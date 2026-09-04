@@ -63,6 +63,10 @@ uv run pytest            # offline, ohne IServ und ohne echte Excel-Datei
 uv run ruff check app tests
 ```
 
+227 Tests, rund 10 Sekunden auf Linux. `--timeout=300` je Test steht in
+`pyproject.toml` — eine Notbremse gegen einen Test, der unbegrenzt auf einem
+Schloss oder einem Kindprozess wartet, keine Leistungsvorgabe.
+
 Dieselben Schritte laufen in der CI (`.github/workflows/ci.yml`) auf Linux mit
 Python 3.10 und 3.11 sowie auf Windows — letzteres nicht als Beigabe: die
 Dateisperre (`msvcrt.locking` statt `fcntl.flock`), der Schreibpfad und die

@@ -29,11 +29,12 @@ jobs:
     # steckengebliebener Lauf Runner-Zeit verbraucht, ohne dass jemand ein
     # Ergebnis sieht; bei Windows zählen die Minuten doppelt. Im ersten Lauf
     # (2026-09-04) stand der Windows-Pytest nach elf Minuten noch auf
-    # "in progress", während Linux nach 74s durch war. Die Grenze hier ist
-    # deshalb eine reine Obergrenze gegen den Dauerläufer, keine
-    # Leistungsaussage: 30 Minuten sind mehr als das Zehnfache der
-    # Linux-Laufzeit und lassen der langsameren Datei-Ein- und -Ausgabe unter
-    # Windows Raum (siehe die Begründung zu --timeout in pyproject.toml).
+    # "in progress". Ursache war ein echter Fehler in bestand.core.grid, nicht
+    # der Runner (siehe merge_deckt_ab dort); seit dessen Behebung läuft die
+    # Suite auf Linux in 9,6s statt 74s. Die Grenze hier bleibt trotzdem, als
+    # reine Obergrenze gegen den Dauerläufer und ohne Leistungsaussage: 30
+    # Minuten schlagen bei keinem gesunden Lauf an, auch auf einem deutlich
+    # langsameren Windows-Runner nicht.
     timeout-minutes: 30
     strategy:
       # Ein Windows-Fehlschlag darf die Linux-Ergebnisse nicht verschlucken -

@@ -3,6 +3,52 @@
 Stand: 2026-09-04. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
 bleibt als abgeschlossener v1-Plan liegen.
 
+## Die CI ist gelaufen — was sie bestätigt hat
+
+Der erste Lauf hat die Annahme abgeräumt, die beim Einrichten offen blieb: das
+Standard-`GITHUB_TOKEN` checkt die beiden öffentlichen Geschwister-Repos ohne
+zusätzliches Secret in den Workspace aus, `astral-sh/setup-uv@v10.0.1` greift,
+und der Abgleich von `requirements.txt` gegen `uv export` läuft in neun
+Sekunden durch. Linux 3.10 und 3.11 sind grün.
+
+Zwei Dinge, die dabei aufgefallen sind und behoben wurden:
+
+- Es gab **keine Zeitgrenze**, weder je Job noch je Test. Ein Lauf, der nicht
+  von selbst endet, hätte die GitHub-Vorgabe von 360 Minuten ausgeschöpft.
+  Jetzt: `timeout-minutes: 30` je Job und `pytest-timeout` mit
+  `--timeout-method=thread`, das im Ernstfall den Stack jedes Threads ausgibt
+  statt schweigend weiterzulaufen.
+- Die Suite brauchte **74 Sekunden** statt der angenommenen zehn. Der
+  Nachmessung nach war das keine langsame Datei-Ein- und -Ausgabe, sondern ein
+  Fehler in `bestand.core.grid`, der auch das Dashboard selbst betraf — siehe
+  den nächsten Abschnitt. Nach der Behebung: 9,6 Sekunden.
+
+## Nebenbefund aus der CI: `parse_grid` war 92x zu langsam
+
+Die auffällige Laufzeit der Testsuite hatte eine Ursache, die den Schul-Laptop
+unmittelbar betrifft. `bestand.core.grid` fragte für jede Zelle über
+`"K3" in merged` ab, ob sie in einem Zellenverbund liegt. Openpyxl baut dabei
+jedes Mal ein neues `CellRange` samt Prüfung seiner vier Deskriptoren — am
+echten Blatt (142 Zellenverbünde) **1496 µs je Abfrage**. `parse_grid` stellt
+rund 250.000 solcher Abfragen und brauchte damit **gut drei Sekunden**.
+
+Das Dashboard ruft `parse_grid` bei **jedem** Seitenaufruf und **jeder**
+Zellenänderung auf. Die drei Sekunden lagen also auf jedem Klick, zusätzlich
+zur Wartezeit über das Netzlaufwerk.
+
+Behoben in `sba-bestand` durch einen reinen Ganzzahlvergleich der vier Grenzen
+(`merge_deckt_ab`) — inhaltlich dieselbe Prüfung, die `CellRange.__contains__`
+am Ende auch macht, nur ohne Objektbau: 7,5 µs statt 1496 µs.
+`parse_grid` fällt damit von **3,09 s auf 0,034 s** (Faktor 92), das Raster
+ist unverändert (72 Zeilen, 16 Sperrflächen), und alle 43 Tests von
+`sba-bestand` bleiben grün.
+
+Beim Testlauf auf dem Schul-Laptop ist das die Erklärung, falls jemand die
+Oberfläche von früher als zäh in Erinnerung hat. Nicht mituntersucht:
+`sba-launcher/core/catalog.py` hat eigene Kopien derselben Hilfsfunktionen mit
+demselben Muster — dort lohnt sich derselbe Handgriff, gehört aber nicht in
+dieses Repo.
+
 ## Nur Niklas kann es erledigen
 
 ### 1. Testlauf auf dem Schul-Laptop
@@ -11,6 +57,16 @@ Der einzige Punkt, an dem wirklich Hardware fehlt. Alles andere ist offline
 geprüft. Ablauf und Abnahmekriterien stehen in
 [`schul-laptop-test.md`](schul-laptop-test.md); `tools/diagnose.py` sammelt die
 Messwerte, die dabei anfallen, in eine Datei, die man mitschicken kann.
+
+Am 2026-09-04 wurde die Liste **offline vorweggenommen**, soweit das ohne
+Windows geht (Abschnitt „Trockenlauf" dort). Ergebnis: die Diagnose läuft mit
+Rückgabewert 0 durch, meldet beide Geschwister-Pakete als installiert und das
+Raster mit den erwarteten 72 Zeilen und 16 Sperrflächen; die Migration einer
+alten Vollkopie (Abschnitt C) kürzt sie auf den einen abweichenden Schlüssel
+ein, lässt den ausgelieferten Standard unangetastet und schreibt beim zweiten
+Start nichts mehr; das Cache-Ausweichen auf den lokalen Ordner funktioniert
+samt Rücklesen. Am Gerät bleibt damit das, was Windows, SMB, IServ und eine
+Uhr braucht.
 
 Besonders zu prüfen, weil hier zuletzt etwas Grundlegendes umgestellt wurde:
 

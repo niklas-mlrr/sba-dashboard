@@ -4,7 +4,9 @@ Diese Liste ist für **Niklas**, nicht für die Lehrkraft. Sie ist der einzige
 offene Punkt, für den echte Hardware nötig ist; alles andere ist offline und in
 der CI geprüft.
 
-Zuletzt geprüft: *(noch nicht — Stand 2026-09-04 ist alles ungeprüft)*
+Zuletzt geprüft: *auf Hardware noch nicht.* Was am 2026-09-04 **offline
+vorweggenommen** wurde, steht unten unter „Trockenlauf". Es ersetzt den
+Durchgang nicht, nimmt ihm aber die Zeilen ab, die kein Windows brauchen.
 
 ## Vorher wissen
 
@@ -38,6 +40,50 @@ cd /d "%LOCALAPPDATA%\sba-dashboard\app\sba-dashboard"
 
 Rückgabewert 0 heißt „kein harter Fehler". Die Datei auf dem Desktop ist das,
 was man mitschickt.
+
+## Trockenlauf am 2026-09-04 (Linux, ohne Schulgerät)
+
+Damit der Durchgang am Gerät nicht an einem Fehler scheitert, den man auch
+offline gefunden hätte, wurden die Zeilen, die keine Windows-Eigenheit prüfen,
+gegen die mitgelieferte Vorlage (`vorlage/…xlsx`) in einem Wegwerfordner
+vorweggenommen — mit `SBA_CONFIG_DIR` und `SBA_CACHE_DIR` auf denselben Ordner,
+damit nichts im echten Benutzerprofil landet.
+
+**Was dabei schon zusammenpasste** (am Gerät nur noch bestätigen, nicht
+erarbeiten):
+
+- **A3–A6:** Rückgabewert 0, beide Geschwister-Pakete als `installiert`
+  gemeldet, `PYTHONPATH` nicht gesetzt, und die Rasterzahlen sind genau die
+  erwarteten **72 Zeilen und 16 Sperrflächen**. Die Blätter der Vorlage:
+  `Bestand- und Nachbestellung, zu Bestellen, bestellt, erhalten`.
+- **C1–C3:** Eine künstlich hergestellte alte Vollkopie (alle sieben Schlüssel,
+  erster Excel-Pfad auf die echte Mappe) wurde beim Start auf **genau einen**
+  Schlüssel eingekürzt, `excel_pfad_kandidaten`, mit der gewählten Mappe an
+  erster Stelle und den beiden ausgelieferten Kandidaten dahinter. Die
+  ausgelieferte `config.json` blieb byteweise gleich (per Prüfsumme
+  verglichen), und es blieb keine `.tmp`-Datei liegen. Der Hinweis dazu
+  erscheint im Bericht als `Warnung`, nicht als Fehler.
+  **Ein zweiter Start schrieb die Datei nicht erneut** (Zeitstempel
+  unverändert) und meldete den Hinweis nicht mehr — die Migration ist also
+  einmalig, nicht bei jedem Start.
+- **Cache-Ausweichen:** Mit schreibgeschütztem Mappenordner landete der Cache
+  im lokalen Rückfallordner, und `laden` gab ihn danach vollständig zurück
+  (Titel, ISBN mit Bindestrichen, Preis). Das ist der Mechanismus hinter F3
+  und F6.
+
+**Was der Trockenlauf ausdrücklich nicht zeigt** und deshalb am Gerät der
+eigentliche Punkt bleibt: alles mit einer Uhr daran (A2, B2), der
+Windows-Sperrpfad (E1–E3), SMB (D5, F3), IServ (F1–F6) und zwei Fenster
+gleichzeitig (G1–G3). Der Trockenlauf lief auf Linux; `msvcrt.locking`,
+Laufwerksbuchstaben und `~$…`-Dateien kommen dort nicht vor.
+
+Nachstellen lässt sich der Migrationsfall auf jeder Plattform so:
+
+```bash
+mkdir -p /tmp/c-test/cfg
+python3 -c 'import json;r=json.load(open("config.json"));r["excel_pfad_kandidaten"]=["<echte Mappe>",*r["excel_pfad_kandidaten"]];json.dump(r,open("/tmp/c-test/cfg/config.json","w"),indent=2)'
+SBA_CONFIG_DIR=/tmp/c-test/cfg python tools/diagnose.py
+```
 
 ## Prüfliste
 
@@ -116,10 +162,25 @@ Mit dem **eigenen** Konto, nicht mit einem Verwalterzugang von jemand anderem.
 |---|---------|----------|----------|
 | F1 | „Aus IServ abrufen", Zugangsdaten eingeben | Fortschrittsbalken bewegt sich | **Gesamtdauer** |
 | F2 | Zusammenfassung am Ende | Zahl geänderter Zellen, Nachbestellungen | Zahlen |
-| F3 | Warnungen in der Zusammenfassung | Falls „Titel und ISBN konnten nicht zwischengespeichert werden": der Gruppenordner ist schreibgeschützt | Wortlaut |
+| F3 | Warnungen in der Zusammenfassung | Erwartet wird **keine** Cache-Warnung. Steht dort „Titel und ISBN konnten diesmal nicht zwischengespeichert werden", ist **beides** fehlgeschlagen, Gruppenordner *und* lokaler Rückfallort | Wortlaut |
 | F4 | Falsches Passwort eingeben | „Zugangsdaten stimmen nicht", HTTP 401, **kein** Absturz | — |
 | F5 | Nach dem Abruf: Titel und ISBN in der Liste | gefüllt, ISBN mit Bindestrichen | ein Beispiel |
 | F6 | Cache-Zeilen im Diagnosebericht | sagt, ob geteilt oder lokal geschrieben wurde | Zeilen |
+
+F3 und F6 gehören zusammen, und die Reihenfolge ist wichtig: das Ausweichen auf
+den lokalen Ordner ist **kein** Fehler und erzeugt **keine** Warnung — es steht
+nur in den beiden Cache-Zeilen des Diagnoseberichts (F6). Ist „Cache (geteilt)"
+übersprungen und „Cache (lokal)" `ok`, dann ist genau das passiert, und alles
+funktioniert wie vorgesehen.
+
+Ein schreibgeschützter Gruppenordner ist dabei nicht die Erklärung, die man
+zuerst vermutet: er würde schon das **Speichern der Mappe** verhindern
+(`atomic_save_workbook` legt seine Zwischendatei im Ordner der Mappe an), der
+Abruf käme also gar nicht bis zum Cache. Kommt die Warnung aus F3 trotz
+gespeicherter Zahlen, ist der Sidecar selbst nicht ersetzbar (vorhandene Datei
+schreibgeschützt oder von einem anderen Programm gehalten) *und* zusätzlich der
+lokale Ordner unbeschreibbar. Der genaue Wortlaut aus dem Bericht ist dann der
+Befund, nicht die Vermutung.
 
 ### G. Zwei Fenster gleichzeitig
 

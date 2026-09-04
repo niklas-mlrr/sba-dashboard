@@ -35,16 +35,19 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Die Zeitgrenze ist absichtlich großzügig. Gemessen auf Linux (2026-09-04,
-# 227 Tests in 74s): der langsamste Einzeltest ist
-# test_vorlage_http.py::test_schreiben_landet_wirklich_in_der_datei mit 9,7s,
-# und die zehn test_vorlage_http-Tests machen zusammen rund zwei Drittel der
-# Laufzeit aus - jeder lädt und speichert die echte Vorlagemappe. Genau diese
-# Datei-Operationen sind unter Windows ein Mehrfaches langsamer (Defender
-# liest jede geschriebene .xlsx mit). 300s je Test lassen dafür reichlich
-# Luft; sie fangen den Fall ab, den sie abfangen sollen - ein Test, der
-# *unbegrenzt* auf einem Schloss oder einem Kindprozess wartet und den Lauf
-# ohne eine Zeile Ausgabe stehenlässt.
+# Die Zeitgrenze ist bewusst weit weg von der echten Laufzeit: gemessen auf
+# Linux (2026-09-04) 227 Tests in 9,6s, langsamster Einzeltest 0,57s. 300s je
+# Test können also nur bei einem Test anschlagen, der *unbegrenzt* wartet -
+# auf ein Schloss, einen Kindprozess, ein Event, das nie gesetzt wird - und
+# den Lauf sonst ohne eine Zeile Ausgabe stehenließe. Sie sind eine Notbremse,
+# keine Leistungsvorgabe, und dürfen auch auf einem viel langsameren
+# Windows-Runner nicht fälschlich zuschlagen.
+#
+# Die Grenze stand kurzzeitig auf 60s, als die Suite noch 74s brauchte. Das
+# war kein langsamer Runner, sondern ein Fehler: bestand.core.grid fragte den
+# Zellenverbund je Zelle über openpyxls CellRange.__contains__ ab, was rund
+# drei Sekunden je parse_grid kostete (Faktor 92, siehe
+# bestand.core.grid.merge_deckt_ab). Die Zahlen oben sind die danach.
 #
 # --timeout-method=thread ist hier Pflicht, nicht Geschmack: die Vorgabe
 # "signal" braucht SIGALRM, das es unter Windows nicht gibt - und die Suite
