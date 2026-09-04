@@ -52,3 +52,25 @@ def test_fehlendes_blatt_meldet_klartext(client, einstellungen, workbook_path):
     antwort = client.get("/")
     assert antwort.status_code == 500
     assert "Gibt-es-nicht" in antwort.text
+
+
+def test_bestand_und_bestellt_sind_eingabefelder(client):
+    """Nur diese zwei Spalten dürfen von Hand geändert werden."""
+    text = client.get("/").text
+    assert text.count('data-spalte="bestand"') > 0
+    assert text.count('data-spalte="bestellt"') > 0
+    assert 'data-spalte="angemeldet"' not in text
+    assert 'data-spalte="zu_bestellen"' not in text
+
+
+def test_die_seite_kennt_die_aenderungszeit(client):
+    """Ohne mtime im HTML könnte der Browser keinen Konflikt erkennen."""
+    daten = client.get("/api/rows").json()
+    assert f'data-mtime="{daten["mtime"]}"' in client.get("/").text
+
+
+def test_abruf_dialog_warnt_vor_dem_ueberschreiben(client):
+    text = client.get("/").text
+    assert "Aus IServ abrufen" in text
+    assert "überschrieben" in text
+    assert 'type="password"' in text

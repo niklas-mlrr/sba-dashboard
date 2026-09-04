@@ -73,7 +73,14 @@ def einstellungen(workbook_path: Path) -> Einstellungen:
 
 @pytest.fixture()
 def client(einstellungen: Einstellungen) -> TestClient:
+    """Die App mit dieser Mappe - und garantiert ohne echten IServ-Client.
+
+    ``client_factory`` wird hinterher wieder entfernt: ``app`` ist ein Modulobjekt
+    und würde einen Fake sonst in den nächsten Test mitnehmen.
+    """
     app.state.einstellungen = einstellungen
+    app.state.client_factory = None
     with TestClient(app) as testclient:
         yield testclient
     app.state.einstellungen = None
+    app.state.client_factory = None

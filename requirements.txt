@@ -1,0 +1,100 @@
+# Abhängigkeiten für den Schul-Laptop. Erzeugt mit:
+#
+#     uv export --no-dev --no-hashes --no-emit-project \
+#         --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \
+#         --format requirements-txt -o requirements.txt
+#
+# Die beiden Geschwister-Repos (ausleihe-api, sba-bestand) stehen hier bewusst
+# NICHT drin. Ein `pip install -e ..\ausleihe-api` müsste auf dem Laptop ein
+# Build-Backend beschaffen und scheitert genau dort, wo niemand mehr weiterhelfen
+# kann. Stattdessen legt START.bat die beiden Quellbäume auf den PYTHONPATH -
+# beide sind reine Python-Pakete ohne Kompilat.
+#
+# Nicht von Hand bearbeiten: bei Änderungen an pyproject.toml neu exportieren.
+annotated-doc==0.0.5
+    # via fastapi
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.15.0
+    # via
+    #   starlette
+    #   watchfiles
+certifi==2026.7.22
+    # via requests
+charset-normalizer==3.5.1
+    # via
+    #   reportlab
+    #   requests
+click==8.5.0
+    # via uvicorn
+et-xmlfile==2.0.0
+    # via openpyxl
+exceptiongroup==1.3.1 ; python_full_version < '3.11'
+    # via anyio
+fastapi==0.141.1
+    # via sba-dashboard
+h11==0.16.0
+    # via uvicorn
+httptools==0.8.0
+    # via uvicorn
+idna==3.19
+    # via
+    #   anyio
+    #   requests
+isbnlib==3.10.14
+    # via sba-bestand
+jinja2==3.1.6
+    # via sba-dashboard
+markupsafe==3.0.3
+    # via jinja2
+openpyxl==3.1.5
+    # via
+    #   sba-bestand
+    #   sba-dashboard
+pillow==12.3.0
+    # via reportlab
+pydantic==2.13.5
+    # via fastapi
+pydantic-core==2.46.5
+    # via pydantic
+python-dotenv==1.2.3
+    # via
+    #   sba-bestand
+    #   sba-dashboard
+    #   uvicorn
+pyyaml==6.0.3
+    # via uvicorn
+reportlab==4.5.1
+    # via sba-bestand
+requests==2.34.2
+    # via
+    #   iserv-ausleihe-api
+    #   sba-bestand
+starlette==1.6.0
+    # via fastapi
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   exceptiongroup
+    #   fastapi
+    #   pydantic
+    #   pydantic-core
+    #   starlette
+    #   typing-inspection
+    #   uvicorn
+typing-inspection==0.4.4
+    # via
+    #   fastapi
+    #   pydantic
+urllib3==2.7.0
+    # via requests
+uvicorn==0.52.4
+    # via sba-dashboard
+uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
+    # via uvicorn
+watchfiles==1.2.0
+    # via uvicorn
+websockets==16.1.1 ; python_full_version < '3.11'
+    # via uvicorn
+websockets==17.1 ; python_full_version >= '3.11'
+    # via uvicorn

@@ -7,3 +7,4 @@ __pycache__/
 backups/
 ~$*.xlsx
 .env
+*.dashboard-cache.json

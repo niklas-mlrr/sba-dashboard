@@ -2,25 +2,38 @@
 
 Weboberfläche für die **Bestands- und Nachbestellungsliste** der Schulbuchausleihe.
 Sie zeigt das 62 Spalten breite Excel-Raster als gewöhnliche, filter- und
-sortierbare Liste und wird später Zahlen zurückschreiben und den IServ-Abruf
-auslösen.
+sortierbare Liste, schreibt geänderte Zahlen zurück und holt den Stand auf Knopf-
+druck aus IServ.
 
 Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 `127.0.0.1`. Die Mappe enthält personenbezogene Zahlen.
 
 ## Stand
 
-Fertig ist der **Lesepfad**: Mappe finden, Raster parsen, Tabelle anzeigen.
-Schreiben (`/api/cell`), der IServ-Abruf (`/api/refresh`), `START.bat` und die
-Nachfolge-Anleitung sind geplant — der vollständige Plan steht in
-[`docs/PLAN.md`](docs/PLAN.md), die Struktur-Befunde in
+Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
+geprüft. Offen ist die **Nachfolge-Anleitung** (`docs/nachfolge-anleitung.md`)
+und der Testlauf auf dem Schul-Laptop. Der vollständige Plan steht in
+[`docs/PLAN.md`](docs/PLAN.md), die Entwurfsgründe in
 [`docs/architektur.md`](docs/architektur.md).
 
 | Route | Zweck |
 |-------|-------|
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
 | `GET /api/rows` | Zeilen als JSON, mit `mtime` und Cache-Alter |
+| `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423 |
+| `POST /api/refresh` | Abruf starten: `{benutzer, passwort}` → 202/400/401/403/504 |
+| `GET /api/refresh/status` | Fortschritt des Abrufs (immer 200) |
+| `POST /api/beenden` | Server beenden (Knopf in der Oberfläche) |
 | `GET /health` | `{"status": "ok"}` |
+
+Änderbar sind nur **Bestand** und **Bestellt**, und nur über den Zeilenschlüssel —
+`/api/cell` nimmt keine freie Zellreferenz entgegen. Der Browser schickt die
+`mtime` mit, die er gesehen hat; weicht sie ab, gibt es 409 statt eines stillen
+Überschreibens.
+
+Zugangsdaten für den Abruf kommen ausschließlich im POST-Körper an, werden sofort
+mit `login()` geprüft und danach fallen gelassen — nie in `app.state`, nie in
+einem Log, nie in einer Antwort.
 
 ## Entwickeln
 
@@ -46,8 +59,26 @@ ist. Der erste existierende Pfad gewinnt; existiert keiner, zeigt die Startseite
 alle geprüften Pfade.
 
 ```bash
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8765
+uv run python -m app.start           # sucht einen freien Port, oeffnet den Browser
+uv run python -m app.start --kein-browser
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8765   # ohne Beenden-Knopf
 ```
+
+## Auf dem Schul-Laptop
+
+`START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die drei
+Quellbäume nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten Mal ein
+venv anlegen, dann `python -m app.start`. `requirements.txt` wird erzeugt, nicht
+von Hand gepflegt:
+
+```bash
+uv export --no-dev --no-hashes --no-emit-project \
+    --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \
+    --format requirements-txt -o requirements.txt
+```
+
+Die beiden Geschwister-Repos stehen bewusst nicht darin — sie kommen über den
+`PYTHONPATH` (Begründung in `docs/architektur.md`).
 
 ## Gestaltung
 

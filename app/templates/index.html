@@ -4,29 +4,35 @@
 {% block kopfzeile %}
 <p class="meta">
   <span title="{{ datei }}">{{ datei.name }}</span>
-  · zuletzt geändert {{ zustand.geaendert.strftime("%d.%m.%Y %H:%M") }}
+  · zuletzt geändert <span id="geaendert">{{ zustand.geaendert.strftime("%d.%m.%Y %H:%M") }}</span>
   {% if cache.stand %}· Abruf {{ cache.stand.strftime("%d.%m.%Y %H:%M") }}{% endif %}
 </p>
 {% endblock %}
 
 {% block inhalt %}
 {% if in_excel_geoeffnet %}
-<p class="hinweis warnung">Die Datei ist gerade in Excel geöffnet. Änderungen lassen sich
-erst speichern, wenn sie dort geschlossen wird.</p>
+<p class="hinweis warnung">Die Datei ist gerade in Excel geöffnet{% if sperr_benutzer %}
+  von {{ sperr_benutzer }}{% endif %}. Änderungen lassen sich erst speichern, wenn sie
+  dort geschlossen wird.</p>
 {% endif %}
 {% if cache.leer %}
 <p class="hinweis">Titel und ISBN stehen nicht in der Mappe. Sie erscheinen nach dem
 ersten Abruf aus IServ.</p>
 {% endif %}
 
+<!-- Meldungen des Schreibpfads: erscheint nur, wenn etwas zu sagen ist. -->
+<p class="hinweis meldung" id="meldung" hidden></p>
+
 <div class="leiste">
   <label><input type="checkbox" id="nur-bedarf"> nur Zeilen mit Bedarf</label>
   <input type="search" id="suche" placeholder="Fach oder Titel suchen" autocomplete="off">
   <span class="zaehler"><span id="sichtbar">{{ zeilen|length }}</span> von {{ zeilen|length }} Zeilen
-    · Bedarf gesamt {{ bedarf_gesamt }}</span>
+    · Bedarf gesamt <span id="bedarf-gesamt">{{ bedarf_gesamt }}</span></span>
+  <button type="button" id="abruf-oeffnen" class="knopf">Aus IServ abrufen</button>
+  <button type="button" id="beenden" class="knopf">Beenden</button>
 </div>
 
-<table id="tabelle">
+<table id="tabelle" data-mtime="{{ zustand.mtime }}">
   <thead>
     <tr>
       <th data-sort="text">Fach</th>
@@ -48,14 +54,49 @@ ersten Abruf aus IServ.</p>
       <td>{{ z.titel or "—" }}</td>
       <td class="isbn">{{ z.isbn or "—" }}</td>
       <td class="zahl">{{ z.angemeldet if z.angemeldet is not none else "—" }}</td>
-      <td class="zahl">{{ z.bestand if z.bestand is not none else "—" }}</td>
-      <td class="zahl">{{ z.bestellt if z.bestellt is not none else "—" }}</td>
-      <td class="zahl {{ 'bedarf' if z.bedarf else '' }}">
+      <td class="zahl"><input class="zellwert" type="number" min="0" step="1"
+        data-spalte="bestand" aria-label="Bestand {{ z.fach }} Jahrgang {{ z.jahrgang }}"
+        value="{{ z.bestand if z.bestand is not none else '' }}"></td>
+      <td class="zahl">
+        {%- if z.bestellt_ref -%}
+        <input class="zellwert" type="number" min="0" step="1"
+          data-spalte="bestellt" aria-label="Bestellt {{ z.fach }} Jahrgang {{ z.jahrgang }}"
+          value="{{ z.bestellt if z.bestellt is not none else '' }}">
+        {%- else -%}—{%- endif -%}
+      </td>
+      <td class="zahl bedarfszelle {{ 'bedarf' if z.bedarf else '' }}">
         {{ z.zu_bestellen if z.zu_bestellen is not none else "—" }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
+<dialog id="abruf" class="dialog">
+  <form method="dialog" id="abruf-formular">
+    <h2>Zahlen aus IServ abrufen</h2>
+    <p class="dialog-text">Der Abruf meldet sich mit <strong>Ihrem</strong> IServ-Konto an
+      und dauert etwa eine Minute. Die Zugangsdaten werden nur für diesen Abruf
+      benutzt und nirgends gespeichert.</p>
+    <p class="dialog-text warnhinweis">Bestand und Bestellt werden dabei mit den Zahlen
+      aus IServ überschrieben.</p>
+    <label>IServ-Benutzername
+      <input type="text" id="benutzer" name="benutzer" autocomplete="username" required></label>
+    <label>Passwort
+      <input type="password" id="passwort" name="passwort"
+             autocomplete="current-password" required></label>
+    <p class="dialog-fehler" id="abruf-fehler" hidden></p>
+    <div class="dialog-knoepfe">
+      <button type="button" id="abruf-abbrechen" class="knopf">Abbrechen</button>
+      <button type="submit" id="abruf-starten" class="knopf knopf-haupt">Abrufen</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="fortschritt" id="fortschritt" hidden>
+  <div class="fortschritt-balken"><span id="fortschritt-fuellung"></span></div>
+  <p class="fortschritt-text" id="fortschritt-text"></p>
+  <ul class="diagnosen" id="diagnosen" hidden></ul>
+</div>
 {% endblock %}
 
 {% block skripte %}<script src="/static/app.js"></script>{% endblock %}

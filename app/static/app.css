@@ -85,3 +85,101 @@ tbody tr:hover { background: var(--flaeche); }
 .karte.fehler { border-color: var(--warnung-rand); background: var(--warnung-grund); }
 .pfadliste { padding-left: 1.2rem; }
 .pfadliste code { word-break: break-all; }
+
+/* ── Schreibpfad ───────────────────────────────────────────────────────────── */
+
+.zellwert {
+  width: 5rem;
+  padding: .2rem .35rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: inherit;
+}
+.zellwert:hover { border-color: var(--rand); background: var(--grund); }
+.zellwert:focus { border-color: var(--akzent); background: var(--grund); outline: none; }
+.zellwert:disabled { opacity: .5; }
+.zellwert.gespeichert { border-color: var(--akzent); background: var(--flaeche); }
+.zellwert.fehlerhaft { border-color: var(--bedarf); background: var(--warnung-grund); }
+/* Die Drehpfeile stehlen Platz und laden zum Verklicken ein. */
+.zellwert::-webkit-outer-spin-button,
+.zellwert::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.zellwert { -moz-appearance: textfield; appearance: textfield; }
+
+.meldung { display: block; }
+
+/* ── Knöpfe ────────────────────────────────────────────────────────────────── */
+
+.knopf {
+  padding: .4rem .9rem;
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  background: var(--flaeche);
+  font: inherit;
+  cursor: pointer;
+}
+.knopf:hover:not(:disabled) { border-color: var(--akzent); }
+.knopf:disabled { opacity: .5; cursor: default; }
+.knopf-haupt { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+
+/* ── Abruf-Dialog ──────────────────────────────────────────────────────────── */
+
+.dialog {
+  width: min(28rem, 92vw);
+  padding: 1.25rem 1.5rem 1.5rem;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--grund);
+}
+.dialog::backdrop { background: rgb(0 0 0 / .35); }
+.dialog h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.dialog-text { margin: 0 0 .75rem; font-size: .9rem; color: var(--text-leise); }
+.dialog-text.warnhinweis { color: var(--bedarf); }
+.dialog label { display: block; margin-bottom: .75rem; font-size: .9rem; }
+.dialog label input {
+  display: block;
+  width: 100%;
+  margin-top: .25rem;
+  padding: .4rem .6rem;
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  font: inherit;
+}
+.dialog-fehler {
+  margin: 0 0 .75rem;
+  padding: .5rem .7rem;
+  border: 1px solid var(--warnung-rand);
+  border-radius: 4px;
+  background: var(--warnung-grund);
+  font-size: .9rem;
+}
+.dialog-knoepfe { display: flex; gap: .6rem; justify-content: flex-end; }
+
+/* ── Fortschritt ───────────────────────────────────────────────────────────── */
+
+.fortschritt { margin: 1.25rem 0; max-width: 44rem; }
+.fortschritt-balken {
+  height: .5rem;
+  border-radius: 999px;
+  background: var(--flaeche);
+  overflow: hidden;
+}
+.fortschritt-balken span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--akzent);
+  transition: width .4s ease;
+}
+.fortschritt.fehlgeschlagen .fortschritt-balken span { background: var(--bedarf); }
+.fortschritt-text { margin: .5rem 0 0; font-size: .9rem; color: var(--text-leise); }
+.diagnosen {
+  margin: .5rem 0 0;
+  padding-left: 1.2rem;
+  font-size: .875rem;
+  color: var(--bedarf);
+}
