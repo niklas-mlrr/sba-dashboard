@@ -9,4 +9,5 @@ backups/
 ~$*.xlsx
 .env
 *.dashboard-cache.json
+*.sba-dashboard.lock
 !vorlage/Bestand- und Nachbestellungsliste 2026.xlsx

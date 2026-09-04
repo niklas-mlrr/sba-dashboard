@@ -6,7 +6,6 @@ import socket
 
 import pytest
 
-from app.main import app
 from app.start import HOST, freier_port, main
 
 
@@ -80,8 +79,13 @@ def test_start_nimmt_alternative_config_und_setzt_app_zustand(tmp_path, monkeypa
         "port": 18765,
     }), encoding="utf-8")
 
+    server_instanz = None
+
     class _Server:
         def __init__(self, _config):
+            nonlocal server_instanz
+            server_instanz = self
+            self.config = _config
             self.should_exit = False
 
         def run(self):
@@ -91,9 +95,7 @@ def test_start_nimmt_alternative_config_und_setzt_app_zustand(tmp_path, monkeypa
 
     monkeypatch.setattr(uvicorn, "Server", _Server)
     monkeypatch.setattr("app.start.freier_port", lambda port: port)
-    try:
-        assert main(["--config", str(config), "--kein-browser"]) == 0
-        assert app.state.einstellungen.excel_pfad_kandidaten == (tmp_path / "kopie.xlsx",)
-    finally:
-        app.state.einstellungen = None
-        app.state.server = None
+    assert main(["--config", str(config), "--kein-browser"]) == 0
+    assert server_instanz.config.app.state.einstellungen.excel_pfad_kandidaten == (
+        tmp_path / "kopie.xlsx",
+    )

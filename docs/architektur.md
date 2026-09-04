@@ -85,10 +85,10 @@ jemand anderem gespeichert werden. Jede Anfrage lädt sie neu und merkt sich nur
 die Änderungszeit. Ein gehaltenes Workbook würde still veralten und beim
 Speichern fremde Änderungen überschreiben.
 
-## Der Schreibpfad: drei Schutzschichten
+## Der Schreibpfad: vier Schutzschichten
 
-`POST /api/cell` ändert genau eine Zahl. Drei Schichten stehen davor, und alle
-drei sind nötig:
+`POST /api/cell` ändert genau eine Zahl. Vier Schichten stehen davor, und alle
+vier sind nötig:
 
 **Kein freier Zellbezug.** Die Route nimmt den Zeilenschlüssel entgegen
 (`0:Deutsch:C3`), nie eine Referenz wie `"K3"`. Der Schlüssel wird gegen das
@@ -97,11 +97,19 @@ verschiebt damit keine Zahl in die falsche Zelle — und ein manipulierter Aufru
 kann keine beliebige Zelle der Mappe beschreiben. Schreibbar sind nur `bestand`
 und `bestellt`; `angemeldet` kommt aus IServ und `zu bestellen` ist eine Formel.
 
-**Optimistisches Sperren.** Der Browser schickt die `mtime` mit, die er beim
+**Optimistisches Sperren.** Der Browser muss die `mtime` mitschicken, die er beim
 Laden gesehen hat. Weicht sie ab, hat jemand anderes gespeichert (oder der
 Abruf lief) → HTTP 409, die Seite lädt neu. Ohne diese Prüfung würde ein Klick
 in einem seit einer Stunde offenen Tab stillschweigend einen frischen Abruf
 überschreiben.
+
+**Schreibvorgänge serialisieren.** `arbeitsmappe_sperren` hält ein lokales
+Thread-Schloss und zusätzlich eine Betriebssystem-Sperre auf einer Sidecar-Datei
+neben der Mappe. Die Sperre umfasst Laden, Versionsprüfung, Änderung und
+Speichern. Manuelle Änderungen und Refresh verwenden denselben Weg. Dadurch
+können zwei Prozesse nicht beide dieselbe alte Fassung laden und nacheinander
+speichern. Auf dem SMB-Laufwerk gilt dies, sofern der Server Dateisperren
+weitergibt.
 
 **Atomar speichern.** `atomic_save_workbook` schreibt in eine Nachbardatei,
 `fsync`t und ersetzt dann per `os.replace`. Ein Abbruch mittendrin — WLAN weg,
@@ -155,13 +163,15 @@ Fach → Buch mehrdeutig; dann wird *nichts* gespeichert. Eine halb aktualisiert
 Bestandsliste wäre schlimmer als eine veraltete, weil ihr niemand ansieht, welche
 Zahl von wann ist.
 
-**Ein Modul-Lock** erlaubt genau einen Lauf. Ein zweiter Versuch bekommt 409 mit
-dem Stand des laufenden.
+Jede mit `create_app` gebaute FastAPI-Instanz besitzt einen eigenen
+`RefreshManager`. Er hält Status und Lauf-Lock der Instanz. Ein zweiter Abruf in
+derselben Instanz bekommt 409. Der gemeinsame Workbook-Lock schützt die Datei
+zusätzlich vor anderen App-Instanzen und manuellen Zelländerungen.
 
 ### Fortschritt
 
 Die Jahrgangs-Bücherlisten werden bewusst nicht über `fetch_snapshot(eager=True)`
-geladen, sondern in `refresh._lade_jahrgaenge` selbst durchlaufen. Erst danach
+geladen, sondern in `RefreshManager._lade_jahrgaenge` selbst durchlaufen. Erst danach
 steht ihre Anzahl fest — und nur mit ihr lässt sich der längste Abschnitt des
 Abrufs als bewegter Balken zeigen statt als stehender. Ein Jahrgang, der im Raster
 steht, aber in IServ keine Bücherliste hat, ist kein Fehler: seine Zellen bleiben
@@ -184,6 +194,12 @@ Der Cache ist **reine Anzeige**. Keine Zahl der Tabelle wird je aus ihm gelesen.
 einem SMB-Laufwerk ist quälend langsam und übersteht keinen Verbindungsabbruch.
 Kopiert wird nur der Programmcode — die Excel-Datei bleibt, wo sie ist, sonst
 gäbe es zwei Wahrheiten.
+
+Eine Kopie von `requirements.txt` im venv bezeichnet den zuletzt erfolgreich
+installierten Stand. `START.bat` führt `pip install` erneut aus, wenn die
+gespiegelte Datei davon abweicht. Der Marker wird erst nach erfolgreicher
+Installation ersetzt. Ein abgebrochenes Update wird beim nächsten Start daher
+erneut versucht.
 
 Die beiden Geschwister-Repos kommen über den `PYTHONPATH`, nicht über
 `pip install -e`. Ein Editable-Install bräuchte auf dem Laptop ein Build-Backend

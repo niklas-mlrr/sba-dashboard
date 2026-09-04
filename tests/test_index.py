@@ -1,7 +1,24 @@
 """Lesepfad über HTTP: Tabelle, JSON, fehlende Datei."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
+
+from app.main import create_app
 from app.settings import Einstellungen
+
+
+def _einrichtungs_app(tmp_path, einstellungen: Einstellungen) -> tuple[TestClient, Path]:
+    config_pfad = tmp_path / "config.json"
+    config_pfad.write_text(json.dumps({
+        "iserv_domain": einstellungen.iserv_domain,
+        "excel_pfad_kandidaten": [str(p) for p in einstellungen.excel_pfad_kandidaten],
+        "blatt_raster": einstellungen.blatt_raster,
+    }), encoding="utf-8")
+    return TestClient(create_app(einstellungen=einstellungen, config_pfad=config_pfad)), config_pfad
 
 
 def test_startseite_zeigt_die_tabelle(client):
@@ -74,3 +91,61 @@ def test_abruf_dialog_warnt_vor_dem_ueberschreiben(client):
     assert "Aus IServ abrufen" in text
     assert "überschrieben" in text
     assert 'type="password"' in text
+
+
+def test_einrichtung_prueft_die_mappe_vor_dem_speichern(tmp_path, einstellungen):
+    unlesbar = tmp_path / "keine-echte-exceldatei.xlsx"
+    unlesbar.write_text("keine Excel-Datei", encoding="utf-8")
+    testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
+    vorher = config_pfad.read_text(encoding="utf-8")
+    with testclient:
+        antwort = testclient.post("/api/einrichtung", json={"pfad": str(unlesbar)})
+    assert antwort.status_code == 400
+    assert "lesbare Excel" in antwort.json()["fehler"]
+    assert config_pfad.read_text(encoding="utf-8") == vorher
+
+
+def test_einrichtung_braucht_alle_dashboard_blaetter(tmp_path, einstellungen, leeres_workbook):
+    unvollstaendig = tmp_path / "unvollstaendig.xlsx"
+    wb = load_workbook(leeres_workbook)
+    del wb["bestellt"]
+    wb.save(unvollstaendig)
+    testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
+    vorher = config_pfad.read_text(encoding="utf-8")
+    with testclient:
+        antwort = testclient.post("/api/einrichtung", json={"pfad": str(unvollstaendig)})
+    assert antwort.status_code == 400
+    assert "bestellt" in antwort.json()["fehler"]
+    assert config_pfad.read_text(encoding="utf-8") == vorher
+
+
+def test_einrichtung_lehnt_leeres_raster_ab(tmp_path, einstellungen):
+    leer = tmp_path / "leeres-raster.xlsx"
+    wb = Workbook()
+    wb.active.title = einstellungen.blatt_raster
+    wb.create_sheet("bestellt")
+    wb.create_sheet("zu Bestellen")
+    wb.save(leer)
+    testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
+    vorher = config_pfad.read_text(encoding="utf-8")
+
+    with testclient:
+        antwort = testclient.post("/api/einrichtung", json={"pfad": str(leer)})
+
+    assert antwort.status_code == 400
+    assert "Bestandsraster" in antwort.json()["fehler"]
+    assert config_pfad.read_text(encoding="utf-8") == vorher
+
+
+def test_einrichtung_speichert_eine_gueltige_mappe(
+    tmp_path, einstellungen, leeres_workbook,
+):
+    testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
+
+    with testclient:
+        antwort = testclient.post("/api/einrichtung", json={"pfad": str(leeres_workbook)})
+
+    assert antwort.status_code == 200
+    assert antwort.json() == {"ok": True}
+    gespeichert = json.loads(config_pfad.read_text(encoding="utf-8"))
+    assert gespeichert["excel_pfad_kandidaten"][0] == str(leeres_workbook)

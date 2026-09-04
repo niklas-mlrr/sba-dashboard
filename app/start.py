@@ -48,7 +48,7 @@ def oeffne_browser(url: str, verzoegerung: float = 1.0) -> None:
 def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
-    from .main import app, lade_einstellungen
+    from .main import create_app, lade_einstellungen
 
     parser = argparse.ArgumentParser(
         description="Startet das Schulbuchausleihe-Dashboard lokal."
@@ -73,11 +73,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Konfiguration ist unbrauchbar: {exc}")
         return 2
 
-    # Die Routen lesen diese Instanz statt erneut die Standard-config.json zu
-    # laden. So kann START.sh mit einer lokalen Arbeitskopie laufen, ohne die
-    # für den Schul-Laptop bestimmte Konfiguration zu verändern.
-    app.state.einstellungen = einstellungen
-    app.state.config_pfad = config_pfad
+    # Jede gestartete Anwendung erhält ihre Konfiguration und ihren eigenen
+    # Abrufzustand. So beeinflussen zwei gestartete Fenster einander nicht.
+    app = create_app(einstellungen=einstellungen, config_pfad=config_pfad)
 
     port = freier_port(einstellungen.port)
     url = f"http://{HOST}:{port}/"

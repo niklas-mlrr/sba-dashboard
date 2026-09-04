@@ -22,9 +22,15 @@ Der Schreibpfad hat drei Schutzschichten, die alle drei nötig sind:
 """
 from __future__ import annotations
 
+import os
+import threading
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
+from typing import Iterator
 
 from ausleihe.inventory_excel import atomic_save_workbook
 from openpyxl import load_workbook
@@ -60,6 +66,108 @@ class Gesperrt(RuntimeError):
     def __init__(self, meldung: str, benutzer: str | None = None) -> None:
         super().__init__(meldung)
         self.benutzer = benutzer
+
+
+_prozesssperren_guard = threading.Lock()
+_prozesssperren: dict[Path, threading.Lock] = {}
+
+
+def _prozesssperre(pfad: Path) -> threading.Lock:
+    """Das lokale Schloss für eine Mappe, unabhängig vom aktuellen Arbeitsordner."""
+    kanonisch = pfad.resolve()
+    with _prozesssperren_guard:
+        return _prozesssperren.setdefault(kanonisch, threading.Lock())
+
+
+def _sperrpfad(pfad: Path) -> Path:
+    """Neben der Mappe liegende, dauerhafte Datei für SMB-taugliche Dateisperren."""
+    return pfad.with_name(f".{pfad.name}.sba-dashboard.lock")
+
+
+def _versuche_dateisperre(datei) -> bool:
+    """Versucht eine exklusive Byte-Sperre, ohne auf eine Plattform festgelegt zu sein."""
+    if os.name == "nt":  # pragma: no cover - auf dem Windows-Schulrechner ausgeführt
+        import msvcrt
+
+        datei.seek(0)
+        try:
+            msvcrt.locking(datei.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    import fcntl
+
+    try:
+        fcntl.flock(datei.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
+def _loese_dateisperre(datei) -> None:
+    if os.name == "nt":  # pragma: no cover - auf dem Windows-Schulrechner ausgeführt
+        import msvcrt
+
+        datei.seek(0)
+        msvcrt.locking(datei.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(datei.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def arbeitsmappe_sperren(pfad: Path, *, wartezeit: float = 30.0) -> Iterator[None]:
+    """Serialisiert den vollständigen Lese-Ändere-Speichere-Zugriff auf ``pfad``.
+
+    Das Python-Schloss schützt Threads des lokalen Dashboard-Prozesses. Die
+    dauerhafte Nachbardatei hält zusätzlich eine exklusive Betriebssystem-
+    Dateisperre und koordiniert damit weitere Dashboard-Prozesse bzw. Rechner,
+    sofern das SMB-Laufwerk Dateisperren unterstützt. Der Inhalt der
+    Sperrdatei ist bedeutungslos; sie bleibt bewusst nach dem Entsperren liegen.
+
+    Der Kontext muss *vor* ``lade_mappe`` beginnen und erst *nach*
+    ``speichere_mappe`` enden. Nur dann kann kein zweiter Schreiber eine alte
+    Mappe laden und später eine neuere Fassung überschreiben.
+    """
+    if wartezeit < 0:
+        raise ValueError("wartezeit darf nicht negativ sein.")
+    prozesssperre = _prozesssperre(pfad)
+    if not prozesssperre.acquire(timeout=wartezeit):
+        raise Gesperrt(
+            "Ein anderer Dashboard-Schreibvorgang bearbeitet die Datei noch. "
+            "Bitte erneut versuchen."
+        )
+
+    datei = None
+    gesperrt = False
+    try:
+        sperrpfad = _sperrpfad(pfad)
+        # a+b erzeugt die Datei bei der ersten Benutzung. Ein Byte ist für
+        # msvcrt.locking nötig; auf POSIX stört es nicht.
+        datei = sperrpfad.open("a+b")
+        datei.seek(0, os.SEEK_END)
+        if datei.tell() == 0:
+            datei.write(b"\0")
+            datei.flush()
+
+        ende = time.monotonic() + wartezeit
+        while not _versuche_dateisperre(datei):
+            if time.monotonic() >= ende:
+                raise Gesperrt(
+                    "Ein anderes SBA Dashboard bearbeitet die Datei noch. "
+                    "Bitte erneut versuchen."
+                )
+            time.sleep(min(0.05, max(0.0, ende - time.monotonic())))
+        gesperrt = True
+        yield
+    finally:
+        if datei is not None:
+            if gesperrt:
+                _loese_dateisperre(datei)
+            datei.close()
+        prozesssperre.release()
 
 
 @dataclass(frozen=True)
@@ -240,14 +348,16 @@ def schreibe_zelle(
     key: str,
     spalte: str,
     wert,
-    mtime: float | None,
+    mtime: float,
     backups_behalten: int = 30,
 ) -> Schreibergebnis:
     """Setzt eine einzelne Zahl in der Mappe - Schlüssel statt Zellbezug.
 
-    Der Ablauf ist bewusst "laden, prüfen, schreiben, speichern" in einem Zug:
-    zwischen dem Parsen des Rasters und dem Speichern liegt kein ``await`` und
-    kein zweiter Ladevorgang, in dem die Datei sich unter uns ändern könnte.
+    ``mtime`` ist absichtlich Pflicht: sie ist der beim Laden gesehene
+    Versionsstand. Der Ablauf ist unter :func:`arbeitsmappe_sperren` bewusst
+    "laden, prüfen, schreiben, speichern" in einem Zug. Damit kann weder ein
+    zweiter Thread noch ein anderes Dashboard eine alte Mappe laden und später
+    eine neuere Fassung überschreiben.
     """
     if spalte not in SCHREIBBARE_SPALTEN:
         raise UngueltigeAenderung(
@@ -255,38 +365,41 @@ def schreibe_zelle(
             f"Erlaubt sind {' und '.join(SCHREIBBARE_SPALTEN)}."
         )
     neuer_wert = pruefe_wert(wert)
-
-    if not pfad.is_file():
-        raise ExcelFehlt(f"Excel-Datei nicht gefunden: {pfad}")
-    zustand = Dateizustand.von(pfad)
-    if mtime is not None and abs(zustand.mtime - float(mtime)) > 1e-6:
-        raise Konflikt(
-            "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
-            "die Änderung erneut eintragen.",
-            zustand.mtime,
-        )
+    if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):
+        raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
 
     from bestand.core import parse_grid  # spät, damit Importfehler die App nicht killen
 
-    wb = lade_mappe(pfad)
-    ws = raster_blatt(wb, blattname)
-    grid = parse_grid(ws)
-    eintrag = grid.entry(key)
-    if eintrag is None:
-        raise UngueltigeAenderung(
-            "Diese Zeile gibt es in der Mappe nicht (mehr). Bitte die Seite neu laden."
-        )
-    slot = eintrag.slots.get(spalte)
-    if slot is None:
-        raise UngueltigeAenderung(
-            f"Für {eintrag.fach_label} Jg. {eintrag.grade_label} gibt es keine Spalte {spalte!r}."
-        )
+    with arbeitsmappe_sperren(pfad):
+        if not pfad.is_file():
+            raise ExcelFehlt(f"Excel-Datei nicht gefunden: {pfad}")
+        zustand = Dateizustand.von(pfad)
+        if abs(zustand.mtime - float(mtime)) > 1e-6:
+            raise Konflikt(
+                "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
+                "die Änderung erneut eintragen.",
+                zustand.mtime,
+            )
 
-    alt = ws[slot.ref].value
-    ws[slot.ref].value = neuer_wert
-    backup = speichere_mappe(wb, pfad, backups_behalten=backups_behalten)
-    return Schreibergebnis(
-        ref=slot.ref, alt=alt, neu=neuer_wert,
-        zustand=Dateizustand.von(pfad), backup=backup,
-        ws=ws, eintrag=eintrag,
-    )
+        wb = lade_mappe(pfad)
+        ws = raster_blatt(wb, blattname)
+        grid = parse_grid(ws)
+        eintrag = grid.entry(key)
+        if eintrag is None:
+            raise UngueltigeAenderung(
+                "Diese Zeile gibt es in der Mappe nicht (mehr). Bitte die Seite neu laden."
+            )
+        slot = eintrag.slots.get(spalte)
+        if slot is None:
+            raise UngueltigeAenderung(
+                f"Für {eintrag.fach_label} Jg. {eintrag.grade_label} gibt es keine Spalte {spalte!r}."
+            )
+
+        alt = ws[slot.ref].value
+        ws[slot.ref].value = neuer_wert
+        backup = speichere_mappe(wb, pfad, backups_behalten=backups_behalten)
+        return Schreibergebnis(
+            ref=slot.ref, alt=alt, neu=neuer_wert,
+            zustand=Dateizustand.von(pfad), backup=backup,
+            ws=ws, eintrag=eintrag,
+        )

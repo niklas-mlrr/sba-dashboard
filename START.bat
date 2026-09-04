@@ -19,6 +19,8 @@ set "ZIEL=%LOCALAPPDATA%\sba-dashboard"
 set "CODE=%ZIEL%\app"
 set "VENV=%ZIEL%\venv"
 set "KONFIG=%ZIEL%\config.json"
+set "ANFORDERUNGEN=%CODE%\sba-dashboard\requirements.txt"
+set "INSTALLSTAND=%VENV%\requirements.installed.txt"
 
 echo ==========================================================
 echo   Schulbuchausleihe - Bestand und Nachbestellung
@@ -76,15 +78,36 @@ if errorlevel 8 goto :kopierfehler
 if not exist "%KONFIG%" copy /y "%CODE%\sba-dashboard\config.json" "%KONFIG%" >nul
 
 rem ── 3. venv und Pakete ────────────────────────────────────────────────────
+set "VENV_NEU=0"
 if not exist "%VENV%\Scripts\python.exe" (
     echo   Erstmalige Einrichtung, das dauert ein paar Minuten...
     %PYEXE% -m venv "%VENV%"
     if errorlevel 1 goto :venvfehler
+    set "VENV_NEU=1"
     "%VENV%\Scripts\python.exe" -m pip install --upgrade pip --quiet
-    "%VENV%\Scripts\python.exe" -m pip install -r "%CODE%\sba-dashboard\requirements.txt" --quiet
     if errorlevel 1 goto :pipfehler
-    echo   Einrichtung fertig.
 )
+
+rem Die gespeicherte Kopie wird erst nach erfolgreichem pip-Install ersetzt.
+rem Damit wird nach einem abgebrochenen Update beim naechsten Start erneut
+rem installiert, statt eine unvollstaendige Umgebung als aktuell zu behandeln.
+if exist "%INSTALLSTAND%" (
+    fc /b "%ANFORDERUNGEN%" "%INSTALLSTAND%" >nul 2>&1
+    if not errorlevel 1 goto :pakete_fertig
+)
+
+if "%VENV_NEU%"=="1" (
+    echo   Pakete werden installiert, das dauert ein paar Minuten...
+) else (
+    echo   Abhaengigkeiten haben sich geaendert und werden aktualisiert...
+)
+"%VENV%\Scripts\python.exe" -m pip install -r "%ANFORDERUNGEN%" --quiet
+if errorlevel 1 goto :pipfehler
+copy /y "%ANFORDERUNGEN%" "%INSTALLSTAND%" >nul
+if errorlevel 1 goto :installstandfehler
+if "%VENV_NEU%"=="1" echo   Einrichtung fertig.
+
+:pakete_fertig
 
 rem ── 4. Starten ────────────────────────────────────────────────────────────
 rem Die beiden Geschwister-Repos kommen ueber den PYTHONPATH statt ueber
@@ -122,7 +145,16 @@ echo.
 echo   Die benoetigten Pakete liessen sich nicht installieren.
 echo   Meist fehlt dafuer der Internetzugang. Bitte Niklas Bescheid geben.
 echo.
-rmdir /s /q "%VENV%" >nul 2>&1
+if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1
+pause
+popd
+exit /b 1
+
+:installstandfehler
+echo.
+echo   Der Installationsstand konnte nicht gespeichert werden.
+echo   Bitte Niklas Bescheid geben und das Programm erneut starten.
+echo.
 pause
 popd
 exit /b 1

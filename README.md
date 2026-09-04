@@ -29,7 +29,10 @@ und der Testlauf auf dem Schul-Laptop. Der vollständige Plan steht in
 Änderbar sind nur **Bestand** und **Bestellt**, und nur über den Zeilenschlüssel —
 `/api/cell` nimmt keine freie Zellreferenz entgegen. Der Browser schickt die
 `mtime` mit, die er gesehen hat; weicht sie ab, gibt es 409 statt eines stillen
-Überschreibens.
+Überschreibens. Diese Änderungszeit ist Pflicht. Ein gemeinsames Datei-Schloss
+serialisiert außerdem manuelle Änderungen und IServ-Abrufe über Threads,
+Dashboard-Prozesse und Rechner hinweg, sofern das SMB-Laufwerk Dateisperren
+unterstützt.
 
 Zugangsdaten für den Abruf kommen ausschließlich im POST-Körper an, werden sofort
 mit `login()` geprüft und danach fallen gelassen — nie in `app.state`, nie in
@@ -102,8 +105,10 @@ für eine kontrollierte Aktualisierung der Vorlage gedacht.
 
 `START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die drei
 Quellbäume nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten Mal ein
-venv anlegen, dann `python -m app.start`. `requirements.txt` wird erzeugt, nicht
-von Hand gepflegt:
+venv anlegen, dann `python -m app.start`. Bei späteren Starts vergleicht es
+`requirements.txt` mit dem zuletzt erfolgreich installierten Stand und
+aktualisiert Pakete nur bei einer Änderung. `requirements.txt` wird erzeugt,
+nicht von Hand gepflegt:
 
 ```bash
 uv export --no-dev --no-hashes --no-emit-project \

@@ -2,13 +2,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
 from bestand.core import parse_grid
 from bestand.core.testing import SHEET_NAME
 from openpyxl import load_workbook
 
-from app.excel import UngueltigeAenderung, kuerze_backups, pruefe_wert
+from app import excel as excel_modul
+from app.excel import (
+    Dateizustand,
+    Konflikt,
+    UngueltigeAenderung,
+    kuerze_backups,
+    pruefe_wert,
+    schreibe_zelle,
+)
 
 
 def _zeilen(client):
@@ -135,14 +144,15 @@ def test_zweiter_schreibvorgang_mit_alter_mtime_scheitert(client):
     assert dritt.status_code == 200
 
 
-def test_ohne_mtime_wird_ohne_konfliktpruefung_geschrieben(client):
-    """Für Aufrufer ohne gesehenen Stand - die Oberfläche schickt immer eine."""
+def test_ohne_mtime_wird_abgelehnt(client):
+    """Ohne gesehenen Versionsstand darf eine API-Anfrage nicht schreiben."""
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     antwort = client.post("/api/cell", json={
         "key": zeile["key"], "spalte": "bestand", "wert": 3,
     })
-    assert antwort.status_code == 200
+    assert antwort.status_code == 400
+    assert "Änderungszeit" in antwort.json()["fehler"]
 
 
 def test_backup_wird_angelegt(client, workbook_path: Path):
@@ -180,6 +190,71 @@ def test_das_raster_wird_bei_jedem_schreiben_neu_geparst(client, workbook_path: 
     schluessel = {e.key for e in grid.entries}
     daten = _zeilen(client)
     assert {z["key"] for z in daten["zeilen"]} == schluessel
+
+
+def test_gleichzeitige_schreibvorgaenge_koennen_keine_aenderung_ueberschreiben(
+    workbook_path: Path, monkeypatch,
+):
+    """Der zweite Schreiber wartet, prüft danach seine alte Version und scheitert.
+
+    Der erste Save wird kontrolliert angehalten. Ohne das gemeinsame Schloss
+    würden inzwischen beide Threads ihre jeweils alte Workbook-Kopie speichern;
+    die zweite Speicherung würde die erste still verlieren lassen.
+    """
+    wb = load_workbook(str(workbook_path))
+    entry = parse_grid(wb[SHEET_NAME]).entries[0]
+    initial_mtime = Dateizustand.von(workbook_path).mtime
+    erster_save_begonnen = Event()
+    save_freigeben = Event()
+    zweiter_gestartet = Event()
+    zweiter_fertig = Event()
+    original_save = excel_modul.atomic_save_workbook
+
+    def angehaltener_save(*args, **kwargs):
+        erster_save_begonnen.set()
+        assert save_freigeben.wait(timeout=5)
+        return original_save(*args, **kwargs)
+
+    monkeypatch.setattr(excel_modul, "atomic_save_workbook", angehaltener_save)
+    ergebnisse: dict[str, object] = {}
+
+    def erster_schreiber():
+        try:
+            ergebnisse["erster"] = schreibe_zelle(
+                workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=71,
+                mtime=initial_mtime,
+            )
+        except BaseException as exc:  # noqa: BLE001 - Assertion für den Thread sammeln
+            ergebnisse["erster"] = exc
+
+    def zweiter_schreiber():
+        zweiter_gestartet.set()
+        try:
+            ergebnisse["zweiter"] = schreibe_zelle(
+                workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=72,
+                mtime=initial_mtime,
+            )
+        except BaseException as exc:  # noqa: BLE001 - Assertion für den Thread sammeln
+            ergebnisse["zweiter"] = exc
+        finally:
+            zweiter_fertig.set()
+
+    thread_1 = Thread(target=erster_schreiber)
+    thread_1.start()
+    assert erster_save_begonnen.wait(timeout=5)
+    thread_2 = Thread(target=zweiter_schreiber)
+    thread_2.start()
+    assert zweiter_gestartet.wait(timeout=5)
+    assert not zweiter_fertig.wait(timeout=0.2)
+    save_freigeben.set()
+    thread_1.join(timeout=5)
+    thread_2.join(timeout=5)
+
+    assert not thread_1.is_alive()
+    assert not thread_2.is_alive()
+    assert not isinstance(ergebnisse["erster"], BaseException)
+    assert isinstance(ergebnisse["zweiter"], Konflikt)
+    assert load_workbook(str(workbook_path))[SHEET_NAME][entry.slots["bestand"].ref].value == 71
 
 
 # ── Einheiten ohne HTTP ───────────────────────────────────────────────────────

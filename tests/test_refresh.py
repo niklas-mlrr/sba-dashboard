@@ -15,20 +15,15 @@ from pathlib import Path
 
 import pytest
 from bestand.core.testing import SHEET_NAME, FakeClient
+from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from app import cache as cache_modul
-from app import refresh as refresh_modul
+from app.main import create_app
+from app.refresh import RefreshManager
 
 PASSWORT = "geheim-Kennwort-2026!"
 BENUTZER = "b.lehrer"
-
-
-@pytest.fixture(autouse=True)
-def sauberer_modulzustand():
-    refresh_modul.zuruecksetzen()
-    yield
-    refresh_modul.zuruecksetzen()
 
 
 def _warte_auf_ende(client, sekunden: float = 10.0) -> dict:
@@ -47,6 +42,18 @@ def _abrufen(client, factory=FakeClient, **felder):
     nutzlast = {"benutzer": BENUTZER, "passwort": PASSWORT}
     nutzlast.update(felder)
     return client.post("/api/refresh", json=nutzlast)
+
+
+def _manager(client) -> RefreshManager:
+    return client.app.state.refresh_manager
+
+
+def test_app_instanz_hat_eigenen_refresh_manager(einstellungen):
+    erste_app = create_app(einstellungen=einstellungen)
+    zweite_app = create_app(einstellungen=einstellungen)
+
+    with TestClient(erste_app), TestClient(zweite_app):
+        assert erste_app.state.refresh_manager is not zweite_app.state.refresh_manager
 
 
 class _FehlerClient:
@@ -142,7 +149,7 @@ def test_falsches_passwort_ist_401(client):
     antwort = _abrufen(client, _FehlerClient(AuthError("401")))
     assert antwort.status_code == 401
     assert "Zugangsdaten" in antwort.json()["fehler"]
-    assert refresh_modul.laeuft() is False
+    assert _manager(client).laeuft() is False
 
 
 def test_fehlende_rolle_ist_403(client):
@@ -215,9 +222,9 @@ def test_zweiter_abruf_waehrend_eines_laufenden_ist_409(client):
         assert erst.status_code == 202
         # Warten, bis der Thread wirklich in der Serienabfrage hängt.
         frist = time.monotonic() + 5
-        while time.monotonic() < frist and not refresh_modul.laeuft():
+        while time.monotonic() < frist and not _manager(client).laeuft():
             time.sleep(0.01)
-        assert refresh_modul.laeuft()
+        assert _manager(client).laeuft()
 
         zweit = _abrufen(client, FakeClient)
         assert zweit.status_code == 409
@@ -261,7 +268,7 @@ def test_passwort_steht_in_keinem_zustand(client, workbook_path: Path):
     _abrufen(client)
     _warte_auf_ende(client)
 
-    assert PASSWORT not in json.dumps(refresh_modul.status(), default=str)
+    assert PASSWORT not in json.dumps(_manager(client).status(), default=str)
     assert PASSWORT not in repr(vars(client.app.state))
     assert PASSWORT not in cache_modul.cache_pfad(workbook_path).read_text(encoding="utf-8")
     assert PASSWORT not in workbook_path.read_bytes().decode("latin-1")
@@ -271,8 +278,9 @@ def test_der_lauf_haelt_keine_zugangsdaten(client):
     """``Lauf`` ist das einzige Objekt, das den Abruf überlebt - es kennt sie nicht."""
     _abrufen(client)
     _warte_auf_ende(client)
-    with refresh_modul._zustand_lock:
-        lauf = refresh_modul._aktueller
+    manager = _manager(client)
+    with manager._zustand_lock:
+        lauf = manager._aktueller
     assert PASSWORT not in repr(vars(lauf))
 
 
@@ -288,12 +296,13 @@ def test_jahrgaenge_werden_einzeln_gemeldet():
         verlauf.append((felder["fortschritt"], felder["text"]))
 
     snapshot = fetch_snapshot(FakeClient(), "2026/2027")
-    original = refresh_modul._setze
-    refresh_modul._setze = merken
+    manager = RefreshManager()
+    original = manager._setze
+    manager._setze = merken
     try:
-        geladen = refresh_modul._lade_jahrgaenge(snapshot)
+        geladen = manager._lade_jahrgaenge(snapshot)
     finally:
-        refresh_modul._setze = original
+        manager._setze = original
 
     assert sorted(geladen) == [5, 6, 7, 12]
     assert [text for _, text in verlauf] == [

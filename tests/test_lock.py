@@ -6,6 +6,7 @@ liegt auf dem Netzlaufwerk und jemand hat sie noch offen. Ein nackter
 """
 from __future__ import annotations
 
+import multiprocessing
 from pathlib import Path
 
 import pytest
@@ -14,10 +15,18 @@ from app import excel as excel_modul
 from app.excel import (
     Gesperrt,
     _benutzer_aus_sperrdatei,
+    arbeitsmappe_sperren,
     sperr_benutzer,
     sperrdatei,
     sperrmeldung,
 )
+
+
+def _halte_dashboard_sperre(pfad_text: str, bereit, freigeben) -> None:
+    """Kindprozess für den Plattformtest der Nachbardatei-Sperre."""
+    with arbeitsmappe_sperren(Path(pfad_text), wartezeit=5):
+        bereit.set()
+        freigeben.wait(timeout=10)
 
 
 def _sperrdatei_anlegen(pfad: Path, name: str) -> Path:
@@ -132,3 +141,27 @@ def test_ohne_sperrdatei_kein_name(tmp_path: Path):
 def test_gesperrt_traegt_den_benutzer():
     fehler = Gesperrt("Die Datei ist gerade in Excel geöffnet von a.b.", "a.b")
     assert fehler.benutzer == "a.b"
+
+
+def test_dateisperre_koordiniert_getrennte_dashboard_prozesse(workbook_path: Path):
+    """Die SMB-taugliche Nachbardatei sperrt nicht nur Python-Threads."""
+    context = multiprocessing.get_context("spawn")
+    bereit = context.Event()
+    freigeben = context.Event()
+    prozess = context.Process(
+        target=_halte_dashboard_sperre,
+        args=(str(workbook_path), bereit, freigeben),
+    )
+    prozess.start()
+    try:
+        assert bereit.wait(timeout=10)
+        with pytest.raises(Gesperrt, match="anderes SBA Dashboard"):
+            with arbeitsmappe_sperren(workbook_path, wartezeit=0.1):
+                pass
+    finally:
+        freigeben.set()
+        prozess.join(timeout=10)
+        if prozess.is_alive():
+            prozess.terminate()
+            prozess.join(timeout=5)
+    assert prozess.exitcode == 0

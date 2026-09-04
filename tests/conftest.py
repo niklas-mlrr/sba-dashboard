@@ -23,7 +23,7 @@ from bestand.core import (  # noqa: E402
 from bestand.core.config import BestandConfig  # noqa: E402
 from bestand.core.testing import SHEET_NAME, FakeClient, build_workbook  # noqa: E402
 
-from app.main import app  # noqa: E402
+from app.main import create_app  # noqa: E402
 from app.settings import Einstellungen  # noqa: E402
 
 
@@ -73,14 +73,7 @@ def einstellungen(workbook_path: Path) -> Einstellungen:
 
 @pytest.fixture()
 def client(einstellungen: Einstellungen) -> TestClient:
-    """Die App mit dieser Mappe - und garantiert ohne echten IServ-Client.
-
-    ``client_factory`` wird hinterher wieder entfernt: ``app`` ist ein Modulobjekt
-    und würde einen Fake sonst in den nächsten Test mitnehmen.
-    """
-    app.state.einstellungen = einstellungen
-    app.state.client_factory = None
-    with TestClient(app) as testclient:
+    """Eine isolierte App mit dieser Mappe und ohne echten IServ-Client."""
+    application = create_app(einstellungen=einstellungen)
+    with TestClient(application) as testclient:
         yield testclient
-    app.state.einstellungen = None
-    app.state.client_factory = None
