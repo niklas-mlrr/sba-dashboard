@@ -39,7 +39,7 @@ from .excel import (
     sperrdatei,
 )
 from .rows import baue_zeilen, zeile_aus_eintrag
-from .settings import Einstellungen, EinstellungsFehler
+from .settings import Einstellungen, EinstellungsFehler, speichere_excel_pfad
 
 _HIER = Path(__file__).parent
 _WURZEL = _HIER.parent
@@ -62,6 +62,10 @@ def _einstellungen(request: Request) -> Einstellungen:
 def _client_factory(request: Request):
     """Wie ein IServ-Client gebaut wird; im Test durch einen Fake ersetzt."""
     return getattr(request.app.state, "client_factory", None)
+
+
+def _config_pfad(request: Request) -> Path:
+    return getattr(request.app.state, "config_pfad", _WURZEL / "config.json")
 
 
 def lies_tabelle(einstellungen: Einstellungen):
@@ -87,6 +91,25 @@ def _keine_datei(einstellungen: Einstellungen) -> JSONResponse:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.post("/api/einrichtung")
+def api_einrichtung(request: Request, nutzlast: dict = Body(...)) -> JSONResponse:
+    pfad_text = nutzlast.get("pfad")
+    if not isinstance(pfad_text, str) or not pfad_text.strip():
+        return JSONResponse({"fehler": "Bitte einen Pfad zur Excel-Datei eingeben."}, status_code=400)
+    pfad = Path(pfad_text.strip())
+    if pfad.suffix.lower() != ".xlsx" or not pfad.is_file():
+        return JSONResponse(
+            {"fehler": "Die Datei wurde nicht gefunden oder ist keine .xlsx-Datei."}, status_code=400
+        )
+    try:
+        request.app.state.einstellungen = speichere_excel_pfad(_config_pfad(request), pfad)
+    except OSError as exc:
+        return JSONResponse(
+            {"fehler": f"Die Auswahl konnte nicht gespeichert werden: {exc}"}, status_code=500
+        )
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/rows")
@@ -282,14 +305,8 @@ def index(request: Request):
         )
 
     if pfad is None:
-        return templates.TemplateResponse(
-            request, "fehler.html",
-            {"titel": "Excel-Datei nicht gefunden",
-             "meldung": "Unter keinem der eingetragenen Pfade liegt die Bestandsliste. "
-                        "Bitte den richtigen Pfad in config.json eintragen.",
-             "pfade": einstellungen.geprüfte_pfade()},
-            status_code=503,
-        )
+        return templates.TemplateResponse(request, "einrichtung.html", {
+            "pfade": einstellungen.geprüfte_pfade()}, status_code=503)
 
     return templates.TemplateResponse(request, "index.html", {
         "zeilen": zeilen,

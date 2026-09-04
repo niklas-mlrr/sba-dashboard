@@ -77,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     # laden. So kann START.sh mit einer lokalen Arbeitskopie laufen, ohne die
     # für den Schul-Laptop bestimmte Konfiguration zu verändern.
     app.state.einstellungen = einstellungen
+    app.state.config_pfad = config_pfad
 
     port = freier_port(einstellungen.port)
     url = f"http://{HOST}:{port}/"

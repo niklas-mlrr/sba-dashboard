@@ -9,6 +9,7 @@ einer Ausnahme abzubrechen.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -95,3 +96,16 @@ class Einstellungen:
             safety_stock=self.sicherheitsbestand,
             match_overrides=dict(self.match_overrides),
         )
+
+
+def speichere_excel_pfad(config_pfad: Path, excel_pfad: Path) -> Einstellungen:
+    """Merkt einen geprüften Pfad vor den zentralen Vorschlägen."""
+    with open(config_pfad, encoding="utf-8") as handle:
+        roh = json.load(handle)
+    auswahl = str(excel_pfad)
+    alte_pfade = (str(p) for p in roh["excel_pfad_kandidaten"] if str(p) != auswahl)
+    roh["excel_pfad_kandidaten"] = [auswahl, *alte_pfade]
+    temporaer = config_pfad.with_suffix(config_pfad.suffix + ".tmp")
+    temporaer.write_text(json.dumps(roh, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporaer, config_pfad)
+    return Einstellungen.laden(config_pfad)

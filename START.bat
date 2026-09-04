@@ -18,6 +18,7 @@ pushd "%~dp0"
 set "ZIEL=%LOCALAPPDATA%\sba-dashboard"
 set "CODE=%ZIEL%\app"
 set "VENV=%ZIEL%\venv"
+set "KONFIG=%ZIEL%\config.json"
 
 echo ==========================================================
 echo   Schulbuchausleihe - Bestand und Nachbestellung
@@ -72,6 +73,7 @@ robocopy "%~dp0..\sba-bestand"  "%CODE%\sba-bestand"  /MIR /NJH /NJS /NDL /NP /R
 if errorlevel 8 goto :kopierfehler
 robocopy "%~dp0..\ausleihe-api" "%CODE%\ausleihe-api" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF .env >nul
 if errorlevel 8 goto :kopierfehler
+if not exist "%KONFIG%" copy /y "%CODE%\sba-dashboard\config.json" "%KONFIG%" >nul
 
 rem ── 3. venv und Pakete ────────────────────────────────────────────────────
 if not exist "%VENV%\Scripts\python.exe" (
@@ -92,7 +94,7 @@ set "PYTHONPATH=%CODE%\sba-bestand;%CODE%\ausleihe-api"
 set "PYTHONUTF8=1"
 echo.
 cd /d "%CODE%\sba-dashboard"
-"%VENV%\Scripts\python.exe" -m app.start
+"%VENV%\Scripts\python.exe" -m app.start --config "%KONFIG%"
 goto :ende
 
 :kopierfehler

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block titel %}Einrichtung — Schulbuchausleihe{% endblock %}
+{% block inhalt %}
+<section class="karte fehler"><h2>Wo liegt die Bestandsliste?</h2>
+<p>Das Dashboard erreicht noch keine Excel-Datei. Der UNC-Pfad steht als Empfehlung zuerst. Wählen Sie einen Vorschlag oder geben Sie den vollständigen Pfad selbst ein.</p>
+<form id="einrichtung-formular">{% for pfad, vorhanden in pfade %}<label><input type="radio" name="auswahl" value="{{ pfad }}" {% if loop.first %}checked{% endif %}>{{ "Empfohlen: " if loop.first else "Alternative: " }}<code>{{ pfad }}</code>{% if vorhanden %} (gefunden){% endif %}</label><br>{% endfor %}<label><input type="radio" name="auswahl" value="manuell"> Eigenen Pfad eingeben</label><p><input id="eigener-pfad" type="text" placeholder="C:\\Ordner\\Bestand- und Nachbestellungsliste 2026.xlsx"></p><p id="fehler" class="dialog-fehler" hidden></p><button class="knopf knopf-haupt">Datei verwenden</button></form></section>
+<script>document.getElementById("einrichtung-formular").addEventListener("submit",async e=>{e.preventDefault();const a=document.querySelector('input[name="auswahl"]:checked').value,pfad=a==="manuell"?document.getElementById("eigener-pfad").value:a,r=await fetch("/api/einrichtung",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pfad})}),d=await r.json();if(r.ok)location.reload();else{const f=document.getElementById("fehler");f.textContent=d.fehler;f.hidden=false}});</script>
+{% endblock %}
