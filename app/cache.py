@@ -35,6 +35,16 @@ from pathlib import Path
 
 CACHE_SUFFIX = ".dashboard-cache.json"
 
+# Wie oft und wie lange ein Zugriff wiederholt wird, den Windows waehrend eines
+# laufenden ``os.replace`` mit einer Zugriffsverletzung beantwortet - auf der
+# Schreibseite (:func:`_ersetze_mit_wiederholung`) wie auf der Leseseite
+# (:func:`_datei_lesen`). Die Summe der Wartezeiten liegt bei gut einer halben
+# Sekunde (10+20+40+80+160+320 ms); ein Ersetzen und ein ``read()`` dauern
+# Bruchteile davon, die Grenze wird also nur erreicht, wenn wirklich etwas
+# anderes im Weg ist.
+_ERSETZ_VERSUCHE = 7
+_ERSETZ_WARTE_START = 0.01
+
 
 class CacheFehler(RuntimeError):
     """Weder der Sidecar neben der Mappe noch der lokale Rückfallort ließen sich schreiben."""
@@ -175,11 +185,46 @@ def _cache_aus_roh(roh: object) -> Cache:
 
 
 def _datei_lesen(pfad: Path) -> Cache:
-    """Liest eine einzelne Cache-Datei tolerant; jede kaputte Eingabe wird zu ``Cache()``."""
-    try:
-        with open(pfad, encoding="utf-8") as handle:
-            text = handle.read()
-    except (FileNotFoundError, OSError, UnicodeDecodeError):
+    """Liest eine einzelne Cache-Datei tolerant; jede kaputte Eingabe wird zu ``Cache()``.
+
+    Diese Funktion wirft nie - auch die Wiederholung unten ändert daran nichts.
+
+    Die Wiederholung ist das Gegenstück zu :func:`_ersetze_mit_wiederholung`
+    und hat denselben Grund: unter Windows ist ein Ersetzen für den Leser
+    kurz sichtbar. Während ``os.replace`` läuft, beantwortet das
+    Dateisystem ein ``open()`` mit einer Zugriffsverletzung
+    (``PermissionError``) statt mit dem alten oder dem neuen Inhalt. Ein
+    einziges ``except OSError`` machte daraus stillschweigend „kein Cache
+    vorhanden" - der Aufrufer sah also einen **leeren** Stand, obwohl neben
+    ihm eine vollständige Datei lag. Die CI hat genau das am 2026-09-04 auf
+    ``windows-latest`` gezeigt, nachdem die Schreibseite repariert war.
+
+    Ein fehlender Cache und ein gerade ersetzter Cache sehen für den Aufrufer
+    sonst gleich aus, und das ist der Unterschied zwischen „Titel und ISBN
+    sind noch nicht abgerufen" und „sie sind da, du hast nur im falschen
+    Moment gefragt".
+
+    ``FileNotFoundError`` wird bewusst **nicht** wiederholt: ``os.replace``
+    lässt die Zieldatei nie verschwinden, ein fehlender Pfad ist also
+    tatsächlich ein fehlender Cache und kein Zwischenzustand.
+    """
+    warte = _ERSETZ_WARTE_START
+    text = None
+    for versuch in range(_ERSETZ_VERSUCHE):
+        try:
+            with open(pfad, encoding="utf-8") as handle:
+                text = handle.read()
+            break
+        except FileNotFoundError:
+            return Cache()
+        except PermissionError:
+            if versuch == _ERSETZ_VERSUCHE - 1:
+                return Cache()
+            time.sleep(warte)
+            warte *= 2
+        except (OSError, UnicodeDecodeError):
+            return Cache()
+    if text is None:
         return Cache()
     if not text.strip():
         return Cache()
@@ -239,14 +284,6 @@ def _cache_zu_json(cache: Cache) -> str:
         },
     }
     return json.dumps(inhalt, ensure_ascii=False, indent=2)
-
-
-# Wie oft und wie lange ``os.replace`` wiederholt wird, wenn Windows die
-# Zieldatei gerade als geöffnet meldet. Die Summe der Wartezeiten liegt bei gut
-# einer halben Sekunde (10+20+40+80+160+320 ms); ein Leser hält die Datei nur
-# für die Dauer eines ``read()``, also Bruchteile davon.
-_ERSETZ_VERSUCHE = 7
-_ERSETZ_WARTE_START = 0.01
 
 
 def _ersetze_mit_wiederholung(quelle: str, ziel: Path) -> None:

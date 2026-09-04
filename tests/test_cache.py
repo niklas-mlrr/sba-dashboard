@@ -6,6 +6,7 @@ Benutzerprofil schreiben.
 """
 from __future__ import annotations
 
+import builtins
 import json
 import threading
 import time
@@ -526,3 +527,60 @@ def test_dauerhaft_belegte_datei_weicht_auf_den_lokalen_ordner_aus(
     assert ziel == cache_modul.cache_pfad_lokal(excel_pfad)
     assert not sidecar.exists()
     assert cache_modul.laden(excel_pfad).schuljahr == "A"
+
+
+def test_lesen_wiederholt_sich_bei_zugriffsverletzung_statt_leer_zu_melden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Ein ``PermissionError`` beim Lesen heißt „wird gerade ersetzt", nicht „ist leer".
+
+    Unter Windows beantwortet das Dateisystem ein ``open()`` während eines
+    laufenden ``os.replace`` mit einer Zugriffsverletzung. Würde ``laden()``
+    daraus einen leeren Cache machen, verschwänden Titel und ISBN für genau
+    den Seitenaufbau, der zufällig in diesen Moment fällt - der Fehler, den
+    die CI am 2026-09-04 auf Windows gezeigt hat.
+    """
+    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+    excel_pfad = _excel_pfad(tmp_path)
+    cache = cache_modul.Cache(
+        stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
+        eintraege={"k": cache_modul.Eintrag(isbn="1", titel="A", preis=1.0)},
+    )
+    cache_modul.speichern(excel_pfad, cache)
+
+    sidecar = cache_modul.cache_pfad(excel_pfad)
+    echtes_open = builtins.open
+    versuche: list[int] = []
+
+    def zickiges_open(pfad, *args, **kwargs):
+        if Path(pfad) == sidecar:
+            versuche.append(1)
+            if len(versuche) <= 2:
+                raise PermissionError(5, "Access is denied")
+        return echtes_open(pfad, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", zickiges_open)
+    monkeypatch.setattr(cache_modul.time, "sleep", lambda _: None)
+
+    geladen = cache_modul.laden(excel_pfad)
+
+    assert geladen.schuljahr == "A", "der vorhandene Stand darf nicht als leer gelten"
+    assert geladen.eintraege["k"].titel == "A"
+    assert len(versuche) == 3, f"erwartet 3 Leseversuche, waren {len(versuche)}"
+
+
+def test_dauerhafte_zugriffsverletzung_beim_lesen_bleibt_leer_ohne_ausnahme(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Hört die Zugriffsverletzung nicht auf, gilt weiter: ``laden`` wirft nie."""
+    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+    excel_pfad = _excel_pfad(tmp_path)
+    cache_modul.speichern(excel_pfad, cache_modul.Cache(schuljahr="A"))
+
+    def immer_verweigern(pfad, *args, **kwargs):
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr(builtins, "open", immer_verweigern)
+    monkeypatch.setattr(cache_modul.time, "sleep", lambda _: None)
+
+    assert cache_modul.laden(excel_pfad) == cache_modul.Cache()
