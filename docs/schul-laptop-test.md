@@ -81,10 +81,21 @@ wesentlich teurer wird. (Vor dem 2026-09-04 behobenen Fehler in
 von früher als zäh in Erinnerung hat, hat das gesehen.)
 
 **Was der Trockenlauf ausdrücklich nicht zeigt** und deshalb am Gerät der
-eigentliche Punkt bleibt: alles mit einer Uhr daran (A2, B2), der
-Windows-Sperrpfad (E1–E3), SMB (D5, F3), IServ (F1–F6) und zwei Fenster
-gleichzeitig (G1–G3). Der Trockenlauf lief auf Linux; `msvcrt.locking`,
-Laufwerksbuchstaben und `~$…`-Dateien kommen dort nicht vor.
+eigentliche Punkt bleibt: der komplette Abschnitt **B** (er prüft `START.bat`
+und `robocopy`, die der Trockenlauf gar nicht anfasst), alles mit einer Uhr
+daran (A2), der Windows-Sperrpfad (E1–E3), SMB (D5, F3), IServ (F1–F6) und
+zwei Fenster gleichzeitig (G1–G3). Der Trockenlauf lief auf Linux;
+`msvcrt.locking`, Laufwerksbuchstaben und `~$…`-Dateien kommen dort nicht vor.
+
+**Abschnitt G ist seit dem 2026-09-04 die wichtigste Zeile nach D4.** Dort
+wurde ein Fehler behoben, den nur Windows zeigt: `os.replace` scheitert mit
+`WinError 5`, solange irgendein Handle auf die Zieldatei offen ist. Ein
+zweites Fenster, das die Mappe nur *liest*, brachte damit ein Speichern zum
+Scheitern — gemeldet als „Die Datei ist gerade in Excel geöffnet", obwohl
+niemand Excel offen hatte. Behoben durch kurzes Wiederholen, geprüft in der
+CI auf `windows-latest`. Ob es unter SMB genauso trägt, zeigt erst G2/G3.
+Erscheint dort „in Excel geöffnet", ohne dass Excel läuft, ist genau dieser
+Fall wieder da und gehört gemeldet.
 
 Nachstellen lässt sich der Migrationsfall auf jeder Plattform so:
 
