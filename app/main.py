@@ -7,6 +7,7 @@ Abrufzustand erstellen können.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from zipfile import BadZipFile
 
@@ -42,8 +43,25 @@ _ERFORDERLICHE_ZUSATZBLAETTER = ("bestellt", "zu Bestellen")
 
 
 def lade_einstellungen(pfad: Path | None = None) -> Einstellungen:
-    """Lädt die Standardkonfiguration oder eine explizite Arbeitskopie."""
-    return Einstellungen.laden(pfad or _WURZEL / "config.json")
+    """Lädt die Konfiguration - mit oder ohne Overlay.
+
+    Mit explizitem ``pfad`` (Arbeitskopie-Modus, ``--config PATH``) wird genau
+    diese eine Datei gelesen und später auch beschrieben - kein Overlay, siehe
+    ``Einstellungen.laden``.
+
+    Ohne ``pfad`` gilt der Produktivmodus: der ausgelieferte Standard aus
+    ``config.json`` wird geladen und die Benutzerkonfiguration im
+    plattformabhängigen Ordner (``app.paths.benutzer_konfigurationspfad``)
+    darübergelegt. Ein fehlendes oder kaputtes Overlay verhindert den Start
+    nicht; ein Klartext-Grund landet dann auf der Konsole - hier und nicht in
+    ``settings.py``, damit die Lade-Funktion dort ohne Seiteneffekt bleibt.
+    """
+    if pfad is not None:
+        return Einstellungen.laden(pfad)
+    einstellungen, hinweis = Einstellungen.laden_mit_benutzerkonfiguration(_WURZEL / "config.json")
+    if hinweis:
+        print(hinweis)
+    return einstellungen
 
 
 def lies_tabelle(einstellungen: Einstellungen):
@@ -119,7 +137,10 @@ def create_app(
     application.mount("/static", StaticFiles(directory=_HIER / "static"), name="static")
     templates = Jinja2Templates(directory=str(_HIER / "templates"))
     application.state.einstellungen = einstellungen
-    application.state.config_pfad = config_pfad or _WURZEL / "config.json"
+    # None bleibt None (statt auf config.json zu verfallen): das unterscheidet
+    # den Arbeitskopie-Modus (--config PATH, kein Overlay) vom Produktivmodus,
+    # der beim Nachladen über lade_einstellungen(None) den Overlay-Weg nimmt.
+    application.state.config_pfad = config_pfad
     application.state.client_factory = client_factory
     application.state.refresh_manager = refresh_manager or RefreshManager()
 
@@ -146,8 +167,18 @@ def create_app(
             validiere_excel_mappe(pfad, aktuelle_einstellungen.blatt_raster)
         except (EinstellungsFehler, BlattFehlt) as exc:
             return JSONResponse({"fehler": str(exc)}, status_code=400)
+        ziel_einstellungen = aktuelle_einstellungen
+        if ziel_einstellungen.benutzer_config_pfad is None:
+            # Einstellungen, die nicht über Einstellungen.laden() entstanden
+            # sind (Dependency Injection in Tests), kennen ihren Zielpfad
+            # nicht von sich aus - dann gilt der config_pfad der App-Instanz,
+            # wie schon vor dem Overlay-Modell.
+            ziel_einstellungen = replace(
+                ziel_einstellungen,
+                benutzer_config_pfad=request.app.state.config_pfad or _WURZEL / "config.json",
+            )
         try:
-            request.app.state.einstellungen = speichere_excel_pfad(request.app.state.config_pfad, pfad)
+            request.app.state.einstellungen = speichere_excel_pfad(ziel_einstellungen, pfad)
         except (OSError, ValueError) as exc:
             return JSONResponse(
                 {"fehler": f"Die Auswahl konnte nicht gespeichert werden: {exc}"}, status_code=500

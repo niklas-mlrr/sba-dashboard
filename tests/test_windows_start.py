@@ -52,6 +52,68 @@ def test_start_entfernt_nur_eine_unvollstaendige_neue_umgebung():
     assert 'if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1' in inhalt
 
 
+def test_start_schreibt_die_ausgelieferte_konfiguration_nicht_fort():
+    """Die ausgelieferte ``config.json`` ist der Standard, keine Arbeitsdatei.
+
+    Eine Vollkopie nach ``%LOCALAPPDATA%`` wuerde jedes kuenftige Update des
+    Standards maskieren. Der Produktivstart laeuft deshalb ohne ``--config``:
+    die Anwendung legt selbst nur die abweichenden Schluessel ab.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert "copy /y \"%CODE%\\sba-dashboard\\config.json\"" not in inhalt
+    assert "%KONFIG%" not in inhalt
+    assert '-m app.start --config' not in inhalt
+    assert '"%VENV%\\Scripts\\python.exe" -m app.start' in inhalt
+
+
+def test_start_installiert_die_geschwister_ins_venv_statt_pythonpath():
+    """Die laufende Anwendung darf an keinem Ordner mehr hängen, nur am venv.
+
+    Ein ``PYTHONPATH`` auf die Nachbarordner koppelt die *Laufzeit* an eine
+    Ordnerstruktur: ein halb gespiegelter Baum oder ein Fenster mit altem
+    ``PYTHONPATH`` bricht die Anwendung an einer Stelle, an der niemand sucht.
+    Begründung und Rollback stehen in ``docs/verteilung.md``.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert "set \"PYTHONPATH=" not in inhalt
+    assert (
+        '"%VENV%\\Scripts\\python.exe" -m pip install --no-build-isolation --no-deps '
+        '--quiet "%CODE%\\ausleihe-api" "%CODE%\\sba-bestand"'
+    ) in inhalt
+    # setuptools muss im venv liegen, sonst hat --no-build-isolation kein Backend.
+    assert "pip install --upgrade pip setuptools wheel --quiet" in inhalt
+
+
+def test_start_installiert_die_geschwister_nur_bei_geaenderten_quellen():
+    """Ein gewöhnlicher Start soll nichts bauen.
+
+    ``robocopy`` meldet mit Rückgabecode 1 "es wurde etwas kopiert" - genau
+    daran hängt die Frage, ob neu installiert werden muss.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert 'set "GESCHWISTER_NEU=0"' in inhalt
+    assert inhalt.count('if errorlevel 1 set "GESCHWISTER_NEU=1"') == 2
+    assert 'if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"' in inhalt
+    assert 'if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig' in inhalt
+    # Ein Kopierfehler bleibt ein Kopierfehler: die 8er-Pruefung steht davor.
+    assert inhalt.index("if errorlevel 8 goto :kopierfehler") < inhalt.index(
+        'if errorlevel 1 set "GESCHWISTER_NEU=1"'
+    )
+
+
+def test_jedes_start_label_wird_angesprungen_und_existiert_genau_einmal():
+    """Ein Tippfehler in einem Label fällt in Batch erst beim Nutzer auf."""
+    inhalt = START.read_text(encoding="utf-8")
+    labels = [z[1:].strip() for z in inhalt.splitlines() if z.startswith(":")]
+
+    assert len(labels) == len(set(labels)), f"doppeltes Label: {labels}"
+    for label in labels:
+        assert f"goto :{label}" in inhalt, f"Label {label!r} wird nie angesprungen"
+
+
 def test_requirements_entsprechen_dem_uv_export():
     export = subprocess.run(
         UV_EXPORT,

@@ -70,11 +70,55 @@ def test_kaputtes_json(tmp_path):
 @pytest.mark.parametrize("abweichung", [
     {"excel_pfad_kandidaten": []},
     {"excel_pfad_kandidaten": "a.xlsx"},
+    {"excel_pfad_kandidaten": ["a.xlsx", ""]},
+    {"excel_pfad_kandidaten": ["a.xlsx", 42]},
     {"blatt_raster": ""},
+    {"blatt_raster": 42},
     {"sicherheitsbestand": -1},
     {"sicherheitsbestand": "fünf"},
     {"match_overrides": {"5|Deutsch|": 42}},
+    {"iserv_domain": ""},
+    {"iserv_domain": "https://beispiel-schule.de"},
+    {"iserv_domain": "beispiel schule.de"},
+    {"iserv_domain": "beispiel-schule"},
+    {"iserv_domain": "beispiel-schule.de/pfad"},
+    {"port": 80},
+    {"port": 70000},
+    {"port": True},
+    {"port": "8765"},
+    {"backups_behalten": -1},
+    {"backups_behalten": 1001},
+    {"backups_behalten": True},
 ])
 def test_ungueltige_werte(tmp_path, abweichung):
     with pytest.raises(EinstellungsFehler):
         Einstellungen.laden(_schreibe(tmp_path, **abweichung))
+
+
+def test_domain_mit_https_praefix_nennt_den_tippfehler(tmp_path):
+    """Ein 'https://' vor der Domain ist der häufigste Tippfehler - die Meldung soll ihn benennen."""
+    with pytest.raises(EinstellungsFehler, match="https://"):
+        Einstellungen.laden(_schreibe(tmp_path, iserv_domain="https://beispiel-schule.de"))
+
+
+def test_port_ausserhalb_des_erlaubten_bereichs(tmp_path):
+    with pytest.raises(EinstellungsFehler, match="1024"):
+        Einstellungen.laden(_schreibe(tmp_path, port=443))
+
+
+def test_backups_behalten_ausserhalb_des_erlaubten_bereichs(tmp_path):
+    with pytest.raises(EinstellungsFehler, match="backups_behalten"):
+        Einstellungen.laden(_schreibe(tmp_path, backups_behalten=5000))
+
+
+def test_unbekannte_schluessel_brechen_das_laden_nicht(tmp_path):
+    """Eine künftige Version darf neue Schlüssel einführen, ohne alte Configs zu zerstören."""
+    einst = Einstellungen.laden(_schreibe(tmp_path, zukuenftiger_schluessel="neu"))
+    assert einst.unbekannte_schluessel == ("zukuenftiger_schluessel",)
+
+
+def test_laden_setzt_den_benutzer_config_pfad_auf_die_geladene_datei(tmp_path):
+    """Im --config-Modus sind Standard und Benutzerkonfiguration dieselbe Datei."""
+    pfad = _schreibe(tmp_path)
+    einst = Einstellungen.laden(pfad)
+    assert einst.benutzer_config_pfad == pfad

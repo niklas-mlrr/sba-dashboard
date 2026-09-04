@@ -200,7 +200,16 @@ class RefreshManager:
             if aktualisierung is None:
                 return
             result, zeilen, backup = aktualisierung
-            self._schreibe_cache(pfad, result, snapshot)
+            try:
+                self._schreibe_cache(pfad, result, snapshot)
+            except cache_modul.CacheFehler:
+                # Die Bestandszahlen stehen bereits sicher in der Mappe - ein
+                # kaputter Cache ist keine Zahl, sondern nur eine leere Anzeige.
+                warnungen.append(
+                    "Titel und ISBN konnten diesmal nicht zwischengespeichert werden - "
+                    "diese Spalten können deshalb leer bleiben. Die Bestandszahlen sind "
+                    "bereits gespeichert."
+                )
             self._abschluss(
                 warnungen=warnungen,
                 zusammenfassung={

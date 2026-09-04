@@ -1,5 +1,22 @@
-# sba-dashboard v1 — Erstellungsplan
-Stand: 2026-09-04. Wird bei Freigabe zu `sba-dashboard/docs/PLAN.md`.
+# sba-dashboard v1 — Erstellungsplan (abgeschlossen, historisch)
+
+> **Dieser Plan ist umgesetzt und wird nicht mehr gepflegt.** Er steht hier als
+> Beleg dafür, welche Befunde den Entwurf bestimmt haben und was v1 bewusst
+> ausgelassen hat — beides ist beim Weiterbauen nützlich, beim Nachschlagen des
+> aktuellen Stands aber irreführend.
+>
+> - Was offen ist: [`roadmap.md`](roadmap.md)
+> - Wie es gebaut ist und warum: [`architektur.md`](architektur.md)
+> - Wie es auf den Laptop kommt: [`verteilung.md`](verteilung.md)
+> - Bedienung: [`nachfolge-anleitung.md`](nachfolge-anleitung.md)
+>
+> Einzelne Angaben unten sind inzwischen überholt. Die auffälligsten:
+> `config.beispiel.json` gibt es nicht mehr (die Benutzerkonfiguration liegt in
+> den lokalen Anwendungsdaten), `atomic_save_workbook` liegt in `bestand.core`
+> statt in `ausleihe-api`, und die beiden Geschwister-Bibliotheken kommen nicht
+> mehr über den `PYTHONPATH`, sondern werden ins venv installiert.
+
+Stand der Niederschrift: 2026-09-04.
 
 ## 0. Befunde aus dem Deep-Dive (bestimmen den Entwurf)
 
@@ -94,7 +111,7 @@ Datenmodell:
     sba-dashboard/
       START.bat                 einziger Einstieg fuer die Lehrkraft
       config.json               ausgeliefert, ohne Secrets
-      config.beispiel.json      kommentiert (Doku-Kopie)
+      config.beispiel.json      (entfallen, war ein Duplikat von config.json)
       pyproject.toml  uv.lock  requirements.txt   (letzteres via `uv export`)
       app/
         __init__.py  main.py    FastAPI-App + Routen

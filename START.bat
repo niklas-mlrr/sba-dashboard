@@ -9,8 +9,11 @@ rem  2. Die drei Quellordner vom Netzlaufwerk nach %LOCALAPPDATA% spiegeln.
 rem     Ausgefuehrt wird lokal: ein venv auf einem SMB-Laufwerk ist quaelend
 rem     langsam und geht bei Verbindungsabbruch kaputt.
 rem  3. Beim ersten Start ein venv anlegen und die Pakete installieren.
-rem  4. Server starten. Die Excel-Datei bleibt die Reihe auf dem Netzlaufwerk -
-rem     kopiert wird nur der Programmcode.
+rem     Die beiden Geschwister-Bibliotheken werden dabei richtig ins venv
+rem     installiert, nicht ueber den PYTHONPATH untergeschoben: die laufende
+rem     Anwendung haengt dann an keinem Ordner mehr, nur noch am venv.
+rem  4. Server starten. Die Excel-Datei bleibt die ganze Zeit auf dem
+rem     Netzlaufwerk - kopiert wird nur der Programmcode.
 rem ==========================================================================
 setlocal EnableExtensions
 pushd "%~dp0"
@@ -18,7 +21,6 @@ pushd "%~dp0"
 set "ZIEL=%LOCALAPPDATA%\sba-dashboard"
 set "CODE=%ZIEL%\app"
 set "VENV=%ZIEL%\venv"
-set "KONFIG=%ZIEL%\config.json"
 set "ANFORDERUNGEN=%CODE%\sba-dashboard\requirements.txt"
 set "INSTALLSTAND=%VENV%\requirements.installed.txt"
 
@@ -69,13 +71,23 @@ echo   Programmdateien werden aktualisiert...
 if not exist "%CODE%" mkdir "%CODE%" >nul 2>&1
 
 set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache node_modules backups /XF *.pyc"
+rem robocopy meldet mit Rueckgabecode 1 "es wurde etwas kopiert". Genau daran
+rem haengt weiter unten die Frage, ob die beiden Bibliotheken neu installiert
+rem werden muessen - sonst liefe nach einem Update weiter der alte Stand.
+set "GESCHWISTER_NEU=0"
 robocopy "%~dp0."          "%CODE%\sba-dashboard" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
 if errorlevel 8 goto :kopierfehler
 robocopy "%~dp0..\sba-bestand"  "%CODE%\sba-bestand"  /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF *.xlsx >nul
 if errorlevel 8 goto :kopierfehler
+if errorlevel 1 set "GESCHWISTER_NEU=1"
 robocopy "%~dp0..\ausleihe-api" "%CODE%\ausleihe-api" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF .env >nul
 if errorlevel 8 goto :kopierfehler
-if not exist "%KONFIG%" copy /y "%CODE%\sba-dashboard\config.json" "%KONFIG%" >nul
+if errorlevel 1 set "GESCHWISTER_NEU=1"
+rem Die ausgelieferte config.json wird NICHT mehr hierher kopiert. Sie ist der
+rem Standard; was die Lehrkraft auswaehlt, legt die Anwendung selbst in
+rem "%ZIEL%\config.json" ab und legt nur die abweichenden Schluessel hinein.
+rem Eine dort schon liegende Vollkopie aus einer aelteren Fassung wird beim
+rem ersten Start bereinigt, die Auswahl bleibt erhalten.
 
 rem ── 3. venv und Pakete ────────────────────────────────────────────────────
 set "VENV_NEU=0"
@@ -84,7 +96,10 @@ if not exist "%VENV%\Scripts\python.exe" (
     %PYEXE% -m venv "%VENV%"
     if errorlevel 1 goto :venvfehler
     set "VENV_NEU=1"
-    "%VENV%\Scripts\python.exe" -m pip install --upgrade pip --quiet
+    rem setuptools und wheel gehoeren mit ins venv: nur dann laesst sich das
+    rem Geschwister-Paket unten mit --no-build-isolation installieren, also
+    rem auch dann noch, wenn der Laptop gerade kein Internet hat.
+    "%VENV%\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel --quiet
     if errorlevel 1 goto :pipfehler
 )
 
@@ -109,15 +124,29 @@ if "%VENV_NEU%"=="1" echo   Einrichtung fertig.
 
 :pakete_fertig
 
+rem ── 3b. Die beiden Bibliotheken ins venv ──────────────────────────────────
+rem Nicht editable und nicht ueber den PYTHONPATH, sondern ein gewoehnlicher
+rem Install aus dem gespiegelten Quellbaum. Damit haengt die laufende Anwendung
+rem an nichts ausser dem venv; ein halb geloeschter Spiegelordner oder ein
+rem vergessenes PYTHONPATH-Fenster kann sie nicht mehr auf halbem Weg brechen.
+rem --no-build-isolation nutzt das oben installierte setuptools statt eines
+rem frisch heruntergeladenen; --no-deps, weil requirements.txt die einzige
+rem Quelle fuer Paketversionen bleibt.
+if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"
+if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig
+echo   Bibliotheken werden eingerichtet...
+"%VENV%\Scripts\python.exe" -m pip install --no-build-isolation --no-deps --quiet "%CODE%\ausleihe-api" "%CODE%\sba-bestand"
+if errorlevel 1 goto :geschwisterfehler
+:geschwister_fertig
+
 rem ── 4. Starten ────────────────────────────────────────────────────────────
-rem Die beiden Geschwister-Repos kommen ueber den PYTHONPATH statt ueber
-rem "pip install -e": beide sind reines Python, und ein Editable-Install
-rem braeuchte hier ein Build-Backend aus dem Netz.
-set "PYTHONPATH=%CODE%\sba-bestand;%CODE%\ausleihe-api"
 set "PYTHONUTF8=1"
 echo.
 cd /d "%CODE%\sba-dashboard"
-"%VENV%\Scripts\python.exe" -m app.start --config "%KONFIG%"
+rem Ohne --config laeuft der Produktivmodus: ausgelieferte config.json plus
+rem Benutzerkonfiguration aus %LOCALAPPDATA%. Ein ausdruecklicher --config-Pfad
+rem waere der Arbeitskopie-Modus und wuerde genau diese Trennung aufheben.
+"%VENV%\Scripts\python.exe" -m app.start
 goto :ende
 
 :kopierfehler
@@ -144,6 +173,18 @@ exit /b 1
 echo.
 echo   Die benoetigten Pakete liessen sich nicht installieren.
 echo   Meist fehlt dafuer der Internetzugang. Bitte Niklas Bescheid geben.
+echo.
+if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1
+pause
+popd
+exit /b 1
+
+:geschwisterfehler
+echo.
+echo   Die mitgelieferten Bibliotheken liessen sich nicht einrichten.
+echo   Meist heisst das: das Netzlaufwerk war beim Kopieren nicht vollstaendig
+echo   verbunden. Bitte es erneut versuchen und, falls es wieder passiert,
+echo   Niklas Bescheid geben.
 echo.
 if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1
 pause

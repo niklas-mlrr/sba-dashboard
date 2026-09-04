@@ -5,10 +5,12 @@
 #         --format requirements-txt -o requirements.txt
 #
 # Die beiden Geschwister-Repos (ausleihe-api, sba-bestand) stehen hier bewusst
-# NICHT drin. Ein `pip install -e ..\ausleihe-api` müsste auf dem Laptop ein
-# Build-Backend beschaffen und scheitert genau dort, wo niemand mehr weiterhelfen
-# kann. Stattdessen legt START.bat die beiden Quellbäume auf den PYTHONPATH -
-# beide sind reine Python-Pakete ohne Kompilat.
+# NICHT drin: sie sind Pfad-Abhängigkeiten und haben in einer Datei, die auf
+# einem fremden Rechner mit `pip install -r` verarbeitet wird, keine gültige
+# Adresse. START.bat installiert sie stattdessen aus den gespiegelten
+# Quellbäumen in dasselbe venv (`pip install --no-build-isolation --no-deps`),
+# damit die laufende Anwendung sie aus site-packages importiert und zur Laufzeit
+# kein PYTHONPATH mehr nötig ist. Begründung in docs/verteilung.md.
 #
 # Nicht von Hand bearbeiten: bei Änderungen an pyproject.toml neu exportieren.
 annotated-doc==0.0.5
@@ -22,9 +24,7 @@ anyio==4.15.0
 certifi==2026.7.22
     # via requests
 charset-normalizer==3.5.1
-    # via
-    #   reportlab
-    #   requests
+    # via requests
 click==8.5.0
     # via uvicorn
 et-xmlfile==2.0.0
@@ -51,8 +51,6 @@ openpyxl==3.1.5
     # via
     #   sba-bestand
     #   sba-dashboard
-pillow==12.3.0
-    # via reportlab
 pydantic==2.13.5
     # via fastapi
 pydantic-core==2.46.5
@@ -64,8 +62,6 @@ python-dotenv==1.2.3
     #   uvicorn
 pyyaml==6.0.3
     # via uvicorn
-reportlab==4.5.1
-    # via sba-bestand
 requests==2.34.2
     # via
     #   iserv-ausleihe-api

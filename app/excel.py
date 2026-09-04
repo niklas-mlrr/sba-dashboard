@@ -19,6 +19,8 @@ Der Schreibpfad hat drei Schutzschichten, die alle drei nötig sind:
   angefasst und die Änderung wird abgelehnt statt sie zu überschreiben.
 * **Atomar speichern.** Erst vollständig in eine Nachbardatei schreiben, dann
   ``os.replace``. Ein Abbruch mittendrin lässt die alte Mappe unberührt.
+  ``atomic_save_workbook`` liegt dafür in ``bestand.core`` — dort, wo auch die
+  CLI der Bestandsliste sie benutzt.
 """
 from __future__ import annotations
 
@@ -32,7 +34,9 @@ from math import isfinite
 from pathlib import Path
 from typing import Iterator
 
-from ausleihe.inventory_excel import atomic_save_workbook
+# Aus bestand.core, nicht mehr aus dem IServ-Client: dauerhaftes Speichern
+# einer Mappe kennt weder IServ noch HTTP (siehe docs/verteilung.md).
+from bestand.core import atomic_save_workbook
 from openpyxl import load_workbook
 
 # Nur diese zwei Spalten sind von Hand änderbar. "Angemeldet" kommt aus IServ,

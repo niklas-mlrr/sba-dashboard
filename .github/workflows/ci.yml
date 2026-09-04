@@ -1,0 +1,174 @@
+name: CI
+
+# Läuft bei jedem Push und bei jedem Pull Request. Keine Secrets nötig: alle drei
+# Repos (sba-dashboard, sba-bestand, ausleihe-api) sind öffentlich, und die
+# Tests laufen grundsätzlich offline - kein Netz, kein IServ (siehe
+# tests/conftest.py: bestand.core.testing.FakeClient und build_workbook).
+on:
+  push:
+  pull_request:
+
+# GitHub Actions kann nur innerhalb von $GITHUB_WORKSPACE auschecken. Das
+# Geschwister-Layout aus README.md ("ausleihe-api/, sba-bestand/,
+# sba-dashboard/ liegen nebeneinander") wird deshalb direkt im Workspace
+# nachgebaut:
+#
+#   $GITHUB_WORKSPACE/
+#     sba-dashboard/   <- dieses Repo
+#     sba-bestand/     <- Geschwister-Repo, öffentlich
+#     ausleihe-api/    <- Geschwister-Repo, öffentlich
+#
+# pyproject.toml bindet beide über [tool.uv.sources] als relativen,
+# editierbaren Pfad ein ("../ausleihe-api", "../sba-bestand") - ohne dieses
+# Layout schlägt schon `uv sync` fehl.
+jobs:
+  tests:
+    name: tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Ein Windows-Fehlschlag darf die Linux-Ergebnisse nicht verschlucken -
+      # gerade auf Windows ist der Schreibpfad am wichtigsten (siehe unten).
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          # Windows ist hier Pflicht, nicht Beigabe: der Dateisperren-Pfad
+          # (msvcrt.locking statt fcntl.flock, app/excel.py::_versuche_dateisperre),
+          # der ~$<Name>.xlsx-Sperrdateipfad und der Schreibpfad über ein
+          # Netzlaufwerk (SMB) verhalten sich unter Windows anders - und genau
+          # dort, auf dem Schul-Laptop, läuft die Anwendung produktiv.
+          - os: windows-latest
+            python-version: "3.11"
+    defaults:
+      run:
+        working-directory: sba-dashboard
+    steps:
+      - name: sba-dashboard auschecken
+        uses: actions/checkout@v5
+        with:
+          path: sba-dashboard
+
+      - name: sba-bestand auschecken (Geschwister-Repo)
+        uses: actions/checkout@v5
+        with:
+          repository: niklas-mlrr/sba-bestand
+          path: sba-bestand
+
+      - name: ausleihe-api auschecken (Geschwister-Repo)
+        uses: actions/checkout@v5
+        with:
+          repository: niklas-mlrr/ausleihe-api
+          path: ausleihe-api
+
+      # actions/setup-python statt "uv python install": setup-python bringt auf
+      # allen drei Runnern (insbesondere windows-latest) einen vorinstallierten,
+      # von GitHub gepflegten Python-Build mit und braucht dafür keinen
+      # zusätzlichen Download bei jedem Lauf. "uv python install" lädt bei
+      # jedem Job einen eigenen Build von astral-sh nach - auf Windows-Runnern
+      # spürbar langsamer und eine zusätzliche externe Abhängigkeit, ohne dass
+      # es hier einen Vorteil brächte. uv erkennt den von setup-python auf dem
+      # PATH platzierten Interpreter automatisch.
+      - name: Python ${{ matrix.python-version }} einrichten
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # astral-sh/setup-uv installiert nur den uv-Binärbaustein selbst; Python
+      # kommt oben aus actions/setup-python. Ab v8 veröffentlicht setup-uv
+      # keine wandernden Major-Tags mehr (kein "@v8", nur volle Versionen wie
+      # "@v10.0.1") - deshalb hier ausnahmsweise eine exakte Version statt
+      # eines Major-Tags, geprüft über die Tag-Liste des Repos.
+      - name: uv einrichten
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: "sba-dashboard/uv.lock"
+
+      - name: Abhängigkeiten installieren
+        run: uv sync --all-groups
+
+      - name: Ruff (Lint)
+        run: uv run ruff check app tests
+
+      - name: Pytest
+        run: uv run pytest -q
+
+  abhaengigkeiten:
+    name: requirements.txt entspricht uv export
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sba-dashboard
+    steps:
+      - name: sba-dashboard auschecken
+        uses: actions/checkout@v5
+        with:
+          path: sba-dashboard
+
+      # uv export löst den Lockfile gegen [tool.uv.sources] auf und braucht die
+      # beiden Geschwister-Pfade dafür ebenso wie `uv sync` im tests-Job.
+      - name: sba-bestand auschecken (Geschwister-Repo)
+        uses: actions/checkout@v5
+        with:
+          repository: niklas-mlrr/sba-bestand
+          path: sba-bestand
+
+      - name: ausleihe-api auschecken (Geschwister-Repo)
+        uses: actions/checkout@v5
+        with:
+          repository: niklas-mlrr/ausleihe-api
+          path: ausleihe-api
+
+      - name: Python einrichten
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: uv einrichten
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: "sba-dashboard/uv.lock"
+
+      # Eigener Schritt mit lesbarer Ausgabe statt nur über pytest (das prüft
+      # zusätzlich tests/test_windows_start.py::test_requirements_entsprechen_dem_uv_export,
+      # aber ohne brauchbaren Diff in der CI-Ausgabe). Der Exportbefehl ist mit
+      # dem Kopf von requirements.txt und mit UV_EXPORT in
+      # tests/test_windows_start.py identisch zu halten.
+      - name: requirements.txt gegen 'uv export' prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          uv export --no-dev --no-hashes --no-emit-project \
+              --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \
+              --format requirements-txt -o /tmp/requirements.exportiert.txt
+
+          # requirements.txt hat einen handgeschriebenen Kommentarkopf, den
+          # 'uv export' so nicht erzeugt. Verglichen wird deshalb erst ab der
+          # ersten Paketzeile - derselbe Ausschnitt, den
+          # tests/test_windows_start.py::_ab_erster_paketzeile bildet.
+          ab_erster_paketzeile() {
+            awk '/^[^ #]/ { drucken = 1 } drucken' "$1"
+          }
+
+          ab_erster_paketzeile requirements.txt > /tmp/vorhanden.txt
+          ab_erster_paketzeile /tmp/requirements.exportiert.txt > /tmp/erwartet.txt
+
+          if diff -u /tmp/vorhanden.txt /tmp/erwartet.txt; then
+            echo "requirements.txt entspricht dem aktuellen 'uv export'."
+          else
+            echo
+            echo "::error::requirements.txt ist veraltet (Diff oben: '-' vorhanden, '+' erwartet)."
+            echo "Reparieren mit:"
+            echo "    uv export --no-dev --no-hashes --no-emit-project \\"
+            echo "        --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \\"
+            echo "        --format requirements-txt -o requirements.txt"
+            echo
+            echo "Danach den handgeschriebenen Kommentarkopf von requirements.txt"
+            echo "wieder voranstellen - 'uv export' ersetzt ihn durch seinen eigenen."
+            exit 1
+          fi

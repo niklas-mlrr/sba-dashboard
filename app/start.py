@@ -65,8 +65,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     argumente = parser.parse_args(argv)
 
-    wurzel = Path(__file__).parent.parent
-    config_pfad = argumente.config or wurzel / "config.json"
+    # None (kein --config) bedeutet Produktivmodus: ausgelieferter Standard
+    # plus Benutzerkonfiguration im plattformabhängigen Ordner, siehe
+    # lade_einstellungen. Erst mit explizitem --config PATH ist es der
+    # Arbeitskopie-Modus ohne Overlay.
+    config_pfad = argumente.config
     try:
         einstellungen = lade_einstellungen(config_pfad)
     except Exception as exc:  # noqa: BLE001 - Klartext statt Traceback

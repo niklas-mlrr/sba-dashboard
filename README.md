@@ -11,10 +11,18 @@ Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 ## Stand
 
 Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
-geprüft. Offen ist die **Nachfolge-Anleitung** (`docs/nachfolge-anleitung.md`)
-und der Testlauf auf dem Schul-Laptop. Der vollständige Plan steht in
-[`docs/PLAN.md`](docs/PLAN.md), die Entwurfsgründe in
-[`docs/architektur.md`](docs/architektur.md).
+geprüft. Offen sind nur noch der **Testlauf auf dem Schul-Laptop**
+([Prüfliste](docs/schul-laptop-test.md)) und die **Gestaltungsvorlage**, für die
+es noch keine Referenz gibt.
+
+| Dokument | Wofür |
+|----------|-------|
+| [`docs/nachfolge-anleitung.md`](docs/nachfolge-anleitung.md) | Bedienung, ohne Vorwissen |
+| [`docs/architektur.md`](docs/architektur.md) | Warum es so gebaut ist |
+| [`docs/verteilung.md`](docs/verteilung.md) | Wie es auf den Laptop kommt, Migration und Rollback |
+| [`docs/roadmap.md`](docs/roadmap.md) | Was offen ist |
+| [`docs/schul-laptop-test.md`](docs/schul-laptop-test.md) | Prüfliste für den Testlauf |
+| [`docs/PLAN.md`](docs/PLAN.md) | Der abgeschlossene v1-Plan, historisch |
 
 | Route | Zweck |
 |-------|-------|
@@ -55,11 +63,32 @@ uv run pytest            # offline, ohne IServ und ohne echte Excel-Datei
 uv run ruff check app tests
 ```
 
+Dieselben Schritte laufen in der CI (`.github/workflows/ci.yml`) auf Linux mit
+Python 3.10 und 3.11 sowie auf Windows — letzteres nicht als Beigabe: die
+Dateisperre (`msvcrt.locking` statt `fcntl.flock`), der Schreibpfad und die
+`~$…`-Sperrdatei verhalten sich dort anders, und dort läuft die Anwendung
+produktiv. Ein weiterer Job prüft, dass `requirements.txt` dem `uv export`
+entspricht.
+
+`tools/diagnose.py` prüft auf einem fremden Rechner die Kette vom Python bis zur
+Arbeitsmappe und schreibt einen Bericht, den man weitergeben kann. Es schreibt
+nie in die Mappe und braucht keine Zugangsdaten.
+
 Zum Ausprobieren braucht es eine Mappe. Der Pfad steht in `config.json` unter
 `excel_pfad_kandidaten` — eine **Liste**, weil dieselbe Datei auf dem einen
 Rechner über einen Laufwerksbuchstaben und auf dem anderen über UNC erreichbar
 ist. Der erste existierende Pfad gewinnt; existiert keiner, zeigt die Startseite
 alle geprüften Pfade.
+
+`config.json` ist der **ausgelieferte Standard** und wird im Betrieb nie
+beschrieben. Was die Lehrkraft auswählt, landet in einer Benutzerkonfiguration
+mit nur den abweichenden Schlüsseln — unter Windows in
+`%LOCALAPPDATA%\sba-dashboard\config.json`, unter macOS in
+`~/Library/Application Support/sba-dashboard/`, unter Linux in
+`$XDG_CONFIG_HOME/sba-dashboard/` (bzw. `~/.config/…`). `SBA_CONFIG_DIR`
+überschreibt den Ordner. Ein `--config PATH` schaltet in den
+Arbeitskopie-Modus: dann sind Standard und Benutzerkonfiguration genau diese
+eine Datei. Details in [`docs/architektur.md`](docs/architektur.md).
 
 ```bash
 uv run python -m app.start           # sucht einen freien Port, oeffnet den Browser
@@ -105,10 +134,13 @@ für eine kontrollierte Aktualisierung der Vorlage gedacht.
 
 `START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die drei
 Quellbäume nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten Mal ein
-venv anlegen, dann `python -m app.start`. Bei späteren Starts vergleicht es
-`requirements.txt` mit dem zuletzt erfolgreich installierten Stand und
-aktualisiert Pakete nur bei einer Änderung. `requirements.txt` wird erzeugt,
-nicht von Hand gepflegt:
+venv anlegen, `ausleihe-api` und `sba-bestand` dort hinein installieren, dann
+`python -m app.start`. Bei späteren Starts vergleicht es `requirements.txt` mit
+dem zuletzt erfolgreich installierten Stand und aktualisiert Pakete nur bei einer
+Änderung; die beiden Bibliotheken installiert es nur neu, wenn `robocopy`
+gemeldet hat, dass sich an ihren Quellen etwas geändert hat.
+
+`requirements.txt` wird erzeugt, nicht von Hand gepflegt:
 
 ```bash
 uv export --no-dev --no-hashes --no-emit-project \
@@ -116,8 +148,16 @@ uv export --no-dev --no-hashes --no-emit-project \
     --format requirements-txt -o requirements.txt
 ```
 
-Die beiden Geschwister-Repos stehen bewusst nicht darin — sie kommen über den
-`PYTHONPATH` (Begründung in `docs/architektur.md`).
+Die beiden Geschwister-Repos stehen bewusst nicht darin: als Pfad-Abhängigkeiten
+hätten sie in einer Datei, die auf einem fremden Rechner mit `pip install -r`
+verarbeitet wird, keine gültige Adresse. `START.bat` installiert sie stattdessen
+aus den gespiegelten Quellbäumen mit `pip install --no-build-isolation --no-deps`
+in dasselbe venv. **Zur Laufzeit ist deshalb kein `PYTHONPATH` mehr nötig** — die
+Anwendung hängt an nichts außer dem venv.
+
+Warum es drei Repos bleiben, was die Alternativen wären (uv-Workspace,
+versionierte Wheels) und wie man den Schritt zurückdreht, steht in
+[`docs/verteilung.md`](docs/verteilung.md).
 
 ## Gestaltung
 

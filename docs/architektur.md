@@ -111,7 +111,8 @@ können zwei Prozesse nicht beide dieselbe alte Fassung laden und nacheinander
 speichern. Auf dem SMB-Laufwerk gilt dies, sofern der Server Dateisperren
 weitergibt.
 
-**Atomar speichern.** `atomic_save_workbook` schreibt in eine Nachbardatei,
+**Atomar speichern.** `atomic_save_workbook` (in `bestand.core`, nicht mehr im
+IServ-Client — siehe [`verteilung.md`](verteilung.md)) schreibt in eine Nachbardatei,
 `fsync`t und ersetzt dann per `os.replace`. Ein Abbruch mittendrin — WLAN weg,
 Akku leer — lässt die alte Mappe unberührt. Jeder Speichervorgang legt zusätzlich
 ein Backup in `backups/` an; der Ordner wird auf `backups_behalten` (Standard 30)
@@ -186,6 +187,99 @@ stand in der Mappe die Strichfassung und im Cache die nackte Ziffernfolge — zw
 Schreibweisen derselben Zahl in derselben Tabellenzeile.
 
 Der Cache ist **reine Anzeige**. Keine Zahl der Tabelle wird je aus ihm gelesen.
+Das ist nicht nur eine Beschreibung, sondern die Begründung dafür, wie hart mit
+ihm umgegangen werden darf: eine kaputte Cache-Datei darf niemals eine Anfrage
+scheitern lassen. `laden()` wirft deshalb unter keinen Umständen. Ungültiges
+JSON, ein `stand`, der kein Zeitstempel ist, eine Eintragsliste, die ein Array
+ist, ein Preis als `"12,50"` — jeder dieser Fälle wird zu einem leeren oder
+teilweise gefüllten Cache, nicht zu einem Fehler. Ein einzelner kaputter Eintrag
+wird bereinigt, statt die ganze Datei zu verwerfen.
+
+Geschrieben wird atomar: Nachbardatei, `fsync`, `os.replace`. Ohne das
+hinterlässt ein Abbruch mittendrin eine halbe JSON-Datei, die beim nächsten Start
+genau so aussieht wie ein Cache, der nie geschrieben wurde — nur dass sie
+existiert und die Frage „lief der Abruf?" falsch beantwortet.
+
+### Ein Cache-Fehler ist eine Warnung, kein gescheiterter Abruf
+
+Der Cache wird geschrieben, **nachdem** die Mappe erfolgreich gespeichert wurde.
+Zu diesem Zeitpunkt sind die Zahlen sicher. Schlägt danach das Schreiben des
+Caches fehl, wäre „Abruf fehlgeschlagen" eine Lüge mit Folgen: die Lehrkraft
+würde ihn wiederholen, obwohl er getan hat, was er sollte. Der Lauf endet
+deshalb erfolgreich, und in den Warnungen steht, dass Titel und ISBN diesmal
+leer bleiben können.
+
+### Speicherort: geteilt vor schreibbar
+
+Der Sidecar bleibt primär neben der Mappe, weil er gemeinsame Anzeigedaten sind
+— ein Abruf von einem Rechner füllt Titel und ISBN für alle, die die Mappe
+öffnen, und der Cache verschwindet mit ihr, ohne dass ihn jemand extra
+aufräumen muss. Das Gruppenlaufwerk kann aber schreibgeschützt oder kurz nicht
+erreichbar sein. Deshalb weicht `speichern()` bei einem `OSError` auf einen
+zweiten, plattformabhängigen Ordner im lokalen Benutzerprofil aus
+(`cache_pfad_lokal`, überschreibbar über `SBA_CACHE_DIR`). Scheitert auch das,
+bleibt es bei der Warnung oben.
+
+Der Trade-off ist bewusst **geteilt vor garantiert schreibbar**, weil der Cache
+reine Anzeige ist: im schlimmsten Fall fehlt eine Spalte, nie steht eine falsche
+Zahl in der Tabelle. Beim Lesen werden beide Orte tolerant geparst, und der mit
+dem neueren `stand` gewinnt — damit ein Abruf, der auf den lokalen Ordner
+ausweichen musste, beim nächsten Laden trotzdem sichtbar wird.
+
+## Zwei Ebenen: ausgelieferter Standard + Benutzerkonfiguration
+
+`config.json` im Repo ist der ausgelieferte Standard und wird im Normalbetrieb
+nie beschrieben — eine Anpassung der Lehrkraft darf einen Git-Pull oder eine
+Neukopie durch `START.bat` nicht verlieren. Vorher war genau das der Fall: die
+Ersteinrichtung schrieb den gewählten Excel-Pfad in die versionierte Datei
+zurück.
+
+Anpassungen landen jetzt in einer Benutzerkonfiguration in einem
+plattformabhängigen Ordner:
+
+| Plattform | Pfad |
+|-----------|------|
+| Windows | `%LOCALAPPDATA%\sba-dashboard\config.json` |
+| macOS | `~/Library/Application Support/sba-dashboard/config.json` |
+| Linux | `$XDG_CONFIG_HOME/sba-dashboard/config.json`, sonst `~/.config/…` |
+
+`SBA_CONFIG_DIR` überschreibt den Ordner auf jeder Plattform; die Tests setzen
+sie immer, damit nichts im echten Benutzerprofil landet.
+
+Diese Datei enthält **nur tatsächlich geänderte Schlüssel**, kein Vollduplikat,
+und wird flach über den Standard gelegt. Fehlt sie oder ist sie kaputt, gilt der
+Standard — der Start wird dadurch nie verhindert. Ein *zusammengesetztes*
+Ergebnis, das semantisch ungültig ist (etwa ein Port aus dem Overlay außerhalb
+1024–65535), bricht dagegen mit Klartext ab: zu raten, welche Ebene schuld ist,
+wäre schlimmer als ein deutlicher Fehler.
+
+`config.beispiel.json` ist damit weggefallen. Sie war byteweise identisch zur
+ausgelieferten `config.json` und damit eine zweite Wahrheit ohne Zusatznutzen.
+
+### Migration einer alten Vollkopie
+
+Auf schon eingerichteten Rechnern lag unter `%LOCALAPPDATA%` eine vollständige
+Kopie der alten `config.json`, angelegt von der früheren `START.bat`. Sie würde
+jedes künftige Update des Standards maskieren. Beim ersten Laden mit dem
+Ebenenmodell wird sie einmalig bereinigt: Schlüssel, die weiterhin mit dem
+Standard übereinstimmen, werden verworfen, echte Abweichungen — allen voran der
+gewählte Excel-Pfad — bleiben erhalten. Zurückgeschrieben wird nur, wenn sich
+dabei wirklich etwas ändert.
+
+Der Arbeitskopie-Modus (`--config PATH`, benutzt von `START.sh`) bleibt
+unverändert: dort sind Standard und Benutzerkonfiguration bewusst dieselbe
+Datei, und geschrieben wird genau dorthin.
+
+### Was validiert wird
+
+Nicht aus Ordnungsliebe, sondern weil jeder dieser Werte einen Fehlerweg hat,
+der sonst erst spät und unverständlich auffällt: `iserv_domain` (ein
+`https://`-Präfix ist der häufigste Tippfehler und wird ausdrücklich benannt),
+`port` (1024–65535; darunter bräuchte es Rechte, die niemand haben soll),
+`backups_behalten` (0–1000), `blatt_raster`, `excel_pfad_kandidaten` und
+`sicherheitsbestand`. Unbekannte Schlüssel sind **kein** Fehler — eine spätere
+Fassung darf welche ergänzen —, werden aber gesammelt und beim Start genannt,
+damit ein Tippfehler im Schlüsselnamen nicht stillschweigend wirkungslos bleibt.
 
 ## Warum das venv nach %LOCALAPPDATA%
 
@@ -201,7 +295,21 @@ gespiegelte Datei davon abweicht. Der Marker wird erst nach erfolgreicher
 Installation ersetzt. Ein abgebrochenes Update wird beim nächsten Start daher
 erneut versucht.
 
-Die beiden Geschwister-Repos kommen über den `PYTHONPATH`, nicht über
-`pip install -e`. Ein Editable-Install bräuchte auf dem Laptop ein Build-Backend
-aus dem Netz und scheitert genau dort, wo niemand mehr weiterhelfen kann. Beide
-sind reines Python ohne Kompilat, ein Pfadeintrag genügt.
+Die beiden Geschwister-Repos werden in dasselbe venv **installiert**, nicht über
+den `PYTHONPATH` untergeschoben. Ein `PYTHONPATH` koppelt die *laufende*
+Anwendung an eine Ordnerstruktur; ein halb gespiegelter Baum oder ein Fenster mit
+altem `PYTHONPATH` bricht sie dann an einer Stelle, an der niemand mehr sucht.
+Nach dem Install hängt sie an nichts außer dem venv, und die gespiegelten
+Quellbäume sind nur noch Bauzutat.
+
+Damit das auch offline funktioniert, bekommt das venv beim Anlegen `setuptools`
+und `wheel` mit; installiert wird dann mit `--no-build-isolation --no-deps`.
+Ohne `--no-build-isolation` holte sich pip bei jedem Update ein Build-Backend aus
+dem Netz — genau der Fall, der auf dem Schul-Laptop nicht verlässlich klappt.
+`--no-deps` hält `requirements.txt` als einzige Quelle für Paketversionen.
+Neu installiert wird nur, wenn `robocopy` gemeldet hat, dass sich an den beiden
+Bäumen etwas geändert hat, oder wenn das venv neu ist.
+
+Warum es überhaupt drei Repos bleiben und was die Alternativen wären (uv-
+Workspace, versionierte Wheels), steht mit Migration und Rollback in
+[`verteilung.md`](verteilung.md).
