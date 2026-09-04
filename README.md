@@ -64,6 +64,33 @@ uv run python -m app.start --kein-browser
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8765   # ohne Beenden-Knopf
 ```
 
+## macOS und Linux: mit Arbeitskopie starten
+
+`START.bat` ist nur für den Schul-Laptop mit Windows. Auf macOS und Linux
+startet `START.sh` das Dashboard mit einer **lokalen Arbeitskopie** der Mappe;
+die Originaldatei wird nicht beschrieben. Es erwartet das Geschwister-Layout
+aus `ausleihe-api/`, `sba-bestand/` und `sba-dashboard/`.
+
+```bash
+cd ~/projects/sba/sba-dashboard
+chmod +x START.sh       # nur beim ersten Mal
+./START.sh
+```
+
+Beim ersten Start braucht der Mac [`uv`](https://docs.astral.sh/uv/):
+
+```bash
+brew install uv
+```
+
+Die Kopie liegt danach in `.local/` und bleibt bei weiteren Starts erhalten.
+Zum Zurücksetzen diese Datei löschen, nicht die Originalmappe. Liegt die Mappe
+an einem anderen Ort, den Pfad einmalig mitgeben:
+
+```bash
+SBA_ORIGINAL_EXCEL="/voller/Pfad/Bestand- und Nachbestellungsliste 2026.xlsx" ./START.sh
+```
+
 ## Auf dem Schul-Laptop
 
 `START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die drei

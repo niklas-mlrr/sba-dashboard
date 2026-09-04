@@ -9,8 +9,8 @@ Zahlen; im Schulnetz erreichbar wäre sie ein Datenschutzvorfall, kein Feature.
 """
 from __future__ import annotations
 
+import argparse
 import socket
-import sys
 import threading
 import webbrowser
 from pathlib import Path
@@ -50,12 +50,33 @@ def main(argv: list[str] | None = None) -> int:
 
     from .main import app, lade_einstellungen
 
+    parser = argparse.ArgumentParser(
+        description="Startet das Schulbuchausleihe-Dashboard lokal."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Pfad zu einer alternativen config.json, etwa für eine Arbeitskopie der Mappe.",
+    )
+    parser.add_argument(
+        "--kein-browser",
+        action="store_true",
+        help="Öffnet keinen Browser automatisch.",
+    )
+    argumente = parser.parse_args(argv)
+
     wurzel = Path(__file__).parent.parent
+    config_pfad = argumente.config or wurzel / "config.json"
     try:
-        einstellungen = lade_einstellungen(wurzel / "config.json")
+        einstellungen = lade_einstellungen(config_pfad)
     except Exception as exc:  # noqa: BLE001 - Klartext statt Traceback
-        print(f"config.json ist unbrauchbar: {exc}")
+        print(f"Konfiguration ist unbrauchbar: {exc}")
         return 2
+
+    # Die Routen lesen diese Instanz statt erneut die Standard-config.json zu
+    # laden. So kann START.sh mit einer lokalen Arbeitskopie laufen, ohne die
+    # für den Schul-Laptop bestimmte Konfiguration zu verändern.
+    app.state.einstellungen = einstellungen
 
     port = freier_port(einstellungen.port)
     url = f"http://{HOST}:{port}/"
@@ -77,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     # Über diese Referenz beendet sich der Server aus /api/beenden selbst.
     app.state.server = server
 
-    if "--kein-browser" not in (argv if argv is not None else sys.argv[1:]):
+    if not argumente.kein_browser:
         oeffne_browser(url)
 
     server.run()

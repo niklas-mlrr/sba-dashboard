@@ -1,11 +1,13 @@
 """Start und Beenden: freier Port, 127.0.0.1, Knopf statt Strg+C."""
 from __future__ import annotations
 
+import json
 import socket
 
 import pytest
 
-from app.start import HOST, freier_port
+from app.main import app
+from app.start import HOST, freier_port, main
 
 
 def test_freier_port_nimmt_den_wunschport():
@@ -67,3 +69,31 @@ def test_beenden_setzt_das_abschaltsignal(client):
 
 def test_die_seite_hat_einen_beenden_knopf(client):
     assert 'id="beenden"' in client.get("/").text
+
+
+def test_start_nimmt_alternative_config_und_setzt_app_zustand(tmp_path, monkeypatch):
+    config = tmp_path / "arbeitskopie.json"
+    config.write_text(json.dumps({
+        "iserv_domain": "iserv.example",
+        "excel_pfad_kandidaten": [str(tmp_path / "kopie.xlsx")],
+        "blatt_raster": "Raster",
+        "port": 18765,
+    }), encoding="utf-8")
+
+    class _Server:
+        def __init__(self, _config):
+            self.should_exit = False
+
+        def run(self):
+            pass
+
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "Server", _Server)
+    monkeypatch.setattr("app.start.freier_port", lambda port: port)
+    try:
+        assert main(["--config", str(config), "--kein-browser"]) == 0
+        assert app.state.einstellungen.excel_pfad_kandidaten == (tmp_path / "kopie.xlsx",)
+    finally:
+        app.state.einstellungen = None
+        app.state.server = None
