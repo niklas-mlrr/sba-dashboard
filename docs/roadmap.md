@@ -25,6 +25,27 @@ Behoben durch kurzes Wiederholen (`_ersetze_mit_wiederholung`, sieben Versuche
 auf den lokalen Ordner greift wie zuvor. Zwei neue Tests stellen den
 Windows-Fehler unter POSIX nach, damit beides prüfbar bleibt.
 
+**Dieselbe Ursache traf auch die Leseseite.** Mit der Wiederholung beim
+Schreiben war `WinError 5` weg, der nächste Lauf scheiterte im selben Test
+aber an einem *leeren* Cache: während `os.replace` läuft, beantwortet Windows
+ein `open()` mit einer Zugriffsverletzung, und `_datei_lesen` machte daraus
+unter seinem gemeinsamen `except OSError` stillschweigend „kein Cache
+vorhanden". Ein Seitenaufbau, der zufällig in einen Abruf fällt, hätte Titel
+und ISBN leer gezeigt. Die Leseseite wiederholt jetzt mit denselben Werten.
+
+**Und dieselbe Ursache steckte in der Arbeitsmappe selbst** (`sba-bestand`,
+`atomic_save_workbook`) — dort ungefunden, weil die CI nur den Cache
+provoziert. Erreichbar ist sie mit Absicht: der Lesepfad (`GET /` und
+`/api/rows`) lädt die Mappe **ohne** Sperre, damit ein Leser nie auf einen
+Schreiber warten muss; nur der Schreibpfad nimmt `arbeitsmappe_sperren`. Zwei
+Fenster — Abschnitt G der Prüfliste — überlappen sich also genau so. Die Folge
+wäre nicht nur ein verlorener Schreibvorgang, sondern eine falsche Erklärung:
+`app/excel.py` übersetzt jeden `PermissionError` in „Die Datei ist gerade in
+Excel geöffnet", und die Lehrkraft hätte Excel geschlossen und dieselbe
+Meldung wieder bekommen. Der bestehende Test
+`test_lesen_waehrend_des_schreibens_…` trifft den Fall nicht, weil er den Save
+*vor* dem Ersetzen anhält.
+
 **Zweiter Befund aus demselben Fehlschlag:** Pytest war auf Windows nach zwei
 Minuten fertig, der Prozess lief danach aber weitere zehn Minuten, bis die CI
 ihn abbrach. Ursache war der fehlgeschlagene Test selbst — er setzte sein
