@@ -1,0 +1,38 @@
+[project]
+name = "sba-dashboard"
+version = "0.1.0"
+description = "Weboberfläche für die Bestands- und Nachbestellungsliste der Schulbuchausleihe"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "jinja2>=3.1",
+    "openpyxl>=3.1,<4",
+    "python-dotenv>=1,<2",
+    # Geschwister-Repos, siehe [tool.uv.sources] und ../README.md
+    "iserv-ausleihe-api",
+    "sba-bestand",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<9", "httpx2>=0.28", "ruff>=0.8,<1"]
+
+# Das Geschwister-Layout ist verbindlich: ausleihe-api, sba-bestand und
+# sba-dashboard liegen nebeneinander. Wer eines woandershin klont, bricht alle.
+[tool.uv.sources]
+iserv-ausleihe-api = { path = "../ausleihe-api", editable = true }
+sba-bestand = { path = "../sba-bestand", editable = true }
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

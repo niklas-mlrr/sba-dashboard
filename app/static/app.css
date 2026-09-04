@@ -1,0 +1,87 @@
+/* Gestaltungs-Marken (Tokens).
+ *
+ * VORLÄUFIG. Das Dashboard soll sich am offiziellen Schulbuchausleihe-Modul
+ * orientieren; dafür liegt noch keine Vorlage vor (siehe docs/PLAN.md,
+ * Schritt 1). Bis dahin gilt ein zurückhaltender Verwaltungs-Stil. Wenn die
+ * Vorlage da ist, werden ausschließlich die Werte in :root ersetzt - die
+ * Regeln darunter bleiben, wie sie sind.
+ */
+:root {
+  --grund: #ffffff;
+  --flaeche: #f6f7f9;
+  --rand: #d8dce2;
+  --text: #1c2024;
+  --text-leise: #5c6570;
+  --akzent: #14508c;
+  --bedarf: #8c3a14;
+  --warnung-grund: #fdf3e3;
+  --warnung-rand: #e5c58a;
+  --schrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --zeilenhoehe: 1.45;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 1.5rem 3rem;
+  background: var(--grund);
+  color: var(--text);
+  font: 15px/var(--zeilenhoehe) var(--schrift);
+}
+
+.kopf { padding: 1.5rem 0 1rem; border-bottom: 1px solid var(--rand); }
+.kopf h1 { margin: 0; font-size: 1.35rem; font-weight: 600; }
+.meta { margin: .35rem 0 0; color: var(--text-leise); font-size: .875rem; }
+
+.hinweis {
+  margin: 1rem 0 0;
+  padding: .6rem .8rem;
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  background: var(--flaeche);
+  font-size: .9rem;
+}
+.hinweis.warnung { background: var(--warnung-grund); border-color: var(--warnung-rand); }
+
+.leiste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin: 1.25rem 0 .75rem;
+}
+.leiste input[type="search"] {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+  padding: .4rem .6rem;
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  font: inherit;
+}
+.zaehler { color: var(--text-leise); font-size: .875rem; }
+
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--flaeche);
+  border-bottom: 1px solid var(--rand);
+  padding: .5rem .6rem;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+thead th[aria-sort="ascending"]::after { content: " \2191"; }
+thead th[aria-sort="descending"]::after { content: " \2193"; }
+tbody td { padding: .4rem .6rem; border-bottom: 1px solid var(--rand); }
+tbody tr:hover { background: var(--flaeche); }
+.zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.isbn { font-variant-numeric: tabular-nums; color: var(--text-leise); }
+.bedarf { color: var(--bedarf); font-weight: 600; }
+
+.karte { max-width: 44rem; margin: 2rem 0; padding: 1.25rem; border: 1px solid var(--rand); border-radius: 6px; }
+.karte.fehler { border-color: var(--warnung-rand); background: var(--warnung-grund); }
+.pfadliste { padding-left: 1.2rem; }
+.pfadliste code { word-break: break-all; }

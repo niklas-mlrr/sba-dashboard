@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block titel %}Bestand — Schulbuchausleihe{% endblock %}
+
+{% block kopfzeile %}
+<p class="meta">
+  <span title="{{ datei }}">{{ datei.name }}</span>
+  · zuletzt geändert {{ zustand.geaendert.strftime("%d.%m.%Y %H:%M") }}
+  {% if cache.stand %}· Abruf {{ cache.stand.strftime("%d.%m.%Y %H:%M") }}{% endif %}
+</p>
+{% endblock %}
+
+{% block inhalt %}
+{% if in_excel_geoeffnet %}
+<p class="hinweis warnung">Die Datei ist gerade in Excel geöffnet. Änderungen lassen sich
+erst speichern, wenn sie dort geschlossen wird.</p>
+{% endif %}
+{% if cache.leer %}
+<p class="hinweis">Titel und ISBN stehen nicht in der Mappe. Sie erscheinen nach dem
+ersten Abruf aus IServ.</p>
+{% endif %}
+
+<div class="leiste">
+  <label><input type="checkbox" id="nur-bedarf"> nur Zeilen mit Bedarf</label>
+  <input type="search" id="suche" placeholder="Fach oder Titel suchen" autocomplete="off">
+  <span class="zaehler"><span id="sichtbar">{{ zeilen|length }}</span> von {{ zeilen|length }} Zeilen
+    · Bedarf gesamt {{ bedarf_gesamt }}</span>
+</div>
+
+<table id="tabelle">
+  <thead>
+    <tr>
+      <th data-sort="text">Fach</th>
+      <th data-sort="text">Jg</th>
+      <th data-sort="text">Titel</th>
+      <th data-sort="text">ISBN</th>
+      <th data-sort="zahl" class="zahl">Angemeldet</th>
+      <th data-sort="zahl" class="zahl" title="Wird beim nächsten Abruf überschrieben">Bestand</th>
+      <th data-sort="zahl" class="zahl" title="Wird beim nächsten Abruf überschrieben">Bestellt</th>
+      <th data-sort="zahl" class="zahl">zu bestellen</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for z in zeilen %}
+    <tr data-key="{{ z.key }}" data-bedarf="{{ 1 if z.bedarf else 0 }}"
+        data-suche="{{ (z.fach ~ ' ' ~ (z.titel or ''))|lower }}">
+      <td>{{ z.fach }}</td>
+      <td>{{ z.jahrgang }}</td>
+      <td>{{ z.titel or "—" }}</td>
+      <td class="isbn">{{ z.isbn or "—" }}</td>
+      <td class="zahl">{{ z.angemeldet if z.angemeldet is not none else "—" }}</td>
+      <td class="zahl">{{ z.bestand if z.bestand is not none else "—" }}</td>
+      <td class="zahl">{{ z.bestellt if z.bestellt is not none else "—" }}</td>
+      <td class="zahl {{ 'bedarf' if z.bedarf else '' }}">
+        {{ z.zu_bestellen if z.zu_bestellen is not none else "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+{% block skripte %}<script src="/static/app.js"></script>{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titel %}{{ titel }} — Schulbuchausleihe{% endblock %}
+{% block inhalt %}
+<section class="karte fehler">
+  <h2>{{ titel }}</h2>
+  <p>{{ meldung }}</p>
+  {% if pfade %}
+  <p>Geprüfte Pfade:</p>
+  <ul class="pfadliste">
+    {% for pfad, vorhanden in pfade %}
+    <li><code>{{ pfad }}</code> — {{ "gefunden" if vorhanden else "nicht vorhanden" }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

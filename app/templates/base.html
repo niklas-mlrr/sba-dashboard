@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titel %}Schulbuchausleihe{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="kopf">
+    <h1>Bestand und Nachbestellung</h1>
+    {% block kopfzeile %}{% endblock %}
+  </header>
+  <main>
+    {% block inhalt %}{% endblock %}
+  </main>
+  {% block skripte %}{% endblock %}
+</body>
+</html>
