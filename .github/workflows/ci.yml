@@ -25,6 +25,16 @@ jobs:
   tests:
     name: tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    # Die Vorgabe von GitHub sind 360 Minuten - sechs Stunden, in denen ein
+    # steckengebliebener Lauf Runner-Zeit verbraucht, ohne dass jemand ein
+    # Ergebnis sieht; bei Windows zählen die Minuten doppelt. Im ersten Lauf
+    # (2026-09-04) stand der Windows-Pytest nach elf Minuten noch auf
+    # "in progress", während Linux nach 74s durch war. Die Grenze hier ist
+    # deshalb eine reine Obergrenze gegen den Dauerläufer, keine
+    # Leistungsaussage: 30 Minuten sind mehr als das Zehnfache der
+    # Linux-Laufzeit und lassen der langsameren Datei-Ein- und -Ausgabe unter
+    # Windows Raum (siehe die Begründung zu --timeout in pyproject.toml).
+    timeout-minutes: 30
     strategy:
       # Ein Windows-Fehlschlag darf die Linux-Ergebnisse nicht verschlucken -
       # gerade auf Windows ist der Schreibpfad am wichtigsten (siehe unten).
@@ -99,6 +109,8 @@ jobs:
   abhaengigkeiten:
     name: requirements.txt entspricht uv export
     runs-on: ubuntu-latest
+    # Reiner Export plus diff, lief im ersten Lauf in 9 Sekunden.
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: sba-dashboard

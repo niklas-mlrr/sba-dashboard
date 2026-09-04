@@ -15,7 +15,14 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<9", "httpx2>=0.28", "ruff>=0.8,<1"]
+# pytest-timeout, weil die Suite Threads und über multiprocessing "spawn"
+# einen Kindprozess startet: bleibt einer davon hängen, endet ein Lauf ohne
+# Zeitgrenze nicht von selbst, und in der CI sieht man stundenlang nur
+# "in progress" ohne eine einzige Zeile Ausgabe - ein Zustand, der sich vom
+# bloß langsamen Lauf nicht unterscheiden lässt. Genau diese Unterscheidung
+# fehlte im ersten Windows-Lauf (2026-09-04). Begründung der Zahlen:
+# tool.pytest.ini_options unten.
+dev = ["pytest>=8,<9", "pytest-timeout>=2.3,<3", "httpx2>=0.28", "ruff>=0.8,<1"]
 
 # Das Geschwister-Layout ist verbindlich: ausleihe-api, sba-bestand und
 # sba-dashboard liegen nebeneinander. Wer eines woandershin klont, bricht alle.
@@ -28,7 +35,24 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Die Zeitgrenze ist absichtlich großzügig. Gemessen auf Linux (2026-09-04,
+# 227 Tests in 74s): der langsamste Einzeltest ist
+# test_vorlage_http.py::test_schreiben_landet_wirklich_in_der_datei mit 9,7s,
+# und die zehn test_vorlage_http-Tests machen zusammen rund zwei Drittel der
+# Laufzeit aus - jeder lädt und speichert die echte Vorlagemappe. Genau diese
+# Datei-Operationen sind unter Windows ein Mehrfaches langsamer (Defender
+# liest jede geschriebene .xlsx mit). 300s je Test lassen dafür reichlich
+# Luft; sie fangen den Fall ab, den sie abfangen sollen - ein Test, der
+# *unbegrenzt* auf einem Schloss oder einem Kindprozess wartet und den Lauf
+# ohne eine Zeile Ausgabe stehenlässt.
+#
+# --timeout-method=thread ist hier Pflicht, nicht Geschmack: die Vorgabe
+# "signal" braucht SIGALRM, das es unter Windows nicht gibt - und die Suite
+# startet Threads und über multiprocessing "spawn" einen Kindprozess, also
+# genau die Konstrukte, die hängen können. Die thread-Methode gibt beim
+# Zuschlagen zusätzlich den Stack **jedes** Threads aus; bei einem
+# verklemmten Schloss ist das der Befund, nach dem man sonst raten müsste.
+addopts = "-q --timeout=300 --timeout-method=thread"
 
 [tool.ruff]
 target-version = "py310"
