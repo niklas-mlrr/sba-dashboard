@@ -71,6 +71,15 @@ erarbeiten):
   (Titel, ISBN mit Bindestrichen, Preis). Das ist der Mechanismus hinter F3
   und F6.
 
+**Vergleichswert für die Wartezeiten:** auf dieser (nicht schnellen)
+Linux-Kiste, mit der Mappe auf einer lokalen Platte, braucht ein Aufruf von
+`/` rund **147 ms** und einer von `/api/rows` rund **136 ms**. Dauert es am
+Schul-Laptop spürbar länger, liegt das am Netzlaufwerk und nicht an der
+Anwendung — das Laden der Mappe über SMB ist der einzige Teil, der dort
+wesentlich teurer wird. (Vor dem 2026-09-04 behobenen Fehler in
+`bestand.core.grid` waren es über drei Sekunden je Aufruf; wer die Oberfläche
+von früher als zäh in Erinnerung hat, hat das gesehen.)
+
 **Was der Trockenlauf ausdrücklich nicht zeigt** und deshalb am Gerät der
 eigentliche Punkt bleibt: alles mit einer Uhr daran (A2, B2), der
 Windows-Sperrpfad (E1–E3), SMB (D5, F3), IServ (F1–F6) und zwei Fenster

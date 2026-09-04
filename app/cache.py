@@ -28,6 +28,7 @@ import json
 import os
 import platform
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -240,6 +241,50 @@ def _cache_zu_json(cache: Cache) -> str:
     return json.dumps(inhalt, ensure_ascii=False, indent=2)
 
 
+# Wie oft und wie lange ``os.replace`` wiederholt wird, wenn Windows die
+# Zieldatei gerade als geöffnet meldet. Die Summe der Wartezeiten liegt bei gut
+# einer halben Sekunde (10+20+40+80+160+320 ms); ein Leser hält die Datei nur
+# für die Dauer eines ``read()``, also Bruchteile davon.
+_ERSETZ_VERSUCHE = 7
+_ERSETZ_WARTE_START = 0.01
+
+
+def _ersetze_mit_wiederholung(quelle: str, ziel: Path) -> None:
+    """``os.replace``, das einen gleichzeitigen Leser unter Windows aussitzt.
+
+    Unter POSIX ersetzt ``rename`` eine Datei auch dann, wenn jemand sie
+    geöffnet hat - der Leser behält seinen alten Inhalt, der neue Name zeigt
+    auf die neue Datei. **Windows nicht:** dort scheitert ``os.replace`` mit
+    ``PermissionError`` (``WinError 5``), solange irgendein Handle auf die
+    Zieldatei offen ist. Python öffnet Dateien ohne ``FILE_SHARE_DELETE``, ein
+    lesendes ``open()`` genügt also.
+
+    Das ist kein theoretischer Fall: das Dashboard ist ausdrücklich für mehrere
+    gleichzeitige Fenster gedacht (``docs/schul-laptop-test.md``, Abschnitt G),
+    der Sidecar liegt auf dem Gruppenlaufwerk, und ein Abruf schreibt ihn
+    genau dann, wenn ein anderes Fenster ihn beim Seitenaufbau liest. Die CI
+    hat den Fall am 2026-09-04 auf ``windows-latest`` gefunden, wo vier lesende
+    Threads gegen 60 Schreibvorgänge liefen und **beide** Speicherorte mit
+    ``WinError 5`` ausfielen.
+
+    Ein Leser hält die Datei nur für die Dauer eines ``read()``. Kurzes
+    Wiederholen löst den Konflikt deshalb zuverlässig, ohne dass irgendwo
+    gesperrt werden müsste. Bleibt es dabei, ist der Grund ein anderer (echter
+    Schreibschutz, fremdes Programm) - dann fliegt der Fehler weiter, und
+    ``speichern`` weicht auf den lokalen Ordner aus.
+    """
+    warte = _ERSETZ_WARTE_START
+    for versuch in range(_ERSETZ_VERSUCHE):
+        try:
+            os.replace(quelle, ziel)
+            return
+        except PermissionError:
+            if versuch == _ERSETZ_VERSUCHE - 1:
+                raise
+            time.sleep(warte)
+            warte *= 2
+
+
 def _atomar_schreiben(pfad: Path, inhalt: str) -> None:
     """Schreibt ``inhalt`` unterbrechungssicher: Nachbardatei, fsync, ``os.replace``.
 
@@ -255,7 +300,7 @@ def _atomar_schreiben(pfad: Path, inhalt: str) -> None:
             handle.write(inhalt)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_name, pfad)
+        _ersetze_mit_wiederholung(tmp_name, pfad)
     except Exception:
         try:
             os.unlink(tmp_name)

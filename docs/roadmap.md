@@ -3,6 +3,37 @@
 Stand: 2026-09-04. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
 bleibt als abgeschlossener v1-Plan liegen.
 
+## Der Windows-Job hat sofort einen echten Fehler gefunden
+
+Genau dafür war er da. `os.replace` — der letzte Schritt jedes atomaren
+Schreibvorgangs — scheitert unter Windows mit `PermissionError` (`WinError 5`),
+solange **irgendein** Handle auf die Zieldatei offen ist. Unter POSIX gelingt
+dasselbe `rename` klaglos, deshalb konnte das lokal nie auffallen.
+
+Betroffen war der Sidecar-Cache: vier lesende Threads gegen 60 Schreibvorgänge,
+und **beide** Speicherorte fielen mit `WinError 5` aus. Das ist kein
+Testartefakt — das Dashboard ist ausdrücklich für mehrere gleichzeitige Fenster
+gedacht (Prüfliste, Abschnitt G), der Sidecar liegt auf dem Gruppenlaufwerk,
+und ein Abruf schreibt ihn genau dann, wenn ein anderes Fenster ihn beim
+Seitenaufbau liest. Auf dem Schul-Laptop hätte das gelegentlich die Meldung
+„Titel und ISBN konnten diesmal nicht zwischengespeichert werden" erzeugt,
+ohne dass etwas kaputt gewesen wäre.
+
+Behoben durch kurzes Wiederholen (`_ersetze_mit_wiederholung`, sieben Versuche
+über gut eine halbe Sekunde): ein Leser hält die Datei nur für die Dauer eines
+`read()`. Hört der Fehler nicht auf, ist es kein Leser mehr, und der Rückfall
+auf den lokalen Ordner greift wie zuvor. Zwei neue Tests stellen den
+Windows-Fehler unter POSIX nach, damit beides prüfbar bleibt.
+
+**Zweiter Befund aus demselben Fehlschlag:** Pytest war auf Windows nach zwei
+Minuten fertig, der Prozess lief danach aber weitere zehn Minuten, bis die CI
+ihn abbrach. Ursache war der fehlgeschlagene Test selbst — er setzte sein
+Stopp-Signal erst *nach* der Schleife, in der die Ausnahme flog, sodass vier
+Leser-Threads endlos weiterliefen und der Interpreter beim Beenden auf sie
+wartete. Jetzt stehen sie in einem `finally` und sind Daemon-Threads: ein
+Fehlschlag kann den Lauf nicht mehr aufhängen. Das ist auch der Grund, warum
+`--timeout` je Test hier nicht half — die Tests waren längst durch.
+
 ## Die CI ist gelaufen — was sie bestätigt hat
 
 Der erste Lauf hat die Annahme abgeräumt, die beim Einrichten offen blieb: das

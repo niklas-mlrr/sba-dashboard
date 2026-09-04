@@ -400,17 +400,27 @@ def test_gleichzeitiges_lesen_waehrend_schreiben_sieht_nie_halbe_datei(
                 fehler.append(AssertionError(f"Zwischenstand gesehen: {ergebnis}"))
                 return
 
-    threads = [threading.Thread(target=leser) for _ in range(4)]
+    # daemon=True und try/finally sind hier kein Zierrat, sondern das Ergebnis
+    # eines konkreten Vorfalls: als ``speichern`` unter Windows in der Schleife
+    # eine Ausnahme warf, wurde ``stopp.set()`` nie erreicht. Die vier Leser
+    # liefen danach endlos weiter, und weil sie keine Daemon-Threads waren,
+    # wartete der Interpreter beim Beenden auf sie - pytest war nach zwei
+    # Minuten fertig, der Prozess hing weitere zehn, bis die CI ihn abbrach.
+    # Ein Fehlschlag in diesem Test darf den ganzen Lauf nicht aufhängen.
+    threads = [threading.Thread(target=leser, daemon=True) for _ in range(4)]
     for thread in threads:
         thread.start()
 
-    for runde in range(60):
-        ziel = cache_a if runde % 2 == 0 else cache_b
-        cache_modul.speichern(excel_pfad, ziel)
+    try:
+        for runde in range(60):
+            ziel = cache_a if runde % 2 == 0 else cache_b
+            cache_modul.speichern(excel_pfad, ziel)
+    finally:
+        stopp.set()
+        for thread in threads:
+            thread.join(timeout=5)
 
-    stopp.set()
     for thread in threads:
-        thread.join(timeout=5)
         assert not thread.is_alive()
 
     assert not fehler, fehler
@@ -451,3 +461,68 @@ def test_unserialisierbarer_wert_wird_zum_cachefehler(tmp_path, monkeypatch):
     kaputt = cache_modul.Cache(eintraege={"a": cache_modul.Eintrag(preis=object())})  # type: ignore[arg-type]
     with pytest.raises(cache_modul.CacheFehler):
         cache_modul.speichern(mappe, kaputt)
+
+
+# ── os.replace unter Windows: gleichzeitiger Leser ───────────────────────────
+
+def test_ersetzen_wiederholt_sich_wenn_windows_die_datei_als_offen_meldet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Ein ``PermissionError`` beim Ersetzen ist unter Windows der Normalfall, kein Defekt.
+
+    Dort scheitert ``os.replace``, solange irgendein Handle auf die Zieldatei
+    offen ist - ein lesendes ``open()`` genügt. Unter POSIX passiert das nie,
+    deshalb wird der Fehler hier nachgestellt: die ersten beiden Versuche
+    scheitern, der dritte gelingt, und ``speichern`` muss trotzdem den
+    Sidecar zurückgeben statt auf den lokalen Ordner auszuweichen.
+    """
+    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+    excel_pfad = _excel_pfad(tmp_path)
+    echtes_replace = cache_modul.os.replace
+    versuche: list[int] = []
+
+    def zickiges_replace(quelle, ziel):
+        versuche.append(1)
+        if len(versuche) <= 2:
+            raise PermissionError(5, "Access is denied")
+        return echtes_replace(quelle, ziel)
+
+    monkeypatch.setattr(cache_modul.os, "replace", zickiges_replace)
+    monkeypatch.setattr(cache_modul.time, "sleep", lambda _: None)
+
+    ziel = cache_modul.speichern(excel_pfad, cache_modul.Cache(
+        stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
+        eintraege={"k": cache_modul.Eintrag(isbn="1", titel="A", preis=1.0)},
+    ))
+
+    assert ziel == cache_modul.cache_pfad(excel_pfad), "darf nicht lokal ausweichen"
+    assert len(versuche) == 3, f"erwartet 3 Versuche, waren {len(versuche)}"
+    assert cache_modul.laden(excel_pfad).schuljahr == "A"
+
+
+def test_dauerhaft_belegte_datei_weicht_auf_den_lokalen_ordner_aus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Hört der PermissionError nicht auf, ist es kein Leser mehr - dann greift der Rückfallort."""
+    lokal = tmp_path / "lokal"
+    monkeypatch.setenv("SBA_CACHE_DIR", str(lokal))
+    excel_pfad = _excel_pfad(tmp_path)
+    echtes_replace = cache_modul.os.replace
+    sidecar = cache_modul.cache_pfad(excel_pfad)
+
+    def nur_sidecar_blockiert(quelle, ziel):
+        if Path(ziel) == sidecar:
+            raise PermissionError(5, "Access is denied")
+        return echtes_replace(quelle, ziel)
+
+    monkeypatch.setattr(cache_modul.os, "replace", nur_sidecar_blockiert)
+    monkeypatch.setattr(cache_modul.time, "sleep", lambda _: None)
+
+    ziel = cache_modul.speichern(excel_pfad, cache_modul.Cache(
+        stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
+        eintraege={"k": cache_modul.Eintrag(isbn="1", titel="A", preis=1.0)},
+    ))
+
+    assert ziel == cache_modul.cache_pfad_lokal(excel_pfad)
+    assert not sidecar.exists()
+    assert cache_modul.laden(excel_pfad).schuljahr == "A"
