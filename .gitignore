@@ -9,3 +9,4 @@ backups/
 ~$*.xlsx
 .env
 *.dashboard-cache.json
+!vorlage/Bestand- und Nachbestellungsliste 2026.xlsx

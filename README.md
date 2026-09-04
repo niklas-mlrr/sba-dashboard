@@ -67,9 +67,11 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8765   # ohne Beenden-Knopf
 ## macOS und Linux: mit Arbeitskopie starten
 
 `START.bat` ist nur für den Schul-Laptop mit Windows. Auf macOS und Linux
-startet `START.sh` das Dashboard mit einer **lokalen Arbeitskopie** der Mappe;
-die Originaldatei wird nicht beschrieben. Es erwartet das Geschwister-Layout
-aus `ausleihe-api/`, `sba-bestand/` und `sba-dashboard/`.
+startet `START.sh` das Dashboard mit einer lokalen Arbeitskopie. Standardmäßig
+nimmt es die mitgelieferte, leere Excel-Vorlage. Sie hat dieselben Blätter,
+Merges, Formeln und Formatierungen wie die echte Mappe, aber keine Arbeitsdaten.
+Das Geschwister-Layout aus `ausleihe-api/`, `sba-bestand/` und
+`sba-dashboard/` bleibt für die Python-Abhängigkeiten nötig.
 
 ```bash
 cd ~/projects/sba/sba-dashboard
@@ -84,12 +86,17 @@ brew install uv
 ```
 
 Die Kopie liegt danach in `.local/` und bleibt bei weiteren Starts erhalten.
-Zum Zurücksetzen diese Datei löschen, nicht die Originalmappe. Liegt die Mappe
-an einem anderen Ort, den Pfad einmalig mitgeben:
+Zum Zurücksetzen diese Datei löschen. Für einen Test mit einer echten Mappe
+den Pfad ausdrücklich mitgeben:
 
 ```bash
 SBA_ORIGINAL_EXCEL="/voller/Pfad/Bestand- und Nachbestellungsliste 2026.xlsx" ./START.sh
 ```
+
+Die Vorlage wird mit `tools/erzeuge_vorlage.py` aus einer echten Mappe erzeugt.
+Das Werkzeug leert die veränderlichen Rasterwerte und Tabellenkörper, entfernt
+Kommentare und Hyperlinks und setzt harmlose Dokumenteigenschaften. Es ist nur
+für eine kontrollierte Aktualisierung der Vorlage gedacht.
 
 ## Auf dem Schul-Laptop
 

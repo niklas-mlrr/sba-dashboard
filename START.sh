@@ -2,11 +2,12 @@
 # Schulbuchausleihe Dashboard auf macOS oder Linux starten.
 #
 # Diese Datei arbeitet absichtlich mit einer lokalen Kopie der Excel-Mappe.
-# Die Originaldatei unter ../sba-bestand/bestand/ wird nie beschrieben.
+# Ohne SBA_ORIGINAL_EXCEL kommt die mitgelieferte, leere Vorlage zum Einsatz.
 set -euo pipefail
 
 WURZEL="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ORIGINAL="${SBA_ORIGINAL_EXCEL:-$WURZEL/../sba-bestand/bestand/Bestand- und Nachbestellungsliste 2026.xlsx}"
+VORLAGE="$WURZEL/vorlage/Bestand- und Nachbestellungsliste 2026.xlsx"
+QUELLE="${SBA_ORIGINAL_EXCEL:-$VORLAGE}"
 ARBEITSORDNER="${SBA_ARBEITSORDNER:-$WURZEL/.local}"
 MAPPE="$ARBEITSORDNER/Bestand- und Nachbestellungsliste 2026.xlsx"
 KONFIGURATION="$ARBEITSORDNER/config.json"
@@ -19,18 +20,18 @@ if ! command -v uv >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ ! -f "$ORIGINAL" ]]; then
+if [[ ! -f "$QUELLE" ]]; then
     echo "Die Quellmappe wurde nicht gefunden:"
-    echo "  $ORIGINAL"
+    echo "  $QUELLE"
     echo
-    echo "Lege sba-bestand neben sba-dashboard ab oder setze SBA_ORIGINAL_EXCEL"
-    echo "auf den Pfad zur Originalmappe."
+    echo "Die Git-Vorlage fehlt. Bitte den Clone erneut vollständig laden."
+    echo "Für eine echte Mappe SBA_ORIGINAL_EXCEL auf ihren Pfad setzen."
     exit 1
 fi
 
 mkdir -p "$ARBEITSORDNER"
 if [[ ! -f "$MAPPE" ]]; then
-    cp -p -- "$ORIGINAL" "$MAPPE"
+    cp -p -- "$QUELLE" "$MAPPE"
     echo "Arbeitskopie angelegt: $MAPPE"
 else
     echo "Vorhandene Arbeitskopie wird weiterverwendet: $MAPPE"
