@@ -1,4 +1,4 @@
-"""POST /api/cell: nur Bestand und Bestellt, nur über den Zeilenschlüssel."""
+"""POST /api/cell: nur Bestellt, nur über den Zeilenschlüssel."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -30,22 +30,22 @@ def _zeile(daten, bestand_ref):
     return next(z for z in daten["zeilen"] if z["bestand_ref"] == bestand_ref)
 
 
-def test_bestand_wird_geschrieben_und_zurueckgemeldet(client, workbook_path: Path):
+def test_bestellt_wird_geschrieben_und_zurueckgemeldet(client, workbook_path: Path):
     daten = _zeilen(client)
-    zeile = _zeile(daten, "G3")          # Erdkunde Jg 5-6, Bestand 60
+    zeile = _zeile(daten, "G3")          # Erdkunde Jg 5-6, Bestand 60, Bestellt 30
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 71, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 71, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
     körper = antwort.json()
-    assert körper["ref"] == "G3"
-    assert körper["zeile"]["bestand"] == 71
-    # 92 angemeldet - 71 Bestand - 30 bestellt = -9: der Bedarf wird sofort neu gerechnet.
-    assert körper["zeile"]["zu_bestellen"] == -9
+    assert körper["ref"] == "H3"         # die Bestellt-Zelle desselben Bandes
+    assert körper["zeile"]["bestellt"] == 71
+    # 92 angemeldet - 60 Bestand - 71 bestellt = -39: der Bedarf wird sofort neu gerechnet.
+    assert körper["zeile"]["zu_bestellen"] == -39
     assert körper["mtime"] != daten["mtime"]
 
     wb = load_workbook(str(workbook_path))
-    assert wb[SHEET_NAME]["G3"].value == 71
+    assert wb[SHEET_NAME]["H3"].value == 71
 
 
 def test_leerer_wert_loescht_die_zelle(client):
@@ -63,13 +63,15 @@ def test_formelspalte_bleibt_nach_dem_schreiben_formel(client, workbook_path: Pa
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 5, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 5, "mtime": daten["mtime"],
     })
     wb = load_workbook(str(workbook_path))
     assert wb[SHEET_NAME]["I3"].value == "=F3+F4-G3-H3"
 
 
-@pytest.mark.parametrize("spalte", ["angemeldet", "zu_bestellen", "Bestand", "", "stand"])
+@pytest.mark.parametrize(
+    "spalte", ["bestand", "angemeldet", "zu_bestellen", "Bestellt", "", "stand"]
+)
 def test_andere_spalten_werden_abgelehnt(client, spalte):
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
@@ -83,7 +85,7 @@ def test_andere_spalten_werden_abgelehnt(client, spalte):
 def test_unbekannter_schluessel_wird_abgelehnt(client):
     daten = _zeilen(client)
     antwort = client.post("/api/cell", json={
-        "key": "0:Gibt-Es-Nicht:ZZ99", "spalte": "bestand", "wert": 1,
+        "key": "0:Gibt-Es-Nicht:ZZ99", "spalte": "bestellt", "wert": 1,
         "mtime": daten["mtime"],
     })
     assert antwort.status_code == 400
@@ -95,7 +97,7 @@ def test_zellbezug_statt_schluessel_schreibt_nichts(client, workbook_path: Path)
     vorher = load_workbook(str(workbook_path))[SHEET_NAME]["C3"].value
     daten = _zeilen(client)
     antwort = client.post("/api/cell", json={
-        "key": "C3", "spalte": "bestand", "wert": 999, "mtime": daten["mtime"],
+        "key": "C3", "spalte": "bestellt", "wert": 999, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 400
     assert load_workbook(str(workbook_path))[SHEET_NAME]["C3"].value == vorher
@@ -106,7 +108,7 @@ def test_ungueltige_werte_werden_abgelehnt(client, wert):
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": wert, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": wert, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 400
 
@@ -115,14 +117,14 @@ def test_veraltete_mtime_ist_ein_konflikt(client, workbook_path: Path):
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 7, "mtime": daten["mtime"] - 60,
+        "key": zeile["key"], "spalte": "bestellt", "wert": 7, "mtime": daten["mtime"] - 60,
     })
     assert antwort.status_code == 409
     körper = antwort.json()
     assert "neu laden" in körper["fehler"]
     assert körper["mtime"] == pytest.approx(daten["mtime"])
     # Nichts geschrieben.
-    assert load_workbook(str(workbook_path))[SHEET_NAME]["G3"].value == 60
+    assert load_workbook(str(workbook_path))[SHEET_NAME]["H3"].value == 30
 
 
 def test_zweiter_schreibvorgang_mit_alter_mtime_scheitert(client):
@@ -130,16 +132,16 @@ def test_zweiter_schreibvorgang_mit_alter_mtime_scheitert(client):
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     erst = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 1, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 1, "mtime": daten["mtime"],
     })
     assert erst.status_code == 200
     zweit = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 2, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 2, "mtime": daten["mtime"],
     })
     assert zweit.status_code == 409
     # Mit der neuen mtime aus der ersten Antwort geht es weiter.
     dritt = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 2, "mtime": erst.json()["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 2, "mtime": erst.json()["mtime"],
     })
     assert dritt.status_code == 200
 
@@ -149,7 +151,7 @@ def test_ohne_mtime_wird_abgelehnt(client):
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 3,
+        "key": zeile["key"], "spalte": "bestellt", "wert": 3,
     })
     assert antwort.status_code == 400
     assert "Änderungszeit" in antwort.json()["fehler"]
@@ -159,7 +161,7 @@ def test_backup_wird_angelegt(client, workbook_path: Path):
     daten = _zeilen(client)
     zeile = _zeile(daten, "G3")
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 4, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 4, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200
     name = antwort.json()["backup"]
@@ -175,7 +177,7 @@ def test_backups_werden_auf_die_eingestellte_zahl_gekuerzt(client, einstellungen
     key = _zeile(_zeilen(client), "G3")["key"]
     for wert in range(5):
         antwort = client.post("/api/cell", json={
-            "key": key, "spalte": "bestand", "wert": wert, "mtime": mtime,
+            "key": key, "spalte": "bestellt", "wert": wert, "mtime": mtime,
         })
         assert antwort.status_code == 200, antwort.text
         mtime = antwort.json()["mtime"]
@@ -221,7 +223,7 @@ def test_gleichzeitige_schreibvorgaenge_koennen_keine_aenderung_ueberschreiben(
     def erster_schreiber():
         try:
             ergebnisse["erster"] = schreibe_zelle(
-                workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=71,
+                workbook_path, SHEET_NAME, key=entry.key, spalte="bestellt", wert=71,
                 mtime=initial_mtime,
             )
         except BaseException as exc:  # noqa: BLE001 - Assertion für den Thread sammeln
@@ -231,7 +233,7 @@ def test_gleichzeitige_schreibvorgaenge_koennen_keine_aenderung_ueberschreiben(
         zweiter_gestartet.set()
         try:
             ergebnisse["zweiter"] = schreibe_zelle(
-                workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=72,
+                workbook_path, SHEET_NAME, key=entry.key, spalte="bestellt", wert=72,
                 mtime=initial_mtime,
             )
         except BaseException as exc:  # noqa: BLE001 - Assertion für den Thread sammeln
@@ -254,7 +256,7 @@ def test_gleichzeitige_schreibvorgaenge_koennen_keine_aenderung_ueberschreiben(
     assert not thread_2.is_alive()
     assert not isinstance(ergebnisse["erster"], BaseException)
     assert isinstance(ergebnisse["zweiter"], Konflikt)
-    assert load_workbook(str(workbook_path))[SHEET_NAME][entry.slots["bestand"].ref].value == 71
+    assert load_workbook(str(workbook_path))[SHEET_NAME][entry.slots["bestellt"].ref].value == 71
 
 
 # ── Einheiten ohne HTTP ───────────────────────────────────────────────────────

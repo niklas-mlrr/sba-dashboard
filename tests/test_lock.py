@@ -50,7 +50,7 @@ def test_permission_error_wird_zu_423(client, monkeypatch):
     monkeypatch.setattr(excel_modul, "atomic_save_workbook", verweigern)
     daten, zeile = _zeile(client)
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 1, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 1, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 423
     assert "in Excel geöffnet" in antwort.json()["fehler"]
@@ -65,7 +65,7 @@ def test_423_nennt_den_benutzer_aus_der_sperrdatei(client, workbook_path: Path, 
     monkeypatch.setattr(excel_modul, "atomic_save_workbook", verweigern)
     daten, zeile = _zeile(client)
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 1, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 1, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 423
     körper = antwort.json()
@@ -80,7 +80,7 @@ def test_sonstiger_oser_error_meldet_die_mappe_als_unveraendert(client, monkeypa
     monkeypatch.setattr(excel_modul, "atomic_save_workbook", verweigern)
     daten, zeile = _zeile(client)
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 1, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 1, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 423
     assert "unverändert" in antwort.json()["fehler"]
@@ -104,7 +104,7 @@ def test_offene_datei_allein_blockiert_das_schreiben_nicht(client, workbook_path
     _sperrdatei_anlegen(workbook_path, "m.schulz")
     daten, zeile = _zeile(client)
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 2, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 2, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200
 

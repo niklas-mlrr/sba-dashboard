@@ -90,7 +90,7 @@ def test_schreiben_von_fremder_seite_aendert_die_mappe_nicht(client: TestClient,
 
     antwort = client.post(
         "/api/cell",
-        json={"key": zeile["key"], "spalte": "bestand", "wert": 999, "mtime": daten["mtime"]},
+        json={"key": zeile["key"], "spalte": "bestellt", "wert": 999, "mtime": daten["mtime"]},
         headers={"Origin": "http://boesewicht.example"},
     )
     assert antwort.status_code == 403

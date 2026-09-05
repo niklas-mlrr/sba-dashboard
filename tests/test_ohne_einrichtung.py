@@ -37,7 +37,7 @@ def test_startseite_zeigt_die_einrichtung(uneingerichtet: TestClient):
 
 @pytest.mark.parametrize("aufruf", [
     ("GET", "/api/rows", None),
-    ("POST", "/api/cell", {"key": "0:Deutsch:C3", "spalte": "bestand", "wert": 1, "mtime": 1.0}),
+    ("POST", "/api/cell", {"key": "0:Deutsch:C3", "spalte": "bestellt", "wert": 1, "mtime": 1.0}),
     ("POST", "/api/refresh", {"benutzer": "b.lehrer", "passwort": "geheim"}),
 ])
 def test_jede_api_route_nennt_die_geprueften_pfade(uneingerichtet: TestClient, aufruf):

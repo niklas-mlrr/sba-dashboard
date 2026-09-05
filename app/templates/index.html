@@ -52,9 +52,13 @@ ersten Abruf aus IServ.</p>
       <th data-sort="text">Jg</th>
       <th data-sort="text">Titel</th>
       <th data-sort="text">ISBN</th>
-      <th data-sort="zahl" class="zahl">Angemeldet</th>
-      <th data-sort="zahl" class="zahl" title="Wird beim nächsten Abruf überschrieben">Bestand</th>
-      <th data-sort="zahl" class="zahl" title="Wird beim nächsten Abruf überschrieben">Bestellt</th>
+      <th data-sort="zahl" class="zahl"
+          title="Kommt aus IServ und wird bei jedem Abruf überschrieben">Angemeldet</th>
+      <th data-sort="zahl" class="zahl"
+          title="Kommt aus IServ und wird bei jedem Abruf überschrieben">Bestand</th>
+      <th data-sort="zahl" class="zahl spalte-eingabe"
+          title="Die einzige Spalte, die von Hand geändert werden kann. Der Abruf ergänzt sie aus dem Blatt „bestellt“ und lässt eigene Einträge stehen.">Bestellt<span
+          class="spaltenhinweis">bearbeitbar</span></th>
       <th data-sort="zahl" class="zahl">zu bestellen</th>
     </tr>
   </thead>
@@ -66,15 +70,16 @@ ersten Abruf aus IServ.</p>
       <td data-wert="{{ z.jahrgang }}">{{ z.jahrgang }}</td>
       <td data-wert="{{ (z.titel or '')|lower }}">{{ z.titel or "—" }}</td>
       <td class="isbn" data-wert="{{ z.isbn or '' }}">{{ z.isbn or "—" }}</td>
-      <td class="zahl" data-wert="{{ z.angemeldet if z.angemeldet is not none else '' }}">
+      <td class="zahl" data-refs="{{ z.angemeldet_refs|join(' ') }}"
+          data-wert="{{ z.angemeldet if z.angemeldet is not none else '' }}">
         {{- z.angemeldet if z.angemeldet is not none else "—" -}}</td>
-      <td class="zahl" data-wert="{{ z.bestand if z.bestand is not none else '' }}">
-        <input class="zellwert" type="number" min="0" step="1"
-        data-spalte="bestand" aria-label="Bestand {{ z.fach }} Jahrgang {{ z.jahrgang }}"
-        value="{{ z.bestand if z.bestand is not none else '' }}"></td>
-      <td class="zahl" data-wert="{{ z.bestellt if z.bestellt is not none else '' }}">
+      <td class="zahl" data-refs="{{ z.bestand_ref }}"
+          data-wert="{{ z.bestand if z.bestand is not none else '' }}">
+        {{- z.bestand if z.bestand is not none else "—" -}}</td>
+      <td class="zahl" data-refs="{{ z.bestellt_ref or '' }}"
+          data-wert="{{ z.bestellt if z.bestellt is not none else '' }}">
         {%- if z.bestellt_ref -%}
-        <input class="zellwert" type="number" min="0" step="1"
+        <input class="zellwert" type="number" min="0" step="1" inputmode="numeric"
           data-spalte="bestellt" aria-label="Bestellt {{ z.fach }} Jahrgang {{ z.jahrgang }}"
           value="{{ z.bestellt if z.bestellt is not none else '' }}">
         {%- else -%}—{%- endif -%}

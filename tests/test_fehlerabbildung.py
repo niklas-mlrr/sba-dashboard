@@ -25,9 +25,9 @@ def _zeile(client: TestClient) -> tuple[str, float]:
 # ── Deutscher Klartext statt FastAPIs englischem 422 ──────────────────────────
 
 @pytest.mark.parametrize("pfad,nutzlast,erwartet", [
-    ("/api/cell", {"spalte": "bestand", "mtime": 1.0}, "Schlüssel"),
-    ("/api/cell", {"key": "x", "mtime": 1.0}, "Erlaubt sind nur die Spalten"),
-    ("/api/cell", {"key": "x", "spalte": "bestand"}, "Änderungszeit"),
+    ("/api/cell", {"spalte": "bestellt", "mtime": 1.0}, "Schlüssel"),
+    ("/api/cell", {"key": "x", "mtime": 1.0}, "Änderbar ist nur die Spalte"),
+    ("/api/cell", {"key": "x", "spalte": "bestellt"}, "Änderungszeit"),
     ("/api/refresh", {}, "Benutzername und Passwort"),
     ("/api/refresh", {"benutzer": "  ", "passwort": "x"}, "Benutzername und Passwort"),
     ("/api/einrichtung", {}, "Pfad zur Excel-Datei"),
@@ -73,7 +73,7 @@ def test_gesperrt_ist_ueberall_423(client, monkeypatch):
     monkeypatch.setattr(excel_modul, "atomic_save_workbook", verweigern)
     key, mtime = _zeile(client)
     antwort = client.post("/api/cell", json={
-        "key": key, "spalte": "bestand", "wert": 1, "mtime": mtime,
+        "key": key, "spalte": "bestellt", "wert": 1, "mtime": mtime,
     })
     assert antwort.status_code == 423
     koerper = antwort.json()
@@ -85,7 +85,7 @@ def test_gesperrt_ist_ueberall_423(client, monkeypatch):
 def test_konflikt_traegt_die_aktuelle_mtime(client):
     key, mtime = _zeile(client)
     antwort = client.post("/api/cell", json={
-        "key": key, "spalte": "bestand", "wert": 1, "mtime": mtime - 60,
+        "key": key, "spalte": "bestellt", "wert": 1, "mtime": mtime - 60,
     })
     assert antwort.status_code == 409
     assert antwort.json()["mtime"] == pytest.approx(mtime)
@@ -101,7 +101,7 @@ def test_fehlendes_blatt_ist_auf_beiden_wegen_500(client, einstellungen, workboo
     )
     assert client.get("/api/rows").status_code == 500
     schreiben = client.post("/api/cell", json={
-        "key": key, "spalte": "bestand", "wert": 1, "mtime": mtime,
+        "key": key, "spalte": "bestellt", "wert": 1, "mtime": mtime,
     })
     assert schreiben.status_code == 500
     # KeyError.__str__ liefert das repr des Arguments - der Klartext darf nicht

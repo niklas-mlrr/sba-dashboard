@@ -78,7 +78,7 @@ def _pruefe_system(bericht: Bericht) -> None:
         # Der Bericht soll gerade dann entstehen, wenn etwas nicht geht - der
         # fehlende Programmimport fällt woanders auf (Pakete, Konfiguration)
         # und bricht hier nur die Version ab, nicht den ganzen Bericht.
-        bericht.notiere("Dashboard", UEBERSPRUNKEN, f"Version nicht ermittelbar: {exc}")
+        bericht.notiere("Dashboard", UEBERSPRUNGEN, f"Version nicht ermittelbar: {exc}")
     else:
         bericht.notiere("Dashboard", OK, f"Version {__version__}")
     bericht.notiere("Benutzerprofil", OK, str(Path.home()))

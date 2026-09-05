@@ -136,16 +136,16 @@ def test_schreiben_landet_wirklich_in_der_datei(
     zeile = daten["zeilen"][0]
 
     antwort = client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 42, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 42, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
 
     nachher = client_vorlage.get("/api/rows").json()
     nachher_zeile = next(z for z in nachher["zeilen"] if z["key"] == zeile["key"])
-    assert nachher_zeile["bestand"] == 42
+    assert nachher_zeile["bestellt"] == 42
 
     wb = load_workbook(str(vorlage_kopie))
-    assert wb[einstellungen_vorlage.blatt_raster][zeile["bestand_ref"]].value == 42
+    assert wb[einstellungen_vorlage.blatt_raster][zeile["bestellt_ref"]].value == 42
 
 
 def test_formeln_ueberleben_den_schreibvorgang(
@@ -159,7 +159,7 @@ def test_formeln_ueberleben_den_schreibvorgang(
     daten = client_vorlage.get("/api/rows").json()
     zeile = daten["zeilen"][0]
     antwort = client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 7, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 7, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
 
@@ -171,7 +171,7 @@ def test_konflikt_bei_veralteter_mtime(client_vorlage: TestClient):
     daten = client_vorlage.get("/api/rows").json()
     zeile = daten["zeilen"][0]
     antwort = client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 3, "mtime": daten["mtime"] - 60,
+        "key": zeile["key"], "spalte": "bestellt", "wert": 3, "mtime": daten["mtime"] - 60,
     })
     assert antwort.status_code == 409
 
@@ -182,22 +182,22 @@ def test_leeren_wert_schreiben_loescht_die_zelle(client_vorlage: TestClient, lee
     daten = client_vorlage.get("/api/rows").json()
     zeile = daten["zeilen"][0]
     erst = client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 5, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 5, "mtime": daten["mtime"],
     })
     assert erst.status_code == 200, erst.text
 
     zweit = client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": leerer_wert, "mtime": erst.json()["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": leerer_wert, "mtime": erst.json()["mtime"],
     })
     assert zweit.status_code == 200, zweit.text
-    assert zweit.json()["zeile"]["bestand"] is None
+    assert zweit.json()["zeile"]["bestellt"] is None
 
 
 def test_backup_wird_beim_schreiben_ueber_http_angelegt(client_vorlage: TestClient, vorlage_kopie: Path):
     daten = client_vorlage.get("/api/rows").json()
     zeile = daten["zeilen"][0]
     antwort = client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 9, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 9, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
     ordner = vorlage_kopie.parent / "backups"
@@ -209,6 +209,6 @@ def test_original_vorlage_bleibt_unangetastet(client_vorlage: TestClient, origin
     daten = client_vorlage.get("/api/rows").json()
     zeile = daten["zeilen"][0]
     client_vorlage.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 1, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 1, "mtime": daten["mtime"],
     })
     assert _hash(_VORLAGE) == original_hash

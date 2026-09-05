@@ -74,7 +74,7 @@ def test_zwei_gleichzeitige_schreiber_auf_dieselbe_mtime_nur_einer_gewinnt(workb
         start.wait()
         try:
             ergebnisse[name] = schreibe_zelle(
-                workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=wert,
+                workbook_path, SHEET_NAME, key=entry.key, spalte="bestellt", wert=wert,
                 mtime=start_mtime,
             )
         except BaseException as exc:  # noqa: BLE001 - Ergebnis für die Haupt-Assertion sammeln
@@ -95,7 +95,7 @@ def test_zwei_gleichzeitige_schreiber_auf_dieselbe_mtime_nur_einer_gewinnt(workb
 
     gewinner: Schreibergebnis = ergebnisse[erfolge[0]]  # type: ignore[assignment]
     wb_final = load_workbook(str(workbook_path))
-    assert wb_final[SHEET_NAME][entry.slots["bestand"].ref].value == gewinner.neu
+    assert wb_final[SHEET_NAME][entry.slots["bestellt"].ref].value == gewinner.neu
 
 
 def test_acht_threads_schreiben_mit_wiederholung_nach_konflikt(workbook_path: Path):
@@ -118,7 +118,7 @@ def test_acht_threads_schreiben_mit_wiederholung_nach_konflikt(workbook_path: Pa
             mtime = Dateizustand.von(workbook_path).mtime
             try:
                 ergebnisse[index] = schreibe_zelle(
-                    workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=wert,
+                    workbook_path, SHEET_NAME, key=entry.key, spalte="bestellt", wert=wert,
                     mtime=mtime,
                 )
                 return
@@ -139,7 +139,7 @@ def test_acht_threads_schreiben_mit_wiederholung_nach_konflikt(workbook_path: Pa
 
     # Die Mappe ist danach intakt und ladbar - keine halbgeschriebene Datei.
     wb_final = load_workbook(str(workbook_path))
-    endwert = wb_final[SHEET_NAME][entry.slots["bestand"].ref].value
+    endwert = wb_final[SHEET_NAME][entry.slots["bestellt"].ref].value
     assert endwert in {100 + i for i in range(anzahl)}
 
 
@@ -237,7 +237,7 @@ def test_lesen_waehrend_des_schreibens_liefert_nie_eine_halbe_mappe(
 
     def schreiben() -> None:
         schreib_antwort["antwort"] = client.post("/api/cell", json={
-            "key": zeile["key"], "spalte": "bestand", "wert": 111, "mtime": vorher["mtime"],
+            "key": zeile["key"], "spalte": "bestellt", "wert": 111, "mtime": vorher["mtime"],
         })
 
     thread = Thread(target=schreiben)
@@ -250,7 +250,7 @@ def test_lesen_waehrend_des_schreibens_liefert_nie_eine_halbe_mappe(
     assert waehrend_antwort.status_code == 200
     waehrend = waehrend_antwort.json()
     zeile_waehrend = next(z for z in waehrend["zeilen"] if z["key"] == zeile["key"])
-    assert zeile_waehrend["bestand"] == zeile["bestand"]
+    assert zeile_waehrend["bestellt"] == zeile["bestellt"]
 
     save_freigeben.set()
     thread.join(timeout=_TIMEOUT)
@@ -259,7 +259,7 @@ def test_lesen_waehrend_des_schreibens_liefert_nie_eine_halbe_mappe(
 
     nachher = client.get("/api/rows").json()
     zeile_nachher = next(z for z in nachher["zeilen"] if z["key"] == zeile["key"])
-    assert zeile_nachher["bestand"] == 111
+    assert zeile_nachher["bestellt"] == 111
 
 
 # ── Refresh und Zelländerung teilen sich das Schloss ─────────────────────────
@@ -307,7 +307,7 @@ def test_refresh_und_zellaenderung_teilen_sich_das_schloss(
     daten_nachher = load_workbook(str(workbook_path))
     entry = parse_grid(daten_nachher[SHEET_NAME]).entries[0]
     ergebnis = schreibe_zelle(
-        workbook_path, SHEET_NAME, key=entry.key, spalte="bestand", wert=5,
+        workbook_path, SHEET_NAME, key=entry.key, spalte="bestellt", wert=5,
         mtime=Dateizustand.von(workbook_path).mtime,
     )
     assert ergebnis.neu == 5

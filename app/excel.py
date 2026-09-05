@@ -53,9 +53,35 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.worksheet.worksheet import Worksheet
 
-# Nur diese zwei Spalten sind von Hand änderbar. "Angemeldet" kommt aus IServ,
-# "zu bestellen" ist eine Formel - beide würde ein Schreibzugriff nur kaputt machen.
-SCHREIBBARE_SPALTEN = ("bestand", "bestellt")
+# Nur diese eine Spalte ist von Hand änderbar.
+#
+# "Angemeldet" und "Bestand" kommen aus IServ und werden bei jedem Abruf
+# überschrieben - eine Eingabe dort hielte höchstens bis zum nächsten Abruf und
+# sähe bis dahin aus wie eine Zahl, auf die man sich verlassen kann.
+# "zu bestellen" ist eine Formel, die ein Schreibzugriff plattmachen würde.
+# Bleibt "Bestellt": es kommt nicht aus IServ, sondern aus dem Blatt 'bestellt'
+# derselben Mappe, und was dort (noch) nicht steht, lässt der Abruf seit
+# 2026-09-05 unangetastet stehen (``bestand.core.update.apply_snapshot``).
+# Genau deshalb ist es die einzige Spalte, in der eine Eingabe von Hand Bestand
+# hat - und die einzige, die das Dashboard schreiben lässt.
+SCHREIBBARE_SPALTEN = ("bestellt",)
+
+
+def erlaubte_spalten_satz() -> str:
+    """Der Satz, der die schreibbaren Spalten aufzählt - Einzahl wie Mehrzahl.
+
+    Steht hier und nicht zweimal ausgeschrieben in ``app/excel.py`` und
+    ``app/modelle.py``: seit ``SCHREIBBARE_SPALTEN`` nur noch einen Eintrag hat,
+    ergab das dortige ``' und '.join(...)`` den Satz "Erlaubt sind bestand und
+    bestellt." minus die Hälfte - also "Erlaubt sind bestellt.". Die Zahl der
+    Spalten darf sich ändern, ohne dass jemand daran denken muss.
+    """
+    namen = [f"'{spalte}'" for spalte in SCHREIBBARE_SPALTEN]
+    if len(namen) == 1:
+        return f"Änderbar ist nur die Spalte {namen[0]}."
+    return "Änderbar sind nur die Spalten " + " und ".join(
+        [", ".join(namen[:-1]), namen[-1]]
+    ) + "."
 
 
 class ExcelFehlt(FileNotFoundError):
@@ -451,8 +477,7 @@ def schreibe_zelle(
     """
     if spalte not in SCHREIBBARE_SPALTEN:
         raise UngueltigeAenderung(
-            f"Die Spalte {spalte!r} ist nicht änderbar. "
-            f"Erlaubt sind {' und '.join(SCHREIBBARE_SPALTEN)}."
+            f"Die Spalte {spalte!r} ist nicht änderbar. {erlaubte_spalten_satz()}"
         )
     neuer_wert = pruefe_wert(wert)
     if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):

@@ -194,10 +194,10 @@ def test_nach_einer_aenderung_traegt_die_api_alles_was_das_skript_einsetzt(clien
     daten = client.get("/api/rows").json()
     zeile = next(z for z in daten["zeilen"] if z["bestand_ref"] == "G3")
     antwort = client.post("/api/cell", json={
-        "key": zeile["key"], "spalte": "bestand", "wert": 3, "mtime": daten["mtime"],
+        "key": zeile["key"], "spalte": "bestellt", "wert": 3, "mtime": daten["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
     zurueck = antwort.json()["zeile"]
     for feld in ("zu_bestellen", "bestand", "bestellt"):
         assert feld in zurueck, feld
-    assert zurueck["bestand"] == 3
+    assert zurueck["bestellt"] == 3

@@ -41,7 +41,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
 
-from .excel import SCHREIBBARE_SPALTEN
+from .excel import erlaubte_spalten_satz
 
 # Leerraum wird abgeschnitten, *dann* wird die Mindestlänge geprüft - ein Feld
 # aus lauter Leerzeichen gilt damit als leer, wie in der handgeschriebenen
@@ -88,7 +88,7 @@ class AbrufAnfrage(BaseModel):
 MELDUNGEN: dict[str, str] = {
     "pfad": "Bitte einen Pfad zur Excel-Datei eingeben.",
     "key": "Es fehlt der Schlüssel der Zeile.",
-    "spalte": f"Erlaubt sind nur die Spalten {' und '.join(SCHREIBBARE_SPALTEN)}.",
+    "spalte": erlaubte_spalten_satz(),
     "mtime": "Es fehlt eine gültige Änderungszeit der geladenen Datei.",
     "benutzer": "Bitte IServ-Benutzername und Passwort eingeben.",
     "passwort": "Bitte IServ-Benutzername und Passwort eingeben.",

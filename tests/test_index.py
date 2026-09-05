@@ -78,11 +78,16 @@ def test_fehlendes_blatt_meldet_klartext(client, einstellungen, workbook_path):
     assert "Gibt-es-nicht" in antwort.text
 
 
-def test_bestand_und_bestellt_sind_eingabefelder(client):
-    """Nur diese zwei Spalten dürfen von Hand geändert werden."""
+def test_nur_bestellt_ist_ein_eingabefeld(client):
+    """Die einzige Spalte, die von Hand geändert werden darf.
+
+    "Bestand" hatte bis 2026-09-05 ebenfalls ein Feld. Es kommt aber aus IServ
+    und wird bei jedem Abruf überschrieben - eine Eingabe dort hielt höchstens
+    bis zum nächsten Abruf und sah bis dahin aus wie eine verlässliche Zahl.
+    """
     text = client.get("/").text
-    assert text.count('data-spalte="bestand"') > 0
     assert text.count('data-spalte="bestellt"') > 0
+    assert 'data-spalte="bestand"' not in text
     assert 'data-spalte="angemeldet"' not in text
     assert 'data-spalte="zu_bestellen"' not in text
 
