@@ -103,8 +103,14 @@ ist unverändert (72 Zeilen, 16 Sperrflächen), und alle 43 Tests von
 Beim Testlauf auf dem Schul-Laptop ist das die Erklärung, falls jemand die
 Oberfläche von früher als zäh in Erinnerung hat. Nicht mituntersucht:
 `sba-launcher/core/catalog.py` hat eigene Kopien derselben Hilfsfunktionen mit
-demselben Muster — dort lohnt sich derselbe Handgriff, gehört aber nicht in
-dieses Repo.
+demselben Muster (`cell_ref in merged`, Zeilen 70 und 79).
+
+**Wird nicht mehr nachgezogen** (Entscheidung Niklas, 2026-09-05): `sba-launcher`
+wird voraussichtlich nicht weiterentwickelt und nicht mehr benutzt. Die Notiz
+bleibt als Fundstelle stehen, falls das Repo doch wiederbelebt wird — dann wäre
+vor dem Handgriff erst zu messen, ob es dort überhaupt weh tut: im Dashboard lag
+der Aufruf auf **jedem** Seitenaufbau und jeder Zellenänderung, in einem
+Katalogaufbau läuft er vermutlich einmal.
 
 ## Nur Niklas kann es erledigen
 
