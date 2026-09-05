@@ -6,6 +6,7 @@ import os
 import socket
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -110,6 +111,7 @@ def test_start_nimmt_alternative_config_und_setzt_app_zustand(tmp_path, monkeypa
     )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="START.sh ist nur für macOS und Linux")
 def test_macos_start_wechselt_ins_projektverzeichnis(tmp_path):
     """Der macOS-Start kommt oft aus dem Home-Ordner, nicht aus dem Checkout.
 
