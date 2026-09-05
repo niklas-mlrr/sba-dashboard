@@ -278,6 +278,45 @@ ein Versprechen an jeden Nutzer des Pakets, das dort nichts prüft — ein Bruch
 fiele in diesem Repo auf statt in dem, das ihn verursacht. Er fand die zwei
 weiteren Kleinigkeiten, die in `e9d0321` mit drinstehen.
 
+## Nachtrag: die Paketgrenze zu `ausleihe` (2026-09-05)
+
+Dieselbe Behandlung für `ausleihe-api`, am selben Tag. Es war die letzte
+Paketgrenze im Geschwister-Layout, die niemand prüfte — und die einzige, die in
+**beiden** Nachbar-Repos unter `ignore_missing_imports` stand. Erledigt in
+`ausleihe-api` `d6c1af7`, `sba-bestand` `fff3af0` und hier.
+
+Der Ablauf war der bekannte: Marker plus `package-data`, am gebauten Rad
+geprüft; `mypy_path` erweitert (hier auf zwei Pfade, komma-getrennt, weil ein
+Doppelpunkt unter Windows zum Laufwerksbuchstaben gehört); mit `reveal_type`
+nachgeprüft statt am ausbleibenden Fehler. Vor der Pfadzeile meldeten beide
+Repos „Success" und offenbarten auf Nachfrage siebenmal `Any`.
+
+`ausleihe-api` war bereits durchgehend annotiert, hatte aber
+`disallow_untyped_defs = false` — die Prüfung hätte beim ersten untypisierten
+Neuzugang lautlos aufgehört. Angezogen; das Paket bestand sie sofort.
+
+Die vier Befunde lagen alle in `sba-bestand`, keiner hier:
+
+- `load_grade_books` gab `list[dict]` zurück, also `list[dict[Any, Any]]`,
+  während `match_book` `list[dict[str, Any]]` verlangt. Das ist der einzige
+  echte **Datenfluss** zwischen den beiden Repos — nicht bloß ein
+  Ausnahmetyp —, und er war ungeprüft, obwohl beide Seiten annotiert aussahen.
+- `cell.subject` ist `str | None`; die Schleife in `apply_snapshot` verließ
+  sich auf die Kopplung an `skip_reason`, die kein Typprüfer sehen kann.
+- Zweimal derselbe Name für zwei Dinge in einer Funktion (`book`, `s`) — beim
+  zweiten fiel es erst auf, als `Series` echte Typen bekam.
+
+Hier war keine Codeänderung nötig, aber zwei Stellen in `app/refresh.py` werden
+jetzt wirklich geprüft, gegengeprüft mit absichtlich falschem Code:
+`fehlerabbildung()` (ein Tippfehler in `AuthError`, `ForbiddenError` oder
+`TransportError` war vorher ein `Any`, das jedes `isinstance` schluckte) und
+`client_factory = AusleiheClient` in `melde_an()` (mypy prüft erst jetzt, dass
+die Klasse überhaupt zu `ClientFabrik` passt).
+
+Damit liefern alle drei Repos `py.typed`, und `openpyxl.*` ist die einzige
+verbliebene namentliche Ausnahme. `sba-launcher` bleibt außen vor
+(Entscheidung 2026-09-05, oben unter „Nebenbefund aus der CI").
+
 ## Bewusst zurückgestellt
 
 ### Versionierte Wheels für die drei Repos
