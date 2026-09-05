@@ -8,8 +8,11 @@
 </head>
 <body>
   <header class="kopf">
-    <h1>Bestand und Nachbestellung</h1>
-    {% block kopfzeile %}{% endblock %}
+    <div class="kopftext">
+      <h1>Bestand und Nachbestellung</h1>
+      {% block kopfzeile %}{% endblock %}
+    </div>
+    <div class="kopfaktionen">{% block kopfaktionen %}{% endblock %}</div>
   </header>
   <main>
     {% block inhalt %}{% endblock %}

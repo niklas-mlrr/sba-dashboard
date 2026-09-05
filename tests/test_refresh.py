@@ -144,6 +144,69 @@ def test_backup_wird_angelegt(client, workbook_path: Path):
     assert name and (workbook_path.parent / "backups" / name).is_file()
 
 
+@pytest.fixture()
+def client_leer(leeres_workbook: Path) -> TestClient:
+    """Eine App auf der noch ungefüllten Mappe - der erste Abruf überhaupt.
+
+    Die Fixture ``client`` arbeitet auf einer Mappe, in der der Snapshot schon
+    steht (siehe ``conftest.workbook_path``); ein Abruf dort ändert
+    definitionsgemäß nichts mehr. Für die Frage, was ein Abruf *ändert*, braucht
+    es die leere Ausgangslage.
+    """
+    from app.settings import Einstellungen
+
+    application = create_app(einstellungen=Einstellungen(
+        iserv_domain="beispiel-schule.de",
+        excel_pfad_kandidaten=(leeres_workbook,),
+        blatt_raster=SHEET_NAME,
+    ))
+    with TestClient(application, base_url=TEST_BASIS_URL) as testclient:
+        yield testclient
+
+
+def test_zusammenfassung_nennt_die_wirklich_geaenderten_zellen(client_leer):
+    """``geaenderte_refs`` ist die Grundlage der Hervorhebung in der Oberfläche.
+
+    Der Browser verliert sein "vorher" beim Neuladen nach dem Abruf; die Bezüge
+    kommen deshalb vom Server.
+    """
+    _abrufen(client_leer)
+    stand = _warte_auf_ende(client_leer)
+    assert stand["fehler"] is None, stand
+    z = stand["zusammenfassung"]
+
+    refs = z["geaenderte_refs"]
+    assert "G3" in refs                       # war leer, steht jetzt auf 60
+    assert len(refs) == z["geaendert"]
+    assert z["geschrieben"] >= z["geaendert"]
+    # Kein Bezug doppelt - sonst hübe die Oberfläche eine Zelle zweimal hervor
+    # und entfernte die Marke beim ersten Ablauf wieder.
+    assert len(set(refs)) == len(refs)
+
+
+def test_ein_zweiter_abruf_meldet_nur_noch_den_stand_als_geaendert(client_leer):
+    """Zweimal dasselbe abrufen heißt: außer der Uhrzeit hat sich nichts bewegt.
+
+    ``UpdateResult.changes`` enthält jede geschriebene Zelle, auch die, in der
+    schon dieselbe Zahl stand - würde die Oberfläche daran hängen, leuchtete
+    nach jedem Abruf die ganze Tabelle auf und sagte damit nichts mehr.
+    """
+    _abrufen(client_leer)
+    _warte_auf_ende(client_leer)
+    _abrufen(client_leer)
+    zweiter = _warte_auf_ende(client_leer)
+
+    assert zweiter["fehler"] is None, zweiter
+    z = zweiter["zusammenfassung"]
+    assert z["geschrieben"] > 0
+    # Keine einzige Zahl hat sich bewegt. Übrig bleiben kann allein die
+    # "Stand"-Zelle B10 (der Abfragezeitpunkt) - und auch die nur, wenn die
+    # beiden Läufe in verschiedene Sekunden fallen: der Zeitstempel wird auf
+    # Sekunden gekürzt. Deshalb Teilmenge und nicht Gleichheit; eine
+    # Gleichheitsprüfung wäre von der Laufzeit der Testsuite abhängig.
+    assert set(z["geaenderte_refs"]) <= {"B10"}, z["geaenderte_refs"]
+
+
 # ── Fehlerabbildung ───────────────────────────────────────────────────────────
 
 def test_falsches_passwort_ist_401(client):

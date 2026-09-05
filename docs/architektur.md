@@ -270,8 +270,17 @@ vier sind nötig:
 (`0:Deutsch:C3`), nie eine Referenz wie `"K3"`. Der Schlüssel wird gegen das
 *frisch geparste* Raster aufgelöst. Ein Bearbeiter, der eine Zeile einfügt,
 verschiebt damit keine Zahl in die falsche Zelle — und ein manipulierter Aufruf
-kann keine beliebige Zelle der Mappe beschreiben. Schreibbar sind nur `bestand`
-und `bestellt`; `angemeldet` kommt aus IServ und `zu bestellen` ist eine Formel.
+kann keine beliebige Zelle der Mappe beschreiben. Schreibbar ist seit dem
+2026-09-05 nur noch `bestellt` (`SCHREIBBARE_SPALTEN` in `app/excel.py`).
+
+Der Grund ist inhaltlich, nicht technisch: `angemeldet` und `bestand` kommen aus
+IServ und werden bei jedem Abruf überschrieben — eine Eingabe dort hielt bis zum
+nächsten Abruf und sah bis dahin aus wie eine Zahl, auf die man sich verlassen
+kann. `zu bestellen` ist eine Formel. Übrig bleibt `bestellt`: es kommt aus dem
+Blatt `bestellt` derselben Mappe, und was dort (noch) nicht steht, lässt der
+Abruf seither unangetastet stehen (siehe „Der Abruf"). Es ist damit die einzige
+Spalte, in der eine Eingabe von Hand Bestand hat — und die Oberfläche zeigt auch
+nur dort ein Eingabefeld.
 
 **Optimistisches Sperren.** Der Browser muss die `mtime` mitschicken, die er beim
 Laden gesehen hat. Weicht sie ab, hat jemand anderes gespeichert (oder der
@@ -334,6 +343,25 @@ mit 200 — es ist eine Abfrage, kein zweiter Versuch.
 Client und werden danach fallen gelassen. Sie landen nie in `app.state`, nie in
 einem Log, nie in einer Antwort, nie im Cache und nie in der Mappe. `test_refresh.py`
 prüft genau das.
+
+**Was der Abruf überschreibt — und was nicht.** `angemeldet`, `bezahlt` und
+`bestand` kommen aus IServ und werden bedingungslos gesetzt. `bestellt` nicht: es
+kommt aus dem Blatt `bestellt` derselben Mappe und wird nur dort geschrieben, wo
+die ISBN in diesem Blatt vorkommt. Bis zum 2026-09-05 setzte
+`bestand.core.update.apply_snapshot` die Zelle sonst auf `None` und löschte damit
+bei jedem Lauf, was jemand von Hand eingetragen hatte — der einzige Ort im ganzen
+Programm, an dem ein Abruf eine Eingabe vernichtete. Ein fehlender Eintrag im
+Blatt heißt „unbekannt", nicht „nichts bestellt". Der stehen gelassene Wert geht
+trotzdem in die Bedarfsrechnung ein, sonst bestellte das Blatt `zu Bestellen`
+dieselben Bücher erneut.
+
+**Was sich wirklich geändert hat.** `zusammenfassung.geaenderte_refs` führt die
+Zellbezüge der Zellen, deren Wert sich bewegt hat — nicht alle geschriebenen
+(`geschrieben`), denn nach dem zweiten Abruf desselben Stands wären das
+sämtliche Zellen des Rasters. Die Oberfläche hebt genau diese Zellen nach dem
+Neuladen zehn Sekunden lang hervor; sie findet sie über `data-refs` an jeder
+Zahlenzelle (`app/templates/index.html`), weil der Browser sein „vorher" mit dem
+Neuladen verloren hat.
 
 **Ganz oder gar nicht.** Meldet `apply_snapshot` Diagnosen, ist die Zuordnung
 Fach → Buch mehrdeutig; dann wird *nichts* gespeichert. Eine halb aktualisierte

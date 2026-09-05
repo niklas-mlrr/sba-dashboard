@@ -100,9 +100,17 @@ def test_die_seite_kennt_die_aenderungszeit(client):
 
 def test_abruf_dialog_warnt_vor_dem_ueberschreiben(client):
     text = client.get("/").text
-    assert "Aus IServ abrufen" in text
-    assert "überschrieben" in text
+    assert "Aktuelle Daten aus IServ abrufen" in text
     assert 'type="password"' in text
+    # Der Satz muss beide Hälften der Wahrheit nennen: was überschrieben wird
+    # (Angemeldet und Bestand, aus IServ) und was nicht (Bestellt, aus dem
+    # Blatt "bestellt" derselben Mappe). Bis 2026-09-05 stand hier "Bestand und
+    # Bestellt werden dabei mit den Zahlen aus IServ überschrieben" - für
+    # Bestellt war beides falsch, die Quelle wie das Schicksal eigener Einträge.
+    assert "Angemeldet und Bestand werden dabei mit den" in text
+    assert "überschrieben" in text
+    assert "Bestellt kommt nicht aus IServ" in text
+    assert "eigene Einträge bleiben stehen" in text
 
 
 def test_einrichtung_prueft_die_mappe_vor_dem_speichern(tmp_path, einstellungen):

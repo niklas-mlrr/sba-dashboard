@@ -1,12 +1,25 @@
 {% extends "base.html" %}
 {% block titel %}Bestand — Schulbuchausleihe{% endblock %}
 
+{#
+  Die beiden Knöpfe stehen in der Kopfzeile und nicht mehr in der Filterleiste
+  über der Tabelle. Dort standen sie zwischen Suchfeld und Zeilenzähler und
+  sahen aus wie ein weiterer Filter - dabei ist der Abruf die eine Handlung,
+  wegen der das Dashboard überhaupt geöffnet wird. Er trägt deshalb auch die
+  Haupt-Auszeichnung, "Beenden" die leise.
+#}
 {% block kopfzeile %}
 <p class="meta">
   <span title="{{ datei }}">{{ datei.name }}</span>
   · zuletzt geändert <span id="geaendert">{{ zustand.geaendert.strftime("%d.%m.%Y %H:%M") }}</span>
   {% if cache.stand %}· Abruf {{ cache.stand.strftime("%d.%m.%Y %H:%M") }}{% endif %}
 </p>
+{% endblock %}
+
+{% block kopfaktionen %}
+<button type="button" id="abruf-oeffnen"
+  class="knopf knopf-haupt">Aktuelle Daten aus IServ abrufen</button>
+<button type="button" id="beenden" class="knopf knopf-leise">Beenden</button>
 {% endblock %}
 
 {% block inhalt %}
@@ -26,10 +39,9 @@ ersten Abruf aus IServ.</p>
 <div class="leiste">
   <label><input type="checkbox" id="nur-bedarf"> nur Zeilen mit Bedarf</label>
   <input type="search" id="suche" placeholder="Fach oder Titel suchen" autocomplete="off">
-  <span class="zaehler"><span id="sichtbar">{{ zeilen|length }}</span> von {{ zeilen|length }} Zeilen
-    · Bedarf gesamt <span id="bedarf-gesamt">{{ bedarf_gesamt }}</span></span>
-  <button type="button" id="abruf-oeffnen" class="knopf">Aus IServ abrufen</button>
-  <button type="button" id="beenden" class="knopf">Beenden</button>
+  <span class="zaehler"><span id="sichtbar">{{ zeilen|length }}</span> von {{ zeilen|length }} Zeilen</span>
+  <span class="bedarf-summe">zu bestellen gesamt
+    <strong id="bedarf-gesamt">{{ bedarf_gesamt }}</strong></span>
 </div>
 
 {#
@@ -98,8 +110,16 @@ ersten Abruf aus IServ.</p>
     <p class="dialog-text">Der Abruf meldet sich mit <strong>Ihrem</strong> IServ-Konto an
       und dauert etwa eine Minute. Die Zugangsdaten werden nur für diesen Abruf
       benutzt und nirgends gespeichert.</p>
-    <p class="dialog-text warnhinweis">Bestand und Bestellt werden dabei mit den Zahlen
-      aus IServ überschrieben.</p>
+    {#
+      Bis 2026-09-05 stand hier "Bestand und Bestellt werden dabei mit den
+      Zahlen aus IServ überschrieben." Das stimmte für Bestellt nicht: die
+      Spalte kommt aus dem Blatt "bestellt" derselben Mappe, nicht aus IServ.
+      Sie WURDE dabei allerdings überschrieben, und zwar auch geleert - das ist
+      seit demselben Tag behoben (bestand.core.update.apply_snapshot).
+    #}
+    <p class="dialog-text warnhinweis">Angemeldet und Bestand werden dabei mit den
+      Zahlen aus IServ überschrieben. Bestellt kommt nicht aus IServ, sondern aus
+      dem Blatt „bestellt“ dieser Mappe; eigene Einträge bleiben stehen.</p>
     <label>IServ-Benutzername
       <input type="text" id="benutzer" name="benutzer" autocomplete="username" required></label>
     <label>Passwort
@@ -108,15 +128,31 @@ ersten Abruf aus IServ.</p>
     <p class="dialog-fehler" id="abruf-fehler" hidden></p>
     <div class="dialog-knoepfe">
       <button type="button" id="abruf-abbrechen" class="knopf">Abbrechen</button>
-      <button type="submit" id="abruf-starten" class="knopf knopf-haupt">Abrufen</button>
+      <button type="submit" id="abruf-starten" class="knopf knopf-haupt">
+        <span class="spinner" id="abruf-spinner" hidden></span>
+        <span id="abruf-starten-text">Abrufen</span></button>
     </div>
   </form>
 </dialog>
 
 <div class="fortschritt" id="fortschritt" hidden>
   <div class="fortschritt-balken"><span id="fortschritt-fuellung"></span></div>
-  <p class="fortschritt-text" id="fortschritt-text"></p>
+  <p class="fortschritt-text"><span class="spinner" id="fortschritt-spinner" hidden></span><span
+    id="fortschritt-text"></span></p>
   <ul class="diagnosen" id="diagnosen" hidden></ul>
+</div>
+
+{#
+  Die Schicht, die jeden selbst ausgelösten Neuladen begleitet: nach einem
+  fertigen Abruf und nach einem Konflikt. Ohne sie stand die Seite zwei
+  Sekunden lang unverändert da, während im Hintergrund schon neu geladen wurde -
+  und wer in dieser Zeit noch etwas eintippte, verlor es wortlos.
+#}
+<div class="ueberlagerung" id="seite-laedt" hidden>
+  <div class="ueberlagerung-karte">
+    <span class="spinner spinner-gross"></span>
+    <p id="seite-laedt-text">Die Seite lädt neu …</p>
+  </div>
 </div>
 {% endblock %}
 

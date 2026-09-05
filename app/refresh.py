@@ -275,10 +275,17 @@ class RefreshManager:
                     "diese Spalten können deshalb leer bleiben. Die Bestandszahlen sind "
                     "bereits gespeichert."
                 )
+            # Nur die Zellen, deren Wert sich wirklich bewegt hat. ``changes``
+            # enthält jede geschriebene Zelle, auch die, in der schon dieselbe
+            # Zahl stand - als Hervorhebung wären das nach dem ersten Abruf
+            # sämtliche 72 Zeilen, also keine Auskunft mehr.
+            geaenderte_refs = [c.ref for c in result.changes if c.old != c.new]
             self._abschluss(
                 warnungen=warnungen,
                 zusammenfassung={
-                    "geaendert": len(result.changes),
+                    "geaendert": len(geaenderte_refs),
+                    "geschrieben": len(result.changes),
+                    "geaenderte_refs": geaenderte_refs,
                     "uebersprungen": len(result.skipped),
                     "nachbestellungen": len(zeilen),
                     "stueckzahl": sum(z.stueckzahl for z in zeilen),

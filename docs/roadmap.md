@@ -8,6 +8,60 @@ mit dem, was sich dabei geändert hat). Offen bleiben damit nur noch die beiden
 **Funktionslücken**, die niemand außer Niklas erledigen kann — allen voran der
 Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
 
+## Sieben Punkte aus dem ersten Blick auf die Oberfläche (2026-09-05)
+
+Niklas hat die laufende Fassung zum ersten Mal angesehen und sieben Dinge
+notiert. Alle sind erledigt; zwei davon waren keine Geschmacksfragen, sondern
+Fehler.
+
+**Der eine, der niemandem aufgefallen war:** der Abruf **leerte** die
+Bestellt-Zelle, wenn die ISBN im Blatt `bestellt` nicht vorkam. Genau die
+Spalte, die man von Hand pflegt, verlor also bei jedem Lauf ihre Einträge. Ein
+fehlender Eintrag im Blatt heißt „unbekannt", nicht „nichts bestellt" — die
+Zelle bleibt jetzt stehen, und ihr Wert geht weiter in die Bedarfsrechnung ein
+(`sba-bestand`, `apply_snapshot`).
+
+**Der andere:** der Warntext im Abruf-Dialog behauptete, Bestand und Bestellt
+kämen beide aus IServ. Bestellt kommt aus dem Blatt `bestellt` derselben Mappe.
+Der Satz nennt jetzt beides getrennt.
+
+Der Rest waren Sichtbarkeitsfragen — und die sind es nicht nur oberflächlich:
+
+- **Bestand ist nicht mehr bearbeitbar** (Oberfläche *und* `SCHREIBBARE_SPALTEN`).
+  Es kommt aus IServ; ein Eingabefeld war eine Zusage, die der nächste Abruf
+  gebrochen hat. Damit ist Bestellt die einzige Eingabespalte — und die einzige,
+  in der eine Eingabe seit heute wirklich Bestand hat.
+- **Bestellt sieht jetzt wie ein Eingabefeld aus.** Vorher zeigte es seinen
+  Rahmen erst beim Überfahren mit der Maus; wer nicht zufällig darüberfuhr,
+  erfuhr nie, dass hier etwas einzutragen ist.
+- **Der Abruf-Knopf steht in der Kopfzeile** statt zwischen Suchfeld und
+  Zeilenzähler, heißt „Aktuelle Daten aus IServ abrufen" und trägt die
+  Haupt-Auszeichnung. „zu bestellen" ist eine rote Plakette mit Zeilenmarke, und
+  die Gesamtsumme steht als eigene Auszeichnung neben dem Zähler.
+- **Spinner überall dort, wo gewartet wird:** in der Anmeldung bei IServ (die
+  synchron in der Anfrage läuft und bis dahin ohne jede Rückmeldung war), im
+  Fortschritt, im Zellfeld während des Speicherns über das Netzlaufwerk, und als
+  Schicht über der Seite, wenn sie von selbst neu lädt.
+- **Geänderte Zellen leuchten zehn Sekunden.** Der Browser verliert sein
+  „vorher" beim Neuladen, der Server nicht: `zusammenfassung.geaenderte_refs`
+  führt die Zellbezüge, die Vorlage trägt `data-refs` an jeder Zahlenzelle. Nur
+  wirklich geänderte Werte zählen — sonst leuchtete nach dem zweiten Abruf die
+  ganze Tabelle und sagte damit nichts.
+- **Die Arbeitskopie liegt sichtbar im Projektordner** statt in `.local/`.
+
+**Nebenbefund, mitgenommen:** wer die Seite während eines laufenden Abrufs neu
+lud (oder ein zweites Fenster öffnete), sah gar keine Rückmeldung — obwohl das
+Dashboard ausdrücklich für mehrere Fenster gedacht ist. Der Fortschritt wird beim
+Laden jetzt nachgeholt (`standNachladen` in `app.js`).
+
+Geprüft ist das mit der Testsuite, dazu einmal mit `jsdom` gegen die echt
+gerenderte Seite (Hervorhebung, `sessionStorage`-Sperre gegen doppeltes
+Aufleuchten, Spinner-Zustände, Fortschritt bis zum Neuladen). Das ist bewusst
+keine eingecheckte JS-Testumgebung — die bleibt, wie in
+[`architektur.md`](architektur.md) begründet, außen vor; `tests/test_oberflaeche.py`
+hält weiterhin den Vertrag zwischen Skript und Vorlage. Wie es **aussieht**,
+kann hier niemand beurteilen: kein Browser, kein Bildschirm.
+
 ## Der Windows-Job hat sofort einen echten Fehler gefunden
 
 Genau dafür war er da. `os.replace` — der letzte Schritt jedes atomaren
@@ -327,13 +381,18 @@ arbeitet. Der Wechsel auf versionierte Wheels lohnt sich, sobald ein zweiter
 Rechner eine *andere* Fassung von `sba-bestand` fahren soll als der
 Entwicklungsstand. Begründung und Umschaltpunkt: [`verteilung.md`](verteilung.md).
 
-### Refresh überschreibt Bestand und Bestellt
+### Bestand im Browser bearbeiten
 
-Bekannte Eigenschaft, keine Panne: der Abruf schreibt alle drei Spalten, wie es
-das abgelöste Skript tat. Änderungen aus dem Browser an Bestand und Bestellt
-leben also nur bis zum nächsten Abruf. Die Oberfläche sagt das an der Spalte
-dazu. Eine Zusammenführung wäre erst sinnvoll, wenn jemand feststellt, dass ihn
-das im Alltag stört.
+Nicht mehr vorgesehen — **war** es bis zum 2026-09-05, und der Punkt stand hier
+als „bekannte Eigenschaft, keine Panne". Das war er auch für Bestand: die Spalte
+kommt aus IServ und wird bei jedem Abruf überschrieben, eine Eingabe hielt also
+bis zum nächsten Lauf. Die Oberfläche sagte es an der Spalte dazu, aber ein Feld,
+in das man tippen kann, ist eine Zusage, die ein Hinweistext nicht zurücknimmt.
+Deshalb ist es weg (`SCHREIBBARE_SPALTEN`), und der eigentliche Weg bleibt IServ.
+
+Für Bestellt lag der Fall anders, und da war es eine Panne: die Spalte kommt
+nicht aus IServ, sondern aus dem Blatt `bestellt` derselben Mappe — und stand die
+ISBN dort nicht, **leerte** der Abruf die Zelle. Behoben, siehe oben.
 
 ### `zu Bestellen` im Browser bearbeiten
 

@@ -44,7 +44,7 @@ Jede Fehlerantwort hat die Form `{"fehler": "<deutscher Klartext>"}`; welche
 Ausnahme zu welchem Status wird, steht als Tabelle in
 [`docs/architektur.md`](docs/architektur.md#ausnahme--http-steht-an-genau-einer-stelle).
 
-Änderbar sind nur **Bestand** und **Bestellt**, und nur über den Zeilenschlüssel —
+Änderbar ist nur **Bestellt**, und nur über den Zeilenschlüssel —
 `/api/cell` nimmt keine freie Zellreferenz entgegen, und die beim Laden gesehene
 `mtime` ist Pflicht. Warum es diese vier Schutzschichten braucht und was jede
 einzelne verhindert, steht in

@@ -182,6 +182,28 @@ def test_bedarf_gesamt_ist_die_summe_der_zellen(client, seite: _Sammler):
     assert summe == gerendert
 
 
+def test_jede_zahlenzelle_nennt_ihren_bezug_in_der_mappe(client, seite: _Sammler):
+    """``data-refs`` ist der Faden zwischen Abruf-Ergebnis und Anzeige.
+
+    Nach dem Abruf lädt die Seite neu; welche Zellen sich geändert haben, weiß
+    danach nur noch der Server (``zusammenfassung.geaenderte_refs``, in
+    Zellbezügen der Mappe). ``hervorheben()`` in app.js findet die zugehörige
+    Tabellenzelle allein über dieses Attribut - fehlt es an einer Spalte, bleibt
+    genau diese Spalte stumm, ohne dass irgendetwas kaputtgeht.
+
+    Angemeldet trägt mehrere Bezüge: in einem Mehrjahresband steht der Bestand
+    einmal, die Anmeldungen aber je Jahrgang.
+    """
+    api = {z["key"]: z for z in client.get("/api/rows").json()["zeilen"]}
+    assert seite.zeilen, "ohne Zeilen prüft dieser Test nichts"
+    for zeile, zellen in zip(seite.zeilen, seite.zellen_je_zeile):
+        daten = api[zeile["data-key"]]
+        angemeldet, bestand, bestellt = zellen[4], zellen[5], zellen[6]
+        assert (angemeldet["data-refs"] or "").split() == list(daten["angemeldet_refs"])
+        assert bestand["data-refs"] == daten["bestand_ref"]
+        assert bestellt["data-refs"] == (daten["bestellt_ref"] or "")
+
+
 def test_eingabefelder_stehen_nur_in_den_schreibbaren_spalten(seite: _Sammler):
     from app.excel import SCHREIBBARE_SPALTEN
 

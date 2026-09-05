@@ -14,8 +14,15 @@
   --text-leise: #5c6570;
   --akzent: #14508c;
   --bedarf: #8c3a14;
+  --bedarf-grund: #fbeee7;
+  --bedarf-rand: #e0b49c;
   --warnung-grund: #fdf3e3;
   --warnung-rand: #e5c58a;
+  /* Die Hervorhebung frisch abgerufener Zellen. Bewusst nicht Rot oder Grün:
+   * "hat sich geändert" ist weder Fehler noch Erfolg, und Rot ist in dieser
+   * Tabelle schon für den Bedarf vergeben. */
+  --frisch-grund: #fff4c2;
+  --frisch-rand: #e0c65a;
   --schrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --zeilenhoehe: 1.45;
 }
@@ -30,8 +37,18 @@ body {
   font: 15px/var(--zeilenhoehe) var(--schrift);
 }
 
-.kopf { padding: 1.5rem 0 1rem; border-bottom: 1px solid var(--rand); }
+.kopf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem 1.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.5rem 0 1rem;
+  border-bottom: 1px solid var(--rand);
+}
 .kopf h1 { margin: 0; font-size: 1.35rem; font-weight: 600; }
+.kopftext { min-width: 0; }
+.kopfaktionen { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
 .meta { margin: .35rem 0 0; color: var(--text-leise); font-size: .875rem; }
 
 .hinweis {
@@ -61,6 +78,18 @@ body {
 }
 .zaehler { color: var(--text-leise); font-size: .875rem; }
 
+/* Die eine Zahl, wegen der die Seite geöffnet wird: wie viele Exemplare fehlen.
+ * Sie stand vorher als Nachsatz im grauen Zeilenzähler. */
+.bedarf-summe {
+  padding: .25rem .7rem;
+  border: 1px solid var(--bedarf-rand);
+  border-radius: 999px;
+  background: var(--bedarf-grund);
+  color: var(--bedarf);
+  font-size: .875rem;
+}
+.bedarf-summe strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
+
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 thead th {
   position: sticky;
@@ -79,7 +108,30 @@ tbody td { padding: .4rem .6rem; border-bottom: 1px solid var(--rand); }
 tbody tr:hover { background: var(--flaeche); }
 .zahl { text-align: right; font-variant-numeric: tabular-nums; }
 .isbn { font-variant-numeric: tabular-nums; color: var(--text-leise); }
-.bedarf { color: var(--bedarf); font-weight: 600; }
+
+/* Die Spalte, in der etwas einzutragen ist: im Kopf beschriftet, in der Zeile
+ * das einzige Eingabefeld. */
+thead th.spalte-eingabe { color: var(--akzent); }
+.spaltenhinweis {
+  display: block;
+  font-size: .7rem;
+  font-weight: 400;
+  letter-spacing: .02em;
+  text-transform: none;
+  color: var(--text-leise);
+}
+
+/* "zu bestellen" ist die Zahl, wegen der jemand handelt - sie war bisher nur
+ * roter, halbfetter Text und ging in einer 72-Zeilen-Tabelle unter. Jetzt eine
+ * Plakette, und die Zeile selbst bekommt am linken Rand eine Marke. */
+.bedarf {
+  color: var(--bedarf);
+  font-weight: 700;
+  background: var(--bedarf-grund);
+  box-shadow: inset 0 0 0 1px var(--bedarf-rand);
+  border-radius: 3px;
+}
+tbody tr[data-bedarf="1"] td:first-child { box-shadow: inset 3px 0 0 var(--bedarf); }
 
 .karte { max-width: 44rem; margin: 2rem 0; padding: 1.25rem; border: 1px solid var(--rand); border-radius: 6px; }
 .karte.fehler { border-color: var(--warnung-rand); background: var(--warnung-grund); }
@@ -88,22 +140,38 @@ tbody tr:hover { background: var(--flaeche); }
 
 /* ── Schreibpfad ───────────────────────────────────────────────────────────── */
 
+/* Das Feld sah bis 2026-09-05 wie Text aus und zeigte erst beim Überfahren
+ * einen Rahmen. Wer nicht zufällig mit der Maus darüberfuhr, erfuhr nie, dass
+ * hier etwas einzutragen ist. Jetzt trägt es den Rahmen immer. */
 .zellwert {
   width: 5rem;
   padding: .2rem .35rem;
-  border: 1px solid transparent;
+  border: 1px solid var(--rand);
   border-radius: 3px;
-  background: transparent;
+  background: var(--grund);
   font: inherit;
   font-variant-numeric: tabular-nums;
   text-align: right;
   color: inherit;
+  cursor: text;
 }
-.zellwert:hover { border-color: var(--rand); background: var(--grund); }
-.zellwert:focus { border-color: var(--akzent); background: var(--grund); outline: none; }
+.zellwert:hover { border-color: var(--akzent); }
+.zellwert:focus {
+  border-color: var(--akzent);
+  outline: 2px solid var(--akzent);
+  outline-offset: -2px;
+}
 .zellwert:disabled { opacity: .5; }
 .zellwert.gespeichert { border-color: var(--akzent); background: var(--flaeche); }
 .zellwert.fehlerhaft { border-color: var(--bedarf); background: var(--warnung-grund); }
+/* Während die Zahl unterwegs zur Mappe ist. Die Datei liegt auf einem
+ * Netzlaufwerk - das dauert spürbar, und "deaktiviert" allein sah aus wie
+ * "kaputt". */
+.zellwert.speichert {
+  border-color: var(--akzent);
+  animation: puls 1s ease-in-out infinite;
+}
+@keyframes puls { 50% { background: var(--flaeche); } }
 /* Die Drehpfeile stehlen Platz und laden zum Verklicken ein. */
 .zellwert::-webkit-outer-spin-button,
 .zellwert::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -124,6 +192,54 @@ tbody tr:hover { background: var(--flaeche); }
 .knopf:hover:not(:disabled) { border-color: var(--akzent); }
 .knopf:disabled { opacity: .5; cursor: default; }
 .knopf-haupt { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+.knopf-leise { background: transparent; color: var(--text-leise); }
+
+/* ── Spinner ───────────────────────────────────────────────────────────────── */
+
+/* Ein Ring, dessen obere Kante durchsichtig ist, und der sich dreht - mehr
+ * braucht es nicht, und es kommt ohne Bilddatei aus. `currentColor` heißt: im
+ * Hauptknopf weiß, im grauen Fortschrittstext grau. */
+.spinner {
+  display: inline-block;
+  width: .8em;
+  height: .8em;
+  margin-right: .45em;
+  vertical-align: -.05em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: dreht .7s linear infinite;
+}
+.spinner-gross { width: 1.6rem; height: 1.6rem; margin: 0 0 .6rem; border-width: 3px; }
+@keyframes dreht { to { transform: rotate(360deg); } }
+
+/* Wer Bewegung im System abgeschaltet hat, bekommt keine Drehung, aber auch
+ * kein unsichtbares Element: der Ring steht dann einfach still da. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+  .zellwert.speichert { animation: none; background: var(--flaeche); }
+}
+
+/* ── Überlagerung beim Neuladen ────────────────────────────────────────────── */
+
+.ueberlagerung {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(255 255 255 / .75);
+}
+.ueberlagerung-karte {
+  padding: 1.25rem 1.75rem;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  background: var(--grund);
+  text-align: center;
+  box-shadow: 0 2px 12px rgb(0 0 0 / .12);
+}
+.ueberlagerung-karte p { margin: 0; color: var(--text-leise); font-size: .9rem; }
 
 /* ── Abruf-Dialog ──────────────────────────────────────────────────────────── */
 
@@ -182,4 +298,19 @@ tbody tr:hover { background: var(--flaeche); }
   padding-left: 1.2rem;
   font-size: .875rem;
   color: var(--bedarf);
+}
+
+/* ── Was der letzte Abruf geändert hat ─────────────────────────────────────── */
+
+/* Nach dem Abruf lädt die Seite neu, und dann sehen 72 Zeilen genauso aus wie
+ * vorher - welche Zahlen sich bewegt haben, war nicht zu erkennen. Diese Marke
+ * setzt app.js für zehn Sekunden auf genau die Zellen, die der Lauf geschrieben
+ * hat. Der Übergang steht an der Zelle und nicht an ``.frisch``, denn nur so
+ * ist auch das VERSCHWINDEN weich: mit der Klasse ginge die Regel mit ihr weg,
+ * und die Marke verschwände als Sprung. Das Überfahren einer Zeile färbt das
+ * ``tr``, nicht das ``td`` - dieser Übergang macht den Hover also nicht träge. */
+tbody td { transition: background .6s ease, box-shadow .6s ease; }
+td.frisch {
+  background: var(--frisch-grund);
+  box-shadow: inset 0 0 0 1px var(--frisch-rand);
 }

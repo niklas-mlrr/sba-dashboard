@@ -61,6 +61,13 @@ class Zeile:
             "zu_bestellen": self.zu_bestellen,
             "bestand_ref": self.bestand_ref,
             "bestellt_ref": self.bestellt_ref,
+            # Mehrzahl, weil ein Mehrjahresband den Bestand einmal führt, die
+            # Anmeldungen aber je Jahrgang einzeln. Steht seit 2026-09-05 mit in
+            # der Antwort, damit die Oberfläche nach einem Abruf auch diese
+            # Spalte hervorheben kann - die geänderten Zellen kommen vom Server
+            # als Zellbezüge, und ohne die Anmeldungs-Bezüge bliebe die
+            # meistgeänderte Spalte der Tabelle als einzige stumm.
+            "angemeldet_refs": list(self.angemeldet_refs),
         }
 
 

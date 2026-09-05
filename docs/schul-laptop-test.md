@@ -180,8 +180,10 @@ Mit dem **eigenen** Konto, nicht mit einem Verwalterzugang von jemand anderem.
 
 | # | Schritt | Erwartet | Notieren |
 |---|---------|----------|----------|
-| F1 | „Aus IServ abrufen", Zugangsdaten eingeben | Fortschrittsbalken bewegt sich | **Gesamtdauer** |
+| F1 | „Aktuelle Daten aus IServ abrufen", Zugangsdaten eingeben | Der Knopf zeigt „Anmeldung läuft …" mit drehendem Rad, dann bewegt sich der Fortschrittsbalken | **Gesamtdauer**, und wie lange allein die Anmeldung braucht |
 | F2 | Zusammenfassung am Ende | Zahl geänderter Zellen, Nachbestellungen | Zahlen |
+| F2b | Direkt nach dem Neuladen | Die geänderten Zahlen sind ~10 s gelb hinterlegt, danach nicht mehr | ob es auffällt |
+| F2c | Während des Abrufs ein zweites Fenster auf `127.0.0.1:8765` öffnen | Auch dort läuft der Fortschrittsbalken, und auch dort lädt die Seite am Ende neu | — |
 | F3 | Warnungen in der Zusammenfassung | Erwartet wird **keine** Cache-Warnung. Steht dort „Titel und ISBN konnten diesmal nicht zwischengespeichert werden", ist **beides** fehlgeschlagen, Gruppenordner *und* lokaler Rückfallort | Wortlaut |
 | F4 | Falsches Passwort eingeben | „Zugangsdaten stimmen nicht", HTTP 401, **kein** Absturz | — |
 | F5 | Nach dem Abruf: Titel und ISBN in der Liste | gefüllt, ISBN mit Bindestrichen | ein Beispiel |

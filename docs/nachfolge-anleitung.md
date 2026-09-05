@@ -79,7 +79,7 @@ Mehrjahresband ist (dann steht in der Spalte Jahrgang zum Beispiel `5-6`).
 | Jahrgang | Ein Jahrgang, oder eine Spanne bei Mehrjahresbänden |
 | Titel, ISBN | Aus IServ. Leer, solange noch kein Abruf gelaufen ist |
 | Angemeldet | Wie viele Schüler das Buch ausleihen. Kommt aus IServ |
-| Bestand | Wie viele Exemplare die Schule hat. **Änderbar** |
+| Bestand | Wie viele Exemplare die Schule hat. Kommt aus IServ |
 | Bestellt | Wie viele bestellt, aber noch nicht da sind. **Änderbar** |
 | zu bestellen | Angemeldet minus Bestand minus Bestellt. Wird gerechnet |
 
@@ -95,20 +95,22 @@ Einmal abrufen (siehe unten), dann sind sie da.
 
 ## 4. Eine Zahl ändern
 
-Nur **Bestand** und **Bestellt** lassen sich ändern. In das Feld klicken, Zahl
-eintippen, das Feld verlassen. Gespeichert wird sofort.
+Nur **Bestellt** lässt sich ändern — es ist die einzige Spalte mit einem
+Eingabefeld. In das Feld klicken, Zahl eintippen, das Feld verlassen.
+Gespeichert wird sofort.
 
 - Erlaubt sind ganze Zahlen ab 0 — oder ein **leeres Feld**.
 - **Leer ist nicht dasselbe wie 0.** Leer heißt „nichts bestellt", `0` heißt
   „nachgesehen, es ist nichts offen". Die Excel-Datei unterscheidet das, und
   das Programm auch.
-- **Angemeldet** und **zu bestellen** kann man nicht ändern. Das erste kommt aus
-  IServ, das zweite ist eine Rechnung.
+- **Angemeldet**, **Bestand** und **zu bestellen** kann man nicht ändern. Die
+  ersten beiden kommen aus IServ und würden beim nächsten Abruf ohnehin
+  überschrieben; die dritte ist eine Rechnung.
 
-> **Wichtig:** Der Abruf aus IServ überschreibt Bestand und Bestellt wieder. Was
-> Sie hier eintragen, gilt also bis zum nächsten Abruf. Das steht auch an der
-> Spalte selbst. Der eigentliche Weg, den Bestand dauerhaft zu ändern, ist
-> IServ.
+> **Ihr Eintrag bleibt stehen.** Der Abruf ergänzt „Bestellt" aus dem Blatt
+> `bestellt` derselben Excel-Datei — aber nur dort, wo für dieses Buch auch
+> wirklich eine Bestellung eingetragen ist. Was Sie von Hand eintippen, löscht
+> er nicht mehr. (Bis September 2026 war das anders.)
 
 ### Jede Änderung wird gesichert
 
@@ -121,12 +123,19 @@ also noch da: einfach aus `backups` zurückkopieren.
 
 ## 5. Zahlen aus IServ holen
 
-Knopf **„Aus IServ abrufen"** oben rechts. Es fragt nach Benutzername und
-Passwort — **Ihren eigenen IServ-Zugangsdaten**, nicht denen von jemand anderem.
+Der blaue Knopf **„Aktuelle Daten aus IServ abrufen"** oben rechts. Es fragt
+nach Benutzername und Passwort — **Ihren eigenen IServ-Zugangsdaten**, nicht
+denen von jemand anderem.
 
-Der Abruf dauert ein paar Sekunden und zeigt einen Fortschrittsbalken. Danach
-steht in der Zusammenfassung, wie viele Zellen geändert wurden und was
-nachbestellt werden müsste.
+Nach dem Klick auf „Abrufen" meldet sich das Programm bei IServ an; solange das
+läuft, dreht sich ein kleines Rad im Knopf. Danach dauert der Abruf ein paar
+Sekunden und zeigt einen Fortschrittsbalken. Am Ende steht in der
+Zusammenfassung, wie viele Zellen sich geändert haben und was nachbestellt
+werden müsste.
+
+**Die Seite lädt danach von selbst neu, und alle Zahlen, die der Abruf geändert
+hat, sind zehn Sekunden lang gelb hinterlegt.** So sieht man auf einen Blick,
+was neu ist. Danach verschwindet die Markierung von selbst.
 
 Was der Abruf tut: Anmeldezahlen, Bestandszahlen, Titel und ISBN aus IServ holen
 und in die Excel-Datei schreiben, außerdem das Blatt „zu Bestellen" neu

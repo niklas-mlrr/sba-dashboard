@@ -14,7 +14,7 @@
 //   * Nach einer Änderung setzt `/api/cell` die fertige Zeile zurück; das
 //     Skript trägt sie ein, statt "zu bestellen" selbst nachzurechnen.
 //
-// Vier Teile, die sich nichts teilen außer der Tabelle:
+// Fünf Teile, die sich nichts teilen außer der Tabelle:
 //   1. Filtern und Sortieren - rein im Browser, die Tabelle ist vollständig
 //      gerendert und eine Serverrunde je Tastendruck wäre auf dem Netzlaufwerk
 //      spürbar.
@@ -22,11 +22,14 @@
 //      Änderungszeit. Antwortet der Server mit 409, hat jemand anderes die
 //      Mappe angefasst; dann wird nicht überschrieben, sondern nachgeladen.
 //   3. Abruf aus IServ - Formular, dann Fortschritt pollen.
-//   4. Beenden.
+//   4. Den Stand beim Laden nachholen: einen laufenden Abruf weiterverfolgen
+//      und hervorheben, was der letzte geändert hat - die Bezüge kommen vom
+//      Server, weil der Browser sein Vorher mit dem Neuladen verloren hat.
+//   5. Beenden.
 //
 // Ab etwa 400 Zeilen Code lässt sich das ohne Build in Module trennen
 // (`<script type="module">` lädt echte ES-Module direkt aus dem Ordner); bei
-// den heutigen 235 Codezeilen wäre das mehr Gerüst als Inhalt.
+// den heutigen gut 300 Codezeilen wäre das mehr Gerüst als Inhalt.
 (function () {
   const tabelle = document.getElementById("tabelle");
   if (!tabelle) return;
@@ -37,6 +40,8 @@
   const sichtbar = document.getElementById("sichtbar");
   const bedarfGesamt = document.getElementById("bedarf-gesamt");
   const meldung = document.getElementById("meldung");
+  const seiteLaedt = document.getElementById("seite-laedt");
+  const seiteLaedtText = document.getElementById("seite-laedt-text");
 
   // Das Zeichen für "kein Wert" steht in der Vorlage (data-leer), damit es
   // nicht an zwei Orten gepflegt werden muss.
@@ -114,6 +119,18 @@
     meldung.hidden = true;
   }
 
+  // ── Neuladen mit Ansage ────────────────────────────────────────────────────
+
+  // Die Seite lädt an drei Stellen von selbst neu: nach einem Konflikt, nach
+  // einem fertigen Abruf und - vom Server angestoßen - nie sonst. Bis dahin
+  // vergingen ein bis zweieinhalb Sekunden, in denen die Seite unverändert
+  // dastand: wer in dieser Zeit noch etwas eintippte, verlor es wortlos.
+  function neuLaden(text, verzoegerung) {
+    seiteLaedtText.textContent = text;
+    seiteLaedt.hidden = false;
+    setTimeout(() => window.location.reload(), verzoegerung);
+  }
+
   // ── 2. Zellen ändern ───────────────────────────────────────────────────────
 
   // Setzt Anzeige UND Sortierschlüssel einer Zelle aus einem Wert der Antwort.
@@ -162,6 +179,10 @@
 
     feld.disabled = true;
     feld.classList.remove("fehlerhaft");
+    // Die Mappe liegt auf einem Netzlaufwerk; bis die Antwort da ist, vergeht
+    // spürbar Zeit. Ein bloß ausgegrautes Feld sah in dieser Zeit aus wie
+    // "kaputt" statt wie "wird gerade gespeichert".
+    feld.classList.add("speichert");
     try {
       const antwort = await fetch("/api/cell", {
         method: "POST",
@@ -191,7 +212,7 @@
       feld.classList.add("fehlerhaft");
       if (antwort.status === 409) {
         zeige(koerper.fehler + " (Die Seite lädt gleich neu.)", "warnung");
-        setTimeout(() => window.location.reload(), 2500);
+        neuLaden("Die Mappe wurde inzwischen geändert - die Seite lädt neu …", 2500);
       } else {
         zeige(koerper.fehler || "Die Änderung ließ sich nicht speichern.", "warnung");
       }
@@ -201,6 +222,7 @@
       zeige("Der Server antwortet nicht. Läuft das schwarze Fenster noch?", "warnung");
     } finally {
       feld.disabled = false;
+      feld.classList.remove("speichert");
     }
   }
 
@@ -224,9 +246,12 @@
   const abbrechen = document.getElementById("abruf-abbrechen");
   const abrufFehler = document.getElementById("abruf-fehler");
   const starten = document.getElementById("abruf-starten");
+  const startenText = document.getElementById("abruf-starten-text");
+  const abrufSpinner = document.getElementById("abruf-spinner");
   const fortschritt = document.getElementById("fortschritt");
   const fuellung = document.getElementById("fortschritt-fuellung");
   const fortschrittText = document.getElementById("fortschritt-text");
+  const fortschrittSpinner = document.getElementById("fortschritt-spinner");
   const diagnosen = document.getElementById("diagnosen");
 
   oeffnen.addEventListener("click", () => {
@@ -240,6 +265,10 @@
     fortschritt.hidden = false;
     fuellung.style.width = (stand.fortschritt || 0) + "%";
     fortschrittText.textContent = stand.text || "";
+    // Der Balken zeigt, wie weit es ist; der Spinner, DASS es noch läuft. Ein
+    // Balken, der eine Minute lang bei 60 % steht (eine Jahrgangsliste kann so
+    // lange brauchen), sieht ohne ihn aus wie ein hängengebliebener Abruf.
+    fortschrittSpinner.hidden = Boolean(stand.fertig) || Boolean(stand.fehler);
     fortschritt.classList.toggle("fehlgeschlagen", Boolean(stand.fehler));
 
     diagnosen.innerHTML = "";
@@ -293,9 +322,9 @@
     }
     const z = stand.zusammenfassung || {};
     fortschrittText.textContent =
-      `Fertig: ${z.geaendert} Zellen aktualisiert, ${z.nachbestellungen} Titel nachzubestellen ` +
+      `Fertig: ${z.geaendert} Zellen geändert, ${z.nachbestellungen} Titel nachzubestellen ` +
       `(${z.stueckzahl} Exemplare). Die Seite lädt gleich neu.`;
-    setTimeout(() => window.location.reload(), 2000);
+    neuLaden("Der Abruf ist fertig - die Seite lädt neu …", 2000);
   }
 
   formular.addEventListener("submit", async (ereignis) => {
@@ -303,6 +332,12 @@
     const benutzer = document.getElementById("benutzer");
     const passwort = document.getElementById("passwort");
     starten.disabled = true;
+    // Die Anmeldung bei IServ läuft SYNCHRON in dieser einen Anfrage (siehe
+    // app/api/abruf.py) und dauert eine knappe Sekunde bis zu mehreren. Bis
+    // 2026-09-05 wurde der Knopf dabei nur ausgegraut - für die Lehrkraft sah
+    // das aus, als sei der Klick ins Leere gegangen.
+    abrufSpinner.hidden = false;
+    startenText.textContent = "Anmeldung läuft …";
     abrufFehler.hidden = true;
     try {
       const antwort = await fetch("/api/refresh", {
@@ -327,10 +362,90 @@
       abrufFehler.hidden = false;
     } finally {
       starten.disabled = false;
+      abrufSpinner.hidden = true;
+      startenText.textContent = "Abrufen";
     }
   });
 
-  // ── 4. Beenden ─────────────────────────────────────────────────────────────
+  // ── 4. Was der letzte Abruf geändert hat ───────────────────────────────────
+
+  // Nach einem Abruf lädt die Seite neu - und sieht danach aus wie vorher. Was
+  // sich bewegt hat, war nicht zu erkennen. Der Browser kann das auch nicht von
+  // sich aus wissen: sein Zustand ist mit dem Neuladen weg. Der Server weiß es
+  // ohnehin, er hat die Zellen geschrieben, und liefert die Bezüge in der
+  // Zusammenfassung des letzten Laufs mit (app/refresh.py).
+  //
+  // Die job_id landet im sessionStorage, damit ein späteres F5 nicht dieselben
+  // Zellen ein zweites Mal aufleuchten lässt: die Marke gehört zu EINEM Abruf,
+  // nicht zu jedem Blick auf sein Ergebnis.
+  const HERVORHEBUNG_MS = 10000;
+  const VERMERK = "sba-hervorgehoben";
+
+  function hervorheben(refs) {
+    const gesucht = new Set(refs);
+    const markiert = [];
+    for (const zeile of zeilen) {
+      let betroffen = false;
+      for (const zelle of zeile.cells) {
+        const eigene = (zelle.dataset.refs || "").split(" ").filter(Boolean);
+        if (!eigene.some((ref) => gesucht.has(ref))) continue;
+        zelle.classList.add("frisch");
+        markiert.push(zelle);
+        betroffen = true;
+      }
+      if (!betroffen) continue;
+      // "zu bestellen" hat keinen eigenen Bezug in der Mappe - die Spalte ist
+      // dort eine Formel und wird hier gerechnet. Sie ändert sich aber genau
+      // dann, wenn eine der Zellen ihrer Zeile sich geändert hat.
+      const bedarfszelle = zeile.querySelector(".bedarfszelle");
+      bedarfszelle.classList.add("frisch");
+      markiert.push(bedarfszelle);
+    }
+    if (markiert.length === 0) return;
+    setTimeout(() => {
+      for (const zelle of markiert) zelle.classList.remove("frisch");
+    }, HERVORHEBUNG_MS);
+  }
+
+  // Beim Laden der Seite einmal fragen, was der Server gerade tut. Zwei Fälle,
+  // und beide gab es vorher nicht:
+  //
+  //   * Es läuft noch ein Abruf. Das ist kein Sonderfall - das Dashboard ist
+  //     ausdrücklich für mehrere Fenster gedacht, und wer eines davon während
+  //     eines Abrufs neu lädt, sah bisher eine stumme Seite, während im
+  //     Hintergrund die Mappe geschrieben wurde.
+  //   * Der letzte Abruf ist fertig, und die Seite ist gerade deswegen neu
+  //     geladen worden: dann werden seine Änderungen markiert.
+  async function standNachladen() {
+    let stand;
+    try {
+      const antwort = await fetch("/api/refresh/status");
+      stand = await antwort.json();
+    } catch (fehler) {
+      return;  // Ohne Status keine Marke - das ist kein Fehler, den jemand liest.
+    }
+    if (stand.laeuft) {
+      oeffnen.disabled = true;
+      zeichneFortschritt(stand);
+      pollen();
+      return;
+    }
+    if (!stand.fertig || stand.fehler || !stand.job_id) return;
+    const refs = (stand.zusammenfassung || {}).geaenderte_refs;
+    if (!refs || refs.length === 0) return;
+    try {
+      if (window.sessionStorage.getItem(VERMERK) === stand.job_id) return;
+      window.sessionStorage.setItem(VERMERK, stand.job_id);
+    } catch (fehler) {
+      // Ein Browser ohne sessionStorage (Privatmodus mit gesperrtem Speicher)
+      // hebt dann bei jedem Neuladen erneut hervor. Lieber das als gar nichts.
+    }
+    hervorheben(refs);
+  }
+
+  standNachladen();
+
+  // ── 5. Beenden ─────────────────────────────────────────────────────────────
 
   document.getElementById("beenden").addEventListener("click", async () => {
     if (!window.confirm("Das Dashboard beenden? Gespeicherte Änderungen bleiben erhalten.")) {
