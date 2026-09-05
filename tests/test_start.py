@@ -129,7 +129,10 @@ def test_macos_start_wechselt_ins_projektverzeichnis(tmp_path):
     fremder_ordner.mkdir()
 
     umgebung = os.environ | {
-        "PATH": f"{bin_ordner}:{os.environ['PATH']}",
+        # ``subprocess`` reicht die Umgebung auf Windows nativ weiter; dort
+        # trennt PATH mit ``;``. Ein hartes ``:`` ließ den GitHub-Runner am
+        # Stub vorbei das echte uv starten.
+        "PATH": f"{bin_ordner}{os.pathsep}{os.environ['PATH']}",
         "SBA_ARBEITSORDNER": str(arbeitsordner),
         "UV_LOG": str(protokoll),
     }
