@@ -3,6 +3,11 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+# Rohdaten der Abdeckungsmessung (--cov steht in den addopts, siehe pyproject.toml)
+.coverage
+.coverage.*
+htmlcov/
 .local/
 *.egg-info/
 backups/

@@ -11,6 +11,7 @@ import uuid
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Callable, Protocol
 
 from bestand.core import (
     EV_BOOKLISTS,
@@ -18,7 +19,10 @@ from bestand.core import (
     EV_GRADE_BOOKS,
     EV_NO_BOOKLIST,
     EV_SERIES,
+    BestandConfig,
+    Snapshot,
     UpdateResult,
+    ZuBestellenRow,
     apply_snapshot,
     fetch_snapshot,
     format_isbn,
@@ -45,6 +49,24 @@ _PHASEN = {
 
 class LaeuftBereits(RuntimeError):
     """Es läuft schon ein Abruf - führt zu HTTP 409."""
+
+
+class AusleiheProtokoll(Protocol):
+    """Was das Dashboard vom IServ-Client wirklich benutzt: eine Anmeldung.
+
+    Ein Protokoll und kein Import von ``ausleihe.AusleiheClient``, weil der
+    Client **injiziert** wird (``create_app(client_factory=...)``): die Tests
+    setzen ``bestand.core.testing.FakeClient`` ein und kommen so ohne Netz und
+    ohne IServ aus. Alles Weitere - Bücherlisten, Anmeldezahlen, Serien - holt
+    ``bestand.core.fetch_snapshot`` selbst aus ihm; was es dafür braucht, steht
+    dort und gehört nicht hierher dupliziert.
+    """
+
+    def login(self) -> None: ...
+
+
+# Der Bauplan, nicht der Client: Domain, Benutzername, Passwort.
+ClientFabrik = Callable[[str, str, str], AusleiheProtokoll]
 
 
 @dataclass
@@ -74,10 +96,10 @@ class Lauf:
     fehlercode: int | None = None
     diagnosen: list[str] = field(default_factory=list)
     warnungen: list[str] = field(default_factory=list)
-    zusammenfassung: dict | None = None
+    zusammenfassung: dict[str, Any] | None = None
     beendet: datetime | None = None
 
-    def als_dict(self) -> dict:
+    def als_dict(self) -> dict[str, Any]:
         return {
             "job_id": self.job_id,
             "gestartet": self.gestartet.isoformat(timespec="seconds") if self.gestartet else None,
@@ -131,7 +153,8 @@ def fehlerabbildung(exc: BaseException) -> tuple[int, str]:
     return 500, f"Unerwarteter Fehler beim Abruf: {exc}"
 
 
-def melde_an(domain: str, benutzer: str, passwort: str, *, client_factory=None):
+def melde_an(domain: str, benutzer: str, passwort: str, *,
+             client_factory: ClientFabrik | None = None) -> AusleiheProtokoll:
     """Baut den Client und prüft Zugangsdaten, ohne sie zu speichern."""
     if client_factory is None:
         from ausleihe import AusleiheClient
@@ -149,11 +172,11 @@ class RefreshManager:
         self._zustand_lock = threading.Lock()
         self._aktueller: Lauf | None = None
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, Any]:
         """Der Stand des letzten Laufs, oder ``Lauf.ohne_lauf()`` vor dem ersten Lauf.
 
         Gibt absichtlich immer ein Dict zurück (nie ``None``): der Aufrufer -
-        der Web-Layer in ``app/main.py`` - muss so gar nicht mehr wissen, dass
+        der Web-Layer in ``app/api/abruf.py`` - muss so gar nicht mehr wissen, dass
         es einen "vor dem ersten Lauf"-Sonderfall gibt. Die Unterscheidung ist
         reines Innenleben des Refresh-Moduls.
         """
@@ -165,7 +188,8 @@ class RefreshManager:
         with self._zustand_lock:
             return self._aktueller is not None and self._aktueller.laeuft
 
-    def starte(self, einstellungen: Einstellungen, client, *, sy_id: str | None = None) -> str:
+    def starte(self, einstellungen: Einstellungen, client: AusleiheProtokoll, *,
+               sy_id: str | None = None) -> str:
         """Startet den Hintergrundlauf. ``client`` ist bereits angemeldet."""
         if not self._lauf_lock.acquire(blocking=False):
             raise LaeuftBereits("Es läuft bereits ein Abruf. Bitte warten, bis er fertig ist.")
@@ -181,21 +205,21 @@ class RefreshManager:
         ).start()
         return job_id
 
-    def _setze(self, **felder) -> None:
+    def _setze(self, **felder: Any) -> None:
         with self._zustand_lock:
             if self._aktueller is None:
                 return
             for name, wert in felder.items():
                 setattr(self._aktueller, name, wert)
 
-    def _fortschritt(self, event: str, payload: dict) -> None:
+    def _fortschritt(self, event: str, payload: dict[str, Any]) -> None:
         eintrag = _PHASEN.get(event)
         if eintrag is None:
             return
         prozent, vorlage = eintrag
         self._setze(phase=event, text=vorlage.format(**payload), fortschritt=prozent)
 
-    def _lade_jahrgaenge(self, snapshot) -> dict[int, list[dict]]:
+    def _lade_jahrgaenge(self, snapshot: Snapshot) -> dict[int, list[dict]]:
         """Lädt jede Jahrgangs-Bücherliste einzeln und meldet Fortschritt."""
         lazy = snapshot.grade_books
         jahrgaenge = sorted(lazy)
@@ -209,7 +233,8 @@ class RefreshManager:
             geladen[grade] = lazy[grade]
         return geladen
 
-    def _lauf(self, einstellungen: Einstellungen, client, sy_id: str | None) -> None:
+    def _lauf(self, einstellungen: Einstellungen, client: AusleiheProtokoll,
+              sy_id: str | None) -> None:
         """Der eigentliche Abruf. Der Thread lässt keine Ausnahme durch."""
         try:
             pfad = einstellungen.excel_pfad()
@@ -270,8 +295,10 @@ class RefreshManager:
         finally:
             self._lauf_lock.release()
 
-    def _aktualisiere_mappe(self, pfad: Path, einstellungen: Einstellungen, snapshot, config,
-                             warnungen: list[str]):
+    def _aktualisiere_mappe(
+        self, pfad: Path, einstellungen: Einstellungen, snapshot: Snapshot,
+        config: BestandConfig, warnungen: list[str],
+    ) -> tuple[UpdateResult, list[ZuBestellenRow], Path | None] | None:
         """Schreibt den fertigen Snapshot unter derselben Sperre wie manuelle Änderungen."""
         with arbeitsmappe_sperren(pfad):
             wb = lade_mappe(pfad)
@@ -311,7 +338,7 @@ class RefreshManager:
             backup = speichere_mappe(wb, pfad, backups_behalten=einstellungen.backups_behalten)
         return result, zeilen, backup
 
-    def _schreibe_cache(self, pfad: Path, result: UpdateResult, snapshot) -> None:
+    def _schreibe_cache(self, pfad: Path, result: UpdateResult, snapshot: Snapshot) -> None:
         eintraege: dict[str, cache_modul.Eintrag] = {}
         for key, isbn in result.isbn_by_entry.items():
             serie = snapshot.series_data.get(isbn, {})
@@ -323,7 +350,7 @@ class RefreshManager:
             stand=result.stand, schuljahr=snapshot.schoolyear_id, eintraege=eintraege,
         ))
 
-    def _abschluss(self, **felder) -> None:
+    def _abschluss(self, **felder: Any) -> None:
         felder.setdefault("fertig", True)
         self._setze(
             laeuft=False,

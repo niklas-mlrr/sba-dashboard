@@ -48,7 +48,8 @@ def oeffne_browser(url: str, verzoegerung: float = 1.0) -> None:
 def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
-    from .main import create_app, lade_einstellungen
+    from .konfiguration import lade_einstellungen
+    from .main import create_app
 
     parser = argparse.ArgumentParser(
         description="Startet das Schulbuchausleihe-Dashboard lokal."

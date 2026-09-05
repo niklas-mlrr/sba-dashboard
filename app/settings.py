@@ -27,7 +27,7 @@ stillschweigend der Standard (das ist der Normalfall bei der Ersteinrichtung);
 ist es vorhanden, aber kaputt (z. B. ungültiges JSON durch einen Handeditier-
 Versuch), gilt ebenfalls der Standard, aber der Grund wird als Klartext-Hinweis
 zurückgegeben, den der Aufrufer auf der Konsole ausgibt (siehe
-``app.main.lade_einstellungen``).
+``app.konfiguration.lade_einstellungen``).
 
 ``Einstellungen.laden(pfad)`` bleibt daneben bestehen: sie lädt **genau eine**
 Datei ohne jedes Overlay. Das ist der Arbeitskopie-Modus (``--config PATH``,

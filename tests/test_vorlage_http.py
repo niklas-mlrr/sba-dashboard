@@ -26,6 +26,7 @@ from openpyxl import load_workbook
 
 from app.main import create_app
 from app.settings import Einstellungen
+from conftest import TEST_BASIS_URL
 
 _WURZEL = Path(__file__).resolve().parent.parent
 _VORLAGE = _WURZEL / "vorlage" / "Bestand- und Nachbestellungsliste 2026.xlsx"
@@ -86,7 +87,7 @@ def einstellungen_vorlage(vorlage_kopie: Path) -> Einstellungen:
 def client_vorlage(einstellungen_vorlage: Einstellungen) -> TestClient:
     """Eine isolierte App direkt auf der kopierten Vorlage, ohne echten IServ-Client."""
     application = create_app(einstellungen=einstellungen_vorlage)
-    with TestClient(application) as testclient:
+    with TestClient(application, base_url=TEST_BASIS_URL) as testclient:
         yield testclient
 
 

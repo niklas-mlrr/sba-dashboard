@@ -1,6 +1,20 @@
 // Oberfläche des Dashboards - Vanilla, kein Build-Schritt.
 //
-// Drei Teile, die sich nichts teilen außer der Tabelle:
+// Die Regel für diese Datei: **so dumm wie möglich**. Sie rechnet nichts aus,
+// was der Server schon ausgerechnet hat, und sie liest nichts aus dem
+// angezeigten Text, was auch als Datenattribut danebenstehen kann. Das ist
+// keine Stilfrage, sondern die Folge davon, dass es hier bewusst weder einen
+// Build-Schritt noch eine JS-Testumgebung gibt: was in dieser Datei steht,
+// prüft niemand automatisch. Was dagegen in der Vorlage steht, prüft
+// `tests/test_oberflaeche.py` bei jedem Lauf - bis hin zu der Frage, ob jede
+// ID, die dieses Skript nachschlägt, im gerenderten HTML überhaupt vorkommt.
+//
+// Konkret heißt das an zwei Stellen etwas:
+//   * Sortiert wird über `data-wert` an jeder Zelle, nicht über ihren Text.
+//   * Nach einer Änderung setzt `/api/cell` die fertige Zeile zurück; das
+//     Skript trägt sie ein, statt "zu bestellen" selbst nachzurechnen.
+//
+// Vier Teile, die sich nichts teilen außer der Tabelle:
 //   1. Filtern und Sortieren - rein im Browser, die Tabelle ist vollständig
 //      gerendert und eine Serverrunde je Tastendruck wäre auf dem Netzlaufwerk
 //      spürbar.
@@ -8,6 +22,11 @@
 //      Änderungszeit. Antwortet der Server mit 409, hat jemand anderes die
 //      Mappe angefasst; dann wird nicht überschrieben, sondern nachgeladen.
 //   3. Abruf aus IServ - Formular, dann Fortschritt pollen.
+//   4. Beenden.
+//
+// Ab etwa 400 Zeilen Code lässt sich das ohne Build in Module trennen
+// (`<script type="module">` lädt echte ES-Module direkt aus dem Ordner); bei
+// den heutigen 235 Codezeilen wäre das mehr Gerüst als Inhalt.
 (function () {
   const tabelle = document.getElementById("tabelle");
   if (!tabelle) return;
@@ -18,6 +37,10 @@
   const sichtbar = document.getElementById("sichtbar");
   const bedarfGesamt = document.getElementById("bedarf-gesamt");
   const meldung = document.getElementById("meldung");
+
+  // Das Zeichen für "kein Wert" steht in der Vorlage (data-leer), damit es
+  // nicht an zwei Orten gepflegt werden muss.
+  const LEER = tabelle.dataset.leer || "";
 
   // ── 1. Filtern und Sortieren ───────────────────────────────────────────────
 
@@ -34,21 +57,17 @@
     sichtbar.textContent = anzahl;
   }
 
+  // Der Sortierschlüssel einer Zelle. `data-wert` liefert die Vorlage (und
+  // nach einer Änderung `zeileAktualisieren`); leerer String heißt "kein Wert".
+  //
+  // "Kein Wert" wird eigens markiert und NICHT auf einen Ersatzwert abgebildet:
+  // ein Sentinel wie NEGATIVE_INFINITY verschiebt die Leerzeilen nur an ein
+  // Ende der Zahlengeraden und wirft sie beim Umschalten der Richtung nach
+  // vorn. Unten sortieren sie deshalb in beiden Richtungen ans Ende.
   function zellwert(zeile, index, art) {
-    const zelle = zeile.cells[index];
-    const feld = zelle.querySelector("input");
-    const text = (feld ? feld.value : zelle.textContent).trim();
-    // Leer und "—" stehen für "kein Wert". Das gilt für Zahlen- wie für
-    // Textspalten (Titel/ISBN rendern fehlende Werte ebenfalls als "—").
-    // Ein einzelner Sentinelwert (z. B. NEGATIVE_INFINITY) reicht dafür nicht:
-    // er verschiebt "kein Wert" nur an ein Ende der Zahlengeraden und springt
-    // beim Umschalten der Richtung auf die andere Seite. Deshalb wird "leer"
-    // separat markiert und im Vergleich unten fest ans Ende sortiert.
-    if (art !== "zahl") {
-      return { wert: text.toLowerCase(), leer: text === "" || text === "—" };
-    }
-    const zahl = parseInt(text, 10);
-    return { wert: zahl, leer: Number.isNaN(zahl) };
+    const roh = zeile.cells[index].dataset.wert ?? "";
+    if (roh === "") return { leer: true, wert: null };
+    return { leer: false, wert: art === "zahl" ? Number(roh) : roh };
   }
 
   tabelle.tHead.addEventListener("click", (ereignis) => {
@@ -63,9 +82,6 @@
     const sortiert = zeilen.slice().sort((a, b) => {
       const links = zellwert(a, index, art);
       const rechts = zellwert(b, index, art);
-      // "Kein Wert" bleibt in beiden Richtungen am Ende - unabhängig von
-      // absteigend, damit ein Klick auf die Spalte die Leerzeilen nie nach
-      // vorn wirft.
       if (links.leer !== rechts.leer) return links.leer ? 1 : -1;
       if (links.leer) return 0;
       if (links.wert < rechts.wert) return absteigend ? 1 : -1;
@@ -93,27 +109,40 @@
 
   // ── 2. Zellen ändern ───────────────────────────────────────────────────────
 
+  // Setzt Anzeige UND Sortierschlüssel einer Zelle aus einem Wert der Antwort.
+  // Beides an einer Stelle, damit die Tabelle nach einer Änderung nicht anders
+  // sortiert als direkt nach dem Laden.
+  function setzeZelle(zelle, wert) {
+    const text = wert === null || wert === undefined ? "" : String(wert);
+    zelle.dataset.wert = text;
+    const feld = zelle.querySelector(".zellwert");
+    if (feld) {
+      feld.value = text;
+      feld.dataset.gespeichert = text;
+    } else {
+      zelle.textContent = text === "" ? LEER : text;
+    }
+  }
+
   function bedarfNeuZeichnen() {
     let summe = 0;
     for (const zeile of zeilen) {
       // Über die Klasse greifen statt über den Spaltenindex: der Index verschiebt
       // sich lautlos, wenn im Template eine Spalte eingefügt oder umsortiert wird.
-      const wert = parseInt(zeile.querySelector(".bedarfszelle").textContent.trim(), 10);
-      if (!Number.isNaN(wert) && wert > 0) summe += wert;
+      const wert = Number(zeile.querySelector(".bedarfszelle").dataset.wert);
+      if (Number.isFinite(wert) && wert > 0) summe += wert;
     }
     bedarfGesamt.textContent = summe;
   }
 
   function zeileAktualisieren(zeile, daten) {
     const bedarfszelle = zeile.querySelector(".bedarfszelle");
-    bedarfszelle.textContent = daten.zu_bestellen === null ? "—" : daten.zu_bestellen;
+    setzeZelle(bedarfszelle, daten.zu_bestellen);
     const bedarf = (daten.zu_bestellen || 0) > 0;
     bedarfszelle.classList.toggle("bedarf", bedarf);
     zeile.dataset.bedarf = bedarf ? "1" : "0";
     for (const feld of zeile.querySelectorAll(".zellwert")) {
-      const wert = daten[feld.dataset.spalte];
-      feld.value = wert === null || wert === undefined ? "" : wert;
-      feld.dataset.gespeichert = feld.value;
+      setzeZelle(feld.closest("td"), daten[feld.dataset.spalte]);
     }
     bedarfNeuZeichnen();
     anwenden();
@@ -235,22 +264,6 @@
     setTimeout(() => window.location.reload(), 2000);
   }
 
-  // ── 4. Beenden ─────────────────────────────────────────────────────────────
-
-  document.getElementById("beenden").addEventListener("click", async () => {
-    if (!window.confirm("Das Dashboard beenden? Gespeicherte Änderungen bleiben erhalten.")) {
-      return;
-    }
-    try {
-      const antwort = await fetch("/api/beenden", { method: "POST" });
-      const koerper = await antwort.json().catch(() => ({}));
-      zeige(koerper.text || koerper.fehler || "Beendet.", antwort.ok ? "" : "warnung");
-    } catch (fehler) {
-      // Der Server hat abgeschaltet, bevor er antworten konnte - genau richtig.
-      zeige("Das Dashboard ist beendet. Sie können das Fenster schließen.", "");
-    }
-  });
-
   formular.addEventListener("submit", async (ereignis) => {
     ereignis.preventDefault();
     const benutzer = document.getElementById("benutzer");
@@ -280,6 +293,22 @@
       abrufFehler.hidden = false;
     } finally {
       starten.disabled = false;
+    }
+  });
+
+  // ── 4. Beenden ─────────────────────────────────────────────────────────────
+
+  document.getElementById("beenden").addEventListener("click", async () => {
+    if (!window.confirm("Das Dashboard beenden? Gespeicherte Änderungen bleiben erhalten.")) {
+      return;
+    }
+    try {
+      const antwort = await fetch("/api/beenden", { method: "POST" });
+      const koerper = await antwort.json().catch(() => ({}));
+      zeige(koerper.text || koerper.fehler || "Beendet.", antwort.ok ? "" : "warnung");
+    } catch (fehler) {
+      // Der Server hat abgeschaltet, bevor er antworten konnte - genau richtig.
+      zeige("Das Dashboard ist beendet. Sie können das Fenster schließen.", "");
     }
   });
 })();

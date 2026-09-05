@@ -32,7 +32,20 @@ ersten Abruf aus IServ.</p>
   <button type="button" id="beenden" class="knopf">Beenden</button>
 </div>
 
-<table id="tabelle" data-mtime="{{ zustand.mtime }}">
+{#
+  data-wert an jeder Zelle ist der Sortierschlüssel, und er steht hier und nicht
+  in app.js. Vorher las das Skript den ANGEZEIGTEN Text, schnitt Leerraum ab,
+  senkte ihn auf Kleinschreibung, erkannte "—" als Leerwert und rief für die
+  zwei Eingabespalten stattdessen querySelector("input").value auf - also fünf
+  Annahmen über die Darstellung, von denen jede einzelne ein neues Format in
+  dieser Datei lautlos gebrochen hätte. Jetzt liefert die Vorlage den Wert, und
+  das Skript vergleicht ihn nur noch: leerer String heißt "kein Wert" und
+  sortiert in beide Richtungen ans Ende.
+
+  data-leer ist derselbe Gedanke für die Anzeige: das Zeichen für "kein Wert"
+  wird an einer Stelle festgelegt statt an fünf (viermal hier, einmal im Skript).
+#}
+<table id="tabelle" data-mtime="{{ zustand.mtime }}" data-leer="—">
   <thead>
     <tr>
       <th data-sort="text">Fach</th>
@@ -49,23 +62,26 @@ ersten Abruf aus IServ.</p>
     {% for z in zeilen %}
     <tr data-key="{{ z.key }}" data-bedarf="{{ 1 if z.bedarf else 0 }}"
         data-suche="{{ (z.fach ~ ' ' ~ (z.titel or ''))|lower }}">
-      <td>{{ z.fach }}</td>
-      <td>{{ z.jahrgang }}</td>
-      <td>{{ z.titel or "—" }}</td>
-      <td class="isbn">{{ z.isbn or "—" }}</td>
-      <td class="zahl">{{ z.angemeldet if z.angemeldet is not none else "—" }}</td>
-      <td class="zahl"><input class="zellwert" type="number" min="0" step="1"
+      <td data-wert="{{ z.fach|lower }}">{{ z.fach }}</td>
+      <td data-wert="{{ z.jahrgang }}">{{ z.jahrgang }}</td>
+      <td data-wert="{{ (z.titel or '')|lower }}">{{ z.titel or "—" }}</td>
+      <td class="isbn" data-wert="{{ z.isbn or '' }}">{{ z.isbn or "—" }}</td>
+      <td class="zahl" data-wert="{{ z.angemeldet if z.angemeldet is not none else '' }}">
+        {{- z.angemeldet if z.angemeldet is not none else "—" -}}</td>
+      <td class="zahl" data-wert="{{ z.bestand if z.bestand is not none else '' }}">
+        <input class="zellwert" type="number" min="0" step="1"
         data-spalte="bestand" aria-label="Bestand {{ z.fach }} Jahrgang {{ z.jahrgang }}"
         value="{{ z.bestand if z.bestand is not none else '' }}"></td>
-      <td class="zahl">
+      <td class="zahl" data-wert="{{ z.bestellt if z.bestellt is not none else '' }}">
         {%- if z.bestellt_ref -%}
         <input class="zellwert" type="number" min="0" step="1"
           data-spalte="bestellt" aria-label="Bestellt {{ z.fach }} Jahrgang {{ z.jahrgang }}"
           value="{{ z.bestellt if z.bestellt is not none else '' }}">
         {%- else -%}—{%- endif -%}
       </td>
-      <td class="zahl bedarfszelle {{ 'bedarf' if z.bedarf else '' }}">
-        {{ z.zu_bestellen if z.zu_bestellen is not none else "—" }}</td>
+      <td class="zahl bedarfszelle {{ 'bedarf' if z.bedarf else '' }}"
+          data-wert="{{ z.zu_bestellen if z.zu_bestellen is not none else '' }}">
+        {{- z.zu_bestellen if z.zu_bestellen is not none else "—" -}}</td>
     </tr>
     {% endfor %}
   </tbody>

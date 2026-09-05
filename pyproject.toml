@@ -22,7 +22,8 @@ dependencies = [
 # bloß langsamen Lauf nicht unterscheiden lässt. Genau diese Unterscheidung
 # fehlte im ersten Windows-Lauf (2026-09-04). Begründung der Zahlen:
 # tool.pytest.ini_options unten.
-dev = ["pytest>=8,<9", "pytest-timeout>=2.3,<3", "httpx2>=0.28", "ruff>=0.8,<1"]
+dev = ["pytest>=8,<9", "pytest-timeout>=2.3,<3", "pytest-cov>=5,<8", "httpx2>=0.28",
+       "ruff>=0.8,<1", "mypy>=1.11,<2"]
 
 # Das Geschwister-Layout ist verbindlich: ausleihe-api, sba-bestand und
 # sba-dashboard liegen nebeneinander. Wer eines woandershin klont, bricht alle.
@@ -55,7 +56,66 @@ testpaths = ["tests"]
 # genau die Konstrukte, die hängen können. Die thread-Methode gibt beim
 # Zuschlagen zusätzlich den Stack **jedes** Threads aus; bei einem
 # verklemmten Schloss ist das der Befund, nach dem man sonst raten müsste.
-addopts = "-q --timeout=300 --timeout-method=thread"
+# --cov steht hier und nicht nur in der CI, weil "237 Tests, und niemand weiß,
+# was sie abdecken" genau der Zustand war, den die Messung beheben soll - eine
+# Zahl, die nur ein Server sieht, ändert daran nichts. Der Preis ist ehrlich
+# gemessen: 18s ohne, 33s mit Abdeckung (Linux, 2026-09-05). Das ist die
+# Tracing-Last von coverage.py, nicht ein langsamer Test.
+#
+# skip-covered kürzt die Tabelle auf die Dateien mit Lücken; bei 20 Modulen ist
+# eine Liste voller "100%" nur Rauschen über dem, worauf es ankommt.
+addopts = "-q --timeout=300 --timeout-method=thread --cov=app --cov-report=term-missing:skip-covered"
+
+[tool.coverage.run]
+source = ["app"]
+# Zweige zählen mit: eine Zeile "if pfad is None: return None" gilt sonst als
+# abgedeckt, sobald sie EINMAL durchlaufen wurde - egal in welche Richtung.
+# Genau die nie genommene Richtung ist aber der Fall, den niemand geprüft hat.
+branch = true
+
+[tool.coverage.report]
+# Bewusst KEIN fail_under hier. Die Schwelle steht als --cov-fail-under=85 im
+# CI-Schritt, und der Unterschied ist praktisch: fail_under gilt für jeden
+# Lauf, auch für "pytest tests/test_cache.py" während der Arbeit an einer
+# einzigen Datei. Ein solcher Teillauf deckt naturgemäß 56 % ab und wäre damit
+# rot, obwohl jeder Test grün ist - eine Schwelle, die bei richtiger Arbeit
+# anschlägt, wird binnen einer Woche abgeschaltet. In der CI läuft immer die
+# ganze Suite, dort ist die Zahl aussagekräftig.
+#
+# Die Zahl selbst: gemessen am 2026-09-05 sind es 95 %. 85 ist eine
+# Sichtbarkeitsschwelle und kein Tor bei 100 % - auch ein ganzes neues,
+# zunächst ungetestetes Modul bleibt darüber, aber eine Testdatei, die
+# versehentlich aus der Sammlung fällt, fällt auf.
+exclude_also = [
+    # Der Windows-Zweig der Dateisperre. Er läuft in der CI auf windows-latest,
+    # aber die Messung hier ist die vom Linux-Lauf.
+    "if sys.platform == \"win32\":",
+]
+
+[tool.mypy]
+# Auf app/ und nicht auf tests/: der Anwendungscode ist durchgehend annotiert
+# (disallow_untyped_defs hält das), Tests dagegen leben von pytest-Fixtures,
+# deren Typen erst über Plugins entstehen - dort wäre die Prüfung viel Lärm für
+# wenig Fund.
+files = ["app"]
+python_version = "3.10"
+
+# Die drei Geschwister-Pakete und openpyxl liefern kein py.typed, obwohl
+# bestand.core durchgehend annotiert ist. Ohne diese Zeile meldet mypy für
+# jeden Import daraus einen Fehler, statt für den Code, um den es geht.
+# Namen wie Snapshot oder GridEntry werden damit zu Any - sie stehen in den
+# Signaturen trotzdem, weil sie dem Leser sagen, was durchfließt.
+ignore_missing_imports = true
+
+# Der eigentliche Zweck: eine Funktion ohne Annotationen überspringt mypy
+# stillschweigend samt Rumpf. Ohne diese Zeile hielte die Prüfung nicht, was
+# der Kommentar oben verspricht - sie würde beim ersten untypisierten
+# Neuzugang lautlos aufhören zu prüfen.
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
 
 [tool.ruff]
 target-version = "py310"
@@ -63,3 +123,9 @@ line-length = 110
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+# "conftest" ist kein installiertes Paket, sondern das Modul neben den
+# Testdateien - pytest legt tests/ dafür auf den sys.path. Ohne diese Zeile
+# sortiert Ruff es zu den Fremdpaketen und meldet den Block als unsortiert.
+known-first-party = ["app", "conftest"]

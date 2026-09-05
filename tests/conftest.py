@@ -98,9 +98,19 @@ def einstellungen(workbook_path: Path) -> Einstellungen:
     )
 
 
+# Ohne base_url schickt der TestClient ``Host: testserver``. Seit der
+# Host-Prüfung (app/sicherheit.py, gegen DNS-Rebinding) beantwortet die
+# Anwendung das mit 400, und zwar jede einzelne Route - der Testlauf wäre
+# vollständig rot, ohne dass an der Anwendung etwas kaputt wäre. Die
+# Testadresse ist deshalb dieselbe, unter der das Dashboard produktiv läuft
+# (``app.start.HOST``); der Port fehlt bewusst, weil ihn weder Starlette noch
+# die Prüfung ansieht.
+TEST_BASIS_URL = "http://127.0.0.1"
+
+
 @pytest.fixture()
 def client(einstellungen: Einstellungen) -> TestClient:
     """Eine isolierte App mit dieser Mappe und ohne echten IServ-Client."""
     application = create_app(einstellungen=einstellungen)
-    with TestClient(application) as testclient:
+    with TestClient(application, base_url=TEST_BASIS_URL) as testclient:
         yield testclient

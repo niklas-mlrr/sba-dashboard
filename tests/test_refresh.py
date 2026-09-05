@@ -22,6 +22,7 @@ from openpyxl import load_workbook
 from app import cache as cache_modul
 from app.main import create_app
 from app.refresh import Lauf, RefreshManager
+from conftest import TEST_BASIS_URL
 
 PASSWORT = "geheim-Kennwort-2026!"
 BENUTZER = "b.lehrer"
@@ -53,7 +54,8 @@ def test_app_instanz_hat_eigenen_refresh_manager(einstellungen):
     erste_app = create_app(einstellungen=einstellungen)
     zweite_app = create_app(einstellungen=einstellungen)
 
-    with TestClient(erste_app), TestClient(zweite_app):
+    with TestClient(erste_app, base_url=TEST_BASIS_URL), \
+            TestClient(zweite_app, base_url=TEST_BASIS_URL):
         assert erste_app.state.refresh_manager is not zweite_app.state.refresh_manager
 
 

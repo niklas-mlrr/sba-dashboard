@@ -44,8 +44,16 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: "3.10"
+            # Die Abdeckungsschwelle wird nur auf Linux erzwungen, und zwar
+            # ohne zweiten Testlauf: --cov selbst steht in den addopts, hier
+            # kommt lediglich die Schwelle dazu. Auf Windows ist die Zahl eine
+            # andere - dort läuft der msvcrt-Zweig der Dateisperre und der
+            # fcntl-Zweig nicht -, und eine plattformabhängige Schwelle wäre
+            # eine Zahl, die niemand erklären kann. Gemessen wird auf beiden.
+            abdeckungsschwelle: "--cov-fail-under=85"
           - os: ubuntu-latest
             python-version: "3.11"
+            abdeckungsschwelle: "--cov-fail-under=85"
           # Windows ist hier Pflicht, nicht Beigabe: der Dateisperren-Pfad
           # (msvcrt.locking statt fcntl.flock, app/excel.py::_versuche_dateisperre),
           # der ~$<Name>.xlsx-Sperrdateipfad und der Schreibpfad über ein
@@ -53,6 +61,7 @@ jobs:
           # dort, auf dem Schul-Laptop, läuft die Anwendung produktiv.
           - os: windows-latest
             python-version: "3.11"
+            abdeckungsschwelle: ""
     defaults:
       run:
         working-directory: sba-dashboard
@@ -104,8 +113,18 @@ jobs:
       - name: Ruff (Lint)
         run: uv run ruff check app tests
 
+      # Auf jedem Runner mit dessen eigener Plattform, nicht nur einmal auf
+      # Linux: app/excel.py hat je einen Zweig für msvcrt (Windows) und fcntl
+      # (POSIX), und mypy prüft immer nur den Zweig der Plattform, auf der es
+      # läuft - der andere gilt ihm als unerreichbar. Erst der Windows-Job
+      # prüft also den Sperrpfad, der auf dem Schul-Laptop wirklich läuft.
+      # Die Konfiguration (Dateiliste, Strenge, Begründung) steht in
+      # pyproject.toml unter [tool.mypy].
+      - name: Mypy (Typprüfung)
+        run: uv run mypy
+
       - name: Pytest
-        run: uv run pytest -q
+        run: uv run pytest -q ${{ matrix.abdeckungsschwelle }}
 
   abhaengigkeiten:
     name: requirements.txt entspricht uv export

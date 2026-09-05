@@ -21,10 +21,21 @@ Der Schreibpfad hat drei Schutzschichten, die alle drei nötig sind:
   ``os.replace``. Ein Abbruch mittendrin lässt die alte Mappe unberührt.
   ``atomic_save_workbook`` liegt dafür in ``bestand.core`` — dort, wo auch die
   CLI der Bestandsliste sie benutzt.
+
+Dazu kommt :func:`validiere_excel_mappe`: die Prüfung einer **neu ausgewählten**
+Datei, bevor ihr Pfad in die Benutzerkonfiguration wandert. Sie steht seit dem
+2026-09-05 hier und nicht mehr in ``app/main.py`` - sie enthält keine Zeile
+FastAPI, sondern beantwortet allein die Frage, ob eine Datei als Bestandsmappe
+taugt.
+
+Keine Funktion in dieser Datei weiß etwas über HTTP. Die Ausnahmen sagen, *was*
+schiefging; welcher Statuscode daraus wird, entscheidet ``app/fehler.py`` an
+einer Stelle für die ganze Anwendung.
 """
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -32,12 +43,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from math import isfinite
 from pathlib import Path
-from typing import Iterator
+from typing import IO, Iterator
+from zipfile import BadZipFile
 
 # Aus bestand.core, nicht mehr aus dem IServ-Client: dauerhaftes Speichern
 # einer Mappe kennt weder IServ noch HTTP (siehe docs/verteilung.md).
-from bestand.core import atomic_save_workbook
-from openpyxl import load_workbook
+from bestand.core import GridEntry, atomic_save_workbook, parse_grid
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
+from openpyxl.worksheet.worksheet import Worksheet
 
 # Nur diese zwei Spalten sind von Hand änderbar. "Angemeldet" kommt aus IServ,
 # "zu bestellen" ist eine Formel - beide würde ein Schreibzugriff nur kaputt machen.
@@ -72,6 +86,20 @@ class Gesperrt(RuntimeError):
         self.benutzer = benutzer
 
 
+class MappeUngeeignet(ValueError):
+    """Eine *neu ausgewählte* Datei taugt nicht als Bestandsmappe - HTTP 400.
+
+    Abgegrenzt von :class:`BlattFehlt`: dort fehlt das Blatt in der Mappe, mit
+    der das Dashboard bereits arbeitet - ein Serverzustand (HTTP 500), an dem
+    die Lehrkraft im Moment der Anfrage nichts falsch gemacht hat. Hier
+    dagegen liegt der Fehler in der gerade **eingegebenen** Auswahl, und die
+    Antwort ist eine Bitte, eine andere Datei zu wählen. Erst diese Trennung
+    macht eine einzige, zentrale Fehlerabbildung möglich (``app/fehler.py``);
+    vorher fing die Einrichtungsroute dieselben Ausnahmeklassen mit einem
+    anderen Status ab als die Leseroute.
+    """
+
+
 _prozesssperren_guard = threading.Lock()
 _prozesssperren: dict[Path, threading.Lock] = {}
 
@@ -88,9 +116,17 @@ def _sperrpfad(pfad: Path) -> Path:
     return pfad.with_name(f".{pfad.name}.sba-dashboard.lock")
 
 
-def _versuche_dateisperre(datei) -> bool:
-    """Versucht eine exklusive Byte-Sperre, ohne auf eine Plattform festgelegt zu sein."""
-    if os.name == "nt":  # pragma: no cover - auf dem Windows-Schulrechner ausgeführt
+def _versuche_dateisperre(datei: IO[bytes]) -> bool:
+    """Versucht eine exklusive Byte-Sperre, ohne auf eine Plattform festgelegt zu sein.
+
+    ``sys.platform`` statt ``os.name``: dieselbe Frage, aber die Schreibweise,
+    die auch ``app/paths.py`` benutzt (Begründung dort) - und die einzige, die
+    ein Typprüfer versteht. Mit ``os.name == "nt"`` meldete mypy auf Linux vier
+    Fehler in den ``msvcrt``-Zeilen, weil dieses Modul dort nicht existiert;
+    mit ``sys.platform`` kennt es den Zweig als plattformgebunden und prüft je
+    Plattform nur den Zweig, den es dort auch gibt.
+    """
+    if sys.platform == "win32":  # pragma: no cover - auf dem Windows-Schulrechner ausgeführt
         import msvcrt
 
         datei.seek(0)
@@ -109,8 +145,8 @@ def _versuche_dateisperre(datei) -> bool:
     return True
 
 
-def _loese_dateisperre(datei) -> None:
-    if os.name == "nt":  # pragma: no cover - auf dem Windows-Schulrechner ausgeführt
+def _loese_dateisperre(datei: IO[bytes]) -> None:
+    if sys.platform == "win32":  # pragma: no cover - auf dem Windows-Schulrechner ausgeführt
         import msvcrt
 
         datei.seek(0)
@@ -190,14 +226,21 @@ class Dateizustand:
 @dataclass(frozen=True)
 class Schreibergebnis:
     ref: str
+    # Der Zellwert vor der Änderung, so wie openpyxl ihn hergibt: Zahl, Text,
+    # Datum oder None. ``object`` ist hier kein Notausgang, sondern die
+    # ehrliche Signatur einer Tabellenzelle - anders als bei ``ws``/``eintrag``,
+    # die bis 2026-09-05 nur deshalb ``object`` waren, weil sie mit einem
+    # ``None``-Vorgabewert nachträglich angebaut wurden.
     alt: object
     neu: int | None
     zustand: Dateizustand
     backup: Path | None
     # Blatt und Rastereintrag der geschriebenen Zeile. Der Aufrufer baut daraus
     # die aktualisierte Tabellenzeile, ohne die Mappe ein zweites Mal zu laden.
-    ws: object = None
-    eintrag: object = None
+    # Ohne Vorgabewert: ``schreibe_zelle`` ist der einzige Erzeuger und setzt
+    # beide immer - ein ``Schreibergebnis`` ohne Blatt hat es nie gegeben.
+    ws: Worksheet
+    eintrag: GridEntry
 
 
 def sperrdatei(pfad: Path) -> Path | None:
@@ -252,22 +295,61 @@ def sperrmeldung(pfad: Path) -> str:
             "Bitte dort schließen und erneut versuchen.")
 
 
-def lade_mappe(pfad: Path):
+def lade_mappe(pfad: Path) -> Workbook:
     """Lädt die Mappe mit erhaltenen Formeln."""
     if not pfad.is_file():
         raise ExcelFehlt(f"Excel-Datei nicht gefunden: {pfad}")
     return load_workbook(str(pfad), data_only=False)
 
 
-def raster_blatt(wb, blattname: str):
+def raster_blatt(wb: Workbook, blattname: str) -> Worksheet:
     if blattname not in wb.sheetnames:
         raise BlattFehlt(f"Tabellenblatt {blattname!r} fehlt in der Mappe.")
     return wb[blattname]
 
 
+# Ohne diese beiden Blätter kann der Abruf nicht laufen: ``bestellt`` liefert die
+# bereits bestellten Stückzahlen, ``zu Bestellen`` wird bei jedem Abruf neu
+# aufgebaut (siehe app/refresh.py).
+ERFORDERLICHE_ZUSATZBLAETTER = ("bestellt", "zu Bestellen")
+
+
+def validiere_excel_mappe(pfad: Path, blatt_raster: str) -> None:
+    """Prüft eine **neu ausgewählte** Datei auf die Struktur, die das Dashboard braucht.
+
+    Läuft vor dem Schreiben der Konfiguration. So kann keine beliebige
+    ``.xlsx``-Datei den funktionierenden Pfad in der Benutzerkonfiguration
+    verdrängen - und die Lehrkraft erfährt den Grund sofort und nicht erst beim
+    nächsten Seitenaufbau.
+
+    Jeder Fehlschlag wird zu :class:`MappeUngeeignet` mit Klartext. Auch das
+    fehlende Raster-Blatt: an dieser Stelle ist es keine kaputte Mappe des
+    Servers, sondern eine falsch ausgewählte Datei.
+    """
+    try:
+        wb = lade_mappe(pfad)
+        ws = raster_blatt(wb, blatt_raster)
+        fehlend = [b for b in ERFORDERLICHE_ZUSATZBLAETTER if b not in wb.sheetnames]
+        if fehlend:
+            raise MappeUngeeignet(
+                f"Erforderliche Tabellenblätter fehlen: {', '.join(fehlend)}."
+            )
+        if not parse_grid(ws).entries:
+            raise MappeUngeeignet("Das Tabellenblatt enthält kein lesbares Bestandsraster.")
+    except MappeUngeeignet:
+        raise
+    except BlattFehlt as exc:
+        # BlattFehlt erbt von KeyError; str(exc) wäre damit in Anführungszeichen
+        # gesetzt (KeyError.__str__ == repr des Arguments). args[0] ist der
+        # Klartext, den raster_blatt geschrieben hat.
+        raise MappeUngeeignet(str(exc.args[0])) from exc
+    except (BadZipFile, InvalidFileException, OSError, ValueError, KeyError, RuntimeError) as exc:
+        raise MappeUngeeignet(f"Die Datei ist keine lesbare Excel-Arbeitsmappe: {exc}") from exc
+
+
 # ── Schreibpfad ───────────────────────────────────────────────────────────────
 
-def pruefe_wert(roh) -> int | None:
+def pruefe_wert(roh: object) -> int | None:
     """Erlaubt ist eine ganze Zahl >= 0 oder leer. Sonst nichts.
 
     Leer heißt bewusst ``None`` und nicht ``0``: eine leere "Bestellt"-Zelle
@@ -281,21 +363,25 @@ def pruefe_wert(roh) -> int | None:
         if not text:
             return None
         try:
-            roh = int(text)
+            zahl = int(text)
         except ValueError:
             raise UngueltigeAenderung(
                 f"{text!r} ist keine Zahl. Erlaubt sind ganze Zahlen ab 0 oder ein leeres Feld."
             ) from None
-    if isinstance(roh, bool) or not isinstance(roh, int):
-        if isinstance(roh, float) and roh.is_integer():
-            roh = int(roh)
-        else:
-            raise UngueltigeAenderung(
-                "Erlaubt sind nur ganze Zahlen ab 0 oder ein leeres Feld."
-            )
-    if roh < 0:
+    elif isinstance(roh, bool):
+        # Muss VOR isinstance(roh, int) stehen: bool ist in Python eine
+        # Unterklasse von int, ``True`` ginge sonst als Stückzahl 1 durch.
+        raise UngueltigeAenderung("Erlaubt sind nur ganze Zahlen ab 0 oder ein leeres Feld.")
+    elif isinstance(roh, int):
+        zahl = roh
+    elif isinstance(roh, float) and roh.is_integer():
+        # 5.0 aus JSON ist dieselbe Zahl wie 5; 3.5 und NaN sind es nicht.
+        zahl = int(roh)
+    else:
+        raise UngueltigeAenderung("Erlaubt sind nur ganze Zahlen ab 0 oder ein leeres Feld.")
+    if zahl < 0:
         raise UngueltigeAenderung("Eine Stückzahl kann nicht negativ sein.")
-    return int(roh)
+    return zahl
 
 
 def kuerze_backups(backup_dir: Path, behalten: int) -> list[Path]:
@@ -321,7 +407,7 @@ def kuerze_backups(backup_dir: Path, behalten: int) -> list[Path]:
     return geloescht
 
 
-def speichere_mappe(wb, pfad: Path, *, backups_behalten: int = 30) -> Path | None:
+def speichere_mappe(wb: Workbook, pfad: Path, *, backups_behalten: int = 30) -> Path | None:
     """Atomar speichern, Backup anlegen, alte Backups kürzen.
 
     ``PermissionError`` heißt auf Windows praktisch immer: die Datei ist in Excel
@@ -351,7 +437,7 @@ def schreibe_zelle(
     *,
     key: str,
     spalte: str,
-    wert,
+    wert: object,
     mtime: float,
     backups_behalten: int = 30,
 ) -> Schreibergebnis:
@@ -371,8 +457,6 @@ def schreibe_zelle(
     neuer_wert = pruefe_wert(wert)
     if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):
         raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
-
-    from bestand.core import parse_grid  # spät, damit Importfehler die App nicht killen
 
     with arbeitsmappe_sperren(pfad):
         if not pfad.is_file():

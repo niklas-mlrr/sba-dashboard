@@ -15,11 +15,16 @@ Zwei Regeln bestimmen die Umrechnung:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from bestand.core import Grid, GridEntry
+from bestand.core import Grid, GridEntry, parse_grid
+from openpyxl.worksheet.worksheet import Worksheet
 
+from . import cache as cache_modul
 from .cache import Cache
+from .excel import Dateizustand, lade_mappe, raster_blatt
+from .settings import Einstellungen
 
 
 @dataclass(frozen=True)
@@ -71,14 +76,14 @@ def _zahl(wert: Any) -> int | None:
         return None
 
 
-def _summe_angemeldet(ws, refs: tuple[str, ...]) -> int | None:
+def _summe_angemeldet(ws: Worksheet, refs: tuple[str, ...]) -> int | None:
     """Summe über die Jahrgangszellen; None, wenn keine einzige gefüllt ist."""
     werte = [_zahl(ws[ref].value) for ref in refs]
     gefuellt = [w for w in werte if w is not None]
     return sum(gefuellt) if gefuellt else None
 
 
-def zeile_aus_eintrag(ws, eintrag: GridEntry, cache: Cache) -> Zeile:
+def zeile_aus_eintrag(ws: Worksheet, eintrag: GridEntry, cache: Cache) -> Zeile:
     bestand_ref = eintrag.slots["bestand"].ref
     bestellt_slot = eintrag.slots.get("bestellt")
     bestellt_ref = bestellt_slot.ref if bestellt_slot else None
@@ -107,7 +112,55 @@ def zeile_aus_eintrag(ws, eintrag: GridEntry, cache: Cache) -> Zeile:
     )
 
 
-def baue_zeilen(ws, grid: Grid, cache: Cache | None = None) -> list[Zeile]:
+def baue_zeilen(ws: Worksheet, grid: Grid, cache: Cache | None = None) -> list[Zeile]:
     """Alle Zeilen des Rasters. Sperrflächen sind im Grid bereits ausgesondert."""
     cache = cache or Cache()
     return [zeile_aus_eintrag(ws, eintrag, cache) for eintrag in grid.entries]
+
+
+@dataclass(frozen=True)
+class Tabellenstand:
+    """Alles, was ein Seitenaufbau über die Mappe wissen muss - in einem Stück.
+
+    Bis 2026-09-05 gab ``lies_tabelle`` ein untypisiertes Vierertupel zurück,
+    dessen Leerfall ``(None, [], None, None)`` hieß. Jeder Aufrufer zerlegte es
+    erst in vier Namen und prüfte danach einen davon auf ``None`` - drei Zeilen
+    Zeremonie je Route, und die drei ``None``-Felder waren für einen Typprüfer
+    (und für den Leser) nicht von echten Werten zu unterscheiden.
+
+    Jetzt gilt: entweder es gibt eine Mappe, dann sind **alle** Felder gesetzt,
+    oder ``lies_tabelle`` gibt ``None`` zurück. Der Leerfall steht damit einmal
+    im Rückgabetyp statt viermal im Inhalt.
+    """
+
+    pfad: Path
+    zeilen: list[Zeile]
+    zustand: Dateizustand
+    cache: Cache
+
+    @property
+    def bedarf_gesamt(self) -> int:
+        """Summe der offenen Stückzahlen - dieselbe Zahl, die der Browser nachrechnet."""
+        return sum(z.zu_bestellen or 0 for z in self.zeilen if z.bedarf)
+
+
+def lies_tabelle(einstellungen: Einstellungen) -> Tabellenstand | None:
+    """Mappe frisch laden, Raster parsen, Anzeigezeilen bauen.
+
+    ``None`` heißt: keiner der eingetragenen Pfade existiert. Das ist der
+    Normalzustand vor der Ersteinrichtung und kein Fehler - die Startseite
+    zeigt dann die Einrichtungsseite, die API antwortet mit 503 und der Liste
+    der geprüften Pfade.
+
+    Geladen wird ohne Schreibsperre. Das ist Absicht: ein Leser soll nie auf
+    einen Schreiber warten müssen (siehe ``docs/architektur.md``).
+    """
+    pfad = einstellungen.excel_pfad()
+    if pfad is None:
+        return None
+    wb = lade_mappe(pfad)
+    ws = raster_blatt(wb, einstellungen.blatt_raster)
+    grid = parse_grid(ws)
+    cache = cache_modul.laden(pfad)
+    return Tabellenstand(pfad=pfad, zeilen=baue_zeilen(ws, grid, cache),
+                         zustand=Dateizustand.von(pfad), cache=cache)

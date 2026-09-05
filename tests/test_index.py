@@ -9,6 +9,7 @@ from openpyxl import Workbook, load_workbook
 
 from app.main import create_app
 from app.settings import Einstellungen
+from conftest import TEST_BASIS_URL
 
 
 def _einrichtungs_app(tmp_path, einstellungen: Einstellungen) -> tuple[TestClient, Path]:
@@ -18,7 +19,11 @@ def _einrichtungs_app(tmp_path, einstellungen: Einstellungen) -> tuple[TestClien
         "excel_pfad_kandidaten": [str(p) for p in einstellungen.excel_pfad_kandidaten],
         "blatt_raster": einstellungen.blatt_raster,
     }), encoding="utf-8")
-    return TestClient(create_app(einstellungen=einstellungen, config_pfad=config_pfad)), config_pfad
+    return (
+        TestClient(create_app(einstellungen=einstellungen, config_pfad=config_pfad),
+                   base_url=TEST_BASIS_URL),
+        config_pfad,
+    )
 
 
 def test_startseite_zeigt_die_tabelle(client):
@@ -35,7 +40,9 @@ def test_startseite_weist_auf_den_fehlenden_abruf_hin(client):
     """Ohne Cache stehen Titel und ISBN nicht zur Verfügung - das muss dastehen."""
     text = client.get("/").text
     assert "nach dem\nersten Abruf aus IServ" in text
-    assert text.count("<td>—</td>") > 0
+    # Titel und ISBN kommen aus dem Cache: ohne Abruf steht das Leerzeichen da,
+    # und der Sortierschlüssel derselben Zelle ist leer statt "—".
+    assert text.count('data-wert="">—</td>') > 0
 
 
 def test_api_rows_liefert_die_zeilen(client):
