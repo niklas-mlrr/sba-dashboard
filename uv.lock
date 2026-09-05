@@ -1200,6 +1200,7 @@ provides-extras = ["pdf"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "mypy", specifier = ">=1.11,<2" },
     { name = "pytest", specifier = ">=8,<9" },
     { name = "ruff", specifier = ">=0.8,<1" },
 ]

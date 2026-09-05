@@ -100,12 +100,16 @@ exclude_also = [
 files = ["app"]
 python_version = "3.10"
 
-# Die drei Geschwister-Pakete und openpyxl liefern kein py.typed, obwohl
-# bestand.core durchgehend annotiert ist. Ohne diese Zeile meldet mypy für
-# jeden Import daraus einen Fehler, statt für den Code, um den es geht.
-# Namen wie Snapshot oder GridEntry werden damit zu Any - sie stehen in den
-# Signaturen trotzdem, weil sie dem Leser sagen, was durchfließt.
-ignore_missing_imports = true
+# bestand.core liefert seit sba-bestand `py.typed` echte Typen - aber mypy
+# findet sie nur über diesen Pfad. Der editable-Install von setuptools legt in
+# site-packages keinen Paketordner ab, sondern einen Import-Finder
+# (`__editable___sba_bestand_0_1_0_finder.py` plus .pth); mypy liest sys.path,
+# nicht die Import-Hooks der Laufzeit, und sah das Paket damit überhaupt nicht.
+# Ohne diese Zeile blieben Snapshot, GridEntry, UpdateResult und BestandConfig
+# also `Any`, py.typed hin oder her - nachgeprüft mit `reveal_type`. Der
+# relative Pfad ist zulässig, weil das Geschwister-Layout verbindlich ist
+# (siehe [tool.uv.sources] oben).
+mypy_path = "../sba-bestand"
 
 # Der eigentliche Zweck: eine Funktion ohne Annotationen überspringt mypy
 # stillschweigend samt Rumpf. Ohne diese Zeile hielte die Prüfung nicht, was
@@ -116,6 +120,23 @@ disallow_incomplete_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
+
+# Kein globales `ignore_missing_imports`: das würde einen Bruch der
+# Pfad-Auflösung oben lautlos verschlucken - bestand.core fiele wieder auf
+# `Any` zurück und die Prüfung an der Paketgrenze wäre weg, ohne dass ein Lauf
+# rot wird. Deshalb namentlich nur die Pakete, die wirklich kein py.typed
+# liefern: ausleihe-api (Geschwister-Repo, unannotiert) und openpyxl.
+[[tool.mypy.overrides]]
+module = ["ausleihe.*", "openpyxl.*"]
+ignore_missing_imports = true
+
+# bestand.core wird für seine Typen gelesen, aber nicht hier geprüft: Fehler
+# im Bibliothekscode gehören in sba-bestand, nicht in einen roten Lauf des
+# Dashboards. `silent` heißt genau das - Typen benutzen, Meldungen aus diesen
+# Modulen unterdrücken.
+[[tool.mypy.overrides]]
+module = ["bestand.*"]
+follow_imports = "silent"
 
 [tool.ruff]
 target-version = "py310"

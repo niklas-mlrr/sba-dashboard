@@ -239,6 +239,45 @@ das, was jeder Start auf dem Schul-Laptop tut — wurde von keinem Test
 aufgerufen. Die beiden Ebenen selbst waren geprüft, der Bootstrap darum herum
 nicht. `tests/test_konfiguration.py` schließt das.
 
+## Nachtrag: die Paketgrenze zu `bestand.core` (2026-09-05)
+
+Der 17. Punkt, der im Backlog als Anschlussarbeit stand: `bestand.core` war
+durchgehend annotiert, lieferte aber kein `py.typed`, und damit waren
+`Snapshot`, `GridEntry`, `UpdateResult` und `BestandConfig` für mypy hier
+`Any`. Erledigt in `sba-bestand` `e9d0321` und hier.
+
+Erwartet war „zwei Zeilen"; es waren drei Befunde. Der Reihe nach:
+
+**Der Marker allein reichte nicht.** mypy sah `bestand` weiterhin nicht,
+py.typed hin oder her — der editable-Install von setuptools stellt das Paket
+über einen Import-Finder bereit, nicht über einen Ordner in `site-packages`,
+und mypy liest `sys.path`. Erst `mypy_path = "../sba-bestand"` machte die Typen
+echt. Geprüft wurde das mit `reveal_type`, nicht am ausbleibenden Fehler — der
+erste Lauf nach dem Marker meldete „Success", und das war die falsche Antwort
+aus dem richtigen Grund. Begründung: `architektur.md`, „Die Paketgrenze ist
+geprüft, nicht nur beschrieben".
+
+**`apply_snapshot` nahm `snapshot` und `config` unannotiert.** Auch mit
+gültigem Marker blieb der Aufruf aus `app/refresh.py` deshalb ungeprüft: eine
+unannotierte Signatur ist implizit `Any`. Jetzt `snapshot: Snapshot,
+config: BestandConfig` — nachgestellt geprüft, dass ein vertauschtes
+Argumentpaar auch wirklich auffällt.
+
+**`write_stand(ws, grid, result.stand, result)` war an drei Stellen ein
+Typfehler** — hier, in `update_bestand_auto.py` und in `bestand.core` selbst.
+`UpdateResult.stand` ist `datetime | None`, weil eine frisch gebaute
+`UpdateResult` noch keinen Stand hat (das Dashboard baut eine, um die
+Diagnosen von `load_bestellt_counts` hineinzureichen); `write_stand` verlangte
+`datetime`. Kein Laufzeitfehler, `apply_snapshot` setzt das Feld immer — aber
+die Signatur log, und drei Aufrufer schrieben denselben Fehler ab. Behoben in
+der Bibliothek, nicht an den Aufrufstellen: `when` nimmt jetzt `None` und
+heißt dann „nimm `result.stand`".
+
+Nebenbei bekam `sba-bestand` seinen eigenen mypy-Lauf. Ohne den wäre `py.typed`
+ein Versprechen an jeden Nutzer des Pakets, das dort nichts prüft — ein Bruch
+fiele in diesem Repo auf statt in dem, das ihn verursacht. Er fand die zwei
+weiteren Kleinigkeiten, die in `e9d0321` mit drinstehen.
+
 ## Bewusst zurückgestellt
 
 ### Versionierte Wheels für die drei Repos

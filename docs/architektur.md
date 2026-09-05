@@ -153,6 +153,34 @@ laufen die Tests beider Repos ohne Netz und ohne die echte Mappe: beide bauen
 sich ihr Prüfblatt mit `bestand.core.testing.build_workbook`, das die vier
 Befunde oben im Kleinen nachbildet.
 
+### Die Paketgrenze ist geprüft, nicht nur beschrieben
+
+`sba-bestand` liefert seit dem 2026-09-05 eine `bestand/py.typed`. Vorher waren
+`Snapshot`, `GridEntry`, `UpdateResult` und `BestandConfig` für mypy hier
+schlicht `Any`: sie standen in den Signaturen von `app/refresh.py` für den
+Leser, geprüft wurde an der Grenze nichts. Ein vertauschtes Argumentpaar wäre
+erst zur Laufzeit aufgefallen.
+
+Zwei Dinge waren dafür nötig, und das zweite ist das unerwartete:
+
+1. Der Marker selbst plus sein Eintrag in `[tool.setuptools.package-data]` von
+   `sba-bestand` — `packages.find` sammelt nur `.py`-Dateien ein.
+2. `mypy_path = "../sba-bestand"` **hier**. Der editable-Install von setuptools
+   legt in `site-packages` keinen Paketordner ab, sondern einen Import-Finder
+   (`__editable___sba_bestand_0_1_0_finder.py` plus `.pth`). mypy liest
+   `sys.path`, nicht die Import-Hooks der Laufzeit, und sah das Paket damit
+   überhaupt nicht — der Marker allein hätte nichts geändert. Nachgeprüft mit
+   `reveal_type`, nicht am ausbleibenden Fehler.
+
+Deshalb steht in `[tool.mypy]` auch **kein** globales `ignore_missing_imports`
+mehr, sondern nur noch die namentliche Ausnahme für `ausleihe.*` und
+`openpyxl.*`. Global gesetzt würde es einen Bruch der Pfad-Auflösung lautlos
+verschlucken: `bestand.core` fiele auf `Any` zurück, und kein Lauf würde rot.
+
+Die CI baut das Geschwister-Layout im Workspace nach (`sba-dashboard/`,
+`sba-bestand/`, `ausleihe-api/` nebeneinander), der relative Pfad trägt dort
+also genauso.
+
 ## Warum 127.0.0.1
 
 Die Mappe enthält Anmeldezahlen je Jahrgang. Ein Server, der im Schulnetz
