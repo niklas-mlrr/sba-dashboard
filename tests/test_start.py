@@ -2,11 +2,18 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
+import stat
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from app.start import HOST, freier_port, main
+
+WURZEL = Path(__file__).resolve().parents[1]
+START_SH = WURZEL / "START.sh"
 
 
 def test_freier_port_nimmt_den_wunschport():
@@ -25,23 +32,25 @@ def test_belegter_port_wird_uebersprungen():
         assert freier_port(port) == port + 1
 
 
-def test_alle_ports_belegt_meldet_klartext():
-    sockets = []
-    try:
-        with socket.socket() as erster:
-            erster.bind((HOST, 0))
-            start = erster.getsockname()[1]
-        for versatz in range(3):
-            sock = socket.socket()
-            sock.bind((HOST, start + versatz))
-            sock.listen(1)
-            sockets.append(sock)
-        with pytest.raises(SystemExit) as fehler:
-            freier_port(start, versuche=3)
-        assert "belegt" in str(fehler.value)
-    finally:
-        for sock in sockets:
-            sock.close()
+def test_alle_ports_belegt_meldet_klartext(monkeypatch):
+    """Der Test braucht keine zufällig freien Nachbarports des Systems."""
+    class _BesetzterSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def setsockopt(self, *_):
+            pass
+
+        def bind(self, *_):
+            raise OSError("Adresse bereits in Verwendung")
+
+    monkeypatch.setattr("app.start.socket.socket", lambda *_: _BesetzterSocket())
+    with pytest.raises(SystemExit) as fehler:
+        freier_port(18765, versuche=3)
+    assert "belegt" in str(fehler.value)
 
 
 def test_beenden_ohne_server_meldet_501(client):
@@ -99,3 +108,38 @@ def test_start_nimmt_alternative_config_und_setzt_app_zustand(tmp_path, monkeypa
     assert server_instanz.config.app.state.einstellungen.excel_pfad_kandidaten == (
         tmp_path / "kopie.xlsx",
     )
+
+
+def test_macos_start_wechselt_ins_projektverzeichnis(tmp_path):
+    """Der macOS-Start kommt oft aus dem Home-Ordner, nicht aus dem Checkout.
+
+    ``uv run --project`` installiert zwar die Abhängigkeiten des Checkouts,
+    setzt aber nicht dessen Arbeitsverzeichnis. Da ``app`` absichtlich nicht
+    als Paket installiert wird, würde ``python -m app.start`` es sonst nicht
+    finden. Das Stub zeichnet deshalb das Verzeichnis beider uv-Aufrufe auf.
+    """
+    bin_ordner = tmp_path / "bin"
+    bin_ordner.mkdir()
+    uv = bin_ordner / "uv"
+    uv.write_text("#!/usr/bin/env bash\npwd >> \"$UV_LOG\"\n", encoding="utf-8")
+    uv.chmod(uv.stat().st_mode | stat.S_IXUSR)
+    protokoll = tmp_path / "uv-cwd.txt"
+    arbeitsordner = tmp_path / "arbeitskopie"
+    fremder_ordner = tmp_path / "home"
+    fremder_ordner.mkdir()
+
+    umgebung = os.environ | {
+        "PATH": f"{bin_ordner}:{os.environ['PATH']}",
+        "SBA_ARBEITSORDNER": str(arbeitsordner),
+        "UV_LOG": str(protokoll),
+    }
+    ergebnis = subprocess.run(
+        ["bash", str(START_SH)],
+        cwd=fremder_ordner,
+        env=umgebung,
+        capture_output=True,
+        text=True,
+    )
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+    assert protokoll.read_text(encoding="utf-8").splitlines() == [str(WURZEL), str(WURZEL)]

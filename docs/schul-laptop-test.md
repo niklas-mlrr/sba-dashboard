@@ -153,8 +153,8 @@ Excel-Pfad auf die echte Mappe ändern.
 | # | Schritt | Erwartet | Notieren |
 |---|---------|----------|----------|
 | D1 | Liste öffnen | 72 Zeilen, Mehrjahresbänder zeigen z. B. `5-6` | — |
-| D2 | Eine `Bestand`-Zahl ändern | Feld übernimmt den Wert ohne Fehlermeldung | alter/neuer Wert |
-| D3 | Mappe in Excel öffnen und nachsehen | Die Zahl steht drin | — |
+| D2 | In einer Zeile mit Eingabefeld eine `Bestellt`-Zahl ändern | Feld übernimmt den Wert ohne Fehlermeldung | alter/neuer Wert |
+| D3 | Mappe in Excel öffnen und nachsehen | Die Zahl steht im Blatt `bestellt` | — |
 | D4 | Spalte „zu bestellen" in Excel | Enthält weiterhin **Formeln**, keine festen Zahlen | eine Zelle notieren |
 | D5 | Ordner `backups` neben der Mappe | Eine neue Datei mit Zeitstempel | Dateiname |
 | D6 | Wert zurücksetzen | wieder der alte Stand | — |

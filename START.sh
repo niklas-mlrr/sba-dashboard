@@ -12,6 +12,13 @@
 set -euo pipefail
 
 WURZEL="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# ``uv run --project`` wählt zwar dieses Projekt für die Abhängigkeiten,
+# wechselt aber nicht in dessen Arbeitsverzeichnis. Dieses Projekt ist bewusst
+# kein installierbares Paket; ``python -m app.start`` findet ``app`` daher nur
+# vom Projektwurzelverzeichnis aus. START.sh wird auf macOS typischerweise aus
+# dem Home-Ordner per Doppelklick gestartet, also niemals darauf vertrauen,
+# dass das Terminal schon hier steht.
+cd -- "$WURZEL"
 VORLAGE="$WURZEL/vorlage/Bestand- und Nachbestellungsliste 2026.xlsx"
 QUELLE="${SBA_ORIGINAL_EXCEL:-$VORLAGE}"
 ARBEITSORDNER="${SBA_ARBEITSORDNER:-$WURZEL}"
