@@ -5,10 +5,14 @@
 > ausgelassen hat — beides ist beim Weiterbauen nützlich, beim Nachschlagen des
 > aktuellen Stands aber irreführend.
 >
-> - Was offen ist: [`roadmap.md`](roadmap.md)
-> - Wie es gebaut ist und warum: [`architektur.md`](architektur.md)
-> - Wie es auf den Laptop kommt: [`verteilung.md`](verteilung.md)
-> - Bedienung: [`nachfolge-anleitung.md`](nachfolge-anleitung.md)
+> Seit dem 2026-09-05 liegt er in `docs/archiv/` und nicht mehr neben den
+> lebenden Dokumenten - er stand vorher in derselben Liste wie sie und sah
+> damit aus wie eine Beschreibung des heutigen Stands.
+>
+> - Was offen ist: [`roadmap.md`](../roadmap.md)
+> - Wie es gebaut ist und warum: [`architektur.md`](../architektur.md)
+> - Wie es auf den Laptop kommt: [`verteilung.md`](../verteilung.md)
+> - Bedienung: [`nachfolge-anleitung.md`](../nachfolge-anleitung.md)
 >
 > Einzelne Angaben unten sind inzwischen überholt. Die auffälligsten:
 > `config.beispiel.json` gibt es nicht mehr (die Benutzerkonfiguration liegt in

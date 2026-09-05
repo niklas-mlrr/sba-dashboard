@@ -1,5 +1,12 @@
 # Architektur und Struktur-Befunde
 
+> Diese Datei ist die **kanonische** Beschreibung. `README.md` trägt
+> Schnellstart, Routentabelle und Verweise, die Wiki-Seite fasst zusammen —
+> beide erklären nichts von dem, was hier steht, ein zweites Mal. Bis zum
+> 2026-09-05 taten sie das, und Cache, Konfigurationsebenen und
+> Schreibsicherheit standen dreifach da: an dem Tag noch übereinstimmend, weil
+> sie am selben Tag geschrieben worden waren.
+
 ## Warum das Raster nicht naiv gelesen werden darf
 
 Vier am echten Workbook gemessene Eigenheiten bestimmen den gesamten Entwurf.
@@ -57,6 +64,80 @@ Ein Fachblock wird nicht über die Merges der Fach-Zeile erkannt (die kann ein
 Bearbeiter jederzeit auflösen), sondern über die Zustandszeile: jede Spalte
 `Angemeldet` eröffnet einen Block.
 
+## Aufteilung innerhalb von `app/`
+
+Eine Datei, eine Aufgabe. Bis zum 2026-09-05 vereinte `main.py` vier davon —
+App-Factory, sämtliche Routen, das Domänenlesen und die Mappenprüfung — und war
+damit die Datei, die jedes neue Feature anfassen musste.
+
+```
+app/
+  main.py           App-Factory: Zustand, Middleware, Handler, Router. Sonst nichts.
+  konfiguration.py  lade_einstellungen - Laden MIT Konsolenhinweis
+  sicherheit.py     Host- und Origin-Prüfung (siehe "Warum 127.0.0.1")
+  fehler.py         Ausnahme -> HTTP, einmal für die ganze Anwendung
+  modelle.py        Anfragekörper als Pydantic-Modelle + deutsche Meldungen
+  api/
+    seite.py        GET /            und POST /api/einrichtung   (HTML + sein Formular)
+    tabelle.py      GET /api/rows    und POST /api/cell
+    abruf.py        POST /api/refresh und GET /api/refresh/status
+    system.py       GET /health      und POST /api/beenden
+    gemeinsam.py    Vorlagen, Einstellungen aus dem Request, der 503-Leerfall
+  rows.py           Raster -> Anzeigezeilen, lies_tabelle -> Tabellenstand
+  excel.py          Laden, Sperren, Schreiben, Prüfen einer Mappe
+  refresh.py        IServ-Abruf mit instanzgebundenem Fortschritt
+  cache.py          Sidecar mit Titel, ISBN, Preis
+  settings.py       Zwei Konfigurationsebenen
+  paths.py          Plattformabhängige Ordner
+  dateien.py        Atomares Schreiben kleiner Dateien
+  start.py          Freier Port, uvicorn, Browser
+```
+
+`rows.py`, `excel.py`, `refresh.py`, `cache.py`, `settings.py`, `paths.py` und
+`dateien.py` importieren **kein FastAPI**. Das ist keine Ordnungsliebe, sondern
+die Voraussetzung für den nächsten Abschnitt: Ausnahmen, die nichts über HTTP
+wissen, lassen sich an einer Stelle auf HTTP abbilden.
+
+### Ausnahme → HTTP steht an genau einer Stelle
+
+`app/fehler.py` registriert einen Handler je Ausnahme. Vorher tat das jede
+Route für sich, mit von Route zu Route driftendem Ergebnis: `BlattFehlt` war im
+Lesepfad 500 und im Schreibpfad 503.
+
+| Ausnahme | Status | zusätzlich im Körper |
+|----------|--------|----------------------|
+| `MappeUngeeignet`, `UngueltigeAenderung` | 400 | — |
+| ungültiger Anfragekörper | 400 | — |
+| `Konflikt` | 409 | `mtime` |
+| `LaeuftBereits` | 409 | `status` |
+| `Gesperrt` | 423 | `benutzer` |
+| `EinstellungsFehler`, `BlattFehlt` | 500 | — |
+| `ExcelFehlt` | 503 | — |
+
+Jede Antwort hat die Form `{"fehler": "<deutscher Klartext>"}`, weil
+`app/static/app.js` genau dieses Feld wörtlich anzeigt. **Eine** Route fällt
+heraus: `GET /` liefert HTML und fängt ihre Fehler weiterhin selbst, mit
+denselben Statuscodes — drei Zeilen JSON im Browserfenster wären für die
+Lehrkraft die schlechteste aller Antworten.
+
+`MappeUngeeignet` gibt es nur, damit diese Tabelle eindeutig sein kann: eine
+*neu ausgewählte* Datei ohne Raster ist eine Eingabe der Lehrkraft (400), ein
+fehlendes Blatt in der Mappe, mit der schon gearbeitet wird, ein Serverzustand
+(500). Vorher war beides dieselbe Ausnahmeklasse mit zwei Bedeutungen.
+
+### Der Anfragekörper: Pydantic plus ein deutscher Handler
+
+`app/modelle.py` beschreibt die drei schreibenden Routen als Modelle. Der Grund,
+das nicht früher zu tun, war echt: FastAPIs Vorgabeantwort auf einen ungültigen
+Körper ist ein englisches, schemaförmiges 422, und die Oberfläche zeigt
+`fehler` wörtlich an. Gelöst ist das mit **einem** `RequestValidationError`-
+Handler, der die Fehlerliste auf einen deutschen Satz abbildet und dabei den
+Statuscode 400 behält. Er gibt insbesondere nie den Eingabewert zurück — bei
+`POST /api/refresh` wäre das das Passwort.
+
+Was Pydantic bewusst **nicht** prüft: ob `wert` eine schreibbare Zahl ist. Diese
+Regel gehört zur Mappe und steht mit ihrer Begründung in `app.excel.pruefe_wert`.
+
 ## Aufteilung auf die Repos
 
 ```
@@ -77,6 +158,47 @@ Befunde oben im Kleinen nachbildet.
 Die Mappe enthält Anmeldezahlen je Jahrgang. Ein Server, der im Schulnetz
 lauscht, macht daraus eine offene Seite ohne Anmeldung. Das Dashboard hört
 ausschließlich auf die Loopback-Adresse; wer es benutzt, sitzt am Rechner.
+
+### Was die Bindung allein nicht abdeckt
+
+Sie hält das **Netz** ab, nicht den **Browser** auf demselben Rechner. Zwei
+Wege blieben deshalb bis zum 2026-09-05 offen, und beide sind nicht
+theoretisch:
+
+- **Auslösen von einer fremden Seite.** `POST /api/beenden` nimmt keinen
+  Körper. Eine beliebige Seite im Nachbartab kann sie mit einem einfachen
+  `fetch` auslösen — kein Preflight nötig. Die Antwort bleibt der fremden
+  Seite verborgen, die Wirkung nicht: das Dashboard ist zu.
+- **DNS-Rebinding.** Eine fremde Domain, deren DNS-Eintrag auf 127.0.0.1
+  zeigt, gilt dem Browser als eigene Herkunft. Ihre Seite darf `GET /` und
+  `/api/rows` lesen **und auswerten** — also genau die Zahlen, deren
+  Offenlegung dieser Abschnitt einen Datenschutzvorfall nennt.
+
+Dagegen stehen zwei Schichten (`app/sicherheit.py`), und sie greifen an
+verschiedenen Stellen:
+
+| Schicht | Prüft | Fängt |
+|---------|-------|-------|
+| `TrustedHostMiddleware` | `Host` gegen `127.0.0.1`/`localhost` | DNS-Rebinding, auch auf den Lesewegen |
+| `HerkunftMiddleware` | `Origin` bei POST/PUT/PATCH/DELETE | die fremde Seite im Nachbartab |
+
+Gegen Rebinding hilft der Origin-Vergleich **nicht** — die Herkunft *ist* dann
+dieselbe; nur der `Host`-Kopf trägt weiter den Namen des Angreifers. Umgekehrt
+hilft die Host-Prüfung nicht gegen den Nachbartab, der das Dashboard korrekt
+unter `127.0.0.1` anspricht. Deshalb beide.
+
+Der Port wird in beiden Fällen nicht geprüft: `app.start.freier_port` weicht
+bei belegtem Port aus, ein zweites Fenster läuft also regulär unter einem
+anderen. Ein fehlender `Origin` gilt als erlaubt — ein Browser setzt ihn bei
+jeder zustandsändernden Anfrage einer fremden Seite, ohne ihn kommt die
+Anfrage aus `curl` oder `tools/diagnose.py`, und die laufen ohnehin schon auf
+diesem Rechner.
+
+Das ist **keine Anmeldung**. Wer am Rechner sitzt, darf weiterhin alles.
+
+Praktische Folge für Tests: der `TestClient` schickt `Host: testserver` und
+bekäme sonst durchweg 400. `tests/conftest.py` setzt deshalb
+`base_url="http://127.0.0.1"`.
 
 ## Warum die Mappe nie im Speicher bleibt
 

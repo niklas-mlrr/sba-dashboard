@@ -1,13 +1,12 @@
 # Was noch offen ist
 
 Stand: 2026-09-05. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
-bleibt als abgeschlossener v1-Plan liegen.
+liegt als abgeschlossener v1-Plan in [`archiv/`](archiv/PLAN.md).
 
-Zwei Arbeitslisten stehen hier nebeneinander: die **Funktionslücken** (unten,
-allen voran der Testlauf auf dem Schul-Laptop) und der **Struktur-Backlog**
-aus dem Review vom 2026-09-05. Ersteres blockiert die Inbetriebnahme,
-Letzteres die Wartbarkeit — der Struktur-Backlog ist deshalb billig jetzt und
-teuer später, aber nie dringend.
+Der **Struktur-Backlog** aus dem Review vom 2026-09-05 ist abgearbeitet (unten,
+mit dem, was sich dabei geändert hat). Offen bleiben damit nur noch die beiden
+**Funktionslücken**, die niemand außer Niklas erledigen kann — allen voran der
+Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
 
 ## Der Windows-Job hat sofort einen echten Fehler gefunden
 
@@ -149,102 +148,90 @@ Typografie, Tabellenkopf und Knopfformen. Bis dahin läuft `app/static/app.css`
 mit einem zurückhaltenden Platzhaltersatz an Marken; wenn die Vorlage da ist,
 werden **nur die Werte in `:root`** ersetzt, nicht die Regeln darunter.
 
-## Struktur-Backlog (Review vom 2026-09-05)
+## Struktur-Backlog (Review vom 2026-09-05) — abgearbeitet
 
-Ein Struktur-Review fand 16 Punkte; sechs sind erledigt (Commit `24aaa08`,
-dazu `sba-bestand` `6478e4c`) — der dritte `os.replace`-Ort, die doppelte
-Plattform-Ordner-Auflösung, die zwei Formen von `/api/refresh/status`, die
-erinnerte Testisolation und zwei Fehler in `app.js`. Die folgenden zehn stehen
-noch aus, absteigend nach Nutzen je Aufwand.
+Ein Struktur-Review fand 16 Punkte. Alle 16 sind erledigt: sechs in Commit
+`24aaa08` (dazu `sba-bestand` `6478e4c`) — der dritte `os.replace`-Ort, die
+doppelte Plattform-Ordner-Auflösung, die zwei Formen von
+`/api/refresh/status`, die erinnerte Testisolation und zwei Fehler in
+`app.js` —, die restlichen zehn danach. Was sich dabei geändert hat, in der
+Reihenfolge der Liste:
 
-### 1. `Host`- und `Origin`-Prüfung fehlt (das Wichtigste hier)
+1. **`Host`- und `Origin`-Prüfung.** Der einzige Punkt, der ein Versprechen
+   des Projekts brach und nicht nur die Wartbarkeit. `app/sicherheit.py`:
+   `TrustedHostMiddleware` gegen DNS-Rebinding (eine fremde Domain, die auf
+   127.0.0.1 zeigt, durfte `/api/rows` lesen **und auswerten**) und eine
+   eigene `HerkunftMiddleware` gegen die fremde Seite im Nachbartab, die
+   `POST /api/beenden` auslösen konnte. Begründung, Grenzen und die Frage,
+   warum ein fehlender `Origin` erlaubt bleibt: `architektur.md`, „Was die
+   Bindung allein nicht abdeckt". Der `TestClient` schickt `Host: testserver`
+   und braucht seither `base_url="http://127.0.0.1"` (`conftest.py`).
+2. **Fehler-auf-HTTP-Abbildung** steht in `app/fehler.py`, einmal statt in
+   jeder Route. `BlattFehlt` war vorher im Lesepfad 500 und im Schreibpfad
+   503; es ist jetzt überall 500. Neu ist dafür `MappeUngeeignet` (400): eine
+   *neu ausgewählte* Datei ohne Raster ist eine Eingabe der Lehrkraft, ein
+   fehlendes Blatt in der Arbeitsmappe ein Serverzustand — vorher war beides
+   dieselbe Klasse mit zwei Bedeutungen, und genau daran scheiterte eine
+   zentrale Abbildung. `GET /` behält seinen eigenen Zweig, weil es HTML
+   liefert, benutzt aber dieselben Statuscodes.
+3. **`main.py` ist reine Verdrahtung** (75 Zeilen statt 345). Die Routen
+   liegen als vier `APIRouter` in `app/api/`, `lies_tabelle` in `app/rows.py`,
+   `validiere_excel_mappe` in `app/excel.py`, `lade_einstellungen` in
+   `app/konfiguration.py`. Die Dateiliste steht in `architektur.md`,
+   „Aufteilung innerhalb von `app/`".
+4. **Pydantic-Modelle** in `app/modelle.py` plus **ein**
+   `RequestValidationError`-Handler, der auf `{"fehler": "<deutsch>"}` mit
+   Status 400 abbildet — nicht auf FastAPIs englisches, schemaförmiges 422.
+   Er gibt insbesondere nie den Eingabewert zurück; bei `POST /api/refresh`
+   wäre das das Passwort, und ein Test hält das fest.
+5. **Die `object`-Notausgänge sind weg.** `Schreibergebnis.ws`/`.eintrag`
+   sind `Worksheet` bzw. `GridEntry` ohne `None`-Vorgabe, und `lies_tabelle`
+   gibt einen `Tabellenstand` zurück oder `None` — der Leerfall steht damit
+   einmal im Rückgabetyp statt viermal im Inhalt.
+6. **mypy in der CI**, streng genug, um etwas zu finden: `disallow_untyped_defs`
+   (sonst überspringt mypy eine untypisierte Funktion samt Rumpf). Er lief
+   auf jedem Runner mit dessen eigener Plattform — nur so wird der
+   `msvcrt`-Zweig der Dateisperre überhaupt geprüft. Dafür wechselte
+   `app/excel.py` von `os.name == "nt"` auf `sys.platform == "win32"`, die
+   Schreibweise, die `app/paths.py` schon benutzte und die als einzige ein
+   Typprüfer versteht.
+7. **`pytest-cov`** mit `--cov` in den `addopts` (95 % am 2026-09-05, mit
+   Zweigmessung). Die Schwelle von 85 % steht **nur** im CI-Aufruf: als
+   `fail_under` hätte sie jeden Teillauf während der Arbeit an einer einzelnen
+   Datei rot gemacht, und eine Schwelle, die bei richtiger Arbeit anschlägt,
+   wird binnen einer Woche abgeschaltet.
+8. **`app/static/app.js`** rechnet und rät nichts mehr: sortiert wird über
+   `data-wert` an jeder Zelle statt über den angezeigten Text, und `„—"`
+   steht als `data-leer` einmal in der Vorlage. `tests/test_oberflaeche.py`
+   prüft den Vertrag zwischen Skript und Seite — und liest die Namen dafür
+   **aus `app.js` selbst**, sodass eine neue `getElementById`-Zeile
+   automatisch eine Prüfung nach sich zieht.
+9. **`architektur.md` ist kanonisch.** Das README trägt Routentabelle,
+   Schnellstart und Verweise; was in `architektur.md` steht, wiederholt es
+   nicht mehr. Die Wiki-Seite fasst zusammen.
+10. **`PLAN.md` liegt in `docs/archiv/`** und steht nicht mehr in derselben
+    Liste wie die lebenden Dokumente. Zahlen, die jeder Commit falsch machen
+    kann („231 Tests", „9,6 s"), stehen weder im README noch in der
+    Wiki-Seite.
 
-Es gibt keine Middleware. Die Bindung an 127.0.0.1 hält das Netz ab, **nicht
-den Browser**:
+### Zwei Funde, die dabei angefallen sind
 
-- `POST /api/beenden` nimmt keinen Body und ist damit cross-origin auslösbar.
-  Eine beliebige Seite, die die Lehrkraft während des Betriebs öffnet, kann das
-  Dashboard beenden (einfache Anfrage, kein Preflight; die Antwort ist
-  blockiert, die Wirkung nicht).
-- **DNS-Rebinding:** eine fremde Domain, die auf 127.0.0.1 auflöst, gilt dem
-  Browser als dieselbe Herkunft und darf `GET /` und `/api/rows` lesen — also
-  genau die Anmeldezahlen, deren Offenlegung `architektur.md` einen
-  Datenschutzvorfall nennt.
+**mypy hat einen echten Laufzeitfehler gefunden, bevor es jemand tat.** Der
+Handler für `LaeuftBereits` rief seine Hilfsfunktion als
+`_antwort(exc, 409, status=…)` auf — und der Parameter für den Statuscode hieß
+ebenfalls `status`. Jeder Aufruf hätte mit `TypeError` abgebrochen. Erreichbar
+war der Weg durchaus: `POST /api/refresh` prüft `manager.laeuft()`, aber
+zwischen dieser Prüfung und `manager.starte()` liegt die Anmeldung bei IServ,
+also eine knappe Sekunde Netz, in der ein zweites Fenster starten kann. Die
+Suite hatte den Weg nie genommen, weil die Vorprüfung im Normalfall greift;
+jetzt gibt es einen Test dafür.
 
-Behebung: `TrustedHostMiddleware(allowed_hosts=["127.0.0.1", "localhost"])`
-(Starlette schneidet den Port selbst ab) plus Ablehnung zustandsändernder
-Anfragen mit fremdem `Origin`. ⚠️ Bricht den `TestClient`, der `Host:
-testserver` schickt — `conftest.py` braucht dann `base_url="http://127.0.0.1"`.
-
-### 2. Fehler-auf-HTTP-Abbildung steht in jeder Route einzeln
-
-`main.py` bildet dieselben Ausnahmen in jeder Route erneut ab, mit von Route zu
-Route driftendem Wortlaut. Einmal registrierte
-`@application.exception_handler(...)` für `Konflikt`, `Gesperrt`,
-`EinstellungsFehler` und `BlattFehlt` ersetzen das; rund 60 Zeilen verlassen
-`main.py`, und „welchen Code gibt `Gesperrt`?" hat wieder **eine** Antwort.
-⚠️ `index()` rendert für dieselben Fehler HTML statt JSON und behält seinen
-eigenen Zweig.
-
-### 3. `main.py` mischt vier Aufgaben
-
-App-Factory, Routen, Domänenlesen (`lies_tabelle`) und Mappenprüfung
-(`validiere_excel_mappe`). Die letzten beiden enthalten kein FastAPI und
-gehören nach `app/rows.py` bzw. `app/excel.py`; die Routen in `app/api/` als
-`APIRouter`, `create_app` bleibt reine Verdrahtung. Das ist die Datei, die
-jedes neue Feature anfasst.
-
-### 4. Handgeschriebene Body-Validierung statt Pydantic
-
-`dict = Body(...)` plus `isinstance`-Ketten, rund 40 Zeilen. Der Grund, es
-nicht blind umzustellen, ist echt: FastAPIs 422 ist englisch und
-Schema-förmig, und die Oberfläche zeigt `fehler` wörtlich einer Lehrkraft.
-Lösbar mit Pydantic-Modellen plus **einem** `RequestValidationError`-Handler,
-der auf `{"fehler": "<deutsch>"}` abbildet. Heute drei Anfrageformen, später
-dreißig.
-
-### 5. Untypisierte Notausgänge
-
-`Schreibergebnis.ws: object = None` und `eintrag: object = None`; dazu gibt
-`lies_tabelle` ein untypisiertes 4-Tupel zurück, dessen Leerfall
-`(None, [], None, None)` jeder Aufrufer erst zerlegt und dann auf `None`
-prüft. Typisieren und den Rückgabewert zu einem kleinen `Tabellenstand`
-machen — das ist zugleich die Voraussetzung für Punkt 6.
-
-### 6. Kein Typprüfer in der CI
-
-Der Code ist durchgehend annotiert; mypy (oder ty/pyright) auf `app/` kostet
-jetzt einen Konfigurationsblock und später viel mehr, sobald sich die
-`object`-Felder aus Punkt 5 vermehren.
-
-### 7. Keine Abdeckungsmessung
-
-237 Tests, und niemand weiß, was sie abdecken. `pytest-cov` mit einer
-Sichtbarkeitsschwelle, kein Tor bei 100 %.
-
-### 8. `app/static/app.js` ist ungetestet
-
-271 Zeilen, darin die Browserhälfte des optimistischen Sperrens (409 →
-Neuladen, `mtime`-Buchführung, Escape-Rücknahme). Der pragmatische Weg, weil
-„kein Build-Schritt" bewusste Entscheidung ist: das JS dumm halten (es ist
-fast dort — `/api/cell` liefert die fertige Zeile) und die letzten
-Logikreste hinter Datenattribute ziehen, die ein Template-Test prüfen kann.
-Ab etwa 400 Zeilen trennt `<script type="module">` die Datei ohne Build.
-
-### 9. Drei Beschreibungen derselben Architektur
-
-`README.md`, `docs/architektur.md` und die Wiki-Seite beschreiben Cache,
-Konfigurationsebenen und Schreibsicherheit jeweils erneut. Heute konsistent,
-weil am selben Tag geschrieben. `architektur.md` sollte kanonisch sein, das
-README nur noch Routentabelle, Schnellstart und Verweise tragen, die
-Wiki-Seite zusammenfassen statt nachzuerzählen.
-
-### 10. `PLAN.md` steht neben den lebenden Dokumenten
-
-Als historisch markiert, aber in `README.md` und der Wiki-Tabelle in derselben
-Liste geführt. Nach `docs/archiv/` verschieben oder löschen — Git hat sie.
-Ebenso: die Wiki-Seite nennt Zahlen („231 Tests", „9,6 s"), die jeder Commit
-falsch machen kann.
+**Die Abdeckung hat gezeigt, wo die Suite gar nicht hinsah.**
+`app/konfiguration.py` stand bei 53 %: der Produktivpfad
+`lade_einstellungen(None)` — Standard plus Benutzerkonfiguration, also genau
+das, was jeder Start auf dem Schul-Laptop tut — wurde von keinem Test
+aufgerufen. Die beiden Ebenen selbst waren geprüft, der Bootstrap darum herum
+nicht. `tests/test_konfiguration.py` schließt das.
 
 ## Bewusst zurückgestellt
 
@@ -274,5 +261,6 @@ darin wäre beim nächsten Lauf weg, ohne dass es jemand merkt.
 Lesen, Schreiben, IServ-Abruf, Windows- und macOS-Start, Ersteinrichtung mit
 geprüfter Mappe, prozessübergreifende Schreibsperre, gehärteter Sidecar-Cache,
 Trennung von ausgeliefertem Standard und Benutzerkonfiguration, eigenständige
-Auslieferung ohne `PYTHONPATH`, CI mit Ruff und pytest auf Linux und Windows.
-Wo das jeweils steht, sagt [`architektur.md`](architektur.md).
+Auslieferung ohne `PYTHONPATH`, Host- und Origin-Prüfung, zentrale
+Fehlerabbildung, CI mit Ruff, mypy, pytest und Abdeckungsmessung auf Linux und
+Windows. Wo das jeweils steht, sagt [`architektur.md`](architektur.md).

@@ -22,29 +22,38 @@ es noch keine Referenz gibt.
 | [`docs/verteilung.md`](docs/verteilung.md) | Wie es auf den Laptop kommt, Migration und Rollback |
 | [`docs/roadmap.md`](docs/roadmap.md) | Was offen ist |
 | [`docs/schul-laptop-test.md`](docs/schul-laptop-test.md) | Prüfliste für den Testlauf |
-| [`docs/PLAN.md`](docs/PLAN.md) | Der abgeschlossene v1-Plan, historisch |
+
+`docs/archiv/` enthält abgeschlossene Dokumente, die nur noch als Beleg dienen —
+derzeit den v1-Erstellungsplan.
+
+[`docs/architektur.md`](docs/architektur.md) ist die **kanonische** Beschreibung
+des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 
 | Route | Zweck |
 |-------|-------|
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
 | `GET /api/rows` | Zeilen als JSON, mit `mtime` und Cache-Alter |
-| `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423 |
-| `POST /api/refresh` | Abruf starten: `{benutzer, passwort}` → 202/400/401/403/504 |
+| `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423/500/503 |
+| `POST /api/einrichtung` | Excel-Pfad festlegen: `{pfad}` → 200/400/500 |
+| `POST /api/refresh` | Abruf starten: `{benutzer, passwort}` → 202/400/401/403/409/504 |
 | `GET /api/refresh/status` | Fortschritt des Abrufs (immer 200) |
 | `POST /api/beenden` | Server beenden (Knopf in der Oberfläche) |
 | `GET /health` | `{"status": "ok"}` |
 
-Änderbar sind nur **Bestand** und **Bestellt**, und nur über den Zeilenschlüssel —
-`/api/cell` nimmt keine freie Zellreferenz entgegen. Der Browser schickt die
-`mtime` mit, die er gesehen hat; weicht sie ab, gibt es 409 statt eines stillen
-Überschreibens. Diese Änderungszeit ist Pflicht. Ein gemeinsames Datei-Schloss
-serialisiert außerdem manuelle Änderungen und IServ-Abrufe über Threads,
-Dashboard-Prozesse und Rechner hinweg, sofern das SMB-Laufwerk Dateisperren
-unterstützt.
+Jede Fehlerantwort hat die Form `{"fehler": "<deutscher Klartext>"}`; welche
+Ausnahme zu welchem Status wird, steht als Tabelle in
+[`docs/architektur.md`](docs/architektur.md#ausnahme--http-steht-an-genau-einer-stelle).
 
-Zugangsdaten für den Abruf kommen ausschließlich im POST-Körper an, werden sofort
-mit `login()` geprüft und danach fallen gelassen — nie in `app.state`, nie in
-einem Log, nie in einer Antwort.
+Änderbar sind nur **Bestand** und **Bestellt**, und nur über den Zeilenschlüssel —
+`/api/cell` nimmt keine freie Zellreferenz entgegen, und die beim Laden gesehene
+`mtime` ist Pflicht. Warum es diese vier Schutzschichten braucht und was jede
+einzelne verhindert, steht in
+[`docs/architektur.md`](docs/architektur.md#der-schreibpfad-vier-schutzschichten).
+
+Alle Anfragen müssen an `127.0.0.1` oder `localhost` adressiert sein
+(`Host`-Prüfung gegen DNS-Rebinding), und zustandsändernde Anfragen mit fremdem
+`Origin` werden abgelehnt. Beides ist keine Anmeldung — Begründung und Grenzen
+in [`docs/architektur.md`](docs/architektur.md#was-die-bindung-allein-nicht-abdeckt).
 
 ## Entwickeln
 
@@ -61,18 +70,27 @@ Das **Geschwister-Layout ist verbindlich** (siehe `../README.md`):
 uv sync --all-groups
 uv run pytest            # offline, ohne IServ und ohne echte Excel-Datei
 uv run ruff check app tests
+uv run mypy              # Dateiliste und Strenge in pyproject.toml
 ```
 
-227 Tests, rund 10 Sekunden auf Linux. `--timeout=300` je Test steht in
-`pyproject.toml` — eine Notbremse gegen einen Test, der unbegrenzt auf einem
-Schloss oder einem Kindprozess wartet, keine Leistungsvorgabe.
+Die Suite läuft offline und misst dabei ihre eigene Abdeckung (`--cov` steht in
+den `addopts`). Konkrete Zahlen stehen bewusst nicht hier, sondern in der
+Ausgabe des letzten Laufs — sie ändern sich mit jedem Commit, und eine falsche
+Zahl im README ist schlimmer als keine. Die Schwelle von 85 % erzwingt nur die
+CI, damit ein Teillauf während der Arbeit an einer einzelnen Datei nicht rot
+wird.
+
+`--timeout=300` je Test steht in `pyproject.toml` — eine Notbremse gegen einen
+Test, der unbegrenzt auf einem Schloss oder einem Kindprozess wartet, keine
+Leistungsvorgabe.
 
 Dieselben Schritte laufen in der CI (`.github/workflows/ci.yml`) auf Linux mit
 Python 3.10 und 3.11 sowie auf Windows — letzteres nicht als Beigabe: die
 Dateisperre (`msvcrt.locking` statt `fcntl.flock`), der Schreibpfad und die
 `~$…`-Sperrdatei verhalten sich dort anders, und dort läuft die Anwendung
-produktiv. Ein weiterer Job prüft, dass `requirements.txt` dem `uv export`
-entspricht.
+produktiv. Auch mypy läuft auf jedem Runner mit dessen eigener Plattform: es
+prüft immer nur den Zweig, den es dort gibt. Ein weiterer Job prüft, dass
+`requirements.txt` dem `uv export` entspricht.
 
 `tools/diagnose.py` prüft auf einem fremden Rechner die Kette vom Python bis zur
 Arbeitsmappe und schreibt einen Bericht, den man weitergeben kann. Es schreibt
@@ -85,14 +103,11 @@ ist. Der erste existierende Pfad gewinnt; existiert keiner, zeigt die Startseite
 alle geprüften Pfade.
 
 `config.json` ist der **ausgelieferte Standard** und wird im Betrieb nie
-beschrieben. Was die Lehrkraft auswählt, landet in einer Benutzerkonfiguration
-mit nur den abweichenden Schlüsseln — unter Windows in
-`%LOCALAPPDATA%\sba-dashboard\config.json`, unter macOS in
-`~/Library/Application Support/sba-dashboard/`, unter Linux in
-`$XDG_CONFIG_HOME/sba-dashboard/` (bzw. `~/.config/…`). `SBA_CONFIG_DIR`
-überschreibt den Ordner. Ein `--config PATH` schaltet in den
-Arbeitskopie-Modus: dann sind Standard und Benutzerkonfiguration genau diese
-eine Datei. Details in [`docs/architektur.md`](docs/architektur.md).
+beschrieben; Anpassungen landen in einer Benutzerkonfiguration im
+plattformabhängigen Ordner (`SBA_CONFIG_DIR` überschreibt ihn), und
+`--config PATH` schaltet in den Arbeitskopie-Modus. Welcher Ordner auf welcher
+Plattform, was validiert wird und wie eine alte Vollkopie migriert wird, steht
+in [`docs/architektur.md`](docs/architektur.md#zwei-ebenen-ausgelieferter-standard--benutzerkonfiguration).
 
 ```bash
 uv run python -m app.start           # sucht einen freien Port, oeffnet den Browser
