@@ -136,8 +136,12 @@ Beim ersten Start braucht der Mac [`uv`](https://docs.astral.sh/uv/):
 brew install uv
 ```
 
-Die Kopie liegt danach in `.local/` und bleibt bei weiteren Starts erhalten.
-Zum Zurücksetzen diese Datei löschen. Für einen Test mit einer echten Mappe
+Die Kopie liegt danach als `Bestand- und Nachbestellungsliste 2026.xlsx` im
+Projektordner selbst — sichtbar, damit man sie im Dateimanager findet und in
+Excel öffnen kann — und bleibt bei weiteren Starts erhalten. Daneben entsteht
+`config.local.json`, die auf sie zeigt. Beides ist in `.gitignore` und wird von
+`START.bat` nicht auf einen Schul-Rechner gespiegelt. Zum Zurücksetzen die
+Mappe löschen. Für einen Test mit einer echten Mappe
 den Pfad ausdrücklich mitgeben:
 
 ```bash

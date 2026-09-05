@@ -3,14 +3,24 @@
 #
 # Diese Datei arbeitet absichtlich mit einer lokalen Kopie der Excel-Mappe.
 # Ohne SBA_ORIGINAL_EXCEL kommt die mitgelieferte, leere Vorlage zum Einsatz.
+#
+# Die Arbeitskopie liegt im Projektordner selbst, nicht in einem versteckten
+# Unterordner: wer sie in Excel öffnen will, soll sie im Dateimanager sehen,
+# ohne erst "versteckte Dateien anzeigen" einzuschalten. Bis 2026-09-05 war das
+# ".local/", und genau daran ist sie niemandem aufgefallen. Beides - Mappe und
+# die Konfiguration, die auf sie zeigt - steht in .gitignore.
 set -euo pipefail
 
 WURZEL="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VORLAGE="$WURZEL/vorlage/Bestand- und Nachbestellungsliste 2026.xlsx"
 QUELLE="${SBA_ORIGINAL_EXCEL:-$VORLAGE}"
-ARBEITSORDNER="${SBA_ARBEITSORDNER:-$WURZEL/.local}"
+ARBEITSORDNER="${SBA_ARBEITSORDNER:-$WURZEL}"
 MAPPE="$ARBEITSORDNER/Bestand- und Nachbestellungsliste 2026.xlsx"
-KONFIGURATION="$ARBEITSORDNER/config.json"
+# NICHT "config.json": das ist der ausgelieferte Standard, aus dem die Zeile
+# unten Domain, Blattname und Schutzwerte übernimmt. Läge die erzeugte Datei
+# unter demselben Namen, überschriebe der erste Lauf im Projektordner die
+# Quelle, aus der er gerade gelesen hat.
+KONFIGURATION="$ARBEITSORDNER/config.local.json"
 
 echo "Schulbuchausleihe - Bestand und Nachbestellung"
 echo

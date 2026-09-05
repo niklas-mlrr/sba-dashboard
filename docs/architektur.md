@@ -472,8 +472,12 @@ Was dagegen nie im Repo liegen darf, wird durch `.gitignore` und die Vorlage
 gehalten: Zugangsdaten (das Passwort existiert nur in der einen Abrufanfrage,
 siehe „Der Abruf"), personenbezogene Zahlen und die echte Arbeitsmappe.
 `vorlage/` ist die bereinigte, mit `tools/erzeuge_vorlage.py` erzeugte
-Strukturvorlage; `.local/` ist ignoriert und wird auch von `START.bat` nicht
-gespiegelt.
+Strukturvorlage. Die Arbeitskopie, die `START.sh` daraus zieht, liegt seit dem
+2026-09-05 sichtbar im Projektordner statt im versteckten `.local/` — in einem
+Ordner, den niemand aufklappt, fand sie auch niemand. Sie und die zugehörige
+`config.local.json` sind in `.gitignore`, und `START.bat` schließt beide vom
+robocopy-Spiegel aus (`*.xlsx` trifft dabei auch `vorlage/`, siehe die
+Begründung dort).
 
 Umschaltpunkt: widerspricht die Schule der Nennung ihres Servernamens in einem
 öffentlichen Repo, wandert die Domain in die Benutzerkonfiguration — dann muss

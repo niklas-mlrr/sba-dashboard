@@ -35,17 +35,38 @@ def test_start_spiegelt_keine_entwicklungsartefakte_mit():
     """``robocopy /MIR`` spiegelt alles, was nicht ausgeschlossen ist.
 
     ``.mypy_cache`` allein sind tausende Dateien und würden über das SMB-
-    Laufwerk jeden Start verlängern; ``.local`` und ``.claude`` gehören inhaltlich
-    nicht auf einen Schul-Rechner. Die Ausschlussliste ist deshalb Teil des
-    Vertrags und wird hier festgehalten, nicht nur beschrieben.
+    Laufwerk jeden Start verlängern; ``.claude`` gehört inhaltlich nicht auf
+    einen Schul-Rechner. Die Ausschlussliste ist deshalb Teil des Vertrags und
+    wird hier festgehalten, nicht nur beschrieben.
     """
     zeile = next(
         z for z in START.read_text(encoding="utf-8").splitlines()
         if z.startswith('set "AUSSCHLUSS=')
     )
-    for name in (".mypy_cache", ".local", ".claude", "htmlcov"):
+    for name in (".mypy_cache", ".claude", "htmlcov", "backups"):
         assert name in zeile, name
     assert "/XF" in zeile and ".coverage" in zeile
+
+
+def test_start_spiegelt_keine_arbeitsmappe_mit():
+    """Die private Arbeitskopie darf auf keinen Schul-Rechner.
+
+    Sie lag bis 2026-09-05 in ``.local`` und war darüber ausgeschlossen; seither
+    legt ``START.sh`` sie im Projektordner selbst ab - unter demselben Namen wie
+    die Vorlage in ``vorlage/``. Ein Ausschluss nach Dateiname trifft also beide,
+    und das ist richtig so: im Produktivmodus liegt die echte Mappe auf dem
+    Netzlaufwerk, gebraucht wird dort keine von beiden.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+    zeile = next(z for z in inhalt.splitlines() if z.startswith('set "AUSSCHLUSS='))
+    for name in ("*.xlsx", "config.local.json", "*.dashboard-cache.json",
+                 "*.sba-dashboard.lock"):
+        assert name in zeile, name
+    # Der Ausschluss gilt fuer jeden der drei robocopy-Aufrufe, nicht nur fuer
+    # den des Dashboards - sonst kaeme die Mappe ueber ein Nachbarrepo mit.
+    kopierzeilen = [z for z in inhalt.splitlines() if z.startswith("robocopy ")]
+    assert len(kopierzeilen) == 3
+    assert all("%AUSSCHLUSS%" in z for z in kopierzeilen)
 
 
 def test_start_installiert_nur_bei_geaenderten_anforderungen():

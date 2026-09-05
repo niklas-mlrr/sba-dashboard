@@ -71,16 +71,24 @@ echo   Programmdateien werden aktualisiert...
 if not exist "%CODE%" mkdir "%CODE%" >nul 2>&1
 
 rem Ausgeschlossen werden auch die Entwicklungsartefakte des Repo-Kopierers:
-rem .mypy_cache allein sind tausende Dateien, und .local enthaelt eine private
-rem Arbeitskopie, die auf keinen Schul-Rechner gehoert.
-set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude .local htmlcov node_modules backups /XF *.pyc .coverage"
+rem .mypy_cache allein sind tausende Dateien.
+rem
+rem *.xlsx gehoert seit 2026-09-05 in diese Liste: START.sh legt seine private
+rem Arbeitskopie jetzt im Projektordner selbst ab (vorher in .local, das hier
+rem einzeln ausgeschlossen war) und traegt denselben Dateinamen wie die Vorlage
+rem in vorlage\ - ein Ausschluss nur nach Name traefe also beide oder keinen.
+rem Beide zu nehmen ist richtig: die Vorlage braucht nur START.sh und die
+rem Testsuite, im Produktivmodus liegt die echte Mappe auf dem Netzlaufwerk.
+rem Dazu config.local.json (zeigt auf die Arbeitskopie) und die Nachbardateien,
+rem die neben einer geoeffneten Mappe entstehen.
+set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude htmlcov node_modules backups /XF *.pyc .coverage *.xlsx config.local.json *.dashboard-cache.json *.sba-dashboard.lock"
 rem robocopy meldet mit Rueckgabecode 1 "es wurde etwas kopiert". Genau daran
 rem haengt weiter unten die Frage, ob die beiden Bibliotheken neu installiert
 rem werden muessen - sonst liefe nach einem Update weiter der alte Stand.
 set "GESCHWISTER_NEU=0"
 robocopy "%~dp0."          "%CODE%\sba-dashboard" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
 if errorlevel 8 goto :kopierfehler
-robocopy "%~dp0..\sba-bestand"  "%CODE%\sba-bestand"  /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF *.xlsx >nul
+robocopy "%~dp0..\sba-bestand"  "%CODE%\sba-bestand"  /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
 if errorlevel 8 goto :kopierfehler
 if errorlevel 1 set "GESCHWISTER_NEU=1"
 robocopy "%~dp0..\ausleihe-api" "%CODE%\ausleihe-api" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF .env >nul
