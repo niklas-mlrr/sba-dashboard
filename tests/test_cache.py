@@ -1,8 +1,12 @@
 """Sidecar-Cache: atomares Schreiben, tolerantes Lesen, lokaler Rückfallort.
 
-Jeder Test, der schreibt, setzt ``SBA_CACHE_DIR`` auf ein ``tmp_path``-
-Unterverzeichnis - sonst würde der lokale Rückfallort ins echte
-Benutzerprofil schreiben.
+Die Isolation gegen das echte Benutzerprofil übernimmt seit 2026-09-05 nicht
+mehr jeder einzelne Test, sondern die autouse-Fixture in
+``tests/conftest.py``: sie setzt ``SBA_CACHE_DIR`` (und ``SBA_CONFIG_DIR``)
+vor jedem Test der ganzen Suite auf ein frisches ``tmp_path``-Unterverzeichnis.
+Ein Test hier setzt ``SBA_CACHE_DIR`` deshalb nur noch dann selbst, wenn er
+auf einen bestimmten Wert dieser Variable angewiesen ist und ihn hinterher
+prüft - reine Schreib-/Lese-Isolation braucht das nicht mehr.
 """
 from __future__ import annotations
 
@@ -14,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from bestand.core import excel_io as excel_io_modul
 from bestand.core.testing import FakeClient
 
 from app import cache as cache_modul
@@ -48,9 +53,8 @@ def _excel_pfad(tmp_path: Path) -> Path:
 
 # ── Rundlauf und Atomarität ───────────────────────────────────────────────────
 
-def test_speichern_laden_rundlauf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_speichern_laden_rundlauf(tmp_path: Path):
     """Was gespeichert wird, kommt unverändert aus ``laden()`` zurück."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     cache = cache_modul.Cache(
         stand=datetime(2026, 9, 4, 12, 0, 0),
@@ -68,8 +72,7 @@ def test_speichern_laden_rundlauf(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert geladen == cache
 
 
-def test_speichern_hinterlaesst_keinen_tmp_rest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_speichern_hinterlaesst_keinen_tmp_rest(tmp_path: Path):
     excel_pfad = _excel_pfad(tmp_path)
     pfad = cache_modul.speichern(excel_pfad, cache_modul.Cache(schuljahr="2026/2027"))
 
@@ -80,7 +83,6 @@ def test_speichern_hinterlaesst_keinen_tmp_rest(tmp_path: Path, monkeypatch: pyt
 
 def test_schreibfehler_laesst_alte_datei_unveraendert(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Eine Ausnahme mitten im Schreiben darf die vorherige Cache-Datei nicht antasten."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     alt = cache_modul.Cache(schuljahr="alter-stand")
     pfad = cache_modul.speichern(excel_pfad, alt)
@@ -105,7 +107,6 @@ def test_schreibfehler_laesst_alte_datei_unveraendert(tmp_path: Path, monkeypatc
 def test_rueckfall_auf_lokalen_ordner_wenn_sidecar_nicht_schreibbar(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     sidecar = cache_modul.cache_pfad(excel_pfad)
     original = cache_modul._atomar_schreiben
@@ -126,7 +127,6 @@ def test_rueckfall_auf_lokalen_ordner_wenn_sidecar_nicht_schreibbar(
 
 
 def test_beide_orte_nicht_schreibbar_wirft_cache_fehler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
 
     def verweigere(pfad, inhalt):
@@ -145,8 +145,7 @@ def _schreibe_direkt(pfad: Path, cache: cache_modul.Cache) -> None:
     pfad.write_text(cache_modul._cache_zu_json(cache), encoding="utf-8")
 
 
-def test_neuerer_stand_gewinnt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_neuerer_stand_gewinnt(tmp_path: Path):
     excel_pfad = _excel_pfad(tmp_path)
     sidecar = cache_modul.cache_pfad(excel_pfad)
     lokal = cache_modul.cache_pfad_lokal(excel_pfad)
@@ -163,8 +162,7 @@ def test_neuerer_stand_gewinnt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert cache_modul.laden(excel_pfad).schuljahr == "neuer"
 
 
-def test_fehlender_stand_gilt_als_aelter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_fehlender_stand_gilt_als_aelter(tmp_path: Path):
     excel_pfad = _excel_pfad(tmp_path)
     sidecar = cache_modul.cache_pfad(excel_pfad)
     lokal = cache_modul.cache_pfad_lokal(excel_pfad)
@@ -177,8 +175,7 @@ def test_fehlender_stand_gilt_als_aelter(tmp_path: Path, monkeypatch: pytest.Mon
     assert cache_modul.laden(excel_pfad).schuljahr == "mit-stand"
 
 
-def test_beide_ohne_stand_gewinnt_der_sidecar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_beide_ohne_stand_gewinnt_der_sidecar(tmp_path: Path):
     excel_pfad = _excel_pfad(tmp_path)
     sidecar = cache_modul.cache_pfad(excel_pfad)
     lokal = cache_modul.cache_pfad_lokal(excel_pfad)
@@ -193,9 +190,8 @@ def test_beide_ohne_stand_gewinnt_der_sidecar(tmp_path: Path, monkeypatch: pytes
     assert cache_modul.laden(excel_pfad).schuljahr == "sidecar-gewinnt"
 
 
-def test_leerer_cache_verliert_gegen_nicht_leeren(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_leerer_cache_verliert_gegen_nicht_leeren(tmp_path: Path):
     """Beide ohne stand, aber der Sidecar ist leer - der nicht-leere lokale Cache gewinnt."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     sidecar = cache_modul.cache_pfad(excel_pfad)
     lokal = cache_modul.cache_pfad_lokal(excel_pfad)
@@ -215,8 +211,7 @@ def test_leerer_cache_verliert_gegen_nicht_leeren(tmp_path: Path, monkeypatch: p
 
 # ── Toleranz beim Lesen ───────────────────────────────────────────────────────
 
-def test_fehlende_datei_ergibt_leeren_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_fehlende_datei_ergibt_leeren_cache(tmp_path: Path):
     excel_pfad = _excel_pfad(tmp_path)
     ergebnis = cache_modul.laden(excel_pfad)
     assert ergebnis == cache_modul.Cache()
@@ -233,11 +228,8 @@ def test_fehlende_datei_ergibt_leeren_cache(tmp_path: Path, monkeypatch: pytest.
     "null",
     "true",
 ])
-def test_kaputte_oder_falsch_geformte_datei_ergibt_leeren_cache(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, roh_text: str
-):
+def test_kaputte_oder_falsch_geformte_datei_ergibt_leeren_cache(tmp_path: Path, roh_text: str):
     """Datei leer, kaputtes JSON, oder eine Wurzel, die kein Objekt ist -> nie eine Ausnahme."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     cache_modul.cache_pfad(excel_pfad).write_text(roh_text, encoding="utf-8")
 
@@ -247,10 +239,7 @@ def test_kaputte_oder_falsch_geformte_datei_ergibt_leeren_cache(
 
 
 @pytest.mark.parametrize("stand_roh", [123, "gestern", "", None, ["2026-09-04T12:00:00"]])
-def test_unlesbarer_stand_wird_none_rest_bleibt_nutzbar(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stand_roh
-):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_unlesbarer_stand_wird_none_rest_bleibt_nutzbar(tmp_path: Path, stand_roh):
     excel_pfad = _excel_pfad(tmp_path)
     import json as _json
 
@@ -264,8 +253,7 @@ def test_unlesbarer_stand_wird_none_rest_bleibt_nutzbar(
     assert ergebnis.eintraege["k"].titel == "Terra"
 
 
-def test_schuljahr_das_kein_string_ist_wird_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_schuljahr_das_kein_string_ist_wird_none(tmp_path: Path):
     excel_pfad = _excel_pfad(tmp_path)
     import json as _json
 
@@ -276,10 +264,7 @@ def test_schuljahr_das_kein_string_ist_wird_none(tmp_path: Path, monkeypatch: py
 
 
 @pytest.mark.parametrize("eintraege_roh", [[1, 2, 3], "kein objekt", 5, None])
-def test_eintraege_das_kein_objekt_ist_ergibt_leeres_dict(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, eintraege_roh
-):
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
+def test_eintraege_das_kein_objekt_ist_ergibt_leeres_dict(tmp_path: Path, eintraege_roh):
     excel_pfad = _excel_pfad(tmp_path)
     import json as _json
 
@@ -291,11 +276,8 @@ def test_eintraege_das_kein_objekt_ist_ergibt_leeres_dict(
     assert ergebnis.schuljahr == "2026/2027"
 
 
-def test_einzelner_eintrag_mit_falschen_typen_wird_bereinigt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_einzelner_eintrag_mit_falschen_typen_wird_bereinigt(tmp_path: Path):
     """Ein kaputter Eintrag verliert nur seine falsch typisierten Felder, die übrigen bleiben."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     import json as _json
 
@@ -370,12 +352,9 @@ def test_abruf_endet_erfolgreich_wenn_cache_schreiben_fehlschlaegt(client, monke
 
 # ── Nebenläufigkeit ───────────────────────────────────────────────────────────
 
-def test_gleichzeitiges_lesen_waehrend_schreiben_sieht_nie_halbe_datei(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_gleichzeitiges_lesen_waehrend_schreiben_sieht_nie_halbe_datei(tmp_path: Path):
     """``laden()`` liefert während paralleler Schreibvorgänge immer einen vollständigen
     Stand - nie eine Ausnahme und nie ein Gemisch aus altem und neuem Inhalt."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     cache_a = cache_modul.Cache(
         stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
@@ -427,14 +406,13 @@ def test_gleichzeitiges_lesen_waehrend_schreiben_sieht_nie_halbe_datei(
     assert not fehler, fehler
 
 
-def test_stand_mit_zeitzone_laesst_den_lesepfad_nicht_werfen(tmp_path, monkeypatch):
+def test_stand_mit_zeitzone_laesst_den_lesepfad_nicht_werfen(tmp_path):
     """Ein von Hand bearbeiteter Cache kann einen Zeitstempel mit Zone tragen.
 
     ``laden`` steht im Lesepfad jeder Anfrage und muss auch dann einen Cache
     liefern; ein Vergleich zwischen naivem und zonenbehaftetem ``stand`` würde
     sonst mit ``TypeError`` durchschlagen.
     """
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     mappe = tmp_path / "Mappe.xlsx"
     mappe.write_bytes(b"x")
 
@@ -453,9 +431,8 @@ def test_stand_mit_zeitzone_laesst_den_lesepfad_nicht_werfen(tmp_path, monkeypat
     assert geladen.get("a").titel in {"Mit Zone", "Ohne Zone"}
 
 
-def test_unserialisierbarer_wert_wird_zum_cachefehler(tmp_path, monkeypatch):
+def test_unserialisierbarer_wert_wird_zum_cachefehler(tmp_path):
     """Der Aufrufer soll auch das als Warnung behandeln können, nicht als Abbruch."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     mappe = tmp_path / "Mappe.xlsx"
     mappe.write_bytes(b"x")
 
@@ -477,9 +454,8 @@ def test_ersetzen_wiederholt_sich_wenn_windows_die_datei_als_offen_meldet(
     scheitern, der dritte gelingt, und ``speichern`` muss trotzdem den
     Sidecar zurückgeben statt auf den lokalen Ordner auszuweichen.
     """
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
-    echtes_replace = cache_modul.os.replace
+    echtes_replace = excel_io_modul.os.replace
     versuche: list[int] = []
 
     def zickiges_replace(quelle, ziel):
@@ -488,8 +464,14 @@ def test_ersetzen_wiederholt_sich_wenn_windows_die_datei_als_offen_meldet(
             raise PermissionError(5, "Access is denied")
         return echtes_replace(quelle, ziel)
 
-    monkeypatch.setattr(cache_modul.os, "replace", zickiges_replace)
-    monkeypatch.setattr(cache_modul.time, "sleep", lambda _: None)
+    # Das Ersetzen, das hier nachgestellt wird, laeuft seit 2026-09-05 nicht mehr in
+    # app/cache.py, sondern in bestand.core.excel_io.replace_with_retry (aufgerufen ueber
+    # app.dateien.schreibe_atomar). ``os.replace`` wird dort im Modul excel_io nachgeschlagen,
+    # also muss auch dort gepatcht werden - ein Patch auf cache_modul.os.replace wuerde zwar
+    # dank des einen global gecachten os-Modulobjekts ebenfalls greifen, benennt aber ein Ziel,
+    # das mit dem tatsaechlich getesteten Code nichts mehr zu tun hat.
+    monkeypatch.setattr(excel_io_modul.os, "replace", zickiges_replace)
+    monkeypatch.setattr(excel_io_modul.time, "sleep", lambda _: None)
 
     ziel = cache_modul.speichern(excel_pfad, cache_modul.Cache(
         stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
@@ -505,10 +487,8 @@ def test_dauerhaft_belegte_datei_weicht_auf_den_lokalen_ordner_aus(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """Hört der PermissionError nicht auf, ist es kein Leser mehr - dann greift der Rückfallort."""
-    lokal = tmp_path / "lokal"
-    monkeypatch.setenv("SBA_CACHE_DIR", str(lokal))
     excel_pfad = _excel_pfad(tmp_path)
-    echtes_replace = cache_modul.os.replace
+    echtes_replace = excel_io_modul.os.replace
     sidecar = cache_modul.cache_pfad(excel_pfad)
 
     def nur_sidecar_blockiert(quelle, ziel):
@@ -516,8 +496,10 @@ def test_dauerhaft_belegte_datei_weicht_auf_den_lokalen_ordner_aus(
             raise PermissionError(5, "Access is denied")
         return echtes_replace(quelle, ziel)
 
-    monkeypatch.setattr(cache_modul.os, "replace", nur_sidecar_blockiert)
-    monkeypatch.setattr(cache_modul.time, "sleep", lambda _: None)
+    # Wie oben: das Ersetzen steckt in bestand.core.excel_io.replace_with_retry, nicht mehr in
+    # app/cache.py - gepatcht wird deshalb dort, wo ``os.replace`` tatsaechlich nachgeschlagen wird.
+    monkeypatch.setattr(excel_io_modul.os, "replace", nur_sidecar_blockiert)
+    monkeypatch.setattr(excel_io_modul.time, "sleep", lambda _: None)
 
     ziel = cache_modul.speichern(excel_pfad, cache_modul.Cache(
         stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
@@ -540,7 +522,6 @@ def test_lesen_wiederholt_sich_bei_zugriffsverletzung_statt_leer_zu_melden(
     den Seitenaufbau, der zufällig in diesen Moment fällt - der Fehler, den
     die CI am 2026-09-04 auf Windows gezeigt hat.
     """
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     cache = cache_modul.Cache(
         stand=datetime(2026, 1, 1, 8, 0, 0), schuljahr="A",
@@ -573,7 +554,6 @@ def test_dauerhafte_zugriffsverletzung_beim_lesen_bleibt_leer_ohne_ausnahme(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """Hört die Zugriffsverletzung nicht auf, gilt weiter: ``laden`` wirft nie."""
-    monkeypatch.setenv("SBA_CACHE_DIR", str(tmp_path / "lokal"))
     excel_pfad = _excel_pfad(tmp_path)
     cache_modul.speichern(excel_pfad, cache_modul.Cache(schuljahr="A"))
 

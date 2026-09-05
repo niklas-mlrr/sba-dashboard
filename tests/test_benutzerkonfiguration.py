@@ -24,10 +24,14 @@ STANDARD = {
 }
 
 
-@pytest.fixture(autouse=True)
-def _kein_echtes_benutzerprofil(monkeypatch, tmp_path):
-    """Sicherheitsnetz: träfe ein Pfad doch die echte Plattformauflösung, landet er hier."""
-    monkeypatch.setenv("SBA_CONFIG_DIR", str(tmp_path / "sba-config-dir-sicherheitsnetz"))
+# Das frühere Sicherheitsnetz hier (eine eigene autouse-Fixture, die nur
+# SBA_CONFIG_DIR setzte) ist seit 2026-09-05 redundant: die autouse-Fixture
+# ``_isolierte_plattformordner`` in ``tests/conftest.py`` setzt dieselbe
+# Variable bereits für die gesamte Suite, inklusive dieses Moduls. Tests unten,
+# die ``SBA_CONFIG_DIR`` gezielt auf einen bestimmten Wert setzen oder mit
+# ``monkeypatch.delenv(..., raising=False)`` entfernen, tun das weiterhin selbst
+# im Testkörper - das läuft nach der conftest-Fixture und überschreibt bzw.
+# entfernt deren Wert zuverlässig.
 
 
 def _schreibe(pfad: Path, daten: dict) -> Path:
@@ -251,3 +255,52 @@ def test_linux_pfad_faellt_ohne_xdg_auf_punkt_config_zurueck(monkeypatch, tmp_pa
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     assert pfade_modul.benutzer_konfigurationsordner() == tmp_path / ".config" / "sba-dashboard"
+
+
+# ── Plattformabhängige Pfadauflösung: lokaler Cache-Rückfallort ──────────────
+#
+# Seit 2026-09-05 teilt sich ``lokaler_cache_ordner`` (bis dahin
+# ``app.cache._lokaler_cache_ordner``) denselben privaten Kern
+# (``pfade_modul._plattformordner``) wie ``benutzer_konfigurationsordner``
+# oben - diese Tests spiegeln die Fälle darüber bewusst, damit beide
+# Funktionen weiterhin unabhängig voneinander geprüft bleiben, auch wenn sie
+# sich intern dieselbe Plattformerkennung teilen. Unterschied zur
+# Konfiguration: unter Windows/macOS hängt der Cache eine zusätzliche
+# ``cache``-Ebene an (siehe Modul-Docstring von ``app/paths.py``).
+
+def test_sba_cache_dir_hat_vorrang_vor_jeder_plattformlogik(monkeypatch, tmp_path):
+    ziel = tmp_path / "eigener-cache-ordner"
+    monkeypatch.setenv("SBA_CACHE_DIR", str(ziel))
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert pfade_modul.lokaler_cache_ordner() == ziel
+
+
+def test_windows_cache_pfad_liegt_unter_localappdata_mit_cache_unterordner(monkeypatch, tmp_path):
+    monkeypatch.delenv("SBA_CACHE_DIR", raising=False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    assert pfade_modul.lokaler_cache_ordner() == tmp_path / "Local" / "sba-dashboard" / "cache"
+
+
+def test_macos_cache_pfad_liegt_unter_application_support_mit_cache_unterordner(monkeypatch, tmp_path):
+    monkeypatch.delenv("SBA_CACHE_DIR", raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    assert pfade_modul.lokaler_cache_ordner() == (
+        tmp_path / "Library" / "Application Support" / "sba-dashboard" / "cache"
+    )
+
+
+def test_linux_cache_pfad_folgt_xdg_cache_home_ohne_zusaetzliche_ebene(monkeypatch, tmp_path):
+    monkeypatch.delenv("SBA_CACHE_DIR", raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+    assert pfade_modul.lokaler_cache_ordner() == tmp_path / "xdg-cache" / "sba-dashboard"
+
+
+def test_linux_cache_pfad_faellt_ohne_xdg_auf_punkt_cache_zurueck(monkeypatch, tmp_path):
+    monkeypatch.delenv("SBA_CACHE_DIR", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    assert pfade_modul.lokaler_cache_ordner() == tmp_path / ".cache" / "sba-dashboard"

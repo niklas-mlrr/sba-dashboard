@@ -60,13 +60,13 @@ Start zu blockieren.
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from bestand.core import BestandConfig
 
+from .dateien import schreibe_atomar as _atomar_schreiben
 from .paths import benutzer_konfigurationspfad
 
 _BEKANNTE_SCHLUESSEL = frozenset({
@@ -108,15 +108,21 @@ def _lies_json_objekt(pfad: Path) -> dict:
 
 
 def _schreibe_json_atomar(pfad: Path, daten: dict) -> None:
-    """Schreibt eine JSON-Datei über eine Nachbardatei plus ``os.replace``.
+    """Schreibt eine JSON-Datei atomar - über ``app.dateien.schreibe_atomar``.
 
-    Ein Abbruch mittendrin (Stromausfall, Absturz) lässt die alte Fassung
-    unberührt - dieselbe Begründung wie beim Speichern der Excel-Mappe.
+    Bis 2026-09-05 machte diese Funktion nur ``write_text`` gefolgt von einem
+    einzelnen ``os.replace`` - ohne ``fsync`` und ohne Wiederholung, anders als
+    der Sidecar-Cache (``app/cache.py``). Das war der einzige der drei
+    Windows-Ersetzen-Orte im Programm ohne den Wiederholungs-Fix vom
+    2026-09-04 (CI auf ``windows-latest``: ``os.replace`` scheitert dort mit
+    ``PermissionError``, solange irgendein Handle auf die Zieldatei offen
+    ist) - und ausgerechnet der heißeste: die Migration alter Vollkopien in
+    ``laden_mit_benutzerkonfiguration`` (siehe Modul-Docstring) kann bei
+    praktisch jedem Programmstart hierher schreiben. ``app.dateien`` bündelt
+    die Nachbardatei-plus-``fsync``-plus-Wiederholung-Logik jetzt für beide
+    Aufrufer (Cache und Benutzerkonfiguration) an einer Stelle.
     """
-    pfad.parent.mkdir(parents=True, exist_ok=True)
-    temporaer = pfad.with_suffix(pfad.suffix + ".tmp")
-    temporaer.write_text(json.dumps(daten, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporaer, pfad)
+    _atomar_schreiben(pfad, json.dumps(daten, ensure_ascii=False, indent=2) + "\n")
 
 
 def _pruefe_domain(domain: str) -> str | None:

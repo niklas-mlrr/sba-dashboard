@@ -110,21 +110,6 @@ def _keine_datei(einstellungen: Einstellungen) -> JSONResponse:
     )
 
 
-def _status_ohne_lauf() -> dict:
-    return {
-        "laeuft": False,
-        "fertig": False,
-        "phase": None,
-        "text": "Noch kein Abruf in dieser Sitzung.",
-        "fortschritt": 0,
-        "fehler": None,
-        "fehlercode": None,
-        "diagnosen": [],
-        "warnungen": [],
-        "zusammenfassung": None,
-    }
-
-
 def create_app(
     *,
     einstellungen: Einstellungen | None = None,
@@ -302,7 +287,11 @@ def create_app(
 
     @application.get("/api/refresh/status")
     def api_refresh_status(request: Request) -> JSONResponse:
-        return JSONResponse(request.app.state.refresh_manager.status() or _status_ohne_lauf())
+        # RefreshManager.status() liefert seit jeher ein Dict - vor dem ersten
+        # Lauf einer Sitzung den Stand aus Lauf.ohne_lauf(). Die Unterscheidung
+        # zwischen "lief schon" und "noch nie gelaufen" ist Refresh-Domänenwissen
+        # und gehört nicht mehr hierher in den Web-Layer.
+        return JSONResponse(request.app.state.refresh_manager.status())
 
     @application.post("/api/beenden")
     def api_beenden(request: Request) -> JSONResponse:

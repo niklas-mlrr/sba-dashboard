@@ -49,11 +49,23 @@ class LaeuftBereits(RuntimeError):
 
 @dataclass
 class Lauf:
-    """Der Stand eines Abrufs. Enthält bewusst keine Zugangsdaten."""
+    """Der Stand eines Abrufs. Enthält bewusst keine Zugangsdaten.
 
-    job_id: str
-    gestartet: datetime
-    phase: str = "anmeldung"
+    ``job_id`` und ``gestartet`` sind ``| None``, obwohl ein echter Lauf beide
+    immer setzt (``RefreshManager.starte`` übergibt sie sofort bei der
+    Erzeugung). Der Grund ist :meth:`ohne_lauf`: damit die Antwort von
+    ``GET /api/refresh/status`` vor dem ersten Lauf einer Sitzung exakt dieselbe
+    Schlüsselmenge hat wie danach - strukturell garantiert statt von Hand in
+    zwei Dateien synchron gehalten -, muss sich auch ein "noch kein Lauf"-Stand
+    als ganz normales ``Lauf``-Objekt bauen und durch :meth:`als_dict` schicken
+    lassen. Ohne Optional-Typ gäbe es dafür keinen gültigen Wert für
+    ``job_id``/``gestartet``, und ``als_dict`` müsste raten, ob es gerade für
+    einen echten oder einen fiktiven Lauf aufgerufen wird.
+    """
+
+    job_id: str | None
+    gestartet: datetime | None
+    phase: str | None = "anmeldung"
     text: str = "Anmeldung bei IServ"
     fortschritt: int = 5
     laeuft: bool = True
@@ -68,7 +80,7 @@ class Lauf:
     def als_dict(self) -> dict:
         return {
             "job_id": self.job_id,
-            "gestartet": self.gestartet.isoformat(timespec="seconds"),
+            "gestartet": self.gestartet.isoformat(timespec="seconds") if self.gestartet else None,
             "phase": self.phase,
             "text": self.text,
             "fortschritt": self.fortschritt,
@@ -81,6 +93,27 @@ class Lauf:
             "zusammenfassung": self.zusammenfassung,
             "beendet": self.beendet.isoformat(timespec="seconds") if self.beendet else None,
         }
+
+    @classmethod
+    def ohne_lauf(cls) -> "Lauf":
+        """Der Stand, bevor in dieser Sitzung überhaupt ein Abruf lief.
+
+        Baut bewusst ein waschechtes ``Lauf``-Objekt statt eines separaten
+        Dict-Literals: so kann ``als_dict`` gar nicht mehr aus dem Ruder
+        laufen, wenn später ein Feld dazukommt - dieser Konstruktor bekommt es
+        automatisch mit (als Default-Wert des Dataclass-Felds, hier per
+        Keyword auf die "nichts ist passiert"-Bedeutung überschrieben) und
+        ``als_dict`` serialisiert es wie jedes andere Feld auch.
+        """
+        return cls(
+            job_id=None,
+            gestartet=None,
+            phase=None,
+            text="Noch kein Abruf in dieser Sitzung.",
+            fortschritt=0,
+            laeuft=False,
+            fertig=False,
+        )
 
 
 def fehlerabbildung(exc: BaseException) -> tuple[int, str]:
@@ -116,10 +149,17 @@ class RefreshManager:
         self._zustand_lock = threading.Lock()
         self._aktueller: Lauf | None = None
 
-    def status(self) -> dict | None:
-        """Der Stand des letzten Laufs, oder ``None`` vor dem ersten Lauf."""
+    def status(self) -> dict:
+        """Der Stand des letzten Laufs, oder ``Lauf.ohne_lauf()`` vor dem ersten Lauf.
+
+        Gibt absichtlich immer ein Dict zurück (nie ``None``): der Aufrufer -
+        der Web-Layer in ``app/main.py`` - muss so gar nicht mehr wissen, dass
+        es einen "vor dem ersten Lauf"-Sonderfall gibt. Die Unterscheidung ist
+        reines Innenleben des Refresh-Moduls.
+        """
         with self._zustand_lock:
-            return self._aktueller.als_dict() if self._aktueller is not None else None
+            aktuell = self._aktueller if self._aktueller is not None else Lauf.ohne_lauf()
+            return aktuell.als_dict()
 
     def laeuft(self) -> bool:
         with self._zustand_lock:

@@ -38,10 +38,17 @@
     const zelle = zeile.cells[index];
     const feld = zelle.querySelector("input");
     const text = (feld ? feld.value : zelle.textContent).trim();
-    if (art !== "zahl") return text.toLowerCase();
-    // Leer und "—" stehen für "kein Wert" und sollen immer ans Ende sortieren.
+    // Leer und "—" stehen für "kein Wert". Das gilt für Zahlen- wie für
+    // Textspalten (Titel/ISBN rendern fehlende Werte ebenfalls als "—").
+    // Ein einzelner Sentinelwert (z. B. NEGATIVE_INFINITY) reicht dafür nicht:
+    // er verschiebt "kein Wert" nur an ein Ende der Zahlengeraden und springt
+    // beim Umschalten der Richtung auf die andere Seite. Deshalb wird "leer"
+    // separat markiert und im Vergleich unten fest ans Ende sortiert.
+    if (art !== "zahl") {
+      return { wert: text.toLowerCase(), leer: text === "" || text === "—" };
+    }
     const zahl = parseInt(text, 10);
-    return Number.isNaN(zahl) ? Number.NEGATIVE_INFINITY : zahl;
+    return { wert: zahl, leer: Number.isNaN(zahl) };
   }
 
   tabelle.tHead.addEventListener("click", (ereignis) => {
@@ -56,8 +63,13 @@
     const sortiert = zeilen.slice().sort((a, b) => {
       const links = zellwert(a, index, art);
       const rechts = zellwert(b, index, art);
-      if (links < rechts) return absteigend ? 1 : -1;
-      if (links > rechts) return absteigend ? -1 : 1;
+      // "Kein Wert" bleibt in beiden Richtungen am Ende - unabhängig von
+      // absteigend, damit ein Klick auf die Spalte die Leerzeilen nie nach
+      // vorn wirft.
+      if (links.leer !== rechts.leer) return links.leer ? 1 : -1;
+      if (links.leer) return 0;
+      if (links.wert < rechts.wert) return absteigend ? 1 : -1;
+      if (links.wert > rechts.wert) return absteigend ? -1 : 1;
       return 0;
     });
     for (const zeile of sortiert) koerper.appendChild(zeile);
@@ -84,7 +96,9 @@
   function bedarfNeuZeichnen() {
     let summe = 0;
     for (const zeile of zeilen) {
-      const wert = parseInt(zeile.cells[7].textContent.trim(), 10);
+      // Über die Klasse greifen statt über den Spaltenindex: der Index verschiebt
+      // sich lautlos, wenn im Template eine Spalte eingefügt oder umsortiert wird.
+      const wert = parseInt(zeile.querySelector(".bedarfszelle").textContent.trim(), 10);
       if (!Number.isNaN(wert) && wert > 0) summe += wert;
     }
     bedarfGesamt.textContent = summe;

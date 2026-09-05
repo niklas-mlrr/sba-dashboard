@@ -11,6 +11,7 @@ import json
 import logging
 import threading
 import time
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ from openpyxl import load_workbook
 
 from app import cache as cache_modul
 from app.main import create_app
-from app.refresh import RefreshManager
+from app.refresh import Lauf, RefreshManager
 
 PASSWORT = "geheim-Kennwort-2026!"
 BENUTZER = "b.lehrer"
@@ -245,6 +246,38 @@ def test_status_ohne_lauf(client):
     stand = client.get("/api/refresh/status").json()
     assert stand["laeuft"] is False and stand["fertig"] is False
     assert stand["zusammenfassung"] is None
+    assert stand["text"] == "Noch kein Abruf in dieser Sitzung."
+
+
+def test_status_ohne_lauf_hat_dieselbe_schluesselmenge_wie_ein_echter_lauf(client):
+    """Wächst ``Lauf`` um ein Feld, muss ``Lauf.ohne_lauf()`` automatisch mitziehen.
+
+    Die erwartete Schlüsselmenge wird bewusst NICHT als Namensliste
+    hingeschrieben (das wäre dieselbe Verdopplung nur eine Ebene tiefer),
+    sondern aus den Dataclass-Feldern von ``Lauf`` selbst abgeleitet - und aus
+    einem echten, per Abruf entstandenen Stand, damit auch tatsächlich das
+    Web-Layer-Format geprüft wird und nicht nur das Dataclass-Innenleben.
+    """
+    erwartete_schluessel = {f.name for f in fields(Lauf)}
+    # als_dict() ist die Übersetzung Dataclass -> JSON-Stand; beide Seiten
+    # müssen exakt dieselben Schlüssel tragen, sonst redet der Test an der
+    # eigentlichen Garantie vorbei.
+    #
+    # ⚠️ Wer dieses Feld später um ein rein internes ergänzt (Thread-Handle,
+    # Zähler, irgendwann vielleicht doch ein Token), bekommt hier einen
+    # Fehlschlag - und die bequeme Reparatur wäre, es in als_dict() zu
+    # serialisieren und damit über /api/refresh/status nach außen zu geben.
+    # Genau das darf nicht passieren: Lauf trägt laut eigenem Docstring
+    # bewusst keine Zugangsdaten. Ein internes Feld gehört stattdessen hier
+    # ausdrücklich ausgenommen (erwartete_schluessel - {"name"}), damit die
+    # Entscheidung sichtbar getroffen und nicht stillschweigend weggetestet wird.
+    assert set(Lauf.ohne_lauf().als_dict()) == erwartete_schluessel
+
+    _abrufen(client)
+    echter_lauf_stand = _warte_auf_ende(client)
+
+    ohne_lauf_stand = RefreshManager().status()
+    assert set(ohne_lauf_stand) == set(echter_lauf_stand) == erwartete_schluessel
 
 
 # ── Zugangsdaten ──────────────────────────────────────────────────────────────

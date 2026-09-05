@@ -25,23 +25,30 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import platform
-import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .dateien import schreibe_atomar as _atomar_schreiben
+from .paths import lokaler_cache_ordner as _lokaler_cache_ordner
+
 CACHE_SUFFIX = ".dashboard-cache.json"
 
 # Wie oft und wie lange ein Zugriff wiederholt wird, den Windows waehrend eines
-# laufenden ``os.replace`` mit einer Zugriffsverletzung beantwortet - auf der
-# Schreibseite (:func:`_ersetze_mit_wiederholung`) wie auf der Leseseite
-# (:func:`_datei_lesen`). Die Summe der Wartezeiten liegt bei gut einer halben
-# Sekunde (10+20+40+80+160+320 ms); ein Ersetzen und ein ``read()`` dauern
-# Bruchteile davon, die Grenze wird also nur erreicht, wenn wirklich etwas
-# anderes im Weg ist.
+# laufenden ``os.replace`` mit einer Zugriffsverletzung beantwortet - hier nur
+# noch fuer die Leseseite (:func:`_datei_lesen`), die kein Ersetzen ist und
+# deshalb nicht nach ``bestand.core`` gehoert. Die Schreibseite hat seit
+# 2026-09-05 ihre eigene, wortgleiche Konstante in
+# ``bestand.core.excel_io.replace_with_retry`` - die beiden Zahlenpaare sehen
+# absichtlich gleich aus (dieselbe Begruendung: Windows haelt eine ersetzte
+# Datei nur fuer die Dauer eines einzelnen Zugriffs offen), sind aber bewusst
+# zwei getrennte Konstanten: Lesen und Ersetzen sind unabhaengige Vorgaenge,
+# die eine Zukunft mit unterschiedlichen Werten stimmen soll koennen, ohne dass
+# jemand eine gemeinsame Konstante an zwei Stellen im Kopf mitfuehren muss. Die
+# Summe der Wartezeiten liegt bei gut einer halben Sekunde
+# (10+20+40+80+160+320 ms); ein ``read()`` dauert Bruchteile davon, die Grenze
+# wird also nur erreicht, wenn wirklich etwas anderes im Weg ist.
 _ERSETZ_VERSUCHE = 7
 _ERSETZ_WARTE_START = 0.01
 
@@ -74,28 +81,6 @@ class Cache:
 def cache_pfad(excel_pfad: Path) -> Path:
     """Der Sidecar neben der Mappe - die gemeinsame Anzeige für alle, die sie öffnen."""
     return excel_pfad.parent / f"{excel_pfad.stem}{CACHE_SUFFIX}"
-
-
-def _lokaler_cache_ordner() -> Path:
-    """Der plattformabhängige Rückfallort, falls das Gruppenlaufwerk nicht beschreibbar ist.
-
-    ``SBA_CACHE_DIR`` ersetzt den kompletten Ordner - nicht nur die Wurzel -,
-    damit Tests gefahrlos in ein ``tmp_path``-Verzeichnis schreiben können,
-    statt in das echte Benutzerprofil.
-    """
-    override = os.environ.get("SBA_CACHE_DIR")
-    if override:
-        return Path(override)
-    system = platform.system()
-    if system == "Windows":
-        basis = os.environ.get("LOCALAPPDATA")
-        wurzel = Path(basis) if basis else Path.home() / "AppData" / "Local"
-        return wurzel / "sba-dashboard" / "cache"
-    if system == "Darwin":
-        return Path.home() / "Library" / "Application Support" / "sba-dashboard" / "cache"
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    wurzel = Path(xdg) if xdg else Path.home() / ".cache"
-    return wurzel / "sba-dashboard"
 
 
 def cache_pfad_lokal(excel_pfad: Path) -> Path:
@@ -189,8 +174,9 @@ def _datei_lesen(pfad: Path) -> Cache:
 
     Diese Funktion wirft nie - auch die Wiederholung unten ändert daran nichts.
 
-    Die Wiederholung ist das Gegenstück zu :func:`_ersetze_mit_wiederholung`
-    und hat denselben Grund: unter Windows ist ein Ersetzen für den Leser
+    Die Wiederholung ist das Gegenstück zu ``bestand.core.replace_with_retry``
+    (aufgerufen über :func:`app.dateien.schreibe_atomar`) und hat denselben
+    Grund: unter Windows ist ein Ersetzen für den Leser
     kurz sichtbar. Während ``os.replace`` läuft, beantwortet das
     Dateisystem ein ``open()`` mit einer Zugriffsverletzung
     (``PermissionError``) statt mit dem alten oder dem neuen Inhalt. Ein
@@ -284,66 +270,6 @@ def _cache_zu_json(cache: Cache) -> str:
         },
     }
     return json.dumps(inhalt, ensure_ascii=False, indent=2)
-
-
-def _ersetze_mit_wiederholung(quelle: str, ziel: Path) -> None:
-    """``os.replace``, das einen gleichzeitigen Leser unter Windows aussitzt.
-
-    Unter POSIX ersetzt ``rename`` eine Datei auch dann, wenn jemand sie
-    geöffnet hat - der Leser behält seinen alten Inhalt, der neue Name zeigt
-    auf die neue Datei. **Windows nicht:** dort scheitert ``os.replace`` mit
-    ``PermissionError`` (``WinError 5``), solange irgendein Handle auf die
-    Zieldatei offen ist. Python öffnet Dateien ohne ``FILE_SHARE_DELETE``, ein
-    lesendes ``open()`` genügt also.
-
-    Das ist kein theoretischer Fall: das Dashboard ist ausdrücklich für mehrere
-    gleichzeitige Fenster gedacht (``docs/schul-laptop-test.md``, Abschnitt G),
-    der Sidecar liegt auf dem Gruppenlaufwerk, und ein Abruf schreibt ihn
-    genau dann, wenn ein anderes Fenster ihn beim Seitenaufbau liest. Die CI
-    hat den Fall am 2026-09-04 auf ``windows-latest`` gefunden, wo vier lesende
-    Threads gegen 60 Schreibvorgänge liefen und **beide** Speicherorte mit
-    ``WinError 5`` ausfielen.
-
-    Ein Leser hält die Datei nur für die Dauer eines ``read()``. Kurzes
-    Wiederholen löst den Konflikt deshalb zuverlässig, ohne dass irgendwo
-    gesperrt werden müsste. Bleibt es dabei, ist der Grund ein anderer (echter
-    Schreibschutz, fremdes Programm) - dann fliegt der Fehler weiter, und
-    ``speichern`` weicht auf den lokalen Ordner aus.
-    """
-    warte = _ERSETZ_WARTE_START
-    for versuch in range(_ERSETZ_VERSUCHE):
-        try:
-            os.replace(quelle, ziel)
-            return
-        except PermissionError:
-            if versuch == _ERSETZ_VERSUCHE - 1:
-                raise
-            time.sleep(warte)
-            warte *= 2
-
-
-def _atomar_schreiben(pfad: Path, inhalt: str) -> None:
-    """Schreibt ``inhalt`` unterbrechungssicher: Nachbardatei, fsync, ``os.replace``.
-
-    Ein Abbruch mittendrin (WLAN weg, Prozess beendet) lässt die vorherige
-    Cache-Datei unberührt statt einer halben JSON-Datei zurück. Anders als
-    ``atomic_save_workbook`` aus der Ausleihe-Bibliothek: der Cache ist reines
-    JSON, kein Workbook, und braucht deshalb weder openpyxl noch ein Backup.
-    """
-    pfad.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{pfad.stem}.", suffix=pfad.suffix, dir=pfad.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(inhalt)
-            handle.flush()
-            os.fsync(handle.fileno())
-        _ersetze_mit_wiederholung(tmp_name, pfad)
-    except Exception:
-        try:
-            os.unlink(tmp_name)
-        except FileNotFoundError:
-            pass
-        raise
 
 
 def speichern(excel_pfad: Path, cache: Cache) -> Path:
