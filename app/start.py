@@ -48,6 +48,7 @@ def oeffne_browser(url: str, verzoegerung: float = 1.0) -> None:
 def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
+    from . import __version__
     from .konfiguration import lade_einstellungen
     from .main import create_app
 
@@ -86,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("=" * 58)
     print("  Schulbuchausleihe - Bestand und Nachbestellung")
+    print(f"  Version {__version__}")
     print("=" * 58)
     print()
     print(f"  Die Seite laeuft unter:  {url}")

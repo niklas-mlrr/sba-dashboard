@@ -94,9 +94,11 @@ def client_vorlage(einstellungen_vorlage: Einstellungen) -> TestClient:
 # ── Lesen ─────────────────────────────────────────────────────────────────────
 
 def test_health(client_vorlage: TestClient):
+    import app
+
     antwort = client_vorlage.get("/health")
     assert antwort.status_code == 200
-    assert antwort.json() == {"status": "ok"}
+    assert antwort.json() == {"status": "ok", "version": app.__version__}
 
 
 def test_startseite_rendert_html(client_vorlage: TestClient):

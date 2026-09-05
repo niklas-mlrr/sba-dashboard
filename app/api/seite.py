@@ -100,7 +100,7 @@ def index(request: Request) -> Response:
 
     if stand is None:
         return vorlagen.TemplateResponse(
-            request, "einrichtung.html", {"pfade": einstellungen.geprüfte_pfade()},
+            request, "einrichtung.html", {"pfade": einstellungen.gepruefte_pfade()},
             status_code=503,
         )
     return vorlagen.TemplateResponse(request, "index.html", {

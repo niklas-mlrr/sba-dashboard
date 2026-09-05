@@ -53,6 +53,6 @@ def keine_datei(einstellungen: Einstellungen) -> JSONResponse:
     """
     return JSONResponse(
         {"fehler": "Keine der eingetragenen Excel-Dateien wurde gefunden.",
-         "geprueft": [str(p) for p, _ in einstellungen.geprüfte_pfade()]},
+         "geprueft": [str(p) for p, _ in einstellungen.gepruefte_pfade()]},
         status_code=503,
     )

@@ -8,7 +8,6 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "jinja2>=3.1",
     "openpyxl>=3.1,<4",
-    "python-dotenv>=1,<2",
     # Geschwister-Repos, siehe [tool.uv.sources] und ../README.md
     "iserv-ausleihe-api",
     "sba-bestand",

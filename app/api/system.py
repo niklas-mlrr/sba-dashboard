@@ -4,13 +4,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from .. import __version__
+
 router = APIRouter()
 
 
 @router.get("/health")
 def health() -> dict[str, str]:
-    """Antwortet immer, solange der Prozess lebt. Von ``tools/diagnose.py`` benutzt."""
-    return {"status": "ok"}
+    """Antwortet immer, solange der Prozess lebt. Von ``tools/diagnose.py`` benutzt.
+
+    Die Version gehört mit hinein, weil genau dieser Endpunkt der ist, den ein
+    fremdes Gerät beantworten kann, wenn die Person vor dem Bildschirm nur
+    sagen kann "geht nicht" - hier steht dann auch, *welcher* Stand dort läuft.
+    """
+    return {"status": "ok", "version": __version__}
 
 
 @router.post("/api/beenden")

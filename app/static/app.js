@@ -70,6 +70,12 @@
     return { leer: false, wert: art === "zahl" ? Number(roh) : roh };
   }
 
+  // Textzellen werden mit deutscher Sortierordnung verglichen, nicht über
+  // `<`/`>`: die Codepunkt-Ordnung legt "ö" hinter "z", sodass ein Fachname
+  // wie "Französisch" falsch einsortieren würde. Intl.Collator ist eingebaut,
+  // ein Build-Schritt fällt dafür keiner an.
+  const textVergleich = new Intl.Collator("de").compare;
+
   tabelle.tHead.addEventListener("click", (ereignis) => {
     const kopf = ereignis.target.closest("th");
     if (!kopf) return;
@@ -84,9 +90,10 @@
       const rechts = zellwert(b, index, art);
       if (links.leer !== rechts.leer) return links.leer ? 1 : -1;
       if (links.leer) return 0;
-      if (links.wert < rechts.wert) return absteigend ? 1 : -1;
-      if (links.wert > rechts.wert) return absteigend ? -1 : 1;
-      return 0;
+      const folge = art === "zahl"
+        ? (links.wert < rechts.wert ? -1 : links.wert > rechts.wert ? 1 : 0)
+        : textVergleich(links.wert, rechts.wert);
+      return absteigend ? -folge : folge;
     });
     for (const zeile of sortiert) koerper.appendChild(zeile);
   });
@@ -245,9 +252,36 @@
     diagnosen.hidden = zeilenText.length === 0;
   }
 
+  // Verlorene Anfragen in Folge, die der Fortschrittsdialog still toleriert.
+  // Ein einziges fehlgeschlagenes fetch - ein WLAN-Blink, ein kurz belegter
+  // Server - würde die Schleife sonst stillschweigend abbrechen: das Dialog-
+  // fenster bliebe stehen, ohne Meldung und ohne Fortschritt, und niemand
+  // erführe, dass nur die Verbindung kurz weg war. Erst wenn auch Wiederholungen
+  // nichts bringen, wird abgebrochen - mit einer Meldung statt eines
+  // eingefrorenen Dialogs.
+  const MAX_VERLOREN = 5;
+  let verloren = 0;
+
   async function pollen() {
-    const antwort = await fetch("/api/refresh/status");
-    const stand = await antwort.json();
+    let stand;
+    try {
+      const antwort = await fetch("/api/refresh/status");
+      stand = await antwort.json();
+      verloren = 0;
+    } catch (fehler) {
+      verloren++;
+      if (verloren >= MAX_VERLOREN) {
+        fortschritt.classList.add("fehlgeschlagen");
+        fortschrittText.textContent =
+          "Der Server antwortet nicht mehr. Läuft das schwarze Fenster noch? " +
+          "Falls ja, kann diese Meldung einfach geschlossen und die Seite neu geladen werden.";
+        return;
+      }
+      fortschrittText.textContent =
+        "Verbindung unterbrochen - es wird weiter versucht.";
+      setTimeout(pollen, 1000);
+      return;
+    }
     zeichneFortschritt(stand);
     if (!stand.fertig) {
       setTimeout(pollen, 1000);

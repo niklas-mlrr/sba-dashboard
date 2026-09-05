@@ -33,7 +33,7 @@ def test_kein_pfad_vorhanden_ist_kein_absturz(tmp_path):
     einst = Einstellungen.laden(_schreibe(
         tmp_path, excel_pfad_kandidaten=[str(tmp_path / "a.xlsx")]))
     assert einst.excel_pfad() is None
-    assert einst.geprüfte_pfade() == [(tmp_path / "a.xlsx", False)]
+    assert einst.gepruefte_pfade() == [(tmp_path / "a.xlsx", False)]
     with pytest.raises(EinstellungsFehler):
         einst.bestand_config()
 

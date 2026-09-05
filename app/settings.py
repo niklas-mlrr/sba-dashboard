@@ -318,13 +318,13 @@ class Einstellungen:
 
     # ── Pfadauflösung ─────────────────────────────────────────────────────────
 
-    def geprüfte_pfade(self) -> list[tuple[Path, bool]]:
+    def gepruefte_pfade(self) -> list[tuple[Path, bool]]:
         """Alle Kandidaten mit der Angabe, ob sie existieren - für die Fehlerseite."""
         return [(pfad, pfad.is_file()) for pfad in self.excel_pfad_kandidaten]
 
     def excel_pfad(self) -> Path | None:
         """Der erste existierende Kandidat, sonst None."""
-        for pfad, vorhanden in self.geprüfte_pfade():
+        for pfad, vorhanden in self.gepruefte_pfade():
             if vorhanden:
                 return pfad
         return None

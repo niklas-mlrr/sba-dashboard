@@ -70,7 +70,10 @@ rem robocopy /MIR spiegelt exakt; Rueckgabecodes 0-7 sind Erfolg, ab 8 Fehler.
 echo   Programmdateien werden aktualisiert...
 if not exist "%CODE%" mkdir "%CODE%" >nul 2>&1
 
-set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache node_modules backups /XF *.pyc"
+rem Ausgeschlossen werden auch die Entwicklungsartefakte des Repo-Kopierers:
+rem .mypy_cache allein sind tausende Dateien, und .local enthaelt eine private
+rem Arbeitskopie, die auf keinen Schul-Rechner gehoert.
+set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude .local htmlcov node_modules backups /XF *.pyc .coverage"
 rem robocopy meldet mit Rueckgabecode 1 "es wurde etwas kopiert". Genau daran
 rem haengt weiter unten die Frage, ob die beiden Bibliotheken neu installiert
 rem werden muessen - sonst liefe nach einem Update weiter der alte Stand.

@@ -457,6 +457,41 @@ der sonst erst spät und unverständlich auffällt: `iserv_domain` (ein
 Fassung darf welche ergänzen —, werden aber gesammelt und beim Start genannt,
 damit ein Tippfehler im Schlüsselnamen nicht stillschweigend wirkungslos bleibt.
 
+### Die echte IServ-Domain steht im ausgelieferten Standard — und das Repo ist öffentlich
+
+`config.json` nennt die echte Domain und die echten Kandidatenpfade, und die
+drei Repos sind öffentlich. Das ist eine Entscheidung, kein Versäumnis. Die
+Domain ist keine Zugangsberechtigung — jede Lehrkraft tippt sie ohnehin in den
+Browser —, und ein Platzhalter im Standard ließe den allerersten Start an der
+Anmeldung scheitern, bevor die Lehrkraft überhaupt etwas wählen kann. Die
+Excel-Kandidaten sind ohnehin nur Vorschläge: die Ersteinrichtung lässt die
+Lehrkraft die Datei auswählen, und genau diese Auswahl wandert in die
+Benutzerkonfiguration, nicht in den Standard.
+
+Was dagegen nie im Repo liegen darf, wird durch `.gitignore` und die Vorlage
+gehalten: Zugangsdaten (das Passwort existiert nur in der einen Abrufanfrage,
+siehe „Der Abruf"), personenbezogene Zahlen und die echte Arbeitsmappe.
+`vorlage/` ist die bereinigte, mit `tools/erzeuge_vorlage.py` erzeugte
+Strukturvorlage; `.local/` ist ignoriert und wird auch von `START.bat` nicht
+gespiegelt.
+
+Umschaltpunkt: widerspricht die Schule der Nennung ihres Servernamens in einem
+öffentlichen Repo, wandert die Domain in die Benutzerkonfiguration — dann muss
+die Ersteinrichtung ein Feld für sie bekommen.
+
+## Wie hier dokumentiert wird
+
+Dokumentation liegt an drei Orten mit je einer Aufgabe: die Wiki-Seite fasst
+zusammen und verlinkt, `roadmap.md` hält die Arbeitsliste und die Hergänge von
+Änderungen, und dieses Dokument ist kanonisch für das *Warum*. In den
+Docstrings des Codes steht deshalb nur der zeitlose Grund einer Entscheidung —
+keine datierte Erzählung („bis zum TT.MM.JJJJ war es anders"). Der Grund: eine
+datierte Erzählung im Code ist beim nächsten Commit sofort falsch und wird dann
+stillschweigend ignoriert; Hergänge gehören dorthin, wo sie gepflegt werden
+(`roadmap.md` und die Wiki-Logs). Bestehende Docstrings, die nach dem alten
+Stil erzählen, werden beim nächsten Anfassen ihrer Stelle auf den zeitlosen
+Kern gekürzt — nicht in einem eigenen Umbaulauf.
+
 ## Warum das venv nach %LOCALAPPDATA%
 
 `START.bat` spiegelt die drei Quellbäume vom Netzlaufwerk nach

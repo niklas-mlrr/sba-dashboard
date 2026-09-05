@@ -72,6 +72,15 @@ def _pruefe_system(bericht: Bericht) -> None:
     if sys.version_info < (3, 10):
         bericht.notiere("Python", FEHLER,
                         "Das Dashboard braucht mindestens Python 3.10.")
+    try:
+        from app import __version__
+    except ImportError as exc:
+        # Der Bericht soll gerade dann entstehen, wenn etwas nicht geht - der
+        # fehlende Programmimport fällt woanders auf (Pakete, Konfiguration)
+        # und bricht hier nur die Version ab, nicht den ganzen Bericht.
+        bericht.notiere("Dashboard", UEBERSPRUNKEN, f"Version nicht ermittelbar: {exc}")
+    else:
+        bericht.notiere("Dashboard", OK, f"Version {__version__}")
     bericht.notiere("Benutzerprofil", OK, str(Path.home()))
     lokal = os.environ.get("LOCALAPPDATA") or "(nicht gesetzt)"
     bericht.notiere("LOCALAPPDATA", OK if lokal != "(nicht gesetzt)" else WARNUNG, lokal)
@@ -140,7 +149,7 @@ def _pruefe_mappe(bericht: Bericht, einstellungen) -> None:
     from app.excel import lade_mappe, raster_blatt, sperr_benutzer, sperrdatei
 
     gefunden = None
-    for pfad, vorhanden in einstellungen.geprüfte_pfade():
+    for pfad, vorhanden in einstellungen.gepruefte_pfade():
         bericht.notiere("Pfadkandidat", OK if vorhanden else WARNUNG,
                         f"{pfad} {'(gefunden)' if vorhanden else '(nicht da)'}")
         if vorhanden and gefunden is None:

@@ -31,6 +31,23 @@ def _ab_erster_paketzeile(inhalt: str) -> str:
     raise AssertionError("Keine Paketzeile gefunden")
 
 
+def test_start_spiegelt_keine_entwicklungsartefakte_mit():
+    """``robocopy /MIR`` spiegelt alles, was nicht ausgeschlossen ist.
+
+    ``.mypy_cache`` allein sind tausende Dateien und würden über das SMB-
+    Laufwerk jeden Start verlängern; ``.local`` und ``.claude`` gehören inhaltlich
+    nicht auf einen Schul-Rechner. Die Ausschlussliste ist deshalb Teil des
+    Vertrags und wird hier festgehalten, nicht nur beschrieben.
+    """
+    zeile = next(
+        z for z in START.read_text(encoding="utf-8").splitlines()
+        if z.startswith('set "AUSSCHLUSS=')
+    )
+    for name in (".mypy_cache", ".local", ".claude", "htmlcov"):
+        assert name in zeile, name
+    assert "/XF" in zeile and ".coverage" in zeile
+
+
 def test_start_installiert_nur_bei_geaenderten_anforderungen():
     inhalt = START.read_text(encoding="utf-8")
 
