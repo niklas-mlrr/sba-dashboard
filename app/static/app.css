@@ -231,6 +231,10 @@ tbody tr[data-bedarf="1"] td:first-child { box-shadow: inset 3px 0 0 var(--bedar
   justify-content: center;
   background: rgb(255 255 255 / .75);
 }
+/* Safari lässt die spezifischere ``display: flex``-Regel sonst gegen das
+ * HTML-Attribut ``hidden`` gewinnen. Dann liegt die zunächst unsichtbare
+ * Neulade-Schicht schon beim ersten Seitenaufruf über der Tabelle. */
+.ueberlagerung[hidden] { display: none !important; }
 .ueberlagerung-karte {
   padding: 1.25rem 1.75rem;
   border: 1px solid var(--rand);

@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 APP_JS = Path(__file__).resolve().parent.parent / "app" / "static" / "app.js"
+APP_CSS = APP_JS.with_name("app.css")
 
 
 class _Sammler(HTMLParser):
@@ -101,6 +102,16 @@ def test_jede_klasse_aus_app_js_kommt_auf_der_seite_vor(seite: _Sammler, js: str
     gesucht = set(re.findall(r'querySelector(?:All)?\("\.([A-Za-zäöüß-]+)"\)', js)) - gesetzt
     assert gesucht, "die Suche selbst ist kaputt"
     assert gesucht <= seite.klassen, f"fehlen auf der Seite: {sorted(gesucht - seite.klassen)}"
+
+
+def test_versteckte_neulade_ueberlagerung_bleibt_auch_in_safari_unsichtbar():
+    """``hidden`` verliert in Safari gegen ``.ueberlagerung { display: flex }``.
+
+    Der Initialzustand darf die Tabelle nie überdecken. Erst ``neuLaden()``
+    nimmt das Attribut weg und zeigt die Schicht für die kurze Wartezeit.
+    """
+    css = APP_CSS.read_text(encoding="utf-8")
+    assert ".ueberlagerung[hidden] { display: none !important; }" in css
 
 
 # ── Die Datenattribute, aus denen app.js liest ────────────────────────────────
