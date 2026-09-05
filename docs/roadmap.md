@@ -1,7 +1,13 @@
 # Was noch offen ist
 
-Stand: 2026-09-04. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
+Stand: 2026-09-05. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
 bleibt als abgeschlossener v1-Plan liegen.
+
+Zwei Arbeitslisten stehen hier nebeneinander: die **Funktionslücken** (unten,
+allen voran der Testlauf auf dem Schul-Laptop) und der **Struktur-Backlog**
+aus dem Review vom 2026-09-05. Ersteres blockiert die Inbetriebnahme,
+Letzteres die Wartbarkeit — der Struktur-Backlog ist deshalb billig jetzt und
+teuer später, aber nie dringend.
 
 ## Der Windows-Job hat sofort einen echten Fehler gefunden
 
@@ -142,6 +148,103 @@ Gebraucht werden Screenshots des Moduls oder eine Beschreibung von Farben,
 Typografie, Tabellenkopf und Knopfformen. Bis dahin läuft `app/static/app.css`
 mit einem zurückhaltenden Platzhaltersatz an Marken; wenn die Vorlage da ist,
 werden **nur die Werte in `:root`** ersetzt, nicht die Regeln darunter.
+
+## Struktur-Backlog (Review vom 2026-09-05)
+
+Ein Struktur-Review fand 16 Punkte; sechs sind erledigt (Commit `24aaa08`,
+dazu `sba-bestand` `6478e4c`) — der dritte `os.replace`-Ort, die doppelte
+Plattform-Ordner-Auflösung, die zwei Formen von `/api/refresh/status`, die
+erinnerte Testisolation und zwei Fehler in `app.js`. Die folgenden zehn stehen
+noch aus, absteigend nach Nutzen je Aufwand.
+
+### 1. `Host`- und `Origin`-Prüfung fehlt (das Wichtigste hier)
+
+Es gibt keine Middleware. Die Bindung an 127.0.0.1 hält das Netz ab, **nicht
+den Browser**:
+
+- `POST /api/beenden` nimmt keinen Body und ist damit cross-origin auslösbar.
+  Eine beliebige Seite, die die Lehrkraft während des Betriebs öffnet, kann das
+  Dashboard beenden (einfache Anfrage, kein Preflight; die Antwort ist
+  blockiert, die Wirkung nicht).
+- **DNS-Rebinding:** eine fremde Domain, die auf 127.0.0.1 auflöst, gilt dem
+  Browser als dieselbe Herkunft und darf `GET /` und `/api/rows` lesen — also
+  genau die Anmeldezahlen, deren Offenlegung `architektur.md` einen
+  Datenschutzvorfall nennt.
+
+Behebung: `TrustedHostMiddleware(allowed_hosts=["127.0.0.1", "localhost"])`
+(Starlette schneidet den Port selbst ab) plus Ablehnung zustandsändernder
+Anfragen mit fremdem `Origin`. ⚠️ Bricht den `TestClient`, der `Host:
+testserver` schickt — `conftest.py` braucht dann `base_url="http://127.0.0.1"`.
+
+### 2. Fehler-auf-HTTP-Abbildung steht in jeder Route einzeln
+
+`main.py` bildet dieselben Ausnahmen in jeder Route erneut ab, mit von Route zu
+Route driftendem Wortlaut. Einmal registrierte
+`@application.exception_handler(...)` für `Konflikt`, `Gesperrt`,
+`EinstellungsFehler` und `BlattFehlt` ersetzen das; rund 60 Zeilen verlassen
+`main.py`, und „welchen Code gibt `Gesperrt`?" hat wieder **eine** Antwort.
+⚠️ `index()` rendert für dieselben Fehler HTML statt JSON und behält seinen
+eigenen Zweig.
+
+### 3. `main.py` mischt vier Aufgaben
+
+App-Factory, Routen, Domänenlesen (`lies_tabelle`) und Mappenprüfung
+(`validiere_excel_mappe`). Die letzten beiden enthalten kein FastAPI und
+gehören nach `app/rows.py` bzw. `app/excel.py`; die Routen in `app/api/` als
+`APIRouter`, `create_app` bleibt reine Verdrahtung. Das ist die Datei, die
+jedes neue Feature anfasst.
+
+### 4. Handgeschriebene Body-Validierung statt Pydantic
+
+`dict = Body(...)` plus `isinstance`-Ketten, rund 40 Zeilen. Der Grund, es
+nicht blind umzustellen, ist echt: FastAPIs 422 ist englisch und
+Schema-förmig, und die Oberfläche zeigt `fehler` wörtlich einer Lehrkraft.
+Lösbar mit Pydantic-Modellen plus **einem** `RequestValidationError`-Handler,
+der auf `{"fehler": "<deutsch>"}` abbildet. Heute drei Anfrageformen, später
+dreißig.
+
+### 5. Untypisierte Notausgänge
+
+`Schreibergebnis.ws: object = None` und `eintrag: object = None`; dazu gibt
+`lies_tabelle` ein untypisiertes 4-Tupel zurück, dessen Leerfall
+`(None, [], None, None)` jeder Aufrufer erst zerlegt und dann auf `None`
+prüft. Typisieren und den Rückgabewert zu einem kleinen `Tabellenstand`
+machen — das ist zugleich die Voraussetzung für Punkt 6.
+
+### 6. Kein Typprüfer in der CI
+
+Der Code ist durchgehend annotiert; mypy (oder ty/pyright) auf `app/` kostet
+jetzt einen Konfigurationsblock und später viel mehr, sobald sich die
+`object`-Felder aus Punkt 5 vermehren.
+
+### 7. Keine Abdeckungsmessung
+
+237 Tests, und niemand weiß, was sie abdecken. `pytest-cov` mit einer
+Sichtbarkeitsschwelle, kein Tor bei 100 %.
+
+### 8. `app/static/app.js` ist ungetestet
+
+271 Zeilen, darin die Browserhälfte des optimistischen Sperrens (409 →
+Neuladen, `mtime`-Buchführung, Escape-Rücknahme). Der pragmatische Weg, weil
+„kein Build-Schritt" bewusste Entscheidung ist: das JS dumm halten (es ist
+fast dort — `/api/cell` liefert die fertige Zeile) und die letzten
+Logikreste hinter Datenattribute ziehen, die ein Template-Test prüfen kann.
+Ab etwa 400 Zeilen trennt `<script type="module">` die Datei ohne Build.
+
+### 9. Drei Beschreibungen derselben Architektur
+
+`README.md`, `docs/architektur.md` und die Wiki-Seite beschreiben Cache,
+Konfigurationsebenen und Schreibsicherheit jeweils erneut. Heute konsistent,
+weil am selben Tag geschrieben. `architektur.md` sollte kanonisch sein, das
+README nur noch Routentabelle, Schnellstart und Verweise tragen, die
+Wiki-Seite zusammenfassen statt nachzuerzählen.
+
+### 10. `PLAN.md` steht neben den lebenden Dokumenten
+
+Als historisch markiert, aber in `README.md` und der Wiki-Tabelle in derselben
+Liste geführt. Nach `docs/archiv/` verschieben oder löschen — Git hat sie.
+Ebenso: die Wiki-Seite nennt Zahlen („231 Tests", „9,6 s"), die jeder Commit
+falsch machen kann.
 
 ## Bewusst zurückgestellt
 
