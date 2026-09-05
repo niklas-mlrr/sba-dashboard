@@ -109,7 +109,15 @@ python_version = "3.10"
 # also `Any`, py.typed hin oder her - nachgeprüft mit `reveal_type`. Der
 # relative Pfad ist zulässig, weil das Geschwister-Layout verbindlich ist
 # (siehe [tool.uv.sources] oben).
-mypy_path = "../sba-bestand"
+# Seit 2026-09-05 gilt dasselbe fuer ausleihe-api: auch dort liegt jetzt ein
+# py.typed, und auch dort ist der Install editable, also unsichtbar fuer mypy.
+# Nachgeprueft mit `reveal_type` - vorher viermal "Any" (AusleiheClient,
+# AuthError, ForbiddenError, TransportError) bei gruenem Lauf.
+#
+# Mehrere Pfade trennt mypy an Komma bzw. os.pathsep. Komma, weil dieselbe
+# Zeile unter Windows gelesen werden muss: dort ist os.pathsep ";", und ein
+# Doppelpunkt waere Teil eines Laufwerksbuchstabens.
+mypy_path = "../sba-bestand, ../ausleihe-api"
 
 # Der eigentliche Zweck: eine Funktion ohne Annotationen überspringt mypy
 # stillschweigend samt Rumpf. Ohne diese Zeile hielte die Prüfung nicht, was
@@ -122,20 +130,22 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 
 # Kein globales `ignore_missing_imports`: das würde einen Bruch der
-# Pfad-Auflösung oben lautlos verschlucken - bestand.core fiele wieder auf
-# `Any` zurück und die Prüfung an der Paketgrenze wäre weg, ohne dass ein Lauf
-# rot wird. Deshalb namentlich nur die Pakete, die wirklich kein py.typed
-# liefern: ausleihe-api (Geschwister-Repo, unannotiert) und openpyxl.
+# Pfad-Auflösung oben lautlos verschlucken - bestand.core und ausleihe fielen
+# wieder auf `Any` zurück und die Prüfung an der Paketgrenze wäre weg, ohne
+# dass ein Lauf rot wird. Deshalb namentlich nur, was wirklich kein py.typed
+# liefert. Seit 2026-09-05 ist das nur noch openpyxl - `ausleihe.*` stand bis
+# dahin hier und ist die letzte Paketgrenze, die jetzt geprüft wird.
 [[tool.mypy.overrides]]
-module = ["ausleihe.*", "openpyxl.*"]
+module = ["openpyxl.*"]
 ignore_missing_imports = true
 
-# bestand.core wird für seine Typen gelesen, aber nicht hier geprüft: Fehler
-# im Bibliothekscode gehören in sba-bestand, nicht in einen roten Lauf des
+# bestand.core und ausleihe werden für ihre Typen gelesen, aber nicht hier
+# geprüft: Fehler im Bibliothekscode gehören in sba-bestand bzw. ausleihe-api,
+# die dafür je einen eigenen mypy-Lauf haben, nicht in einen roten Lauf des
 # Dashboards. `silent` heißt genau das - Typen benutzen, Meldungen aus diesen
 # Modulen unterdrücken.
 [[tool.mypy.overrides]]
-module = ["bestand.*"]
+module = ["bestand.*", "ausleihe.*"]
 follow_imports = "silent"
 
 [tool.ruff]

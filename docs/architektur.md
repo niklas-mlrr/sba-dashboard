@@ -173,13 +173,39 @@ Zwei Dinge waren dafür nötig, und das zweite ist das unerwartete:
    `reveal_type`, nicht am ausbleibenden Fehler.
 
 Deshalb steht in `[tool.mypy]` auch **kein** globales `ignore_missing_imports`
-mehr, sondern nur noch die namentliche Ausnahme für `ausleihe.*` und
-`openpyxl.*`. Global gesetzt würde es einen Bruch der Pfad-Auflösung lautlos
-verschlucken: `bestand.core` fiele auf `Any` zurück, und kein Lauf würde rot.
+mehr, sondern nur noch die namentliche Ausnahme. Global gesetzt würde es einen
+Bruch der Pfad-Auflösung lautlos verschlucken: `bestand.core` fiele auf `Any`
+zurück, und kein Lauf würde rot.
 
 Die CI baut das Geschwister-Layout im Workspace nach (`sba-dashboard/`,
 `sba-bestand/`, `ausleihe-api/` nebeneinander), der relative Pfad trägt dort
 also genauso.
+
+Am selben Tag bekam `ausleihe-api` dieselbe Behandlung — es war die letzte
+Stelle, an der eine Paketgrenze unkontrolliert war, und sie stand in **beiden**
+Nachbar-Repos unter `ignore_missing_imports`. Dasselbe Muster, dieselbe Falle:
+Marker plus `package-data`, `mypy_path` um `../ausleihe-api` erweitert (mypy
+trennt mehrere Pfade am Komma; ein Doppelpunkt wäre unter Windows Teil eines
+Laufwerksbuchstabens), und wieder mit `reveal_type` nachgeprüft — vorher
+viermal `Any` bei grünem Lauf.
+
+Was das hier konkret bringt, sind zwei Stellen in `app/refresh.py`:
+
+- `fehlerabbildung()` bildet `AuthError`, `ForbiddenError` und `TransportError`
+  auf 401/403/504 ab. Ein Tippfehler in einem dieser Namen war vorher kein
+  Fehler, sondern ein `Any`, das jedes `isinstance` klaglos schluckte.
+- `melde_an()` setzt `client_factory = AusleiheClient`. Erst jetzt prüft mypy,
+  dass die Klasse überhaupt zu `ClientFabrik` passt — also mit drei Strings
+  aufrufbar ist und etwas mit `login() -> None` zurückgibt. Gegengeprüft: eine
+  andere Klasse aus `ausleihe` an derselben Stelle wird abgelehnt.
+
+`ausleihe.*` steht jetzt wie `bestand.*` unter `follow_imports = "silent"` —
+Typen benutzen, aber Meldungen aus dem Bibliothekscode dort melden, wo er
+gepflegt wird. Beide Bibliotheken haben dafür einen eigenen mypy-Lauf;
+`ausleihe-api` prüft in seiner CI mit.
+
+Damit liefern alle drei Repos des Geschwister-Layouts `py.typed`, und die
+einzige verbliebene namentliche Ausnahme ist `openpyxl.*`.
 
 ## Warum 127.0.0.1
 

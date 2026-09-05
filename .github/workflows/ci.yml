@@ -20,7 +20,11 @@ on:
 #
 # pyproject.toml bindet beide über [tool.uv.sources] als relativen,
 # editierbaren Pfad ein ("../ausleihe-api", "../sba-bestand") - ohne dieses
-# Layout schlägt schon `uv sync` fehl.
+# Layout schlägt schon `uv sync` fehl. Dieselben zwei Pfade stehen dort als
+# mypy_path: der editable-Install legt kein Paket in site-packages, mypy findet
+# bestand.core und ausleihe also nur über den Quellbaum daneben. Beide
+# Auscheck-Schritte holen den Standardzweig - wer hier etwas ändert, das ein
+# Geschwister-Repo braucht, pusht dort zuerst.
 jobs:
   tests:
     name: tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
