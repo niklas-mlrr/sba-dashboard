@@ -101,7 +101,18 @@ rem Eine dort schon liegende Vollkopie aus einer aelteren Fassung wird beim
 rem ersten Start bereinigt, die Auswahl bleibt erhalten.
 
 rem ── 3. venv und Pakete ────────────────────────────────────────────────────
+rem Geprueft wird nicht nur der Interpreter, sondern auch pip. Eine
+rem abgebrochene Ersteinrichtung - geschlossenes Fenster, Virenscanner - laesst
+rem ein venv mit python.exe, aber ohne pip zurueck. Ohne die zweite Pruefung
+rem galt dieser Torso dauerhaft als fertig: jeder weitere Start uebersprang die
+rem Einrichtung und endete erneut mit "No module named pip". Ein halbes venv
+rem ist nichts wert, es wird darum verworfen und neu angelegt.
 set "VENV_NEU=0"
+if exist "%VENV%\Scripts\python.exe" if not exist "%VENV%\Scripts\pip.exe" (
+    echo   Die vorhandene Umgebung ist unvollstaendig und wird neu angelegt...
+    rmdir /s /q "%VENV%" >nul 2>&1
+    if exist "%VENV%\Scripts\python.exe" goto :venvrestfehler
+)
 if not exist "%VENV%\Scripts\python.exe" (
     echo   Erstmalige Einrichtung, das dauert ein paar Minuten...
     %PYEXE% -m venv "%VENV%"
@@ -166,6 +177,18 @@ echo   Die Programmdateien liessen sich nicht kopieren.
 echo   Meist heisst das: das Netzlaufwerk ist gerade nicht verbunden.
 echo   Bitte im Explorer pruefen, ob der Ordner "Buchausleihe Admins"
 echo   zu oeffnen ist, und es dann erneut versuchen.
+echo.
+pause
+popd
+exit /b 1
+
+:venvrestfehler
+echo.
+echo   Die unvollstaendige Python-Umgebung liess sich nicht entfernen.
+echo   Meist haelt noch ein offenes Fenster des Programms sie fest.
+echo   Bitte alle Fenster schliessen und diesen Ordner von Hand loeschen:
+echo     %VENV%
+echo   Danach diese Datei erneut doppelklicken.
 echo.
 pause
 popd

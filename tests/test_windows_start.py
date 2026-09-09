@@ -90,6 +90,33 @@ def test_start_entfernt_nur_eine_unvollstaendige_neue_umgebung():
     assert 'if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1' in inhalt
 
 
+def test_start_verwirft_ein_venv_ohne_pip():
+    """Ein halbes venv galt sonst dauerhaft als fertige Einrichtung.
+
+    Bricht die Ersteinrichtung nach ``python -m venv`` ab - geschlossenes
+    Fenster, Virenscanner -, bleibt ``Scripts\\python.exe`` liegen, ``pip`` aber
+    nicht. Eine Pruefung nur auf den Interpreter uebersprang die Einrichtung
+    dann bei jedem weiteren Start, und jeder endete mit "No module named pip";
+    von Hand half nur das Loeschen des Ordners. Geprueft wird deshalb beides.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    pruefung = (
+        'if exist "%VENV%\\Scripts\\python.exe" '
+        'if not exist "%VENV%\\Scripts\\pip.exe" ('
+    )
+    assert pruefung in inhalt
+    assert 'rmdir /s /q "%VENV%" >nul 2>&1' in inhalt
+    # Die Pruefung steht vor der Ersteinrichtung, sonst laeuft der Torso weiter.
+    assert inhalt.index(pruefung) < inhalt.index(
+        'if not exist "%VENV%\\Scripts\\python.exe" (\n    echo   Erstmalige'
+    )
+    # Ein gescheitertes rmdir darf nicht stillschweigend weiterlaufen.
+    assert (
+        'if exist "%VENV%\\Scripts\\python.exe" goto :venvrestfehler' in inhalt
+    )
+
+
 def test_start_schreibt_die_ausgelieferte_konfiguration_nicht_fort():
     """Die ausgelieferte ``config.json`` ist der Standard, keine Arbeitsdatei.
 
