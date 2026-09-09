@@ -371,6 +371,51 @@ Damit liefern alle drei Repos `py.typed`, und `openpyxl.*` ist die einzige
 verbliebene namentliche Ausnahme. `sba-launcher` bleibt außen vor
 (Entscheidung 2026-09-05, oben unter „Nebenbefund aus der CI").
 
+## Nachtrag: ein venv ohne pip (2026-09-09)
+
+Der erste Start auf einem fremden Windows-Rechner — Lukas' privatem, ohne
+Netzlaufwerk, IServ oder echte Mappe. Der Schul-Laptop-Test oben bleibt davon
+unberührt, der Startpfad selbst lief aber zum ersten Mal fremd und ist sofort
+in eine Sackgasse gelaufen. Behoben in `d83ea4c`.
+
+Die Ersteinrichtung war irgendwo nach `python -m venv` abgebrochen —
+geschlossenes Fenster, Virenscanner, unklar. Zurück blieb ein Torso:
+`Scripts\python.exe` da, `pip` nicht. `START.bat` prüfte nur auf den
+Interpreter, hielt das venv damit für fertig und übersprang `ensurepip` samt
+`pip install --upgrade pip setuptools wheel`. Jeder weitere Start endete mit
+`No module named pip` — und, weil die Meldung darunter „meist fehlt dafür der
+Internetzugang" rät, wurde erst das Netz verdächtigt.
+
+Der bestehende Aufräumpfad griff nicht: `:pipfehler` löscht das venv nur bei
+`VENV_NEU=1`, also nur, wenn *dieser* Lauf es angelegt hat. Beim Folgestart war
+es fremd und blieb liegen. Damit war der Zustand **stabil**: kein Neustart kam
+je heraus, von Hand half nur `rmdir` auf den Ordner oder
+`python -m ensurepip --default-pip`.
+
+Geprüft wird jetzt `Scripts\python.exe` **und** `Scripts\pip.exe`. Fehlt pip,
+wird das venv verworfen und neu angelegt — ein halbes venv ist nichts wert, und
+Reparieren wäre eine Wette darauf, dass sonst alles heil ist. Scheitert das
+`rmdir`, weil noch ein Fenster die Dateien hält, bricht der Start über das neue
+Label `:venvrestfehler` mit dem zu löschenden Pfad im Klartext ab, statt in
+denselben pip-Fehler weiterzulaufen. `test_start_verwirft_ein_venv_ohne_pip`
+hält Prüfung, Reihenfolge und Ausfallpfad fest.
+
+`START.sh` braucht nichts davon: dort verwaltet `uv` die Umgebung, der Zustand
+kann gar nicht entstehen.
+
+Die zeitlose Lehre steht als Kommentar über der Prüfung in `START.bat`: die
+Existenz eines Interpreters ist kein Beweis für eine vollständige Umgebung. Ein
+Setup, das sich mit einem einzigen `if exist` überspringt, baut eine Sackgasse
+für genau den Fall, für den die Prüfung da ist — den abgebrochenen Lauf.
+
+Nebenbefund ohne Codeänderung: „Bitte NICHT als Administrator starten" wurde
+als Anforderung gelesen („wie starte ich es *nicht* als Admin?"). Es ist reiner
+Hinweistext — Doppelklick ist bereits der nicht-erhöhte Fall. Der Satz bleibt,
+weil er für die Schule stimmt (gemappte Netzlaufwerke sind in einem elevated
+Prozess unsichtbar, `%LOCALAPPDATA%` zeigt bei fremdem Admin-Konto auf ein
+anderes Profil). Falls er noch einmal jemanden aufhält, wäre die Ergänzung
+„(Doppelklick genügt)" der ganze Fix.
+
 ## Bewusst zurückgestellt
 
 ### Versionierte Wheels für die drei Repos
