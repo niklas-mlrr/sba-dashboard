@@ -49,10 +49,19 @@ from .excel import erlaubte_spalten_satz
 NichtLeer = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
-class EinrichtungAnfrage(BaseModel):
-    """``POST /api/einrichtung`` - der von Hand eingetragene Pfad zur Mappe."""
+class EinstellungenAnfrage(BaseModel):
+    """``POST /api/einstellungen`` - die zwei Werte hinter dem Zahnrad im Fenster.
 
-    pfad: NichtLeer
+    Bis 2026-09-10 hieß dieses Modell ``EinrichtungAnfrage`` und trug einen
+    einzigen ``pfad``: den vollen Dateipfad der Mappe, eingegeben auf einer
+    Browserseite. Beides hat sich geändert - eingestellt wird der **Ordner**
+    (der Dateiname trägt die Jahreszahl und wechselt, siehe
+    ``app.settings.mappe_im_ordner``), und dazu der IServ-Server, der vorher nur
+    von Hand in der JSON-Datei änderbar war.
+    """
+
+    server: NichtLeer
+    ordner: NichtLeer
 
 
 class ZellAnfrage(BaseModel):
@@ -69,8 +78,13 @@ class ZellAnfrage(BaseModel):
     mtime: float
 
 
-class AbrufAnfrage(BaseModel):
-    """``POST /api/refresh`` - Zugangsdaten, die nur diese eine Anfrage überlebt.
+class AnmeldeAnfrage(BaseModel):
+    """``POST /api/anmeldung`` - die Zugangsdaten, die das Programmfenster sendet.
+
+    Bis 2026-09-10 hieß dieses Modell ``AbrufAnfrage`` und war der Körper von
+    ``POST /api/refresh``: jeder Abruf brachte seine eigenen Zugangsdaten mit.
+    Angemeldet wird jetzt einmal im Fenster (``app/sitzung.py``), und
+    ``/api/refresh`` nimmt überhaupt keinen Körper mehr.
 
     ``passwort`` wird **nicht** beschnitten: ein Leerzeichen am Rand kann Teil
     des Passworts sein. Nur die Mindestlänge gilt, wie in der handgeschriebenen
@@ -86,7 +100,8 @@ class AbrufAnfrage(BaseModel):
 # hier auf (Modell, Feld) umgestellt werden - bis dahin wäre das eine Ebene
 # Umweg ohne Nutzen.
 MELDUNGEN: dict[str, str] = {
-    "pfad": "Bitte einen Pfad zur Excel-Datei eingeben.",
+    "server": "Bitte die Adresse des IServ-Servers eingeben, etwa 'meine-schule.de'.",
+    "ordner": "Bitte den Ordner angeben, in dem die Excel-Datei liegt.",
     "key": "Es fehlt der Schlüssel der Zeile.",
     "spalte": erlaubte_spalten_satz(),
     "mtime": "Es fehlt eine gültige Änderungszeit der geladenen Datei.",

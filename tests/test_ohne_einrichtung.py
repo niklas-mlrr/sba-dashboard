@@ -38,7 +38,11 @@ def test_startseite_zeigt_die_einrichtung(uneingerichtet: TestClient):
 @pytest.mark.parametrize("aufruf", [
     ("GET", "/api/rows", None),
     ("POST", "/api/cell", {"key": "0:Deutsch:C3", "spalte": "bestellt", "wert": 1, "mtime": 1.0}),
-    ("POST", "/api/refresh", {"benutzer": "b.lehrer", "passwort": "geheim"}),
+    # Ohne Körper: die Zugangsdaten kommen seit 2026-09-10 aus der Anmeldung.
+    # Der 503 kommt trotzdem zuerst - die fehlende Mappe wird vor der Anmeldung
+    # geprüft, sonst hieße die Antwort "bitte anmelden" für ein Problem, das
+    # keine Anmeldung löst.
+    ("POST", "/api/refresh", None),
 ])
 def test_jede_api_route_nennt_die_geprueften_pfade(uneingerichtet: TestClient, aufruf):
     methode, pfad, nutzlast = aufruf
@@ -49,14 +53,22 @@ def test_jede_api_route_nennt_die_geprueften_pfade(uneingerichtet: TestClient, a
     assert len(koerper["geprueft"]) == 2
 
 
-def test_einrichtung_lehnt_nicht_xlsx_ab(uneingerichtet: TestClient, tmp_path: Path):
-    """Vor jedem Öffnen: Endung und Existenz. Sonst stünde hier ein Zip-Fehler."""
-    textdatei = tmp_path / "notiz.txt"
-    textdatei.write_text("kein Workbook", encoding="utf-8")
-    for kandidat in (textdatei, tmp_path / "gibt-es-nicht.xlsx"):
-        antwort = uneingerichtet.post("/api/einrichtung", json={"pfad": str(kandidat)})
-        assert antwort.status_code == 400, kandidat
-        assert "keine .xlsx-Datei" in antwort.json()["fehler"]
+def test_einstellungen_lehnen_einen_ordner_ohne_mappe_ab(uneingerichtet: TestClient,
+                                                        tmp_path: Path):
+    """Vor jedem Öffnen: gibt es den Ordner, und liegt eine .xlsx darin?"""
+    leerer_ordner = tmp_path / "leer"
+    leerer_ordner.mkdir()
+    (leerer_ordner / "notiz.txt").write_text("kein Workbook", encoding="utf-8")
+
+    antwort = uneingerichtet.post("/api/einstellungen", json={
+        "server": "beispiel-schule.de", "ordner": str(leerer_ordner)})
+    assert antwort.status_code == 400
+    assert "keine Excel-Datei" in antwort.json()["fehler"]
+
+    antwort = uneingerichtet.post("/api/einstellungen", json={
+        "server": "beispiel-schule.de", "ordner": str(tmp_path / "gibt-es-nicht")})
+    assert antwort.status_code == 400
+    assert "Ordner wurde nicht gefunden" in antwort.json()["fehler"]
 
 
 def test_unbeschreibbare_benutzerkonfiguration_meldet_500(tmp_path: Path, einstellungen,
@@ -82,7 +94,8 @@ def test_unbeschreibbare_benutzerkonfiguration_meldet_500(tmp_path: Path, einste
 
     anwendung = create_app(einstellungen=einstellungen, config_pfad=config_pfad)
     with TestClient(anwendung, base_url=TEST_BASIS_URL) as testclient:
-        antwort = testclient.post("/api/einrichtung", json={"pfad": str(leeres_workbook)})
+        antwort = testclient.post("/api/einstellungen", json={
+            "server": einstellungen.iserv_domain, "ordner": str(leeres_workbook.parent)})
     assert antwort.status_code == 500
     assert "nicht gespeichert werden" in antwort.json()["fehler"]
 

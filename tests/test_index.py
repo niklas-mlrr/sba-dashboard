@@ -101,7 +101,12 @@ def test_die_seite_kennt_die_aenderungszeit(client):
 def test_abruf_dialog_warnt_vor_dem_ueberschreiben(client):
     text = client.get("/").text
     assert "Aktuelle Daten aus IServ abrufen" in text
-    assert 'type="password"' in text
+    # Seit 2026-09-10 fragt die Seite keine Zugangsdaten mehr ab: angemeldet
+    # wird im Programmfenster (app/fenster.py). Ein Passwortfeld hier wäre eine
+    # zweite Stelle, an der ein Passwort entgegengenommen wird - genau das, was
+    # der Entwurf ausschließt.
+    assert 'type="password"' not in text
+    assert "im Programmfenster" in text
     # Der Satz muss beide Hälften der Wahrheit nennen: was überschrieben wird
     # (Angemeldet und Bestand, aus IServ) und was nicht (Bestellt, aus dem
     # Blatt "bestellt" derselben Mappe). Bis 2026-09-05 stand hier "Bestand und
@@ -113,59 +118,99 @@ def test_abruf_dialog_warnt_vor_dem_ueberschreiben(client):
     assert "eigene Einträge bleiben stehen" in text
 
 
-def test_einrichtung_prueft_die_mappe_vor_dem_speichern(tmp_path, einstellungen):
-    unlesbar = tmp_path / "keine-echte-exceldatei.xlsx"
-    unlesbar.write_text("keine Excel-Datei", encoding="utf-8")
+def _eigener_ordner(tmp_path: Path, name: str) -> Path:
+    """Ein leerer Unterordner je Test.
+
+    Die Mappe aus der ``leeres_workbook``-Fixture liegt direkt in ``tmp_path``;
+    würde ein Test den *ganzen* tmp_path als Ordner einstellen, fände
+    ``mappe_im_ordner`` sie und nicht die untaugliche Datei, um die es gerade
+    geht - und der Test bewiese das Gegenteil dessen, was sein Name sagt.
+    """
+    ordner = tmp_path / name
+    ordner.mkdir()
+    return ordner
+
+
+def test_einstellungen_pruefen_die_mappe_vor_dem_speichern(tmp_path, einstellungen):
+    ordner = _eigener_ordner(tmp_path, "unlesbar")
+    (ordner / "keine-echte-exceldatei.xlsx").write_text("keine Excel-Datei", encoding="utf-8")
     testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
     vorher = config_pfad.read_text(encoding="utf-8")
     with testclient:
-        antwort = testclient.post("/api/einrichtung", json={"pfad": str(unlesbar)})
+        antwort = testclient.post("/api/einstellungen", json={
+            "server": einstellungen.iserv_domain, "ordner": str(ordner)})
     assert antwort.status_code == 400
     assert "lesbare Excel" in antwort.json()["fehler"]
     assert config_pfad.read_text(encoding="utf-8") == vorher
 
 
-def test_einrichtung_braucht_alle_dashboard_blaetter(tmp_path, einstellungen, leeres_workbook):
-    unvollstaendig = tmp_path / "unvollstaendig.xlsx"
+def test_einstellungen_brauchen_alle_dashboard_blaetter(tmp_path, einstellungen, leeres_workbook):
+    ordner = _eigener_ordner(tmp_path, "unvollstaendig")
     wb = load_workbook(leeres_workbook)
     del wb["bestellt"]
-    wb.save(unvollstaendig)
+    wb.save(ordner / "unvollstaendig.xlsx")
     testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
     vorher = config_pfad.read_text(encoding="utf-8")
     with testclient:
-        antwort = testclient.post("/api/einrichtung", json={"pfad": str(unvollstaendig)})
+        antwort = testclient.post("/api/einstellungen", json={
+            "server": einstellungen.iserv_domain, "ordner": str(ordner)})
     assert antwort.status_code == 400
     assert "bestellt" in antwort.json()["fehler"]
     assert config_pfad.read_text(encoding="utf-8") == vorher
 
 
-def test_einrichtung_lehnt_leeres_raster_ab(tmp_path, einstellungen):
-    leer = tmp_path / "leeres-raster.xlsx"
+def test_einstellungen_lehnen_leeres_raster_ab(tmp_path, einstellungen):
+    ordner = _eigener_ordner(tmp_path, "leeres-raster")
     wb = Workbook()
     wb.active.title = einstellungen.blatt_raster
     wb.create_sheet("bestellt")
     wb.create_sheet("zu Bestellen")
-    wb.save(leer)
+    wb.save(ordner / "leeres-raster.xlsx")
     testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
     vorher = config_pfad.read_text(encoding="utf-8")
 
     with testclient:
-        antwort = testclient.post("/api/einrichtung", json={"pfad": str(leer)})
+        antwort = testclient.post("/api/einstellungen", json={
+            "server": einstellungen.iserv_domain, "ordner": str(ordner)})
 
     assert antwort.status_code == 400
     assert "Bestandsraster" in antwort.json()["fehler"]
     assert config_pfad.read_text(encoding="utf-8") == vorher
 
 
-def test_einrichtung_speichert_eine_gueltige_mappe(
+def test_einstellungen_lehnen_einen_server_mit_schema_ab(tmp_path, einstellungen,
+                                                        leeres_workbook):
+    """Der häufigste Tippfehler - und er darf den Ordner nicht mitspeichern."""
+    testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
+    vorher = config_pfad.read_text(encoding="utf-8")
+
+    with testclient:
+        antwort = testclient.post("/api/einstellungen", json={
+            "server": "https://beispiel-schule.de", "ordner": str(leeres_workbook.parent)})
+
+    assert antwort.status_code == 400
+    assert "https://" in antwort.json()["fehler"]
+    assert config_pfad.read_text(encoding="utf-8") == vorher
+
+
+def test_einstellungen_speichern_server_und_ordner(
     tmp_path, einstellungen, leeres_workbook,
 ):
     testclient, config_pfad = _einrichtungs_app(tmp_path, einstellungen)
 
     with testclient:
-        antwort = testclient.post("/api/einrichtung", json={"pfad": str(leeres_workbook)})
+        antwort = testclient.post("/api/einstellungen", json={
+            "server": "neu-schule.de", "ordner": str(leeres_workbook.parent)})
+        assert antwort.status_code == 200
+        assert antwort.json() == {"ok": True, "mappe": str(leeres_workbook)}
+        # Was das Fenster danach vorbelegt anzeigt, kommt aus derselben Quelle
+        # wie das, womit der Server arbeitet - deshalb dieselbe Runde hier.
+        gelesen = testclient.get("/api/einstellungen").json()
 
-    assert antwort.status_code == 200
-    assert antwort.json() == {"ok": True}
+    assert gelesen["server"] == "neu-schule.de"
+    assert gelesen["ordner"] == str(leeres_workbook.parent)
+    assert gelesen["mappe"] == str(leeres_workbook)
+
     gespeichert = json.loads(config_pfad.read_text(encoding="utf-8"))
-    assert gespeichert["excel_pfad_kandidaten"][0] == str(leeres_workbook)
+    assert gespeichert["iserv_domain"] == "neu-schule.de"
+    assert gespeichert["excel_ordner"] == str(leeres_workbook.parent)

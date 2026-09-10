@@ -27,9 +27,10 @@ Drei Dinge, die dabei wichtig sind:
 - **Es läuft nur auf Ihrem Rechner.** Die Seite ist nicht aus dem Schulnetz
   erreichbar. In der Datei stehen Anmeldezahlen je Jahrgang; das gehört nicht
   auf eine offene Seite.
-- **Es speichert kein Passwort.** Für den Abruf aus IServ geben Sie Ihre eigenen
-  Zugangsdaten ein. Sie werden sofort benutzt und danach vergessen — nicht
-  gespeichert, nicht in eine Datei geschrieben.
+- **Es speichert kein Passwort.** Sie melden sich einmal im Programmfenster mit
+  Ihren eigenen IServ-Zugangsdaten an. Die Anmeldung gilt, solange Sie arbeiten,
+  und verfällt nach 30 Minuten ohne Abruf. Auf die Festplatte wird davon nichts
+  geschrieben — beim nächsten Start ist alles wieder leer.
 
 ---
 
@@ -37,11 +38,21 @@ Drei Dinge, die dabei wichtig sind:
 
 **Doppelklick auf `START.bat`.** Das ist alles.
 
-Es öffnet sich ein schwarzes Fenster mit Text und danach der Browser mit der
-Liste.
+Es öffnen sich ein schwarzes Fenster mit Text, das **Programmfenster** und der
+Browser mit der Liste.
 
-> **Das schwarze Fenster nicht schließen, solange Sie arbeiten.** Darin läuft
-> das Programm. Wenn Sie es schließen, ist die Seite im Browser tot.
+> **Weder das schwarze noch das Programmfenster schließen, solange Sie
+> arbeiten.** Darin läuft das Programm. Wenn Sie es schließen, ist die Seite im
+> Browser tot.
+
+Das Programmfenster ist die Schaltzentrale. Darin:
+
+| Feld oder Knopf | Wofür |
+|-----------------|-------|
+| Benutzername, Passwort, **Anmelden** | Die IServ-Anmeldung für den Abruf (Abschnitt 5) |
+| **Seite öffnen** | Öffnet die Liste erneut im Browser — falls Sie den Tab versehentlich geschlossen haben |
+| **Beenden** | Beendet das Programm sauber |
+| **⚙** (Zahnrad) | Server und Ordner der Excel-Datei einstellen |
 
 Beim **allerersten Mal** dauert es ein paar Minuten: das Programm richtet sich
 im Benutzerprofil ein und lädt die benötigten Bausteine aus dem Internet. Beim
@@ -52,19 +63,29 @@ sich der Browser nicht von selbst öffnet, tippen Sie diese Adresse dort ein.
 
 ### Beim ersten Start: „Wo liegt die Bestandsliste?"
 
-Findet das Programm die Excel-Datei nicht, zeigt es eine Seite mit den geprüften
-Pfaden. Zwei Möglichkeiten:
+Findet das Programm die Excel-Datei nicht, sagt die Seite im Browser das und
+nennt die geprüften Orte. Einstellen lässt es sich im **Programmfenster**:
 
-- Steht der richtige Pfad dabei und ist als **(gefunden)** markiert, auf
-  **Datei verwenden** klicken.
-- Sonst **Eigenen Pfad eingeben** aufklappen und den vollständigen Pfad zur
-  `.xlsx`-Datei eintragen (im Explorer: Datei mit Rechtsklick anklicken,
-  „Als Pfad kopieren").
+1. Auf das **Zahnrad ⚙** klicken.
+2. Bei **Ordner der Mappe** auf **Durchsuchen…** klicken und den Ordner
+   auswählen, in dem die Bestandsliste liegt (nicht die Datei — den Ordner).
+3. **Speichern**. Darunter steht dann, welche Datei das Programm gewählt hat.
+4. Zurück im Browser die Seite neu laden (F5).
 
-Das Programm öffnet die Datei und prüft, ob sie wirklich die Bestandsliste ist,
-bevor es sich den Pfad merkt. Eine falsche Datei kann den funktionierenden Pfad
-also nicht verdrängen. Der gemerkte Pfad bleibt auch dann erhalten, wenn das
-Programm später aktualisiert wird.
+**Warum den Ordner und nicht die Datei?** Weil der Dateiname die Jahreszahl
+trägt und mit dem Schuljahr wechselt. Das Programm nimmt die `.xlsx` mit der
+höchsten Jahreszahl im Namen; liegt die alte Mappe noch daneben, ist das also
+schon richtig. Sperrdateien, die Excel beim Öffnen anlegt (`~$…`), übergeht es,
+und die Sicherungen im Unterordner `backups` ebenfalls.
+
+Im selben Fenster steht auch der **IServ-Server** (etwa `iserv-trg-oha.de`) —
+ohne `https://` davor. Er wird für die Anmeldung gebraucht und muss normalerweise
+nie geändert werden.
+
+Das Programm öffnet die gefundene Datei und prüft, ob sie wirklich die
+Bestandsliste ist, bevor es sich den Ordner merkt. Ein falscher Ordner kann den
+funktionierenden also nicht verdrängen. Beides bleibt gespeichert und steht beim
+nächsten Start wieder da — auch nach einem Update des Programms.
 
 ---
 
@@ -123,13 +144,23 @@ also noch da: einfach aus `backups` zurückkopieren.
 
 ## 5. Zahlen aus IServ holen
 
-Der blaue Knopf **„Aktuelle Daten aus IServ abrufen"** oben rechts. Es fragt
-nach Benutzername und Passwort — **Ihren eigenen IServ-Zugangsdaten**, nicht
-denen von jemand anderem.
+**Zuerst anmelden:** im Programmfenster Benutzername und Passwort eintragen —
+**Ihre eigenen IServ-Zugangsdaten**, nicht die von jemand anderem — und auf
+**Anmelden** klicken. Darunter steht danach, als wer Sie angemeldet sind und
+wann die Anmeldung verfällt.
 
-Nach dem Klick auf „Abrufen" meldet sich das Programm bei IServ an; solange das
-läuft, dreht sich ein kleines Rad im Knopf. Danach dauert der Abruf ein paar
-Sekunden und zeigt einen Fortschrittsbalken. Am Ende steht in der
+Dann im Browser der blaue Knopf **„Aktuelle Daten aus IServ abrufen"** oben
+rechts, und im Dialog auf **Abrufen**. Der Abruf dauert ein paar
+Sekunden und zeigt einen Fortschrittsbalken.
+
+> **„Bitte im Programmfenster anmelden"?** Dann ist die Anmeldung noch nicht
+> erfolgt oder inzwischen verfallen — sie hält 30 Minuten ab dem letzten Abruf.
+> Einfach im Programmfenster erneut anmelden und den Abruf noch einmal starten.
+> Das ist Absicht: so liegt Ihr Passwort nicht den ganzen Tag im Speicher.
+
+Wenn Sie zwischendurch sicher sein wollen, dass niemand an Ihrem Rechner einen
+Abruf startet: **Abmelden** im Programmfenster. Das Programm läuft weiter, die
+Liste bleibt bedienbar. Am Ende steht in der
 Zusammenfassung, wie viele Zellen sich geändert haben und was nachbestellt
 werden müsste.
 
@@ -183,9 +214,13 @@ Zwei Dinge, die dabei zu wissen sind:
 
 ## 7. Beenden
 
-Knopf **„Beenden"** auf der Seite. Danach kann das schwarze Fenster geschlossen
-werden. Alternativ das Fenster einfach zumachen — es geht dabei nichts verloren,
-weil jede Änderung sofort gespeichert wird.
+Knopf **„Beenden"** — im Programmfenster oder auf der Seite, beide tun dasselbe.
+Danach kann auch das schwarze Fenster geschlossen werden.
+
+Der Knopf im Programmfenster ist der Weg, der immer funktioniert: Er ist auch
+dann noch da, wenn Sie den Browser-Tab schon zugemacht haben. Und wenn Sie das
+Programmfenster einfach zuklappen, fragt es nach und beendet dann ebenfalls
+alles. Es geht dabei nichts verloren, weil jede Änderung sofort gespeichert wird.
 
 ---
 

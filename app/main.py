@@ -1,9 +1,9 @@
 """Die App-Factory - reine Verdrahtung, sonst nichts.
 
 ``create_app`` baut eine vollständig eigenständige Anwendung: eigene
-Konfiguration, eigener Abrufzustand, eigener Client. Zwei gestartete Fenster
-und jeder Test bekommen damit ihre eigene Instanz, die keine andere
-beeinflusst. Der exportierte Modulwert ``app`` bleibt für
+Konfiguration, eigener Abrufzustand, eigene Anmeldung, eigener Client. Zwei
+gestartete Fenster und jeder Test bekommen damit ihre eigene Instanz, die keine
+andere beeinflusst. Der exportierte Modulwert ``app`` bleibt für
 ``uvicorn app.main:app`` erhalten.
 
 Diese Datei hatte bis 2026-09-05 vier Aufgaben: Factory, sämtliche Routen, das
@@ -33,6 +33,7 @@ from .api import ROUTER
 from .refresh import ClientFabrik, RefreshManager
 from .settings import Einstellungen
 from .sicherheit import ERLAUBTE_HOSTS, HerkunftMiddleware
+from .sitzung import Anmeldung
 
 _HIER = Path(__file__).resolve().parent
 
@@ -43,6 +44,7 @@ def create_app(
     config_pfad: Path | None = None,
     client_factory: ClientFabrik | None = None,
     refresh_manager: RefreshManager | None = None,
+    anmeldung: Anmeldung | None = None,
 ) -> FastAPI:
     """Erstellt eine unabhängige Dashboard-Anwendung mit Dependency Injection."""
     application = FastAPI(title="Schulbuchausleihe — Bestand")
@@ -55,6 +57,10 @@ def create_app(
     application.state.config_pfad = config_pfad
     application.state.client_factory = client_factory
     application.state.refresh_manager = refresh_manager or RefreshManager()
+    # Eine Anmeldung je Anwendung, wie der RefreshManager: zwei gestartete
+    # Fenster melden sich unabhängig voneinander an. Einsetzbar, damit Tests das
+    # Zeitschloss mit einer eigenen Zeitquelle prüfen können.
+    application.state.anmeldung = anmeldung or Anmeldung()
 
     # Reihenfolge: Starlette baut den Stapel so, dass die ZULETZT hinzugefügte
     # Middleware AUSSEN liegt. Die Host-Prüfung soll ganz außen stehen - sie ist

@@ -34,15 +34,27 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
 | `GET /api/rows` | Zeilen als JSON, mit `mtime` und Cache-Alter |
 | `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423/500/503 |
-| `POST /api/einrichtung` | Excel-Pfad festlegen: `{pfad}` → 200/400/500 |
-| `POST /api/refresh` | Abruf starten: `{benutzer, passwort}` → 202/400/401/403/409/504 |
+| `GET /api/einstellungen` | Server, Ordner und gefundene Mappe (fürs Fenster) |
+| `POST /api/einstellungen` | Server und Ordner festlegen: `{server, ordner}` → 200/400/500 |
+| `POST /api/anmeldung` | Bei IServ anmelden: `{benutzer, passwort}` → 200/400/401/403/504 |
+| `GET /api/anmeldung` | Wer angemeldet ist und wann es verfällt (nie das Passwort) |
+| `DELETE /api/anmeldung` | Abmelden, Client verwerfen |
+| `POST /api/refresh` | Abruf starten, **ohne Körper** → 202/401/409/503 |
 | `GET /api/refresh/status` | Fortschritt des Abrufs (immer 200) |
-| `POST /api/beenden` | Server beenden (Knopf in der Oberfläche) |
+| `POST /api/beenden` | Server beenden (Knopf im Fenster und auf der Seite) |
 | `GET /health` | `{"status": "ok"}` |
 
 Jede Fehlerantwort hat die Form `{"fehler": "<deutscher Klartext>"}`; welche
 Ausnahme zu welchem Status wird, steht als Tabelle in
 [`docs/architektur.md`](docs/architektur.md#ausnahme--http-steht-an-genau-einer-stelle).
+
+Bedient wird das Programm über ein **eigenes Fenster** (tkinter): dort meldet man
+sich bei IServ an, stellt Server und Ordner der Mappe ein, öffnet die Seite
+erneut und beendet das Dashboard — auch dann, wenn der Browser-Tab längst zu ist.
+Die Zugangsdaten werden **nie gespeichert**; sie liegen für die Laufzeit im
+IServ-Client und verfallen nach 30 Minuten ohne Abruf. Warum das Passwort
+überhaupt gehalten werden muss und was das Zeitschloss daran ändert, steht in
+[`docs/architektur.md`](docs/architektur.md#die-anmeldung-einmal-im-fenster-mit-zeitschloss).
 
 Änderbar ist nur **Bestellt**, und nur über den Zeilenschlüssel —
 `/api/cell` nimmt keine freie Zellreferenz entgegen, und die beim Laden gesehene
@@ -102,6 +114,11 @@ Rechner über einen Laufwerksbuchstaben und auf dem anderen über UNC erreichbar
 ist. Der erste existierende Pfad gewinnt; existiert keiner, zeigt die Startseite
 alle geprüften Pfade.
 
+Server und Ordner lassen sich im Fenster hinterm Zahnrad einstellen; welche
+`.xlsx` im Ordner genommen wird, entscheidet eine feste Regel
+(`app.settings.mappe_im_ordner`: keine `~$…`-Sperrdateien, größte Jahreszahl im
+Namen, bei Gleichstand die jüngste Änderungszeit).
+
 `config.json` ist der **ausgelieferte Standard** und wird im Betrieb nie
 beschrieben; Anpassungen landen in einer Benutzerkonfiguration im
 plattformabhängigen Ordner (`SBA_CONFIG_DIR` überschreibt ihn), und
@@ -110,10 +127,15 @@ Plattform, was validiert wird und wie eine alte Vollkopie migriert wird, steht
 in [`docs/architektur.md`](docs/architektur.md#zwei-ebenen-ausgelieferter-standard--benutzerkonfiguration).
 
 ```bash
-uv run python -m app.start           # sucht einen freien Port, oeffnet den Browser
+uv run python -m app.start           # freier Port, Fenster, Browser
 uv run python -m app.start --kein-browser
+uv run python -m app.start --kein-fenster   # nur Server, beenden mit Strg+C
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8765   # ohne Beenden-Knopf
 ```
+
+Ohne Bildschirm — der Entwicklungs-VPS, die CI — fällt der Start von selbst auf
+`--kein-fenster` zurück und sagt das auf der Konsole. Eine Anmeldemaske gibt es
+dann nicht; ein Abruf braucht dort ein `POST` auf `/api/anmeldung`.
 
 ## macOS und Linux: mit Arbeitskopie starten
 

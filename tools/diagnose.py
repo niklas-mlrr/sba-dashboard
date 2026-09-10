@@ -142,6 +142,18 @@ def _pruefe_konfiguration(bericht: Bericht):
         bericht.notiere("Konfiguration", WARNUNG, hinweis)
     bericht.notiere("IServ-Domain", OK, einstellungen.iserv_domain)
     bericht.notiere("Blatt", OK, einstellungen.blatt_raster)
+    # Der im Programmfenster eingestellte Ordner gehört in den Bericht, auch wenn
+    # die Mappe darin gefunden wird: er entscheidet, WELCHE Datei genommen wird
+    # (app.settings.mappe_im_ordner), und genau danach fragt man, wenn jemand
+    # sagt "da stehen falsche Zahlen".
+    if einstellungen.excel_ordner is not None:
+        vorhanden = einstellungen.excel_ordner.is_dir()
+        bericht.notiere("Excel-Ordner", OK if vorhanden else FEHLER,
+                        f"{einstellungen.excel_ordner}"
+                        f"{'' if vorhanden else ' (gibt es nicht)'}")
+    else:
+        bericht.notiere("Excel-Ordner", UEBERSPRUNGEN,
+                        "nicht eingestellt - es gelten die Pfadkandidaten unten")
     return einstellungen
 
 
@@ -149,15 +161,21 @@ def _pruefe_mappe(bericht: Bericht, einstellungen) -> None:
     from app.excel import lade_mappe, raster_blatt, sperr_benutzer, sperrdatei
 
     gefunden = None
-    for pfad, vorhanden in einstellungen.gepruefte_pfade():
-        bericht.notiere("Pfadkandidat", OK if vorhanden else WARNUNG,
+    # gepruefte_pfade() stellt das Ergebnis eines eingestellten Ordners voran -
+    # entweder die darin gefundene Mappe oder den Ordner selbst mit False. Die
+    # Reihenfolge hier ist deshalb dieselbe, in der auch die Anwendung wählt.
+    for nummer, (pfad, vorhanden) in enumerate(einstellungen.gepruefte_pfade()):
+        aus_ordner = nummer == 0 and einstellungen.excel_ordner is not None
+        bericht.notiere("Mappe im Ordner" if aus_ordner else "Pfadkandidat",
+                        OK if vorhanden else WARNUNG,
                         f"{pfad} {'(gefunden)' if vorhanden else '(nicht da)'}")
         if vorhanden and gefunden is None:
             gefunden = pfad
     if gefunden is None:
         bericht.notiere("Arbeitsmappe", FEHLER,
-                        "Keiner der eingetragenen Pfade existiert. Meist heißt das: "
-                        "das Netzlaufwerk ist nicht verbunden.")
+                        "Weder im eingestellten Ordner noch unter den eingetragenen "
+                        "Pfaden liegt eine Mappe. Meist heißt das: das Netzlaufwerk "
+                        "ist nicht verbunden.")
         return
 
     if sperrdatei(gefunden) is not None:

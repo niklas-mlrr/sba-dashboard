@@ -116,6 +116,8 @@ Menschen — die frühere Fehlmeldung des Testskripts kam genau daher.
 |---|---------|----------|----------|
 | A1 | `START.bat` doppelklicken | Fenster öffnet sich, keine Admin-Abfrage, keine Firewall-Abfrage | Uhrzeit Start |
 | A2 | Warten, bis der Browser aufgeht | Liste ist sichtbar oder die Einrichtungsseite | **Dauer in Sekunden** |
+| A2b | Das **Programmfenster** ansehen | Es ist da, zeigt Server und Ordner, und die Knöpfe „Seite öffnen" und „Beenden" | ob es lesbar ist, Schriftgröße |
+| A2c | Zahnrad ⚙ → „Durchsuchen…" | Windows-Ordnerauswahl geht auf; ausgewählter Ordner steht danach im Feld | ob der Netzlaufwerk-Ordner darin auffindbar ist |
 | A3 | `tools\diagnose.py` laufen lassen | Rückgabewert 0 | Bericht anhängen |
 | A4 | Im Bericht: Zeilen „Paket ausleihe" / „Paket bestand" | beide `ok`, Text „installiert" | Textzeile |
 | A5 | Im Bericht: Zeile „PYTHONPATH" | `ok`, „nicht gesetzt" | — |
@@ -180,12 +182,16 @@ Mit dem **eigenen** Konto, nicht mit einem Verwalterzugang von jemand anderem.
 
 | # | Schritt | Erwartet | Notieren |
 |---|---------|----------|----------|
-| F1 | „Aktuelle Daten aus IServ abrufen", Zugangsdaten eingeben | Der Knopf zeigt „Anmeldung läuft …" mit drehendem Rad, dann bewegt sich der Fortschrittsbalken | **Gesamtdauer**, und wie lange allein die Anmeldung braucht |
+| F0 | Ohne Anmeldung „Abrufen" klicken | Klartext „Bitte im Programmfenster anmelden", HTTP 401, kein Absturz | Wortlaut |
+| F1a | Im Programmfenster anmelden | Statuszeile: „Angemeldet als …, verfällt in 30 Minuten"; das Passwortfeld ist sofort leer | **Dauer der Anmeldung** |
+| F1 | „Aktuelle Daten aus IServ abrufen", dann „Abrufen" | Der Fortschrittsbalken bewegt sich | **Gesamtdauer** |
 | F2 | Zusammenfassung am Ende | Zahl geänderter Zellen, Nachbestellungen | Zahlen |
 | F2b | Direkt nach dem Neuladen | Die geänderten Zahlen sind ~10 s gelb hinterlegt, danach nicht mehr | ob es auffällt |
 | F2c | Während des Abrufs ein zweites Fenster auf `127.0.0.1:8765` öffnen | Auch dort läuft der Fortschrittsbalken, und auch dort lädt die Seite am Ende neu | — |
 | F3 | Warnungen in der Zusammenfassung | Erwartet wird **keine** Cache-Warnung. Steht dort „Titel und ISBN konnten diesmal nicht zwischengespeichert werden", ist **beides** fehlgeschlagen, Gruppenordner *und* lokaler Rückfallort | Wortlaut |
-| F4 | Falsches Passwort eingeben | „Zugangsdaten stimmen nicht", HTTP 401, **kein** Absturz | — |
+| F4 | Falsches Passwort im Fenster eingeben | „Zugangsdaten stimmen nicht", **kein** Absturz, die bestehende Anmeldung bleibt bestehen | — |
+| F4b | „Abmelden" im Fenster, dann „Abrufen" | Wieder der 401 aus F0 | — |
+| F4c | Zeitschloss: `START.bat` mit gesetztem `SBA_ANMELDUNG_ABLAUF=60` starten (in der Eingabeaufforderung: `set SBA_ANMELDUNG_ABLAUF=60` und dann `START.bat`), anmelden, eine Minute warten | Die Statuszeile schlägt auf „Nicht angemeldet" um, ein Abruf verlangt eine neue Anmeldung | ob es nachvollziehbar ist |
 | F5 | Nach dem Abruf: Titel und ISBN in der Liste | gefüllt, ISBN mit Bindestrichen | ein Beispiel |
 | F6 | Cache-Zeilen im Diagnosebericht | sagt, ob geteilt oder lokal geschrieben wurde | Zeilen |
 
@@ -214,10 +220,35 @@ Befund, nicht die Vermutung.
 
 ### H. Beenden
 
+Der Anlass für das Programmfenster steht in H2: der Weg zurück, wenn der Tab weg
+ist. Bis dahin gab es keinen.
+
 | # | Schritt | Erwartet |
 |---|---------|----------|
-| H1 | Knopf „Beenden" | Seite sagt, man könne das Fenster schließen; Fenster endet |
-| H2 | Danach `START.bat` erneut | startet normal |
+| H1 | Knopf „Beenden" auf der Seite | Seite sagt, man könne das Fenster schließen; beide Fenster enden |
+| H2 | Neu starten, **Browser-Tab schließen**, dann „Seite öffnen" im Programmfenster | Der Tab ist wieder da, mit derselben Liste |
+| H3 | Knopf „Beenden" im Programmfenster | Rückfrage, danach endet alles; `http://127.0.0.1:8765/` ist nicht mehr erreichbar |
+| H4 | Neu starten und das Programmfenster über das **X** schließen | Dieselbe Rückfrage, dasselbe Ergebnis |
+| H5 | Danach `START.bat` erneut | startet normal; Server und Ordner stehen noch, Anmeldung ist weg |
+
+### I. Laufwerksverschlüsselung
+
+Kein Test des Programms, sondern eine Frage an das Gerät — und die einzige, die
+das Programm selbst nicht beantworten kann.
+
+Die IServ-Anmeldung hält das Passwort für die Laufzeit im Arbeitsspeicher
+(Begründung in [`architektur.md`](architektur.md#warum-das-passwort-jetzt-im-speicher-liegt)).
+Windows kann eine Speicherseite jederzeit in die Auslagerungsdatei schreiben;
+ohne BitLocker liegt sie danach unverschlüsselt auf der Platte und überlebt das
+Beenden.
+
+| # | Schritt | Erwartet |
+|---|---------|----------|
+| I1 | In der Eingabeaufforderung `manage-bde -status C:` (oder Systemsteuerung → BitLocker) | „Schutz aktiviert" |
+
+Steht dort etwas anderes, ist das ein Befund für die Schul-IT und kein Fehler
+des Dashboards. Das Zeitschloss von 30 Minuten begrenzt das Zeitfenster, schließt
+es aber nicht.
 
 ## Wenn etwas fehlschlägt
 

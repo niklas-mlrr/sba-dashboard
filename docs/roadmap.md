@@ -1,12 +1,51 @@
 # Was noch offen ist
 
-Stand: 2026-09-05. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
+Stand: 2026-09-10. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
 liegt als abgeschlossener v1-Plan in [`archiv/`](archiv/PLAN.md).
 
 Der **Struktur-Backlog** aus dem Review vom 2026-09-05 ist abgearbeitet (unten,
 mit dem, was sich dabei geändert hat). Offen bleiben damit nur noch die beiden
 **Funktionslücken**, die niemand außer Niklas erledigen kann — allen voran der
 Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
+
+## Das Programmfenster (2026-09-10) — erledigt, mit einem Nachfolgepunkt
+
+Anlass war eine einzige Beobachtung: wer den Browser-Tab versehentlich schließt,
+hat keinen bedienbaren Weg mehr, den Server zu beenden. Das Programm hat seither
+ein eigenes Fenster (tkinter, Standardbibliothek) mit Anmeldung, „Seite öffnen",
+„Beenden" und den Einstellungen hinterm Zahnrad. Was sich dabei sonst geändert
+hat, steht in [`architektur.md`](architektur.md#das-programmfenster-warum-der-server-in-den-nebenthread-wanderte):
+
+- Die **IServ-Anmeldung** passiert nur noch im Fenster, einmal statt bei jedem
+  Abruf. Sie verfällt nach 30 Minuten ohne Abruf; gespeichert wird nichts.
+  `POST /api/refresh` nimmt keinen Körper mehr.
+- **Server und Ordner der Mappe** sind im Fenster einstellbar und überleben den
+  Neustart. Eingestellt wird der **Ordner**, nicht die Datei — der Dateiname
+  trägt die Jahreszahl und wechselt mit dem Schuljahr.
+- Die **Einrichtungsseite im Browser** ist damit nur noch ein Hinweis; sie hatte
+  als einziges Eingabefeld einen von Hand getippten UNC-Pfad, die
+  fehleranfälligste Stelle der ganzen Ersteinrichtung.
+- Der **Server läuft im Nebenthread**, weil Tk den Hauptthread braucht.
+
+**Nachfolgepunkt: die Konsole verstecken.** Das schwarze Fenster hat seinen
+Zweck verloren — alles, was darin stand, steht jetzt im Programmfenster, und der
+Satz „dieses Fenster nicht schließen" war schon immer eine Zumutung. Der Weg
+dorthin ist `pythonw.exe` statt `python.exe` in `START.bat` (plus eine
+`.pyw`-Endung, wo eine gebraucht wird). Was dabei zu bedenken ist, und warum es
+nicht einfach eine Zeile ist:
+
+- `pythonw` hat **kein stdout/stderr**. Jedes `print` aus `app/start.py` und
+  jeder Traceback gehen ins Leere; ein Start, der an der Konfiguration scheitert,
+  endet dann ohne eine einzige Spur. Vorher braucht es also einen Ort für diese
+  Meldungen — eine Logdatei im Benutzerprofil und/oder ein Fehlerfenster vor dem
+  Start des Servers.
+- Die Einrichtung in `START.bat` (pip, robocopy) **muss** sichtbar bleiben: beim
+  ersten Start dauert sie Minuten. Verstecken lässt sich nur der letzte Schritt.
+- `tools/diagnose.py` und der Handtest leben von der Konsolenausgabe; sie müssen
+  weiter an sie herankommen (`--kein-fenster` plus `python.exe` bleibt der Weg).
+
+Solange das nicht gebaut ist, bleibt es bei zwei Fenstern — und das schwarze ist
+immerhin nicht mehr das einzige Bedienelement.
 
 ## Sieben Punkte aus dem ersten Blick auf die Oberfläche (2026-09-05)
 
@@ -444,10 +483,22 @@ ISBN dort nicht, **leerte** der Abruf die Zelle. Behoben, siehe oben.
 Nicht vorgesehen. Das Blatt wird beim Abruf neu aufgebaut; eine Bearbeitung
 darin wäre beim nächsten Lauf weg, ohne dass es jemand merkt.
 
+### Das Passwort gar nicht halten
+
+Erwogen und verworfen, als die Anmeldung ins Fenster wanderte: schöner wäre es,
+nach dem `login()` nur die IServ-Sitzung zu behalten und das Passwort sofort zu
+verwerfen. Das geht mit diesem Client nicht — `AusleiheClient` hält es selbst und
+braucht es für die Neuanmeldung nach einem 401 (`ausleihe/client.py`). Machbar
+wäre es nur mit einer Änderung in `ausleihe-api` (ein Modus „kein erneuter Login")
+und hätte den Preis, dass jede abgelaufene IServ-Sitzung eine neue Eingabe
+verlangt, auch mitten in der Arbeit. Das Zeitschloss von 30 Minuten ist der
+Kompromiss; die vollständige Abwägung steht in
+[`architektur.md`](architektur.md#warum-das-passwort-jetzt-im-speicher-liegt).
+
 ## Erledigt und damit hier nur noch als Stichwort
 
-Lesen, Schreiben, IServ-Abruf, Windows- und macOS-Start, Ersteinrichtung mit
-geprüfter Mappe, prozessübergreifende Schreibsperre, gehärteter Sidecar-Cache,
+Lesen, Schreiben, IServ-Abruf, Windows- und macOS-Start, Programmfenster mit
+Anmeldung und Einstellungen, Ersteinrichtung mit geprüfter Mappe, prozessübergreifende Schreibsperre, gehärteter Sidecar-Cache,
 Trennung von ausgeliefertem Standard und Benutzerkonfiguration, eigenständige
 Auslieferung ohne `PYTHONPATH`, Host- und Origin-Prüfung, zentrale
 Fehlerabbildung, CI mit Ruff, mypy, pytest und Abdeckungsmessung auf Linux und

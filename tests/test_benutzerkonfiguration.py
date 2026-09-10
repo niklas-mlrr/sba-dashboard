@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from app import paths as pfade_modul
-from app.settings import Einstellungen, EinstellungsFehler, speichere_excel_pfad
+from app.settings import Einstellungen, EinstellungsFehler, speichere_benutzerwerte
 
 STANDARD = {
     "iserv_domain": "beispiel-schule.de",
@@ -98,29 +98,69 @@ def test_fehlendes_overlay_ist_kein_fehler(standard_pfad, benutzer_pfad):
 
 # ── Schreiben: nur ins Overlay, config.json bleibt unberührt ────────────────
 
-def test_speichere_excel_pfad_schreibt_nur_ins_overlay_config_json_bleibt_byteweise_gleich(
+def test_speichere_benutzerwerte_schreibt_nur_ins_overlay_config_json_bleibt_byteweise_gleich(
     standard_pfad, benutzer_pfad, tmp_path,
 ):
     vorher = standard_pfad.read_bytes()
     einst, _ = Einstellungen.laden_mit_benutzerkonfiguration(standard_pfad, benutzer_pfad)
 
-    neuer_kandidat = tmp_path / "gewaehlt.xlsx"
-    neuer_kandidat.write_text("x")
-    ergebnis = speichere_excel_pfad(einst, neuer_kandidat)
+    ordner = tmp_path / "Buchausleihe"
+    ordner.mkdir()
+    ergebnis = speichere_benutzerwerte(einst, iserv_domain="neu-schule.de", excel_ordner=ordner)
 
     assert standard_pfad.read_bytes() == vorher  # der ausgelieferte Standard ist unverändert
     assert benutzer_pfad.is_file()
 
     overlay = json.loads(benutzer_pfad.read_text(encoding="utf-8"))
     assert overlay == {
-        "excel_pfad_kandidaten": [
-            str(neuer_kandidat), *STANDARD["excel_pfad_kandidaten"],
-        ]
-    }  # nur der geänderte Schlüssel, kein Vollduplikat des Standards
-    assert ergebnis.excel_pfad_kandidaten[0] == neuer_kandidat
+        "iserv_domain": "neu-schule.de",
+        "excel_ordner": str(ordner),
+    }  # nur die geänderten Schlüssel, kein Vollduplikat des Standards
+    assert ergebnis.iserv_domain == "neu-schule.de"
+    assert ergebnis.excel_ordner == ordner
 
 
-def test_speichere_excel_pfad_ohne_bekannten_zielpfad_ist_ein_fehler(tmp_path):
+def test_speichere_benutzerwerte_laesst_fremde_schluessel_im_overlay_stehen(
+    standard_pfad, benutzer_pfad, tmp_path,
+):
+    """Ein zweiter Speichervorgang darf den ersten nicht wegwerfen."""
+    _schreibe(benutzer_pfad, {"excel_pfad_kandidaten": ["b.xlsx", "a.xlsx"]})
+    einst, _ = Einstellungen.laden_mit_benutzerkonfiguration(standard_pfad, benutzer_pfad)
+
+    speichere_benutzerwerte(einst, iserv_domain="neu-schule.de")
+
+    overlay = json.loads(benutzer_pfad.read_text(encoding="utf-8"))
+    assert overlay == {
+        "excel_pfad_kandidaten": ["b.xlsx", "a.xlsx"],
+        "iserv_domain": "neu-schule.de",
+    }
+
+
+def test_speichere_benutzerwerte_ohne_aenderung_schreibt_nichts(standard_pfad, benutzer_pfad):
+    """Ein Aufruf ohne Werte ist kein Fehler, legt aber auch keine Datei an."""
+    einst, _ = Einstellungen.laden_mit_benutzerkonfiguration(standard_pfad, benutzer_pfad)
+    assert speichere_benutzerwerte(einst) is einst
+    assert not benutzer_pfad.exists()
+
+
+def test_der_eingestellte_ordner_ueberlebt_einen_neustart(standard_pfad, benutzer_pfad, tmp_path):
+    """Genau das, was das Fenster zusagt: beim nächsten Start steht es vorbelegt da."""
+    ordner = tmp_path / "Buchausleihe Admins"
+    ordner.mkdir()
+    (ordner / "Bestand- und Nachbestellungsliste 2026.xlsx").write_text("x")
+
+    einst, _ = Einstellungen.laden_mit_benutzerkonfiguration(standard_pfad, benutzer_pfad)
+    speichere_benutzerwerte(einst, iserv_domain="neu-schule.de", excel_ordner=ordner)
+
+    # Zweiter Start: dieselben beiden Dateien, frisch geladen.
+    wieder, hinweis = Einstellungen.laden_mit_benutzerkonfiguration(standard_pfad, benutzer_pfad)
+    assert hinweis is None  # kein Migrationsbedarf, das Overlay ist schon minimal
+    assert wieder.iserv_domain == "neu-schule.de"
+    assert wieder.excel_ordner == ordner
+    assert wieder.excel_pfad() == ordner / "Bestand- und Nachbestellungsliste 2026.xlsx"
+
+
+def test_speichere_benutzerwerte_ohne_bekannten_zielpfad_ist_ein_fehler(tmp_path):
     """Eine direkt konstruierte Einstellungen-Instanz ohne benutzer_config_pfad ist ein Programmierfehler."""
     einst = Einstellungen(
         iserv_domain="beispiel-schule.de",
@@ -128,7 +168,7 @@ def test_speichere_excel_pfad_ohne_bekannten_zielpfad_ist_ein_fehler(tmp_path):
         blatt_raster="Bestand- und Nachbestellung",
     )
     with pytest.raises(EinstellungsFehler):
-        speichere_excel_pfad(einst, tmp_path / "b.xlsx")
+        speichere_benutzerwerte(einst, iserv_domain="andere-schule.de")
 
 
 # ── Migration alter Vollkopien ────────────────────────────────────────────────
@@ -187,12 +227,12 @@ def test_config_modus_liest_und_schreibt_weiterhin_genau_die_angegebene_datei(tm
     einst = Einstellungen.laden(pfad)
     assert einst.benutzer_config_pfad == pfad
 
-    neuer_kandidat = tmp_path / "gewaehlt.xlsx"
-    neuer_kandidat.write_text("x")
-    ergebnis = speichere_excel_pfad(einst, neuer_kandidat)
+    ordner = tmp_path / "Buchausleihe"
+    ordner.mkdir()
+    ergebnis = speichere_benutzerwerte(einst, excel_ordner=ordner)
 
     inhalt = json.loads(pfad.read_text(encoding="utf-8"))
-    assert inhalt["excel_pfad_kandidaten"][0] == str(neuer_kandidat)
+    assert inhalt["excel_ordner"] == str(ordner)
     assert inhalt["iserv_domain"] == STANDARD["iserv_domain"]  # restliche Schlüssel bleiben erhalten
     assert ergebnis.benutzer_config_pfad == pfad
 

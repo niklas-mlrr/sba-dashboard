@@ -98,6 +98,23 @@ Schul-Laptop reportlab **und** Pillow — rund 15 MB Pakete, die das Dashboard n
 importiert, und zwei zusätzliche Räder, an denen die Ersteinrichtung scheitern
 konnte.
 
+## Das Programmfenster braucht Tk — und bringt keine Abhängigkeit mit
+
+Das Fenster (seit 2026-09-10, siehe [`architektur.md`](architektur.md#das-programmfenster-warum-der-server-in-den-nebenthread-wanderte))
+ist **tkinter** aus der Standardbibliothek. `requirements.txt` ändert sich damit
+nicht, und das ist hier keine Kleinigkeit: die Datei ist erzeugt, wird in der CI
+gegen `uv export` geprüft, und jede neue Laufzeitabhängigkeit wäre ein weiteres
+Paket, das die Ersteinrichtung auf dem Schul-Laptop aus dem Internet holen muss.
+
+Tk ist beim Installer von python.org standardmäßig dabei („tcl/tk and IDLE", in
+der Vorauswahl angehakt). Fehlt es — ein abgewähltes Häkchen, eine abgespeckte
+Store-Fassung, ein Linux ohne `python3-tk` —, ist das **kein Startfehler**: der
+Start fällt auf den Ablauf ohne Fenster zurück und nennt den Grund im Klartext
+(`app.fenster.tkinter_verfuegbar`, ausgewertet in `app/start.py`). Ohne Fenster
+gibt es dann allerdings keine Anmeldemaske, und damit keinen Abruf ohne
+`POST /api/anmeldung` von Hand. Auf dem Schul-Laptop ist das deshalb ein Punkt
+der Prüfliste (A2b), nicht eine Annahme.
+
 ## Migration
 
 Auf einem Laptop, der schon einmal mit der alten `START.bat` gestartet wurde,

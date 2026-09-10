@@ -9,10 +9,11 @@ enthielten keine Zeile FastAPI und liegen jetzt in ``app/rows.py`` bzw.
 
 Die vier Router hier sind nach dem geschnitten, was ein Leser sucht:
 
-* :mod:`~app.api.seite` - die HTML-Oberfläche (``GET /``) und das eine
-  Formular, das sie einrichtet (``POST /api/einrichtung``).
+* :mod:`~app.api.seite` - die HTML-Oberfläche (``GET /``) und die Einstellungen,
+  die das Programmfenster liest und schreibt (``GET/POST /api/einstellungen``).
 * :mod:`~app.api.tabelle` - die Tabelle als JSON und die Änderung einer Zahl.
-* :mod:`~app.api.abruf` - Start und Fortschritt des IServ-Abrufs.
+* :mod:`~app.api.abruf` - die Anmeldung (``/api/anmeldung``) sowie Start und
+  Fortschritt des IServ-Abrufs.
 * :mod:`~app.api.system` - Lebenszeichen und Beenden.
 
 Was in **keinem** dieser Module steht: eine Abbildung von Ausnahmen auf

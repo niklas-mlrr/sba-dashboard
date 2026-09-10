@@ -8,7 +8,8 @@ gab es je nach Datei eine andere Antwort. Die Tabelle unten ist jetzt die
 einzige Antwort.
 
 Warum das überhaupt geht: die Ausnahmen kommen aus ``app/excel.py``,
-``app/refresh.py`` und ``app/settings.py`` - Modulen ohne jeden FastAPI-Import.
+``app/refresh.py``, ``app/settings.py`` und ``app/sitzung.py`` - Modulen ohne
+jeden FastAPI-Import.
 Sie beschreiben, *was* schiefging (die Mappe ist offen, der Stand ist veraltet),
 nicht *wie* man darauf antwortet. Genau deshalb lässt sich das Wie einmal
 zentral festlegen.
@@ -18,6 +19,8 @@ zentral festlegen.
 | ``MappeUngeeignet``   | 400    | -                    |
 | ``UngueltigeAenderung``| 400   | -                    |
 | ``RequestValidationError`` | 400 | -                 |
+| ``NichtAngemeldet``   | 401    | -                    |
+| ``Abgelaufen``        | 401    | -                    |
 | ``Konflikt``          | 409    | ``mtime``            |
 | ``LaeuftBereits``     | 409    | ``status``           |
 | ``Gesperrt``          | 423    | ``benutzer``         |
@@ -53,6 +56,7 @@ from .excel import (
 from .modelle import KOERPER_UNBRAUCHBAR, MELDUNGEN
 from .refresh import LaeuftBereits
 from .settings import EinstellungsFehler
+from .sitzung import Abgelaufen, NichtAngemeldet
 
 
 def _text(exc: Exception) -> str:
@@ -88,7 +92,7 @@ def validierungsmeldung(fehlerliste: Sequence[Any]) -> str:
     fehlenden Felder derselbe richtige Satz.
 
     Was hier **nicht** hineinläuft: der eingegebene Wert. Pydantic legt ihn in
-    jedem Fehlereintrag unter ``input`` ab - bei ``POST /api/refresh`` wäre das
+    jedem Fehlereintrag unter ``input`` ab - bei ``POST /api/anmeldung`` wäre das
     das Passwort. Es verlässt den Prozess nirgends (``tests/test_refresh.py``
     prüft das für jede Antwort), und dieser Handler ist genau die Stelle, an
     der es aus Versehen doch passieren könnte.
@@ -120,6 +124,19 @@ def registriere(application: FastAPI) -> None:
         # die Oberfläche unterscheidet die beiden nicht, und ein einziger Code
         # für "die Anfrage taugt nicht" ist leichter zu erklären.
         return JSONResponse({"fehler": validierungsmeldung(exc.errors())}, status_code=400)
+
+    @application.exception_handler(NichtAngemeldet)
+    async def _nicht_angemeldet(request: Request, exc: NichtAngemeldet) -> JSONResponse:
+        # 401 und nicht 403: es fehlt eine Anmeldung, sie wurde nicht verweigert.
+        # Die Oberfläche zeigt den Klartext, der aufs Programmfenster verweist.
+        return _antwort(exc, 401)
+
+    @application.exception_handler(Abgelaufen)
+    async def _abgelaufen(request: Request, exc: Abgelaufen) -> JSONResponse:
+        # Derselbe Code wie NichtAngemeldet, aber ein anderer Satz: "abgelaufen"
+        # ist für die Lehrkraft eine andere Auskunft als "nie angemeldet", und
+        # beide Male ist dasselbe zu tun.
+        return _antwort(exc, 401)
 
     @application.exception_handler(Konflikt)
     async def _konflikt(request: Request, exc: Konflikt) -> JSONResponse:

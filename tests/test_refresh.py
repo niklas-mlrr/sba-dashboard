@@ -1,9 +1,11 @@
-"""POST /api/refresh: ein Lauf, Fehler in Klartext, Passwort nirgends.
+"""Anmeldung und Abruf: ein Lauf, Fehler in Klartext, Passwort nur an einer Stelle.
 
-Der Abruf ist die einzige Stelle, an der das Dashboard Zugangsdaten anfasst.
-Die Tests prüfen deshalb nicht nur, dass er funktioniert, sondern auch, dass
-das Passwort keine der Antworten, keinen Log-Eintrag und keinen Modulzustand
-erreicht.
+``POST /api/anmeldung`` ist seit 2026-09-10 die einzige Stelle, an der das
+Dashboard Zugangsdaten entgegennimmt (im Betrieb aus dem Programmfenster); der
+Abruf selbst hat keinen Körper mehr. Die Tests prüfen deshalb nicht nur, dass
+beides funktioniert, sondern auch, dass das Passwort keine Antwort, keinen
+Log-Eintrag und keinen ablesbaren Zustand erreicht - außer dem IServ-Client, der
+es für eine Neuanmeldung selbst braucht (Begründung in ``app/sitzung.py``).
 """
 from __future__ import annotations
 
@@ -23,9 +25,8 @@ from app import cache as cache_modul
 from app.main import create_app
 from app.refresh import Lauf, RefreshManager
 from conftest import TEST_BASIS_URL
-
-PASSWORT = "geheim-Kennwort-2026!"
-BENUTZER = "b.lehrer"
+from conftest import TEST_BENUTZER as BENUTZER
+from conftest import TEST_PASSWORT as PASSWORT
 
 
 def _warte_auf_ende(client, sekunden: float = 10.0) -> dict:
@@ -39,11 +40,19 @@ def _warte_auf_ende(client, sekunden: float = 10.0) -> dict:
     raise AssertionError(f"Abruf wurde nicht fertig: {stand}")
 
 
-def _abrufen(client, factory=FakeClient, **felder):
+def _anmelden(client, factory=FakeClient, **felder):
+    """Die Anmeldung allein - für die Tests, in denen sie scheitern soll."""
     client.app.state.client_factory = factory
     nutzlast = {"benutzer": BENUTZER, "passwort": PASSWORT}
     nutzlast.update(felder)
-    return client.post("/api/refresh", json=nutzlast)
+    return client.post("/api/anmeldung", json=nutzlast)
+
+
+def _abrufen(client, factory=FakeClient):
+    """Anmelden und abrufen - der vollständige Weg, wie ihn das Fenster geht."""
+    antwort = _anmelden(client, factory)
+    assert antwort.status_code == 200, antwort.text
+    return client.post("/api/refresh")
 
 
 def _manager(client) -> RefreshManager:
@@ -212,7 +221,7 @@ def test_ein_zweiter_abruf_meldet_nur_noch_den_stand_als_geaendert(client_leer):
 def test_falsches_passwort_ist_401(client):
     from ausleihe.exceptions import AuthError
 
-    antwort = _abrufen(client, _FehlerClient(AuthError("401")))
+    antwort = _anmelden(client, _FehlerClient(AuthError("401")))
     assert antwort.status_code == 401
     assert "Zugangsdaten" in antwort.json()["fehler"]
     assert _manager(client).laeuft() is False
@@ -221,7 +230,7 @@ def test_falsches_passwort_ist_401(client):
 def test_fehlende_rolle_ist_403(client):
     from ausleihe.exceptions import ForbiddenError
 
-    antwort = _abrufen(client, _FehlerClient(ForbiddenError("403")))
+    antwort = _anmelden(client, _FehlerClient(ForbiddenError("403")))
     assert antwort.status_code == 403
     assert "Ausleihe-Verwalter" in antwort.json()["fehler"]
 
@@ -229,13 +238,13 @@ def test_fehlende_rolle_ist_403(client):
 def test_netzfehler_ist_504(client):
     from ausleihe.exceptions import TransportError
 
-    antwort = _abrufen(client, _FehlerClient(TransportError("timeout")))
+    antwort = _anmelden(client, _FehlerClient(TransportError("timeout")))
     assert antwort.status_code == 504
     assert "IServ" in antwort.json()["fehler"]
 
 
 def test_unerwarteter_fehler_ist_500(client):
-    antwort = _abrufen(client, _FehlerClient(RuntimeError("kaputt")))
+    antwort = _anmelden(client, _FehlerClient(RuntimeError("kaputt")))
     assert antwort.status_code == 500
 
 
@@ -247,7 +256,7 @@ def test_unerwarteter_fehler_ist_500(client):
 ])
 def test_fehlende_zugangsdaten_sind_400(client, nutzlast):
     client.app.state.client_factory = FakeClient
-    antwort = client.post("/api/refresh", json=nutzlast)
+    antwort = client.post("/api/anmeldung", json=nutzlast)
     assert antwort.status_code == 400
 
 
@@ -362,11 +371,22 @@ def test_passwort_taucht_in_keiner_antwort_auf(client, caplog):
     assert PASSWORT not in protokoll
 
 
-def test_passwort_steht_in_keinem_zustand(client, workbook_path: Path):
+def test_passwort_steht_in_keinem_ablesbaren_zustand(client, workbook_path: Path):
+    """Es liegt im IServ-Client - und in nichts, was sich ausgeben lässt.
+
+    Bis 2026-09-10 hieß dieser Test "steht in keinem Zustand", und das stimmte
+    wörtlich: das Passwort überlebte die eine Anfrage nicht. Seit der Anmeldung
+    im Programmfenster hält der Client es für eine mögliche Neuanmeldung
+    (``app/sitzung.py`` erklärt, warum das nicht zu umgehen ist). Was der Test
+    seither festhält, ist die verbliebene Zusage - und die ist die, auf die es
+    ankommt: kein Statusobjekt, keine Datei und keine Ausgabe des App-Zustands
+    zeigt es. ``Anmeldung.__repr__`` ist genau dafür da.
+    """
     _abrufen(client)
     _warte_auf_ende(client)
 
     assert PASSWORT not in json.dumps(_manager(client).status(), default=str)
+    assert PASSWORT not in json.dumps(client.app.state.anmeldung.status(), default=str)
     assert PASSWORT not in repr(vars(client.app.state))
     assert PASSWORT not in cache_modul.cache_pfad(workbook_path).read_text(encoding="utf-8")
     assert PASSWORT not in workbook_path.read_bytes().decode("latin-1")

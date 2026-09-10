@@ -6,6 +6,20 @@ dem einen Rechner ``N:\\Buchausleihe Admins\\...`` und auf dem anderen
 gewinnt; existiert keiner, zeigt die Startseite alle geprüften Pfade an, statt mit
 einer Ausnahme abzubrechen.
 
+## Ordner schlägt Kandidatenliste
+
+Seit es ein Programmfenster gibt (``app/fenster.py``), stellt die Lehrkraft dort
+den **Ordner** ein, in dem die Mappe liegt, und nicht mehr den vollen Dateipfad:
+der Dateiname trägt die Jahreszahl (``... 2026.xlsx``) und wechselt mit dem
+Schuljahr, der Ordner bleibt. Ist ``excel_ordner`` gesetzt, gewinnt die dort
+gefundene Mappe gegen ``excel_pfad_kandidaten``; die Fundregel steht bei
+:func:`mappe_im_ordner`.
+
+``excel_pfad_kandidaten`` bleibt daneben bestehen und bleibt Pflicht: es ist der
+ausgelieferte Standard für einen Rechner, auf dem noch niemand etwas eingestellt
+hat, und im Arbeitskopie-Modus (``--config``, siehe ``START.sh``) der einzige
+Weg, auf eine einzelne Datei zu zeigen.
+
 ## Zwei Ebenen: ausgelieferter Standard + Benutzerkonfiguration
 
 ``config.json`` im Repo-Wurzelverzeichnis ist der **ausgelieferte Standard**. Er
@@ -38,7 +52,8 @@ dieselbe Datei, und genau diese wird auch wieder beschrieben.
 
 Bevor es dieses Overlay-Modell gab, kopierte ``START.bat`` die gesamte
 ``config.json`` einmalig nach ``%LOCALAPPDATA%\\sba-dashboard\\config.json`` und
-``speichere_excel_pfad`` schrieb bei der Ersteinrichtung in diese Kopie zurück.
+``speichere_excel_pfad`` (heute ``speichere_benutzerwerte``) schrieb bei der
+Ersteinrichtung in diese Kopie zurück.
 Eine solche Vollkopie würde als Overlay jedes künftige Update des ausgelieferten
 Standards maskieren, weil sie für jeden Schlüssel einen (zufällig passenden)
 Wert mitbringt. Beim Laden werden deshalb Schlüssel des Overlays, deren Wert
@@ -71,6 +86,7 @@ from .paths import benutzer_konfigurationspfad
 
 _BEKANNTE_SCHLUESSEL = frozenset({
     "iserv_domain",
+    "excel_ordner",
     "excel_pfad_kandidaten",
     "blatt_raster",
     "sicherheitsbestand",
@@ -80,6 +96,11 @@ _BEKANNTE_SCHLUESSEL = frozenset({
 })
 
 _DOMAIN_MUSTER = re.compile(r"[A-Za-z0-9.-]+")
+
+# Vierstellige Jahreszahl im Dateinamen - "Bestand- ... 2026.xlsx". Bewusst
+# nicht strenger: welches Jahr gemeint ist, entscheidet die Mappe, nicht dieses
+# Muster.
+_JAHR_MUSTER = re.compile(r"(?<!\d)(\d{4})(?!\d)")
 
 
 class EinstellungsFehler(ValueError):
@@ -125,8 +146,14 @@ def _schreibe_json_atomar(pfad: Path, daten: dict) -> None:
     _atomar_schreiben(pfad, json.dumps(daten, ensure_ascii=False, indent=2) + "\n")
 
 
-def _pruefe_domain(domain: str) -> str | None:
-    """Gibt eine deutsche Fehlermeldung zurück, oder None, wenn die Domain taugt."""
+def pruefe_domain(domain: str) -> str | None:
+    """Gibt eine deutsche Fehlermeldung zurück, oder None, wenn die Domain taugt.
+
+    Öffentlich, weil ``POST /api/einstellungen`` denselben Satz braucht, bevor
+    etwas gespeichert wird: Der Server, den das Fenster schickt, soll an genau
+    derselben Regel scheitern wie einer, der in der Datei steht - und mit
+    demselben Wortlaut, allen voran dem Hinweis auf das überflüssige ``https://``.
+    """
     if not domain:
         return "'iserv_domain' fehlt oder ist leer."
     schema, _, rest = domain.partition("://")
@@ -144,23 +171,72 @@ def _pruefe_domain(domain: str) -> str | None:
     return None
 
 
+def mappe_im_ordner(ordner: Path) -> Path | None:
+    """Die Arbeitsmappe in ``ordner``, nach einer festen Regel gewählt.
+
+    Die Regel muss vorhersagbar sein - eine Lehrkraft, die nicht erklären kann,
+    *warum* das Programm diese Datei genommen hat, kann auch nicht erkennen,
+    dass es die falsche war. Deshalb in dieser Reihenfolge:
+
+    1. Nur ``.xlsx`` **direkt** im Ordner. Die Sicherungen liegen eine Ebene
+       tiefer in ``backups/`` (siehe ``app.excel.speichere_mappe``) und fallen
+       damit von selbst weg.
+    2. Ohne ``~$…``: das sind Excels eigene Sperrdateien einer geöffneten Mappe,
+       keine Arbeitsmappen.
+    3. Bei mehreren: die größte vierstellige Jahreszahl im Dateinamen gewinnt -
+       beim Schuljahreswechsel liegt die alte Mappe oft noch daneben.
+    4. Bei Gleichstand: die jüngste Änderungszeit.
+
+    Öffnet **keine** Datei: diese Funktion läuft bei jeder Anfrage über
+    ``excel_pfad()``, und das kann ein Netzlaufwerk sein. Ob die gewählte Mappe
+    brauchbar ist, prüft ``app.excel.validiere_excel_mappe`` - einmal, wenn der
+    Ordner eingestellt wird.
+    """
+    try:
+        dateien = [
+            eintrag for eintrag in ordner.iterdir()
+            if eintrag.suffix.lower() == ".xlsx"
+            and not eintrag.name.startswith("~$")
+            and eintrag.is_file()
+        ]
+    except OSError:
+        # Ordner weg, Netzlaufwerk nicht verbunden, keine Leserechte: alles
+        # dasselbe wie "keine Mappe gefunden". Der Aufrufer zeigt den Ordner an.
+        return None
+    if not dateien:
+        return None
+
+    def schluessel(pfad: Path) -> tuple[int, float]:
+        jahre = [int(treffer) for treffer in _JAHR_MUSTER.findall(pfad.stem)]
+        try:
+            mtime = pfad.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        return (max(jahre) if jahre else 0, mtime)
+
+    return max(sorted(dateien), key=schluessel)
+
+
 @dataclass(frozen=True)
 class Einstellungen:
     iserv_domain: str
     excel_pfad_kandidaten: tuple[Path, ...]
     blatt_raster: str
+    # Der im Programmfenster eingestellte Ordner. Gesetzt schlägt er die
+    # Kandidatenliste (siehe Modul-Docstring "Ordner schlägt Kandidatenliste").
+    excel_ordner: Path | None = None
     sicherheitsbestand: int = 5
     match_overrides: dict[str, str] = field(default_factory=dict)
     port: int = 8765
     backups_behalten: int = 30
     # Nicht Teil der Konfigurationsdatei selbst (daher ohne Gegenstück in
-    # config.json): der Ort, an den speichere_excel_pfad schreibt. Im
+    # config.json): der Ort, an den speichere_benutzerwerte schreibt. Im
     # --config-Modus (Einstellungen.laden) zeigt das Feld auf dieselbe Datei,
     # die auch gelesen wurde. Im Produktivmodus
     # (laden_mit_benutzerkonfiguration) zeigt es auf die Benutzerkonfiguration
     # im plattformabhängigen Ordner, nie auf den ausgelieferten Standard. Bei
     # einer direkt konstruierten Einstellungen-Instanz (z. B. in Tests) bleibt
-    # es None; der Aufrufer von speichere_excel_pfad muss dann selbst wissen,
+    # es None; der Aufrufer von speichere_benutzerwerte muss dann selbst wissen,
     # wohin geschrieben wird.
     benutzer_config_pfad: Path | None = None
     # Schlüssel, die beim Laden in der Konfiguration standen, aber von dieser
@@ -259,7 +335,7 @@ class Einstellungen:
         Gemeinsamer Kern von ``laden`` und ``laden_mit_benutzerkonfiguration``,
         damit beide Wege exakt dieselben Prüfungen durchlaufen.
         """
-        domain_fehler = _pruefe_domain(str(roh.get("iserv_domain", "")))
+        domain_fehler = pruefe_domain(str(roh.get("iserv_domain", "")))
         if domain_fehler:
             raise EinstellungsFehler(f"config.json: {domain_fehler}")
 
@@ -271,6 +347,13 @@ class Einstellungen:
         if not all(isinstance(k, str) and k.strip() for k in kandidaten):
             raise EinstellungsFehler(
                 "config.json: 'excel_pfad_kandidaten' darf nur nicht leere Textpfade enthalten."
+            )
+
+        ordner_roh = roh.get("excel_ordner")
+        if ordner_roh is not None and (not isinstance(ordner_roh, str) or not ordner_roh.strip()):
+            raise EinstellungsFehler(
+                "config.json: 'excel_ordner' muss ein nicht leerer Textpfad sein "
+                "(oder fehlen, dann gilt 'excel_pfad_kandidaten')."
             )
 
         blatt = roh.get("blatt_raster")
@@ -308,6 +391,7 @@ class Einstellungen:
             iserv_domain=str(roh["iserv_domain"]),
             excel_pfad_kandidaten=tuple(Path(str(k)) for k in kandidaten),
             blatt_raster=str(blatt),
+            excel_ordner=Path(ordner_roh.strip()) if isinstance(ordner_roh, str) else None,
             sicherheitsbestand=stock,
             match_overrides=dict(overrides),
             port=port,
@@ -319,11 +403,24 @@ class Einstellungen:
     # ── Pfadauflösung ─────────────────────────────────────────────────────────
 
     def gepruefte_pfade(self) -> list[tuple[Path, bool]]:
-        """Alle Kandidaten mit der Angabe, ob sie existieren - für die Fehlerseite."""
-        return [(pfad, pfad.is_file()) for pfad in self.excel_pfad_kandidaten]
+        """Alles, wo nach der Mappe gesucht wurde, mit dem Ergebnis.
+
+        Für die Anzeige, wenn nichts gefunden wurde: "keine Datei gefunden" ohne
+        die Angabe, *wo* gesucht wurde, ist auf einem Netzlaufwerk nicht zu
+        klären. Steht ein ``excel_ordner`` fest, ist sein Ergebnis der erste
+        Eintrag - entweder die gefundene Mappe oder der Ordner selbst mit
+        ``False``, damit die Lehrkraft den eingestellten Ordner vor sich sieht
+        und nicht nur die ausgelieferten Vorschläge.
+        """
+        eintraege: list[tuple[Path, bool]] = []
+        if self.excel_ordner is not None:
+            gefunden = mappe_im_ordner(self.excel_ordner)
+            eintraege.append((gefunden, True) if gefunden else (self.excel_ordner, False))
+        eintraege += [(pfad, pfad.is_file()) for pfad in self.excel_pfad_kandidaten]
+        return eintraege
 
     def excel_pfad(self) -> Path | None:
-        """Der erste existierende Kandidat, sonst None."""
+        """Die Mappe aus dem eingestellten Ordner, sonst der erste existierende Kandidat."""
         for pfad, vorhanden in self.gepruefte_pfade():
             if vorhanden:
                 return pfad
@@ -342,21 +439,33 @@ class Einstellungen:
         )
 
 
-def speichere_excel_pfad(einstellungen: Einstellungen, excel_pfad: Path) -> Einstellungen:
-    """Merkt einen geprüften Pfad vor den zentralen Vorschlägen.
+def speichere_benutzerwerte(
+    einstellungen: Einstellungen,
+    *,
+    iserv_domain: str | None = None,
+    excel_ordner: Path | None = None,
+) -> Einstellungen:
+    """Schreibt geänderte Einstellungen in die Benutzerkonfiguration zurück.
 
     Schreibt **ausschließlich** in ``einstellungen.benutzer_config_pfad`` - nie
     in den ausgelieferten Standard. Im ``--config``-Modus ist das dieselbe
-    Datei, die auch gelesen wurde (dort also weiterhin das komplette
-    Verhalten von früher); im Produktivmodus ist es die Benutzerkonfiguration
-    im plattformabhängigen Ordner, die dabei bei Bedarf neu angelegt wird.
+    Datei, die auch gelesen wurde; im Produktivmodus die Benutzerkonfiguration
+    im plattformabhängigen Ordner, die dabei bei Bedarf angelegt wird.
 
-    Nur der Schlüssel ``excel_pfad_kandidaten`` wird verändert; bereits
-    vorhandene Schlüssel der Benutzerkonfiguration (z. B. aus einer früheren
-    Ersteinrichtung) bleiben erhalten. Der neue Kandidat kommt nach vorn, die
-    bisher bekannten Kandidaten - Stand der geladenen ``einstellungen``, also
-    inklusive der Kandidaten des ausgelieferten Standards - bleiben dahinter
-    erhalten.
+    Nur die übergebenen Schlüssel werden verändert; alle anderen Schlüssel der
+    Benutzerkonfiguration bleiben stehen. Das ist der Grund für die
+    Schlüsselwort-Parameter statt eines ``**felder``: welche Werte das Fenster
+    speichern darf, steht damit in der Signatur und nicht erst in einer Prüfung
+    im Rumpf.
+
+    Bis 2026-09-10 hieß diese Funktion ``speichere_excel_pfad`` und konnte genau
+    einen Schlüssel schreiben - damals gab es auch nur eine Einstellung, die sich
+    im Betrieb ändern ließ (die Datei, über ``POST /api/einrichtung``). Mit dem
+    Programmfenster sind es zwei, und die Stelle, die atomar in das Overlay
+    schreibt, soll eine bleiben.
+
+    Gibt die neuen Einstellungen zurück; der Aufrufer ersetzt damit
+    ``app.state.einstellungen``.
     """
     ziel = einstellungen.benutzer_config_pfad
     if ziel is None:
@@ -365,6 +474,14 @@ def speichere_excel_pfad(einstellungen: Einstellungen, excel_pfad: Path) -> Eins
             "Einstellungen.laden() oder Einstellungen.laden_mit_benutzerkonfiguration() geladen."
         )
     ziel = Path(ziel)
+
+    aenderungen: dict[str, str] = {}
+    if iserv_domain is not None:
+        aenderungen["iserv_domain"] = iserv_domain
+    if excel_ordner is not None:
+        aenderungen["excel_ordner"] = str(excel_ordner)
+    if not aenderungen:
+        return einstellungen
 
     vorhanden: dict = {}
     if ziel.is_file():
@@ -376,11 +493,11 @@ def speichere_excel_pfad(einstellungen: Einstellungen, excel_pfad: Path) -> Eins
             # scheitern zu lassen.
             vorhanden = {}
 
-    auswahl = str(excel_pfad)
-    alte_pfade = [str(p) for p in einstellungen.excel_pfad_kandidaten if str(p) != auswahl]
-    vorhanden["excel_pfad_kandidaten"] = [auswahl, *alte_pfade]
-
+    vorhanden.update(aenderungen)
     _schreibe_json_atomar(ziel, vorhanden)
 
-    neue_kandidaten = (Path(auswahl), *(Path(p) for p in alte_pfade))
-    return replace(einstellungen, excel_pfad_kandidaten=neue_kandidaten)
+    return replace(
+        einstellungen,
+        iserv_domain=iserv_domain or einstellungen.iserv_domain,
+        excel_ordner=excel_ordner or einstellungen.excel_ordner,
+    )

@@ -71,6 +71,20 @@ source = ["app"]
 # abgedeckt, sobald sie EINMAL durchlaufen wurde - egal in welche Richtung.
 # Genau die nie genommene Richtung ist aber der Fall, den niemand geprüft hat.
 branch = true
+omit = [
+    # Die Tk-Hülle des Programmfensters. Sie lässt sich ohne Bildschirm nicht
+    # ausführen, und weder der Entwicklungsrechner noch die CI hat einen - sie
+    # stünde also dauerhaft mit 0 % in der Messung und würde die Zahl für alles
+    # andere unlesbar machen.
+    #
+    # Vertretbar ist das nur, WEIL sie keine Entscheidung enthält: jeder Knopf
+    # ruft eine Methode von app/fenster.py:Fenstersteuerung und zeigt deren
+    # Rückgabe oder deren FensterFehler an. Die Texte, die Zustandsübergänge und
+    # die Anfragen liegen dort und sind dort geprüft (tests/test_fenster.py) -
+    # ohne omit wäre die Versuchung groß, stattdessen die Trennung aufzugeben.
+    # Ein Test baut trotzdem ein echtes Fenster, er wird hier nur übersprungen.
+    "app/_fenster_tk.py",
+]
 
 [tool.coverage.report]
 # Bewusst KEIN fail_under hier. Die Schwelle steht als --cov-fail-under=85 im

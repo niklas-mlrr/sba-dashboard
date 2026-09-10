@@ -108,6 +108,29 @@ def einstellungen(workbook_path: Path) -> Einstellungen:
 TEST_BASIS_URL = "http://127.0.0.1"
 
 
+# Die Zugangsdaten der Suite. Sie stehen hier und nicht in jedem Modul einzeln,
+# weil mehrere Module prüfen, dass das Passwort NIRGENDS auftaucht - und dafür
+# müssen sie genau dieselbe Zeichenkette suchen, die auch eingegeben wurde.
+TEST_BENUTZER = "b.lehrer"
+TEST_PASSWORT = "geheim-Kennwort-2026!"
+
+
+def melde_an(client: TestClient, factory=FakeClient) -> dict:
+    """Meldet die Testanwendung an - die Vorbedingung jedes Abrufs.
+
+    Seit 2026-09-10 bringt ``POST /api/refresh`` keine Zugangsdaten mehr mit;
+    angemeldet wird einmal über ``POST /api/anmeldung`` (im Betrieb aus dem
+    Programmfenster, siehe ``app/sitzung.py``). Jeder Test, der einen Abruf
+    startet, braucht deshalb diesen Schritt davor.
+    """
+    client.app.state.client_factory = factory
+    antwort = client.post(
+        "/api/anmeldung", json={"benutzer": TEST_BENUTZER, "passwort": TEST_PASSWORT},
+    )
+    assert antwort.status_code == 200, antwort.text
+    return antwort.json()
+
+
 @pytest.fixture()
 def client(einstellungen: Einstellungen) -> TestClient:
     """Eine isolierte App mit dieser Mappe und ohne echten IServ-Client."""

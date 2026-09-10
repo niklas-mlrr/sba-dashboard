@@ -22,18 +22,17 @@ from bestand.core import excel_io as excel_io_modul
 from bestand.core.testing import FakeClient
 
 from app import cache as cache_modul
-
-BENUTZER = "b.lehrer"
-PASSWORT = "geheim-Kennwort-2026!"
+from conftest import melde_an
 
 
-def _abrufen(client, factory=FakeClient, **felder):
-    """Löst denselben Abruf aus wie ``test_refresh.py`` - eigenständig gehalten,
-    damit dieses Modul nicht von einem anderen Testmodul abhängt."""
-    client.app.state.client_factory = factory
-    nutzlast = {"benutzer": BENUTZER, "passwort": PASSWORT}
-    nutzlast.update(felder)
-    return client.post("/api/refresh", json=nutzlast)
+def _abrufen(client, factory=FakeClient):
+    """Meldet an und löst den Abruf aus - beides zusammen, wie im Betrieb.
+
+    Der Abruf selbst hat seit 2026-09-10 keinen Körper mehr; die Zugangsdaten
+    gehen einmal über ``POST /api/anmeldung`` (``conftest.melde_an``).
+    """
+    melde_an(client, factory)
+    return client.post("/api/refresh")
 
 
 def _warte_auf_ende(client, sekunden: float = 10.0) -> dict:

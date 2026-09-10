@@ -257,7 +257,7 @@
   oeffnen.addEventListener("click", () => {
     abrufFehler.hidden = true;
     dialog.showModal();
-    document.getElementById("benutzer").focus();
+    starten.focus();
   });
   abbrechen.addEventListener("click", () => dialog.close());
 
@@ -329,30 +329,26 @@
 
   formular.addEventListener("submit", async (ereignis) => {
     ereignis.preventDefault();
-    const benutzer = document.getElementById("benutzer");
-    const passwort = document.getElementById("passwort");
     starten.disabled = true;
-    // Die Anmeldung bei IServ läuft SYNCHRON in dieser einen Anfrage (siehe
-    // app/api/abruf.py) und dauert eine knappe Sekunde bis zu mehreren. Bis
-    // 2026-09-05 wurde der Knopf dabei nur ausgegraut - für die Lehrkraft sah
-    // das aus, als sei der Klick ins Leere gegangen.
+    // Der Abruf startet mit der Anmeldung aus dem Programmfenster; die Anfrage
+    // hat deshalb keinen Körper mehr (app/api/abruf.py). Sie kann trotzdem
+    // einen Moment dauern, und bis 2026-09-05 wurde der Knopf dabei nur
+    // ausgegraut - für die Lehrkraft sah das aus, als sei der Klick ins Leere
+    // gegangen.
     abrufSpinner.hidden = false;
-    startenText.textContent = "Anmeldung läuft …";
+    startenText.textContent = "Abruf startet …";
     abrufFehler.hidden = true;
     try {
-      const antwort = await fetch("/api/refresh", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ benutzer: benutzer.value, passwort: passwort.value }),
-      });
+      const antwort = await fetch("/api/refresh", { method: "POST" });
       const koerper = await antwort.json().catch(() => ({}));
       if (antwort.status !== 202) {
+        // Bei 401 steht hier der Satz des Servers: "Bitte im Programmfenster
+        // anmelden." Er ist die einzige Anleitung, die die Lehrkraft in diesem
+        // Moment braucht, und sie kommt aus app/sitzung.py.
         abrufFehler.textContent = koerper.fehler || "Der Abruf ließ sich nicht starten.";
         abrufFehler.hidden = false;
         return;
       }
-      // Das Passwort war nur für diese eine Anfrage da.
-      passwort.value = "";
       dialog.close();
       oeffnen.disabled = true;
       zeichneFortschritt(koerper.status || { fortschritt: 5, text: "Abruf gestartet" });

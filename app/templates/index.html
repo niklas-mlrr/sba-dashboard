@@ -107,9 +107,16 @@ ersten Abruf aus IServ.</p>
 <dialog id="abruf" class="dialog">
   <form method="dialog" id="abruf-formular">
     <h2>Zahlen aus IServ abrufen</h2>
-    <p class="dialog-text">Der Abruf meldet sich mit <strong>Ihrem</strong> IServ-Konto an
-      und dauert etwa eine Minute. Die Zugangsdaten werden nur für diesen Abruf
-      benutzt und nirgends gespeichert.</p>
+    {#
+      Bis 2026-09-10 standen hier zwei Eingabefelder: jeder Abruf brachte seine
+      eigenen Zugangsdaten mit. Angemeldet wird seither einmal im
+      Programmfenster (app/fenster.py); dieser Dialog ist nur noch die
+      Rückfrage vor einem Vorgang, der Zellen überschreibt. Ist niemand
+      angemeldet, antwortet /api/refresh mit 401 und dem Hinweis darauf - der
+      Text unten in .dialog-fehler kommt dann wörtlich vom Server.
+    #}
+    <p class="dialog-text">Der Abruf meldet sich mit dem im Programmfenster
+      angemeldeten IServ-Konto an und dauert etwa eine Minute.</p>
     {#
       Bis 2026-09-05 stand hier "Bestand und Bestellt werden dabei mit den
       Zahlen aus IServ überschrieben." Das stimmte für Bestellt nicht: die
@@ -120,11 +127,6 @@ ersten Abruf aus IServ.</p>
     <p class="dialog-text warnhinweis">Angemeldet und Bestand werden dabei mit den
       Zahlen aus IServ überschrieben. Bestellt kommt nicht aus IServ, sondern aus
       dem Blatt „bestellt“ dieser Mappe; eigene Einträge bleiben stehen.</p>
-    <label>IServ-Benutzername
-      <input type="text" id="benutzer" name="benutzer" autocomplete="username" required></label>
-    <label>Passwort
-      <input type="password" id="passwort" name="passwort"
-             autocomplete="current-password" required></label>
     <p class="dialog-fehler" id="abruf-fehler" hidden></p>
     <div class="dialog-knoepfe">
       <button type="button" id="abruf-abbrechen" class="knopf">Abbrechen</button>

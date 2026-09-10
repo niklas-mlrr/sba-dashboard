@@ -15,6 +15,7 @@ from app.excel import BlattFehlt, Gesperrt, Konflikt
 from app.fehler import validierungsmeldung
 from app.modelle import KOERPER_UNBRAUCHBAR
 from app.settings import Einstellungen
+from conftest import TEST_PASSWORT, melde_an
 
 
 def _zeile(client: TestClient) -> tuple[str, float]:
@@ -28,9 +29,10 @@ def _zeile(client: TestClient) -> tuple[str, float]:
     ("/api/cell", {"spalte": "bestellt", "mtime": 1.0}, "Schlüssel"),
     ("/api/cell", {"key": "x", "mtime": 1.0}, "Änderbar ist nur die Spalte"),
     ("/api/cell", {"key": "x", "spalte": "bestellt"}, "Änderungszeit"),
-    ("/api/refresh", {}, "Benutzername und Passwort"),
-    ("/api/refresh", {"benutzer": "  ", "passwort": "x"}, "Benutzername und Passwort"),
-    ("/api/einrichtung", {}, "Pfad zur Excel-Datei"),
+    ("/api/anmeldung", {}, "Benutzername und Passwort"),
+    ("/api/anmeldung", {"benutzer": "  ", "passwort": "x"}, "Benutzername und Passwort"),
+    ("/api/einstellungen", {}, "Adresse des IServ-Servers"),
+    ("/api/einstellungen", {"server": "beispiel-schule.de"}, "Ordner"),
 ])
 def test_ungueltiger_koerper_ist_400_mit_deutschem_text(client, pfad, nutzlast, erwartet):
     antwort = client.post(pfad, json=nutzlast)
@@ -57,7 +59,7 @@ def test_validierungsmeldung_faellt_auf_den_allgemeinen_satz_zurueck():
 
 def test_das_passwort_steht_in_keiner_validierungsantwort(client):
     """Pydantic legt den Eingabewert in jeden Fehlereintrag - hier das Passwort."""
-    antwort = client.post("/api/refresh", json={"benutzer": "", "passwort": "geheim-2026"})
+    antwort = client.post("/api/anmeldung", json={"benutzer": "", "passwort": "geheim-2026"})
     assert antwort.status_code == 400
     assert "geheim-2026" not in antwort.text
 
@@ -183,8 +185,8 @@ def test_wettlauf_beim_abruf_ist_409_mit_status(client, monkeypatch):
         raise LaeuftBereits("Es läuft bereits ein Abruf. Bitte warten, bis er fertig ist.")
 
     monkeypatch.setattr(RefreshManager, "starte", belegt)
-    client.app.state.client_factory = FakeClient
-    antwort = client.post("/api/refresh", json={"benutzer": "b.lehrer", "passwort": "geheim"})
+    melde_an(client, FakeClient)
+    antwort = client.post("/api/refresh")
 
     assert antwort.status_code == 409
     koerper = antwort.json()
@@ -192,4 +194,4 @@ def test_wettlauf_beim_abruf_ist_409_mit_status(client, monkeypatch):
     # Der Status gehört mit hinein: die Oberfläche zeigt den laufenden Abruf
     # dann sofort an, statt zuerst /api/refresh/status zu fragen.
     assert koerper["status"]["laeuft"] is False
-    assert "geheim" not in antwort.text
+    assert TEST_PASSWORT not in antwort.text

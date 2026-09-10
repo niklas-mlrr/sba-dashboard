@@ -110,7 +110,10 @@ def test_lesen_mit_fremdem_origin_bleibt_erlaubt(client: TestClient):
 def test_ohne_origin_bleibt_alles_wie_vorher(client: TestClient):
     """curl, tools/diagnose.py und der TestClient schicken keinen Origin."""
     assert client.get("/health").status_code == 200
-    assert client.post("/api/refresh", json={}).status_code == 400  # 400, nicht 403
+    # 401 ("bitte anmelden"), nicht 403 ("fremde Herkunft"): die Anfrage kommt
+    # durch die Middleware hindurch und scheitert erst an der fehlenden
+    # Anmeldung. Welcher der beiden Codes kommt, ist hier der ganze Punkt.
+    assert client.post("/api/refresh").status_code == 401
 
 
 @pytest.mark.parametrize("origin,erlaubt", [

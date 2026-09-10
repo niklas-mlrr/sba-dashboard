@@ -78,23 +78,26 @@ app/
   fehler.py         Ausnahme -> HTTP, einmal für die ganze Anwendung
   modelle.py        Anfragekörper als Pydantic-Modelle + deutsche Meldungen
   api/
-    seite.py        GET /            und POST /api/einrichtung   (HTML + sein Formular)
+    seite.py        GET /            und GET/POST /api/einstellungen  (HTML + Fenster)
     tabelle.py      GET /api/rows    und POST /api/cell
-    abruf.py        POST /api/refresh und GET /api/refresh/status
+    abruf.py        /api/anmeldung, POST /api/refresh, GET /api/refresh/status
     system.py       GET /health      und POST /api/beenden
     gemeinsam.py    Vorlagen, Einstellungen aus dem Request, der 503-Leerfall
   rows.py           Raster -> Anzeigezeilen, lies_tabelle -> Tabellenstand
   excel.py          Laden, Sperren, Schreiben, Prüfen einer Mappe
   refresh.py        IServ-Abruf mit instanzgebundenem Fortschritt
+  sitzung.py        Die Anmeldung: ein Client, ein Zeitschloss, kein Leck
   cache.py          Sidecar mit Titel, ISBN, Preis
   settings.py       Zwei Konfigurationsebenen
   paths.py          Plattformabhängige Ordner
   dateien.py        Atomares Schreiben kleiner Dateien
-  start.py          Freier Port, uvicorn, Browser
+  start.py          Freier Port, uvicorn im Nebenthread, Fenster im Hauptthread
+  fenster.py        Die Fensterlogik - ohne tkinter, deshalb prüfbar
+  _fenster_tk.py    Die Widgets. Keine Entscheidung, nur Anzeige.
 ```
 
-`rows.py`, `excel.py`, `refresh.py`, `cache.py`, `settings.py`, `paths.py` und
-`dateien.py` importieren **kein FastAPI**. Das ist keine Ordnungsliebe, sondern
+`rows.py`, `excel.py`, `refresh.py`, `sitzung.py`, `cache.py`, `settings.py`,
+`paths.py`, `dateien.py` und `fenster.py` importieren **kein FastAPI**. Das ist keine Ordnungsliebe, sondern
 die Voraussetzung für den nächsten Abschnitt: Ausnahmen, die nichts über HTTP
 wissen, lassen sich an einer Stelle auf HTTP abbilden.
 
@@ -133,7 +136,7 @@ Körper ist ein englisches, schemaförmiges 422, und die Oberfläche zeigt
 `fehler` wörtlich an. Gelöst ist das mit **einem** `RequestValidationError`-
 Handler, der die Fehlerliste auf einen deutschen Satz abbildet und dabei den
 Statuscode 400 behält. Er gibt insbesondere nie den Eingabewert zurück — bei
-`POST /api/refresh` wäre das das Passwort.
+`POST /api/anmeldung` wäre das das Passwort.
 
 Was Pydantic bewusst **nicht** prüft: ob `wert` eine schreibbare Zahl ist. Diese
 Regel gehört zur Mappe und steht mit ihrer Begründung in `app.excel.pruefe_wert`.
@@ -320,12 +323,55 @@ Eine vorhandene `~$…`-Datei allein blockiert das Schreiben **nicht**: sie kann
 verwaist sein (Excel abgestürzt). Erst der echte `PermissionError` ist einer.
 Die Startseite weist trotzdem darauf hin.
 
-## Der Abruf: ein Lauf, Zugangsdaten nur für ihn
+## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 
-`POST /api/refresh` prüft die Zugangsdaten **synchron** (`AusleiheClient(...)`,
-`login()`) und antwortet erst dann mit `202`. Nur an dieser Stelle lässt sich
+`POST /api/anmeldung` prüft die Zugangsdaten **synchron** (`AusleiheClient(...)`,
+`login()`) und antwortet erst dann. Nur an dieser Stelle lässt sich
 "Passwort falsch" noch als 401 beantworten; wäre die Anmeldung Teil des
 Hintergrundlaufs, stünde der Fehler in einem Statusobjekt, das niemand liest.
+
+Bis zum 2026-09-10 war das der Körper von `POST /api/refresh`: **jeder** Abruf
+brachte Benutzername und Passwort mit, der Browser fragte beide jedes Mal neu ab,
+und das Passwort überlebte die eine Anfrage nicht. Mit dem Programmfenster
+(`app/fenster.py`) meldet man sich einmal an; `/api/refresh` nimmt keinen Körper
+mehr und holt den angemeldeten Client aus `app.state.anmeldung`.
+
+### Warum das Passwort jetzt im Speicher liegt
+
+Weil es nicht anders geht. `AusleiheClient` hält das Passwort selbst
+(`ausleihe/client.py`) und **braucht** es weiter: läuft die IServ-Sitzung ab,
+meldet er sich bei einem 401 selbsttätig neu an. Einen angemeldeten Client ohne
+Passwort gibt es nicht — "nur die Sitzung halten" wäre eine Zusage, die das
+Programm nicht einhalten könnte.
+
+Die Zusage, die stattdessen gilt und die `tests/test_sitzung.py` festhält:
+
+* **Genau ein Besitzer.** Das Passwort liegt im Client-Objekt und sonst nirgends
+  — nicht in einem Feld von `Anmeldung`, nicht im Fortschrittszustand des
+  Abrufs, nicht in einer Antwort und nicht im Log. `Anmeldung.__repr__` lässt
+  den Client bewusst aus; `status()` gibt nur Benutzername und Restzeit.
+* **Nie auf der Platte.** Anders als Server und Ordner, die in der
+  Benutzerkonfiguration landen, wird hiervon nichts gespeichert.
+* **Ein Zeitschloss, 30 Minuten.** `Anmeldung.client()` verwirft den Client nach
+  einer halben Stunde ohne Abruf. Das ist der einzige wirksame Hebel auf die
+  Liegezeit: er verkürzt sie von "bis der Laptop abends zuklappt" auf die
+  tatsächliche Arbeitsphase. `GET /api/anmeldung` zählt dabei **nicht** als
+  Benutzung — der Fenster-Timer fragt alle 15 Sekunden, und würde das die Frist
+  verlängern, liefe sie nie ab.
+
+Was ausdrücklich **nicht** zugesagt wird: dass das Passwort nach dem Verwerfen
+aus dem Speicher verschwunden *ist*. Python-Strings sind unveränderlich, sie
+lassen sich nicht überschreiben; `abmelden` macht sie unerreichbar, mehr nicht.
+Ein `bytearray`-Umweg, der danach aussieht, als könnte er mehr, wäre schlimmer
+als dieser Absatz. Offen bleibt damit auch die Auslagerungsdatei — auf einem
+Laptop ohne Laufwerksverschlüsselung kann eine Speicherseite mit dem Passwort
+auf der Platte landen. Das kann dieses Programm nicht verhindern, nur benennen;
+es steht deshalb als Prüfpunkt in `docs/schul-laptop-test.md`.
+
+Ein **laufender** Abruf wird vom Zeitschloss nicht gestört: `RefreshManager.starte`
+bekommt den Client als Parameter und hält eine eigene Referenz. Verfällt die
+Anmeldung mitten in einem langen Lauf, läuft er zu Ende; erst der nächste Abruf
+verlangt eine neue. Deshalb braucht es dort keinen Wächter.
 
 | Fehler | Status | Klartext |
 |--------|--------|----------|
@@ -339,10 +385,11 @@ Die letzten beiden treten erst im Lauf auf und stehen deshalb als `fehlercode`
 im Statusobjekt, nicht als HTTP-Status. `GET /api/refresh/status` antwortet immer
 mit 200 — es ist eine Abfrage, kein zweiter Versuch.
 
-**Zugangsdaten** kommen ausschließlich im POST-Körper an, gehen direkt in den
-Client und werden danach fallen gelassen. Sie landen nie in `app.state`, nie in
-einem Log, nie in einer Antwort, nie im Cache und nie in der Mappe. `test_refresh.py`
-prüft genau das.
+**Zugangsdaten** kommen ausschließlich im Körper von `POST /api/anmeldung` an und
+gehen direkt in den Client. Der Abruf selbst fasst sie nicht mehr an. Fehlt die
+Anmeldung oder ist sie verfallen, antwortet `/api/refresh` mit **401** und dem
+Satz, der aufs Programmfenster verweist (`NichtAngemeldet`/`Abgelaufen` in
+`app/fehler.py`).
 
 **Was der Abruf überschreibt — und was nicht.** `angemeldet`, `bezahlt` und
 `bestand` kommen aus IServ und werden bedingungslos gesetzt. `bestellt` nicht: es
@@ -492,13 +539,13 @@ drei Repos sind öffentlich. Das ist eine Entscheidung, kein Versäumnis. Die
 Domain ist keine Zugangsberechtigung — jede Lehrkraft tippt sie ohnehin in den
 Browser —, und ein Platzhalter im Standard ließe den allerersten Start an der
 Anmeldung scheitern, bevor die Lehrkraft überhaupt etwas wählen kann. Die
-Excel-Kandidaten sind ohnehin nur Vorschläge: die Ersteinrichtung lässt die
-Lehrkraft die Datei auswählen, und genau diese Auswahl wandert in die
+Excel-Kandidaten sind ohnehin nur Vorschläge: das Programmfenster lässt die
+Lehrkraft den Ordner auswählen, und genau diese Auswahl wandert in die
 Benutzerkonfiguration, nicht in den Standard.
 
 Was dagegen nie im Repo liegen darf, wird durch `.gitignore` und die Vorlage
-gehalten: Zugangsdaten (das Passwort existiert nur in der einen Abrufanfrage,
-siehe „Der Abruf"), personenbezogene Zahlen und die echte Arbeitsmappe.
+gehalten: Zugangsdaten (sie werden nirgends gespeichert, siehe „Die Anmeldung"),
+personenbezogene Zahlen und die echte Arbeitsmappe.
 `vorlage/` ist die bereinigte, mit `tools/erzeuge_vorlage.py` erzeugte
 Strukturvorlage. Die Arbeitskopie, die `START.sh` daraus zieht, liegt seit dem
 2026-09-05 sichtbar im Projektordner statt im versteckten `.local/` — in einem
@@ -507,9 +554,47 @@ Ordner, den niemand aufklappt, fand sie auch niemand. Sie und die zugehörige
 robocopy-Spiegel aus (`*.xlsx` trifft dabei auch `vorlage/`, siehe die
 Begründung dort).
 
-Umschaltpunkt: widerspricht die Schule der Nennung ihres Servernamens in einem
-öffentlichen Repo, wandert die Domain in die Benutzerkonfiguration — dann muss
-die Ersteinrichtung ein Feld für sie bekommen.
+Dieser Umschaltpunkt ist seit dem 2026-09-10 erreicht, aber aus dem anderen
+Grund: das Programmfenster hat ein Feld für den Server, und die Eingabe wandert
+als `iserv_domain` in die Benutzerkonfiguration. Der Standard im Repo nennt die
+Domain weiter — er muss es, sonst scheiterte der allererste Start an der
+Anmeldung —, aber er ist jetzt überstimmbar, ohne eine Datei zu bearbeiten.
+
+## Das Programmfenster: warum der Server in den Nebenthread wanderte
+
+Bis zum 2026-09-10 bestand die Bedienung aus einem Konsolenfenster und einem
+Browser-Tab. Wer den Tab versehentlich schloss, hatte keinen bedienbaren Weg
+mehr, den Server zu beenden — nur noch "das schwarze Fenster zuklappen", was auf
+dem Schul-Laptop niemand als Beenden erkennt. Und sobald die Konsole gar nicht
+mehr aufgeht (der nächste Schritt, siehe `docs/roadmap.md`), wäre überhaupt kein
+Bedienelement übrig.
+
+Das Fenster ist **tkinter**, aus der Standardbibliothek. Der python.org-Installer
+bringt es mit, `requirements.txt` bleibt unberührt — und diese Datei wird in der
+CI gegen `uv export` geprüft, eine neue Laufzeitabhängigkeit wäre also nicht nur
+ein Paket mehr, sondern ein weiterer Schritt in der Verteilung.
+
+**Es redet über HTTP mit dem Server, wie der Browser.** Keine internen Objekte,
+dieselben Routen, dieselben deutschen Fehlertexte — die liegen damit weiter an
+genau einer Stelle. Benutzt wird `urllib.request`, nicht `requests` (das ist hier
+keine direkte Abhängigkeit, siehe oben).
+
+**Die Reihenfolge kehrt sich um.** Tk muss auf dem Hauptthread laufen. Also läuft
+`server.run()` jetzt in einem Daemon-Thread und das Fenster im Hauptthread; ist
+das Fenster zu, setzt `app/start.py` `should_exit` und sammelt den Thread ein.
+uvicorn kommt damit von sich aus zurecht — es installiert seine Signalhandler nur
+auf dem Hauptthread und überspringt sie sonst. Ohne Bildschirm (`--kein-fenster`,
+oder kein `DISPLAY` unter Linux) bleibt es beim alten Ablauf: Server auf dem
+Hauptthread, beenden mit Strg+C.
+
+**Die Logik steckt in `Fenstersteuerung`, die Widgets in `app/_fenster_tk.py`.**
+Diese Trennung ist der Grund, warum das Fenster überhaupt geprüft ist: der
+Entwicklungsrechner hat keinen Bildschirm und die CI auch nicht.
+`tests/test_fenster.py` hängt die Steuerung an einen `TestClient` und prüft jeden
+Weg, den ein Knopf nimmt. Die Tk-Hülle enthält dafür **keine Entscheidung**, nur
+Widgets und Weiterleitungen — sie ist deshalb aus der Abdeckungsmessung
+ausgenommen (`pyproject.toml`, mit Begründung), und ein einzelner Test baut
+trotzdem ein echtes Fenster, wo es einen Bildschirm gibt.
 
 ## Wie hier dokumentiert wird
 
