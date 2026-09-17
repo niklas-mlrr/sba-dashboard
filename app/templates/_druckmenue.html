@@ -1,0 +1,111 @@
+{#
+  Druckmenü der Bücherlisten nach Fach. Aufgebaut wie die IServ-Menüs
+  "Druck Leihscheine" und "Druck Klassenliste" (Bootstrap-Modal mit
+  form-horizontal: Beschriftung rechtsbündig links, Optionen rechts, unten
+  "Abbrechen" und "PDF öffnen"), live angesehen am 2026-09-17.
+
+  Erwartet: druck_faecher (Liste der Fachnamen) auf der Gesamtseite, oder
+  druck_fach (ein Name) auf der Seite eines Fachs. Verhalten in
+  static/druckmenue.js; das Formular öffnet das PDF in einem neuen Tab.
+#}
+<dialog id="druckmenue" class="iserv-modal" aria-labelledby="druckmenue-titel">
+  <form id="druckformular" method="post" action="/buecherliste/fach/druck" target="_blank">
+    <div class="modal-header">
+      <h3 class="modal-title" id="druckmenue-titel">Druck Bücherliste {{ druck_fach or "Fächer" }}</h3>
+    </div>
+    <div class="modal-body">
+      {% if druck_fach %}<input type="hidden" name="einzeln" value="{{ druck_fach }}">{% endif %}
+
+      <div class="form-group">
+        <div class="spalte-inhalt spalte-versetzt">
+          <div class="checkbox">
+            <label><input type="checkbox" name="bestaetigung" value="1" id="druck-bestaetigung">&nbsp;Bestätigungsaufforderung</label>
+          </div>
+          <p class="small help-block">Ergänzt einen Prüfauftrag und ein Bestätigungsfeld, damit die
+            Fachkonferenzleitungen die Bücherliste ihres Fachs korrigieren und mit Unterschrift
+            bestätigen.</p>
+        </div>
+      </div>
+
+      <div class="form-group" id="druck-rueckgabe">
+        <label class="control-label spalte-beschriftung">Rückgabe:</label>
+        <div class="spalte-inhalt">
+          <div class="eingabezeile">
+            <span class="eingabe-vor">bis</span>
+            <input type="text" class="form-control" name="rueckgabe_bis" id="druck-rueckgabe-bis"
+              autocomplete="off" disabled>
+            <span class="eingabe-nach">späteste Rückgabe</span>
+          </div>
+          <div class="eingabezeile">
+            <span class="eingabe-vor">an</span>
+            <input type="text" class="form-control" name="rueckgabe_an" id="druck-rueckgabe-an"
+              autocomplete="off" disabled>
+            <span class="eingabe-nach">Kürzel</span>
+          </div>
+        </div>
+      </div>
+
+      {% if druck_faecher %}
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung">Fächer:</label>
+        <div class="spalte-inhalt">
+          {#
+            "veränderte" und "nicht bestätigte" sind Platzhalter: sie wählen,
+            bis es die Angaben dazu gibt, alle Fächer (data-faecher="alle").
+          #}
+          <div class="radio"><label><input type="radio" name="faecher_auswahl" value="alle"
+            data-faecher="alle" checked>Alle</label></div>
+          <div class="radio"><label><input type="radio" name="faecher_auswahl" value="veraenderte"
+            data-faecher="alle">veränderte</label></div>
+          <div class="radio"><label><input type="radio" name="faecher_auswahl" value="nicht_bestaetigte"
+            data-faecher="alle">nicht bestätigte</label></div>
+          <div class="radio radio-mit-auswahl">
+            <label><input type="radio" name="faecher_auswahl" value="individuell"
+              id="druck-individuell">Individuell</label>
+            <div class="dropdown" id="druck-faecherliste">
+              <button type="button" class="btn btn-default dropdown-toggle" id="druck-faecherliste-knopf"
+                aria-haspopup="true" aria-expanded="false" disabled><span
+                id="druck-faecherliste-text">{{ druck_faecher|length }} von {{ druck_faecher|length }}</span>&nbsp;<span
+                class="caret"></span></button>
+              <ul class="dropdown-menu faecherauswahl" role="menu">
+                {% for fach in druck_faecher %}
+                <li><label><input type="checkbox" name="faecher" value="{{ fach }}" checked
+                  disabled>&nbsp;{{ fach }}</label></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung">Reihenfolge:</label>
+        <div class="spalte-inhalt">
+          <div class="radio"><label><input type="radio" name="reihenfolge" value="alphabet"
+            checked>Alphabetisch</label></div>
+          <div class="radio"><label><input type="radio" name="reihenfolge"
+            value="aufgabenfeld">Nach Aufgabenfeld</label></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung">Doppelseitig:</label>
+        <div class="spalte-inhalt">
+          <div class="checkbox">
+            <label><input type="checkbox" name="doppelseitig" value="1" id="druck-doppelseitig">&nbsp;Für doppelseitigen Druck optimieren</label>
+          </div>
+          <div class="checkbox eingerueckt" id="druck-falls-noetig-zeile">
+            <label><input type="checkbox" name="falls_noetig" value="1" id="druck-falls-noetig"
+              disabled>&nbsp;falls nötig</label>
+            <span class="small help-inline">optimiert nur, falls eines mehr als eine Seite einnimmt</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-default" id="druck-abbrechen">Abbrechen</button>
+      <button type="submit" class="btn btn-primary" id="druck-starten">PDF öffnen</button>
+    </div>
+  </form>
+</dialog>

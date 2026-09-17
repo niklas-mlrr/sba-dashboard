@@ -24,7 +24,9 @@ anyio==4.15.0
 certifi==2026.7.22
     # via requests
 charset-normalizer==3.5.1
-    # via requests
+    # via
+    #   reportlab
+    #   requests
 click==8.5.0
     # via uvicorn
 et-xmlfile==2.0.0
@@ -53,6 +55,8 @@ openpyxl==3.1.5
     # via
     #   sba-bestand
     #   sba-dashboard
+pillow==12.3.0
+    # via reportlab
 pydantic==2.13.5
     # via fastapi
 pydantic-core==2.46.5
@@ -63,6 +67,8 @@ python-dotenv==1.2.3
     #   uvicorn
 pyyaml==6.0.3
     # via uvicorn
+reportlab==4.5.1
+    # via sba-bestand
 requests==2.34.2
     # via
     #   iserv-ausleihe-api

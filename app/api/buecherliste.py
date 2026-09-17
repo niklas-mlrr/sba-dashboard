@@ -7,8 +7,12 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 from __future__ import annotations
 
 from typing import Any, Callable
+from urllib.parse import parse_qs, quote
 
+from buecherlisten.core.daten import lade_buecherdaten, waehle_faecher
+from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs
 from fastapi import APIRouter, Request
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
 from ..buecherlisten import (
@@ -63,6 +67,74 @@ def _laden(request: Request) -> Buecherlisten | Response:
 
 def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
     return _hinweis(request, "Unbekannte Ansicht", f"Es gibt keine Ansicht „{ansicht}“.", 404)
+
+
+@router.post("/buecherliste/fach/druck")
+async def drucken(request: Request) -> Response:
+    """Das Druckmenü (templates/_druckmenue.html) schickt hierher; Antwort ist das PDF.
+
+    Das Formular öffnet einen neuen Tab. ``Content-Disposition: inline`` sorgt
+    dafür, dass der Browser das PDF dort anzeigt, statt es herunterzuladen.
+
+    Gelesen wird der Körper von Hand statt über ``Form(...)``: das spart
+    python-multipart als Abhängigkeit, und ein URL-kodiertes Formular ist mit
+    ``parse_qs`` vollständig beschrieben. Gesperrte Felder schickt der Browser
+    nicht - fehlt ``bestaetigung``, fehlen also auch die Rückgabe-Angaben.
+    """
+    felder = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+
+    def eins(name: str) -> str:
+        return (felder.get(name) or [""])[0].strip()
+
+    try:
+        client = request.app.state.anmeldung.client()
+    except (NichtAngemeldet, Abgelaufen) as exc:
+        return _hinweis(request, "Nicht angemeldet",
+                        f"{exc} Danach das Druckmenü erneut öffnen.", 401)
+    try:
+        daten = await run_in_threadpool(lade_buecherdaten, client)
+    except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
+        return _hinweis(request, "IServ nicht erreichbar",
+                        f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502)
+
+    einzeln = eins("einzeln")
+    if einzeln:
+        gewuenscht, modus = [einzeln], "split"
+    elif eins("faecher_auswahl") == "individuell":
+        gewuenscht, modus = felder.get("faecher", []), eins("reihenfolge")
+    else:
+        # "Alle" sowie die Platzhalter "veränderte" und "nicht bestätigte".
+        gewuenscht, modus = daten.faecher, eins("reihenfolge")
+    if modus not in {"alphabet", "aufgabenfeld", "split"}:
+        modus = "alphabet"
+    faecher, unbekannt = waehle_faecher(daten.faecher, gewuenscht)
+    if unbekannt or not faecher:
+        return _hinweis(request, "Keine gültige Auswahl",
+                        "Diese Fächer kommen in keiner Bücherliste vor: " + ", ".join(unbekannt)
+                        if unbekannt else "Es ist kein Fach ausgewählt.", 400)
+
+    try:
+        (pdf, *_) = await run_in_threadpool(
+            lambda: erzeuge_buecherlisten_pdfs(
+                daten,
+                faecher=faecher,
+                modus=modus,  # type: ignore[arg-type]
+                bestaetigung=bool(eins("bestaetigung")),
+                rueckgabe_bis=eins("rueckgabe_bis") or None,
+                rueckgabe_an=eins("rueckgabe_an") or None,
+                doppelseitig=bool(eins("doppelseitig")),
+                nur_falls_noetig=bool(eins("falls_noetig")),
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _hinweis(request, "PDF nicht erzeugt",
+                        f"Beim Erzeugen des PDFs ist ein Fehler aufgetreten: {exc}", 500)
+
+    return Response(
+        pdf.inhalt,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(pdf.dateiname)}"},
+    )
 
 
 @router.get("/buecherliste/{ansicht}")

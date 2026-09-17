@@ -2,6 +2,10 @@
 {% block titel %}Bücherliste nach {{ ansicht_name }} — Schulbuchausleihe{% endblock %}
 {% block seitenklasse %}seite-voll{% endblock %}
 {% block ueberschrift %}Bücherliste nach {{ ansicht_name }}{% endblock %}
+{% block kopfaktionen %}{% if ansicht == "fach" %}
+<button type="button" class="btn btn-default" id="druck-oeffnen" title="Drucken" aria-label="Drucken"><span
+  class="glyphicon glyphicon-print" aria-hidden="true"></span></button>
+{% endif %}{% endblock %}
 
 {#
   Nachgebaut nach der IServ-Seite "Bücherlisten" (#/schoolyear/…/booklists):
@@ -66,6 +70,10 @@
   {% endif %}
 </table>
 </div>
+{% if ansicht == "fach" %}
+{% with druck_faecher = gruppen|map(attribute="name")|list, druck_fach = none %}{% include "_druckmenue.html" %}{% endwith %}
+{% endif %}
 {% endblock %}
 
-{% block skripte %}<script src="/static/sortieren.js"></script>{% endblock %}
+{% block skripte %}<script src="/static/sortieren.js"></script>
+{% if ansicht == "fach" %}<script src="/static/druckmenue.js"></script>{% endif %}{% endblock %}

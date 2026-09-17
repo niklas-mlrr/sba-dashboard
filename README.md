@@ -34,6 +34,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
 | `GET /buecherliste/{fach,verlag,jahrgang}` | Bücherlisten-Übersicht, live aus IServ (braucht Anmeldung) |
 | `GET /buecherliste/{ansicht}/{name}` | Bücher eines Fachs, Verlags oder Jahrgangs |
+| `POST /buecherliste/fach/druck` | Bücherliste nach Fach als PDF (Formular aus dem Druckmenü, Antwort `inline`) |
 | `GET /api/rows` | Zeilen als JSON, mit `mtime` und Cache-Alter |
 | `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423/500/503 |
 | `GET /api/einstellungen` | Server, Ordner und gefundene Mappe (fürs Fenster) |

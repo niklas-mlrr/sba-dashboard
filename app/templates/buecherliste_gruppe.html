@@ -8,7 +8,10 @@
   stehen fertig im HTML; static/paketansicht.js blendet um, und
   static/sortieren.js überträgt die bisherige Sortierung (siehe dort).
 #}
-{% block kopfaktionen %}{% if liste and liste.paket %}
+{% block kopfaktionen %}{% if ansicht == "fach" %}
+<button type="button" class="btn btn-default" id="druck-oeffnen" title="Drucken" aria-label="Drucken"><span
+  class="glyphicon glyphicon-print" aria-hidden="true"></span></button>
+{% endif %}{% if liste and liste.paket %}
 <label class="iserv-knopf"><input type="checkbox" id="paketansicht" checked>&nbsp;Paketansicht</label>
 {% endif %}{% endblock %}
 {% block unter_ueberschrift %}<p class="zurueck"><a href="/buecherliste/{{ ansicht }}">« Zurück zur Übersicht</a></p>{% endblock %}
@@ -84,8 +87,12 @@
   {% endif %}
 {% else %}
   {{ buchtabelle(gruppe.buecher, true) }}
+  {% if ansicht == "fach" %}
+  {% with druck_faecher = none, druck_fach = gruppe.name %}{% include "_druckmenue.html" %}{% endwith %}
+  {% endif %}
 {% endif %}
 {% endblock %}
 
 {% block skripte %}<script src="/static/sortieren.js"></script>
-{% if liste and liste.paket %}<script src="/static/paketansicht.js"></script>{% endif %}{% endblock %}
+{% if liste and liste.paket %}<script src="/static/paketansicht.js"></script>{% endif %}
+{% if ansicht == "fach" %}<script src="/static/druckmenue.js"></script>{% endif %}{% endblock %}

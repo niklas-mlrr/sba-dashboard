@@ -317,3 +317,128 @@ def test_skripte_finden_ihre_ids_auf_der_paketseite(seiten: TestClient):
     js = (statisch / "paketansicht.js").read_text(encoding="utf-8")
     for kennung in re.findall(r'getElementById\("([^"]+)"\)', js):
         assert f'id="{kennung}"' in text, kennung
+
+
+# ── Druckmenü ────────────────────────────────────────────────────────────────
+
+def test_druckknopf_und_menue_auf_der_fachuebersicht(seiten: TestClient):
+    _anmelden(seiten)
+    text = seiten.get("/buecherliste/fach").text
+    assert 'id="druck-oeffnen"' in text and 'id="druckmenue"' in text
+    assert "Druck Bücherliste Fächer" in text
+    assert 'name="faecher_auswahl"' in text and 'name="reihenfolge"' in text
+    for fach in ("Chemie", "Geschichte", "Mathematik"):
+        assert f'name="faecher" value="{fach}"' in text
+    statisch = Path(__file__).resolve().parent.parent / "app" / "static"
+    js = (statisch / "druckmenue.js").read_text(encoding="utf-8")
+    for kennung in re.findall(r'getElementById\("([^"]+)"\)', js):
+        assert f'id="{kennung}"' in text, kennung
+
+
+def test_druckmenue_eines_fachs_ohne_faecherauswahl(seiten: TestClient):
+    _anmelden(seiten)
+    text = seiten.get("/buecherliste/fach/Chemie").text
+    assert "Druck Bücherliste Chemie" in text
+    assert '<input type="hidden" name="einzeln" value="Chemie">' in text
+    assert 'name="faecher_auswahl"' not in text and 'name="reihenfolge"' not in text
+
+
+@pytest.mark.parametrize("pfad", ["/buecherliste/verlag", "/buecherliste/jahrgang/5",
+                                  "/buecherliste/verlag/Klett"])
+def test_kein_druckknopf_ausserhalb_von_fach(seiten: TestClient, pfad: str):
+    _anmelden(seiten)
+    assert 'id="druck-oeffnen"' not in seiten.get(pfad).text
+
+
+class _Erzeuger:
+    """Ersetzt Laden und Erzeugen; merkt sich, womit aufgerufen wurde."""
+
+    def __init__(self) -> None:
+        self.aufrufe: list[dict] = []
+
+    def lade(self, client):
+        from buecherlisten.core.daten import Buecherdaten
+        leer = {"leih": [], "kauf": []}
+        return Buecherdaten("2026/2027", "Schuljahr 26/27",
+                            {"Chemie": leer, "Deutsch": leer, "Mathematik": leer})
+
+    def erzeuge(self, daten, **optionen):
+        from buecherlisten.core.erzeugen import ErzeugtesPdf
+        self.aufrufe.append(optionen)
+        return [ErzeugtesPdf(b"%PDF-1.4 test", "Bücherliste Fächer 2026-2027.pdf", "t")]
+
+
+@pytest.fixture()
+def erzeuger(monkeypatch) -> _Erzeuger:
+    from app.api import buecherliste
+    ersatz = _Erzeuger()
+    monkeypatch.setattr(buecherliste, "lade_buecherdaten", ersatz.lade)
+    monkeypatch.setattr(buecherliste, "erzeuge_buecherlisten_pdfs", ersatz.erzeuge)
+    return ersatz
+
+
+def _drucken(client: TestClient, felder: list[tuple[str, str]]):
+    from urllib.parse import urlencode
+    return client.post("/buecherliste/fach/druck", content=urlencode(felder),
+                       headers={"Content-Type": "application/x-www-form-urlencoded"})
+
+
+def test_drucken_ohne_anmeldung_zeigt_hinweis(seiten: TestClient, erzeuger: _Erzeuger):
+    antwort = _drucken(seiten, [("faecher_auswahl", "alle")])
+    assert antwort.status_code == 401
+    assert erzeuger.aufrufe == []
+
+
+def test_drucken_liefert_pdf_zum_anzeigen(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    antwort = _drucken(seiten, [("faecher_auswahl", "alle"), ("reihenfolge", "alphabet")])
+    assert antwort.status_code == 200
+    assert antwort.headers["content-type"] == "application/pdf"
+    assert antwort.headers["content-disposition"].startswith("inline;")
+    assert antwort.content.startswith(b"%PDF")
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf["faecher"] == ["Chemie", "Deutsch", "Mathematik"]
+    assert aufruf["modus"] == "alphabet"
+    assert aufruf["bestaetigung"] is False and aufruf["doppelseitig"] is False
+
+
+@pytest.mark.parametrize("auswahl", ["veraenderte", "nicht_bestaetigte"])
+def test_platzhalter_waehlen_alle_faecher(seiten: TestClient, erzeuger: _Erzeuger, auswahl: str):
+    _anmelden(seiten)
+    # Auch wenn noch Häkchen mitkämen: ohne "Individuell" zählen sie nicht.
+    _drucken(seiten, [("faecher_auswahl", auswahl), ("faecher", "Chemie")])
+    assert erzeuger.aufrufe[0]["faecher"] == ["Chemie", "Deutsch", "Mathematik"]
+
+
+def test_individuell_mit_allen_optionen(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    antwort = _drucken(seiten, [
+        ("bestaetigung", "1"), ("rueckgabe_bis", "08.10.2026"), ("rueckgabe_an", "Ml"),
+        ("faecher_auswahl", "individuell"), ("faecher", "mathematik"), ("faecher", "Chemie"),
+        ("reihenfolge", "aufgabenfeld"), ("doppelseitig", "1"), ("falls_noetig", "1"),
+    ])
+    assert antwort.status_code == 200
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf == {
+        "faecher": ["Chemie", "Mathematik"], "modus": "aufgabenfeld", "bestaetigung": True,
+        "rueckgabe_bis": "08.10.2026", "rueckgabe_an": "Ml",
+        "doppelseitig": True, "nur_falls_noetig": True,
+    }
+
+
+def test_einzelnes_fach_wird_eigenes_pdf(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    _drucken(seiten, [("einzeln", "Chemie")])
+    assert erzeuger.aufrufe[0]["faecher"] == ["Chemie"]
+    assert erzeuger.aufrufe[0]["modus"] == "split"
+
+
+@pytest.mark.parametrize("felder", [
+    [("faecher_auswahl", "individuell")],
+    [("faecher_auswahl", "individuell"), ("faecher", "Alchemie")],
+    [("einzeln", "Alchemie")],
+])
+def test_ungueltige_auswahl_ergibt_400(seiten: TestClient, erzeuger: _Erzeuger, felder):
+    _anmelden(seiten)
+    assert _drucken(seiten, felder).status_code == 400
+    assert erzeuger.aufrufe == []

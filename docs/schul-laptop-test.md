@@ -228,6 +228,10 @@ Befund, nicht die Vermutung.
 | G2-4 | „Jahrgang 5" anklicken | Grundpaket und Wahlbereiche wie bei IServ, ohne Bearbeitungsknöpfe |
 | G2-5 | Dort Spaltenüberschriften anklicken, z. B. erst „Fach", dann „Verlag" | Sortiert auf/ab; gleicher Verlag bleibt nach Fach geordnet |
 | G2-6 | „Paketansicht" abwählen, wieder anwählen | Alle Bücher in einer Tabelle, bisherige Sortierung übernommen; bei Jahrgang 12/13 (Individuell) gibt es den Knopf nicht |
+| G2-7 | Nach dem ersten Start: installiert sich alles? (reportlab und **Pillow** sind seit dem Druck neu) | kein pip-Fehler zu Pillow |
+| G2-8 | „Fach" → Druck-Knopf → „PDF öffnen" | PDF öffnet in neuem Tab, **kein** Download; wie lange dauert es? |
+| G2-9 | Druckmenü: „Bestätigungsaufforderung" an, Rückgabe bis/an ausfüllen, „Individuell" mit 2 Fächern, doppelseitig | Nur die 2 Fächer, Rückgabe im Kopf, Seitenzahl je Fach gerade |
+| G2-10 | Auf der Seite eines Fachs drucken | PDF nur dieses Fachs |
 
 ### H. Beenden
 

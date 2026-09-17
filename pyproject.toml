@@ -12,7 +12,8 @@ dependencies = [
     "isbnlib>=3.10",
     # Geschwister-Repos, siehe [tool.uv.sources] und ../README.md
     "iserv-ausleihe-api",
-    "sba-bestand",
+    # [pdf]: reportlab für den Druck der Bücherlisten (app/api/buecherliste.py).
+    "sba-bestand[pdf]",
 ]
 
 [dependency-groups]
@@ -151,7 +152,7 @@ warn_unused_ignores = true
 # liefert. Seit 2026-09-05 ist das nur noch openpyxl - `ausleihe.*` stand bis
 # dahin hier und ist die letzte Paketgrenze, die jetzt geprüft wird.
 [[tool.mypy.overrides]]
-module = ["openpyxl.*", "isbnlib.*"]
+module = ["openpyxl.*", "isbnlib.*", "reportlab.*"]
 ignore_missing_imports = true
 
 # bestand.core und ausleihe werden für ihre Typen gelesen, aber nicht hier
@@ -160,7 +161,7 @@ ignore_missing_imports = true
 # Dashboards. `silent` heißt genau das - Typen benutzen, Meldungen aus diesen
 # Modulen unterdrücken.
 [[tool.mypy.overrides]]
-module = ["bestand.*", "ausleihe.*"]
+module = ["bestand.*", "buecherlisten.*", "ausleihe.*"]
 follow_imports = "silent"
 
 [tool.ruff]

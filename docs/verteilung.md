@@ -98,6 +98,14 @@ Schul-Laptop reportlab **und** Pillow — rund 15 MB Pakete, die das Dashboard n
 importiert, und zwei zusätzliche Räder, an denen die Ersteinrichtung scheitern
 konnte.
 
+**Seit 2026-09-17 braucht das Dashboard reportlab doch.** Es druckt die
+Bücherlisten nach Fach (`POST /buecherliste/fach/druck`) mit
+`buecherlisten.core` aus `sba-bestand`, und hängt deshalb an
+`sba-bestand[pdf]`. reportlab und Pillow stehen damit wieder in
+`requirements.txt`. Das Risiko von oben gilt wieder: findet pip für die
+Python-Version des Laptops kein Pillow-Rad, scheitert die Ersteinrichtung.
+Prüfpunkt G2-7 in `schul-laptop-test.md`.
+
 ## Das Programmfenster braucht Tk — und bringt keine Abhängigkeit mit
 
 Das Fenster (seit 2026-09-10, siehe [`architektur.md`](architektur.md#das-programmfenster-warum-der-server-in-den-nebenthread-wanderte))
