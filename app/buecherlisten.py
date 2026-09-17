@@ -115,6 +115,13 @@ class Liste:
     def wahlbereiche(self) -> tuple[Bereich, ...]:
         return tuple(b for b in self.bereiche if not b.grundpaket)
 
+    @property
+    def alle_buecher(self) -> tuple[Buch, ...]:
+        """Grundpaket, dann jede Wahlmöglichkeit - die Reihenfolge der Gesamtansicht."""
+        bereiche = ((self.grundpaket,) if self.grundpaket else ()) + self.wahlbereiche
+        return tuple(buch for bereich in bereiche for option in bereich.optionen
+                     for buch in option.buecher)
+
 
 @dataclass(frozen=True)
 class Gruppe:

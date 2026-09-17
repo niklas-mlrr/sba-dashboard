@@ -2,6 +2,16 @@
 {% block titel %}Bücherliste {{ titel }} — Schulbuchausleihe{% endblock %}
 {% block seitenklasse %}seite-voll{% endblock %}
 {% block ueberschrift %}Bücherliste {{ titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
+{#
+  "Paketansicht" nur bei Paketausleihe: an = Grundpaket und Wahlbereiche
+  getrennt wie bei IServ, aus = alle Bücher in einer Tabelle. Beide Ansichten
+  stehen fertig im HTML; static/paketansicht.js blendet um, und
+  static/sortieren.js überträgt die bisherige Sortierung (siehe dort).
+#}
+{% block kopfaktionen %}{% if liste and liste.paket %}
+<button type="button" id="paketansicht" class="iserv-knopf aktiv" aria-pressed="true"><span
+  class="glyphicon glyphicon-check" aria-hidden="true"></span>&nbsp;&nbsp;Paketansicht</button>
+{% endif %}{% endblock %}
 {% block unter_ueberschrift %}<p class="zurueck"><a href="/buecherliste/{{ ansicht }}">« Zurück zur Übersicht</a></p>{% endblock %}
 
 {#
@@ -10,22 +20,23 @@
   und "Leihbar" ist ein Häkchen, das sich nicht umschalten lässt.
 
   Bei Fach und Verlag kommen die Bücher aus mehreren Jahrgangslisten; dort
-  steht deshalb zusätzlich die Spalte Jahrgang.
+  steht deshalb zusätzlich die Spalte Jahrgang. Sie sortiert als Text mit
+  numerischem Vergleich ("5, 6" vor "7, 8" vor "11"), siehe static/sortieren.js.
 #}
-{% macro buchtabelle(buecher, mit_jahrgang) %}
+{% macro buchtabelle(buecher, mit_jahrgang, gesamt=false) %}
 <div class="tabellenrahmen">
-<table class="iserv-tabelle">
+<table class="iserv-tabelle sortierbar"{% if gesamt %} data-gesamt{% endif %}>
   <thead>
     <tr>
-      <th>Titel</th>
-      {% if mit_jahrgang %}<th>Jahrgang</th>{% endif %}
-      <th>Fach</th>
-      <th>Verlag</th>
-      <th>ISBN</th>
-      <th>Neupreis</th>
-      <th>Leihgebühr</th>
-      <th>Leihbar</th>
-      <th>Status</th>
+      <th data-sort="text">Titel</th>
+      {% if mit_jahrgang %}<th data-sort="text">Jahrgang</th>{% endif %}
+      <th data-sort="text">Fach</th>
+      <th data-sort="text">Verlag</th>
+      <th data-sort="text">ISBN</th>
+      <th data-sort="zahl">Neupreis</th>
+      <th data-sort="zahl">Leihgebühr</th>
+      <th data-sort="zahl">Leihbar</th>
+      <th data-sort="text">Status</th>
     </tr>
   </thead>
   <tbody>
@@ -35,10 +46,10 @@
       {% if mit_jahrgang %}<td>{{ buch.jahrgang_anzeige }}</td>{% endif %}
       <td>{{ buch.fach_anzeige }}</td>
       <td>{{ buch.verlag }}</td>
-      <td><samp>{{ buch.isbn_anzeige }}</samp></td>
-      <td>{{ euro(buch.neupreis) }}</td>
-      <td>{{ euro(buch.leihgebuehr) }}</td>
-      <td><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
+      <td data-wert="{{ buch.isbn }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
+      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ euro(buch.neupreis) }}</td>
+      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ euro(buch.leihgebuehr) }}</td>
+      <td data-wert="{{ 1 if buch.leihbar else 0 }}"><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
         {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
       <td><span class="label label-status">offen</span></td>
     </tr>
@@ -53,6 +64,7 @@
 
 {% block inhalt %}
 {% if liste %}
+  <div id="paketteile">
   {% if liste.grundpaket %}
   <h2 class="iserv-h2">Grundpaket</h2>
   {% for option in liste.grundpaket.optionen %}{{ buchtabelle(option.buecher, false) }}{% endfor %}
@@ -67,7 +79,14 @@
   {% endfor %}
   {% endfor %}
   {% endif %}
+  </div>
+  {% if liste.paket %}
+  <div id="gesamtansicht" hidden>{{ buchtabelle(liste.alle_buecher, false, true) }}</div>
+  {% endif %}
 {% else %}
   {{ buchtabelle(gruppe.buecher, true) }}
 {% endif %}
 {% endblock %}
+
+{% block skripte %}<script src="/static/sortieren.js"></script>
+{% if liste and liste.paket %}<script src="/static/paketansicht.js"></script>{% endif %}{% endblock %}

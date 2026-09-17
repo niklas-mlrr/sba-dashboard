@@ -10,36 +10,39 @@
 
   Status ist vorerst ein Platzhalter; was dort stehen soll, wird noch
   festgelegt.
+
+  Sortierbar über static/sortieren.js: data-sort an jeder Überschrift,
+  data-wert an Zellen, deren Anzeige nicht selbst der Schlüssel ist.
 #}
 {% block inhalt %}
 <div class="tabellenrahmen">
-<table class="iserv-tabelle">
+<table class="iserv-tabelle sortierbar">
   {% if ansicht == "jahrgang" %}
   <thead>
     <tr>
-      <th>Bezeichnung</th>
-      <th>Jahrgang</th>
-      <th>Leihmodalität</th>
-      <th>Festpreis</th>
-      <th>Anmeldung</th>
-      <th>Beginn</th>
-      <th>Ende</th>
-      <th>Zahlungsfrist</th>
-      <th>Bankverbindung</th>
-      <th>Status</th>
+      <th data-sort="text">Bezeichnung</th>
+      <th data-sort="zahl">Jahrgang</th>
+      <th data-sort="text">Leihmodalität</th>
+      <th data-sort="zahl">Festpreis</th>
+      <th data-sort="text">Anmeldung</th>
+      <th data-sort="text">Beginn</th>
+      <th data-sort="text">Ende</th>
+      <th data-sort="text">Zahlungsfrist</th>
+      <th data-sort="text">Bankverbindung</th>
+      <th data-sort="text">Status</th>
     </tr>
   </thead>
   <tbody>
     {% for liste in listen %}
     <tr>
       <td>{% if liste.jahrgang is not none %}<a href="/buecherliste/jahrgang/{{ liste.jahrgang }}">{{ liste.titel }}</a>{% else %}{{ liste.titel }}{% endif %}</td>
-      <td>{{ liste.jahrgang if liste.jahrgang is not none else "" }}</td>
+      <td data-wert="{{ liste.jahrgang if liste.jahrgang is not none else '' }}">{{ liste.jahrgang if liste.jahrgang is not none else "" }}</td>
       <td>{{ liste.leihmodalitaet }}</td>
-      <td>{% if liste.festpreis %}{{ "%.2f"|format(liste.festpreis)|replace(".", ",") }}&nbsp;€{% else %}<span class="klein grau">Nein</span>{% endif %}</td>
+      <td data-wert="{{ liste.festpreis or '' }}">{% if liste.festpreis %}{{ "%.2f"|format(liste.festpreis)|replace(".", ",") }}&nbsp;€{% else %}<span class="klein grau">Nein</span>{% endif %}</td>
       <td>{% if liste.anmeldung_moeglich %}<span class="label label-success">möglich</span>{% else %}<span class="label label-default">z. Z. nicht möglich</span>{% endif %}</td>
-      <td><b>{{ liste.beginn.strftime("%d.%m.%y") if liste.beginn else "" }}</b></td>
-      <td><b>{{ liste.ende.strftime("%d.%m.%y") if liste.ende else "" }}</b></td>
-      <td><b>{{ liste.zahlungsfrist.strftime("%d.%m.%y") if liste.zahlungsfrist else "" }}</b></td>
+      <td data-wert="{{ liste.beginn.isoformat() if liste.beginn else '' }}"><b>{{ liste.beginn.strftime("%d.%m.%y") if liste.beginn else "" }}</b></td>
+      <td data-wert="{{ liste.ende.isoformat() if liste.ende else '' }}"><b>{{ liste.ende.strftime("%d.%m.%y") if liste.ende else "" }}</b></td>
+      <td data-wert="{{ liste.zahlungsfrist.isoformat() if liste.zahlungsfrist else '' }}"><b>{{ liste.zahlungsfrist.strftime("%d.%m.%y") if liste.zahlungsfrist else "" }}</b></td>
       <td>{{ liste.bank }}</td>
       <td><span class="label label-status">offen</span></td>
     </tr>
@@ -48,8 +51,8 @@
   {% else %}
   <thead>
     <tr>
-      <th>Bezeichnung</th>
-      <th>Status</th>
+      <th data-sort="text">Bezeichnung</th>
+      <th data-sort="text">Status</th>
     </tr>
   </thead>
   <tbody>
@@ -64,3 +67,5 @@
 </table>
 </div>
 {% endblock %}
+
+{% block skripte %}<script src="/static/sortieren.js"></script>{% endblock %}
