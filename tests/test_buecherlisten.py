@@ -344,11 +344,47 @@ def test_druckmenue_eines_fachs_ohne_faecherauswahl(seiten: TestClient):
     assert 'name="faecher_auswahl"' not in text and 'name="reihenfolge"' not in text
 
 
-@pytest.mark.parametrize("pfad", ["/buecherliste/verlag", "/buecherliste/jahrgang/5",
-                                  "/buecherliste/verlag/Klett"])
-def test_kein_druckknopf_ausserhalb_von_fach(seiten: TestClient, pfad: str):
+@pytest.mark.parametrize("pfad", [
+    "/buecherliste/fach", "/buecherliste/verlag", "/buecherliste/jahrgang",
+    "/buecherliste/fach/Chemie", "/buecherliste/verlag/Klett", "/buecherliste/jahrgang/5",
+])
+def test_jede_seite_hat_das_druckmenue(seiten: TestClient, pfad: str):
     _anmelden(seiten)
-    assert 'id="druck-oeffnen"' not in seiten.get(pfad).text
+    text = seiten.get(pfad).text
+    assert 'id="druck-oeffnen"' in text and 'id="druckmenue"' in text
+    assert '<script src="/static/druckmenue.js"></script>' in text
+
+
+def test_druckmenue_der_verlage_und_jahrgaenge(seiten: TestClient):
+    _anmelden(seiten)
+    verlage = seiten.get("/buecherliste/verlag").text
+    assert "Druck Bücherliste Verlage" in verlage
+    assert 'name="verlage" value="Klett"' in verlage
+    # Bestätigung und Reihenfolge sind an die Fachkonferenzen gebunden.
+    assert 'name="bestaetigung"' not in verlage and 'name="reihenfolge"' not in verlage
+    assert 'name="schuelerliste"' not in verlage
+
+    jahrgaenge = seiten.get("/buecherliste/jahrgang").text
+    assert "Druck Bücherliste Jahrgänge" in jahrgaenge
+    assert 'name="jahrgaenge" value="Jahrgang 5"' in jahrgaenge
+    assert 'name="schuelerliste"' in jahrgaenge
+
+    einzeln = seiten.get("/buecherliste/jahrgang/5").text
+    assert 'action="/buecherliste/jahrgang/Jahrgang%205/pdf"' in einzeln
+    assert 'name="jahrgaenge_auswahl"' not in einzeln
+
+
+@pytest.mark.parametrize("pfad, weg, bleibt", [
+    ("/buecherliste/fach/Chemie", "Fach", "Verlag"),
+    ("/buecherliste/verlag/Klett", "Verlag", "Fach"),
+])
+def test_die_spalte_der_ueberschrift_entfaellt(seiten: TestClient, pfad: str, weg: str, bleibt: str):
+    """Auf einer Fach-Seite steht in jeder Zeile dasselbe Fach - das spart die Spalte."""
+    _anmelden(seiten)
+    sammler = _Tabellen()
+    sammler.feed(seiten.get(pfad).text)
+    koepfe = re.findall(r"<th[^>]*>([^<]+)</th>", seiten.get(pfad).text)
+    assert weg not in koepfe and bleibt in koepfe
 
 
 class _Erzeuger:
@@ -360,13 +396,23 @@ class _Erzeuger:
     def lade(self, client):
         from buecherlisten.core.daten import Buecherdaten
         leer = {"leih": [], "kauf": []}
-        return Buecherdaten("2026/2027", "Schuljahr 26/27",
-                            {"Chemie": leer, "Deutsch": leer, "Mathematik": leer})
+        return Buecherdaten(
+            "2026/2027", "Schuljahr 26/27",
+            {"Chemie": leer, "Deutsch": leer, "Mathematik": leer},
+            je_verlag={"Klett": leer, "Westermann": leer},
+            je_jahrgang={"Jahrgang 5": leer, "Jahrgang 6": leer},
+            listen_ids={"Jahrgang 5": 1295, "Jahrgang 6": 1296},
+        )
 
     def erzeuge(self, daten, **optionen):
         from buecherlisten.core.erzeugen import ErzeugtesPdf
         self.aufrufe.append(optionen)
         return [ErzeugtesPdf(b"%PDF-1.4 test", "Bücherliste Fächer 2026-2027.pdf", "t")]
+
+    def erzeuge_schueler(self, daten, hole_pdf, **optionen):
+        from buecherlisten.core.erzeugen import ErzeugtesPdf
+        self.aufrufe.append({"schuelerliste": True, **optionen})
+        return [ErzeugtesPdf(b"%PDF-1.4 iserv", "Bücherliste Jahrgänge 2026-2027 (Schülerliste).pdf", "t")]
 
 
 @pytest.fixture()
@@ -375,6 +421,7 @@ def erzeuger(monkeypatch) -> _Erzeuger:
     ersatz = _Erzeuger()
     monkeypatch.setattr(buecherliste, "lade_buecherdaten", ersatz.lade)
     monkeypatch.setattr(buecherliste, "erzeuge_buecherlisten_pdfs", ersatz.erzeuge)
+    monkeypatch.setattr(buecherliste, "erzeuge_schuelerlisten_pdfs", ersatz.erzeuge_schueler)
     return ersatz
 
 
@@ -400,6 +447,7 @@ def test_drucken_liefert_pdf_zum_anzeigen(seiten: TestClient, erzeuger: _Erzeuge
     assert aufruf["faecher"] == ["Chemie", "Deutsch", "Mathematik"]
     assert aufruf["modus"] == "alphabet"
     assert aufruf["bestaetigung"] is False and aufruf["doppelseitig"] is False
+    assert aufruf["ansicht"] == "fach"
 
 
 @pytest.mark.parametrize("auswahl", ["veraenderte", "nicht_bestaetigte"])
@@ -420,6 +468,7 @@ def test_individuell_mit_allen_optionen(seiten: TestClient, erzeuger: _Erzeuger)
     assert antwort.status_code == 200
     (aufruf,) = erzeuger.aufrufe
     assert aufruf == {
+        "ansicht": "fach",
         "faecher": ["Chemie", "Mathematik"], "modus": "aufgabenfeld", "bestaetigung": True,
         "rueckgabe_bis": "08.10.2026", "rueckgabe_an": "Ml",
         "doppelseitig": True, "nur_falls_noetig": True,
@@ -455,3 +504,45 @@ def test_fachnamen_stehen_fest_in_der_pdf_url(seiten: TestClient, erzeuger: _Erz
 def test_alte_post_route_gibt_es_nicht_mehr(seiten: TestClient, erzeuger: _Erzeuger):
     _anmelden(seiten)
     assert seiten.post("/buecherliste/fach/druck").status_code in (404, 405)
+
+
+def test_verlage_und_jahrgaenge_werden_gedruckt(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert _drucken(seiten, [("verlage_auswahl", "individuell"), ("verlage", "klett")],
+                    "/buecherliste/verlag/pdf").status_code == 200
+    assert _drucken(seiten, [], "/buecherliste/jahrgang/Jahrgang 5/pdf").status_code == 200
+    assert [(a["ansicht"], a["faecher"], a["modus"]) for a in erzeuger.aufrufe] == [
+        ("verlag", ["Klett"], "alphabet"),
+        ("jahrgang", ["Jahrgang 5"], "split"),
+    ]
+
+
+def test_schuelerliste_nimmt_die_iserv_druckversion(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    antwort = _drucken(seiten, [("schuelerliste", "1"), ("doppelseitig", "1"), ("falls_noetig", "1")],
+                       "/buecherliste/jahrgang/pdf")
+    assert antwort.status_code == 200
+    assert antwort.content == b"%PDF-1.4 iserv"
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf == {"schuelerliste": True, "jahrgaenge": ["Jahrgang 5", "Jahrgang 6"],
+                      "modus": "alphabet", "doppelseitig": True, "nur_falls_noetig": True}
+
+
+def test_schuelerliste_gibt_es_nur_beim_jahrgang(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert _drucken(seiten, [("schuelerliste", "1")], "/buecherliste/verlag/pdf").status_code == 200
+    assert "schuelerliste" not in erzeuger.aufrufe[0]
+
+
+def test_aufgabenfeld_und_bestaetigung_bleiben_beim_fach(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    _drucken(seiten, [("reihenfolge", "aufgabenfeld"), ("bestaetigung", "1")],
+             "/buecherliste/verlag/pdf")
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf["modus"] == "alphabet" and aufruf["bestaetigung"] is False
+
+
+def test_unbekannte_ansicht_druckt_nicht(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert _drucken(seiten, [], "/buecherliste/schrank/pdf").status_code == 404
+    assert erzeuger.aufrufe == []

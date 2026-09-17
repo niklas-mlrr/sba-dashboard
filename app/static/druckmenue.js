@@ -1,14 +1,18 @@
-// Druckmenü der Bücherlisten nach Fach (Vorlage: templates/_druckmenue.html).
+// Druckmenü der Bücherlisten (Vorlage: templates/_druckmenue.html).
+//
+// Dieselbe Datei für Fach, Verlag und Jahrgang: Bestätigung, Rückgabe und
+// Reihenfolge gibt es nur bei Fach, die Schülerliste nur bei Jahrgang, die
+// Auswahl nur auf der Übersicht. Was fehlt, wird hier übersprungen.
 //
 // Regeln, die hier und nirgends sonst stehen:
 //   * Ohne "Bestätigungsaufforderung" sind die Rückgabe-Felder gesperrt, und
 //     ohne "Für doppelseitigen Druck optimieren" das Häkchen "falls nötig".
 //     Gesperrte Felder schickt der Browser nicht mit.
-//   * "Fächer" steht bei jedem Öffnen auf "Alle".
-//   * Wechsel auf "Individuell": die Häkchen zeigen die Fächer der zuletzt
+//   * Die Auswahl steht bei jedem Öffnen auf "Alle".
+//   * Wechsel auf "Individuell": die Häkchen zeigen die Gruppen der zuletzt
 //     gewählten Option. "veränderte" und "nicht bestätigte" sind Platzhalter
-//     und stehen für alle Fächer (data-faecher="alle").
-//   * Ohne ein einziges angehaktes Fach lässt sich kein PDF öffnen.
+//     und stehen für alle Fächer (data-gruppen="alle").
+//   * Ohne einen einzigen angehakten Eintrag lässt sich kein PDF öffnen.
 // Alle anderen Felder behalten ihren Wert, bis die Seite neu geladen wird.
 (function () {
   const dialog = document.getElementById("druckmenue");
@@ -24,27 +28,29 @@
   const starten = document.getElementById("druck-starten");
 
   function sperren() {
-    for (const feld of [rueckgabeBis, rueckgabeAn]) feld.disabled = !bestaetigung.checked;
-    rueckgabe.classList.toggle("gesperrt", !bestaetigung.checked);
+    if (bestaetigung) {
+      for (const feld of [rueckgabeBis, rueckgabeAn]) feld.disabled = !bestaetigung.checked;
+      rueckgabe.classList.toggle("gesperrt", !bestaetigung.checked);
+    }
     fallsNoetig.disabled = !doppelseitig.checked;
     fallsNoetigZeile.classList.toggle("disabled", !doppelseitig.checked);
   }
-  bestaetigung.addEventListener("change", sperren);
+  if (bestaetigung) bestaetigung.addEventListener("change", sperren);
   doppelseitig.addEventListener("change", sperren);
 
-  // ── Fächer (nur auf der Gesamtseite) ──────────────────────────────────────
+  // ── Auswahl (nur auf der Übersicht) ───────────────────────────────────────
   const individuell = document.getElementById("druck-individuell");
-  let faecherZuruecksetzen = () => {};
-  let faecherPruefen = () => {};
+  let auswahlZuruecksetzen = () => {};
+  let auswahlPruefen = () => {};
   if (individuell) {
-    const liste = document.getElementById("druck-faecherliste");
-    const listenKnopf = document.getElementById("druck-faecherliste-knopf");
-    const listenText = document.getElementById("druck-faecherliste-text");
-    const optionen = Array.from(formular.querySelectorAll('input[name="faecher_auswahl"]'));
-    const haekchen = Array.from(liste.querySelectorAll('input[name="faecher"]'));
+    const liste = document.getElementById("druck-gruppenliste");
+    const listenKnopf = document.getElementById("druck-gruppenliste-knopf");
+    const listenText = document.getElementById("druck-gruppenliste-text");
+    const optionen = Array.from(formular.querySelectorAll('input[type="radio"][data-gruppen], #druck-individuell'));
+    const haekchen = Array.from(liste.querySelectorAll('input[type="checkbox"]'));
     let zuletzt = optionen[0];
 
-    faecherPruefen = () => {
+    auswahlPruefen = () => {
       const angehakt = haekchen.filter((h) => h.checked).length;
       listenText.textContent = `${angehakt} von ${haekchen.length}`;
       starten.disabled = individuell.checked && angehakt === 0;
@@ -56,8 +62,8 @@
     }
 
     function uebernimm(option) {
-      // Heute steht jede Option außer "Individuell" für alle Fächer.
-      if (option.dataset.faecher === "alle") for (const h of haekchen) h.checked = true;
+      // Heute steht jede Option außer "Individuell" für alle Einträge.
+      if (option.dataset.gruppen === "alle") for (const h of haekchen) h.checked = true;
     }
 
     for (const option of optionen) {
@@ -68,25 +74,25 @@
         listenKnopf.disabled = !eigene;
         for (const h of haekchen) h.disabled = !eigene;
         if (!eigene) listeOffen(false);
-        faecherPruefen();
+        auswahlPruefen();
       });
     }
-    for (const h of haekchen) h.addEventListener("change", faecherPruefen);
+    for (const h of haekchen) h.addEventListener("change", auswahlPruefen);
     listenKnopf.addEventListener("click", () => listeOffen(!liste.classList.contains("open")));
     dialog.addEventListener("click", (ereignis) => {
       if (!liste.contains(ereignis.target)) listeOffen(false);
     });
 
-    faecherZuruecksetzen = () => {
+    auswahlZuruecksetzen = () => {
       optionen[0].checked = true;
       optionen[0].dispatchEvent(new Event("change"));
     };
   }
 
   oeffnen.addEventListener("click", () => {
-    faecherZuruecksetzen();
+    auswahlZuruecksetzen();
     sperren();
-    faecherPruefen();
+    auswahlPruefen();
     dialog.showModal();
   });
   document.getElementById("druck-abbrechen").addEventListener("click", () => dialog.close());

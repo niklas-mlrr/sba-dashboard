@@ -232,6 +232,9 @@ Befund, nicht die Vermutung.
 | G2-8 | „Fach" → Druck-Knopf → „PDF öffnen" | PDF öffnet in neuem Tab, **kein** Download; wie lange dauert es? |
 | G2-9 | Druckmenü: „Bestätigungsaufforderung" an, Rückgabe bis/an ausfüllen, „Individuell" mit 2 Fächern, doppelseitig | Nur die 2 Fächer, Rückgabe im Kopf, Seitenzahl je Fach gerade |
 | G2-10 | Auf der Seite eines Fachs drucken | PDF nur dieses Fachs |
+| G2-11 | „Verlag" → Druck-Knopf → „PDF öffnen" | PDF je Verlag, Spalten Titel, Fach, Klasse, ISBN, Neupreis, Leihgebühr; keine Verlags-Spalte auf der Seite selbst |
+| G2-12 | „Jahrgang" → Druck-Knopf, „Schülerliste" **aus** | Eigene Liste je Jahrgang, Spalten wie die IServ-Liste, alle Bücher in einer Tabelle |
+| G2-13 | Dasselbe mit „Schülerliste" **an** | Die IServ-Druckversionen, aneinandergehängt; mit „doppelseitig" endet jeder Jahrgang auf gerader Seitenzahl |
 
 ### H. Beenden
 

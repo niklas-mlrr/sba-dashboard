@@ -258,7 +258,8 @@ Offen:
 ### Geplant: Stand speichern und „veränderte" drucken
 
 Noch nicht gebaut, aber der PDF-Druck ist schon darauf ausgelegt (seit
-2026-09-17 `GET /buecherliste/fach/pdf`, Optionen in der URL):
+2026-09-17 `GET /buecherliste/fach/pdf`, Optionen in der URL; die Auswahl
+heißt bei den anderen Ansichten `verlage`/`jahrgaenge`):
 
 - **Stand speichern** - die aktuelle Bücherliste wird als Vergleichsstand
   abgelegt. Ändert Daten, also POST; Speicherort eher neben der Mappe auf dem

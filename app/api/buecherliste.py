@@ -6,11 +6,11 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, cast
 from urllib.parse import quote
 
-from buecherlisten.core.daten import lade_buecherdaten, waehle_faecher
-from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs
+from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
+from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
@@ -69,47 +69,59 @@ def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
     return _hinweis(request, "Unbekannte Ansicht", f"Es gibt keine Ansicht „{ansicht}“.", 404)
 
 
+# Wie die Auswahl einer Ansicht im Druckmenü und damit in der PDF-URL heißt.
+_AUSWAHLFELD = {"fach": "faecher", "verlag": "verlage", "jahrgang": "jahrgaenge"}
+
+
 # Beide PDF-Routen stehen vor "/buecherliste/{ansicht}/{name:path}", sonst
 # fängt diese "fach/pdf" und "fach/<Fach>/pdf" als Gruppennamen ab.
-@router.get("/buecherliste/fach/pdf")
-async def pdf_faecher(request: Request) -> Response:
-    """PDF mehrerer Fächer; das Druckmenü der Fachübersicht schickt hierher.
+@router.get("/buecherliste/{ansicht}/pdf")
+async def pdf_gruppen(request: Request, ansicht: str) -> Response:
+    """PDF mehrerer Fächer, Verlage oder Jahrgänge; aus dem Druckmenü der Übersicht.
 
     GET statt POST, wie die PDF-Exporte von IServ (``loan-slips``,
     ``forms/export/form-students``): alle Angaben stehen in der URL, also lädt
     F5 im PDF-Tab ohne "Formular erneut senden" dasselbe PDF neu, und nach
     einer abgelaufenen Anmeldung genügt Neuladen.
 
-    Die Fächer kommen bei "Individuell" als fertige Liste. Das soll so
+    Die Gruppen kommen bei "Individuell" als fertige Liste. Das soll so
     bleiben: "veränderte" wird später im Menü geprüft und hakt die Fächer
     dort an, damit F5 dieselben Fächer zeigt, auch wenn sich danach etwas
     geändert hat (docs/roadmap.md).
     """
+    if ansicht not in _ANSICHTEN:
+        return _unbekannte_ansicht(request, ansicht)
     abfrage = request.query_params
+    feld = _AUSWAHLFELD[ansicht]
 
     def auswahl(alle: list[str]) -> tuple[list[str], str]:
         modus = abfrage.get("reihenfolge", "")
-        if abfrage.get("faecher_auswahl") == "individuell":
-            return abfrage.getlist("faecher"), modus
+        if abfrage.get(f"{feld}_auswahl") == "individuell":
+            return abfrage.getlist(feld), modus
         # "Alle" sowie die Platzhalter "veränderte" und "nicht bestätigte".
         return alle, modus
 
-    return await _pdf(request, auswahl)
+    return await _pdf(request, cast(Ansicht, ansicht), auswahl)
 
 
-@router.get("/buecherliste/fach/{name}/pdf")
-async def pdf_fach(request: Request, name: str) -> Response:
-    """PDF eines Fachs, aufgerufen aus dem Druckmenü auf dessen Seite."""
-    return await _pdf(request, lambda alle: ([name], "split"))
+@router.get("/buecherliste/{ansicht}/{name:path}/pdf")
+async def pdf_gruppe(request: Request, ansicht: str, name: str) -> Response:
+    """PDF eines Fachs, Verlags oder Jahrgangs, aus dem Druckmenü seiner Seite."""
+    if ansicht not in _ANSICHTEN:
+        return _unbekannte_ansicht(request, ansicht)
+    return await _pdf(request, cast(Ansicht, ansicht), lambda alle: ([name], "split"))
 
 
-async def _pdf(request: Request,
+async def _pdf(request: Request, ansicht: Ansicht,
                auswahl: Callable[[list[str]], tuple[list[str], str]]) -> Response:
-    """Lädt die Daten, wählt die Fächer und liefert das PDF zum Anzeigen.
+    """Lädt die Daten, wählt die Gruppen und liefert das PDF zum Anzeigen.
 
     ``Content-Disposition: inline`` sorgt dafür, dass der Browser das PDF im
     neuen Tab anzeigt, statt es herunterzuladen. Gesperrte Felder schickt der
     Browser nicht - fehlt ``bestaetigung``, fehlen also auch die Rückgabe-Angaben.
+
+    ``schuelerliste`` (nur Jahrgang) holt statt der eigenen Liste die
+    Druckversion aus IServ - dieselbe PDF, die dort an den Bücherlisten hängt.
     """
     abfrage = request.query_params
 
@@ -127,28 +139,45 @@ async def _pdf(request: Request,
         return _hinweis(request, "IServ nicht erreichbar",
                         f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502)
 
-    gewuenscht, modus = auswahl(list(daten.faecher))
+    gewuenscht, modus = auswahl(list(daten.gruppen(ansicht)))
     if modus not in {"alphabet", "aufgabenfeld", "split"}:
         modus = "alphabet"
-    faecher, unbekannt = waehle_faecher(daten.faecher, gewuenscht)
-    if unbekannt or not faecher:
+    if ansicht != "fach" and modus == "aufgabenfeld":
+        modus = "alphabet"
+    gruppen, unbekannt = waehle_gruppen(daten, ansicht, gewuenscht)
+    if unbekannt or not gruppen:
+        wort = _ANSICHTEN[ansicht][0]
         return _hinweis(request, "Keine gültige Auswahl",
-                        "Diese Fächer kommen in keiner Bücherliste vor: " + ", ".join(unbekannt)
-                        if unbekannt else "Es ist kein Fach ausgewählt.", 400)
+                        f"Das kommt in keiner Bücherliste vor ({wort}): " + ", ".join(unbekannt)
+                        if unbekannt else "Es ist nichts ausgewählt.", 400)
 
+    schuelerliste = ansicht == "jahrgang" and bool(eins("schuelerliste"))
     try:
-        (pdf, *_) = await run_in_threadpool(
-            lambda: erzeuge_buecherlisten_pdfs(
-                daten,
-                faecher=faecher,
-                modus=modus,  # type: ignore[arg-type]
-                bestaetigung=bool(eins("bestaetigung")),
-                rueckgabe_bis=eins("rueckgabe_bis") or None,
-                rueckgabe_an=eins("rueckgabe_an") or None,
-                doppelseitig=bool(eins("doppelseitig")),
-                nur_falls_noetig=bool(eins("falls_noetig")),
+        if schuelerliste:
+            (pdf, *_) = await run_in_threadpool(
+                lambda: erzeuge_schuelerlisten_pdfs(
+                    daten,
+                    lambda listen_id: client.admin.get_booklist_pdf(daten.schuljahr_id, listen_id),
+                    jahrgaenge=gruppen,
+                    modus="split" if modus == "split" else "alphabet",
+                    doppelseitig=bool(eins("doppelseitig")),
+                    nur_falls_noetig=bool(eins("falls_noetig")),
+                )
             )
-        )
+        else:
+            (pdf, *_) = await run_in_threadpool(
+                lambda: erzeuge_buecherlisten_pdfs(
+                    daten,
+                    ansicht=ansicht,
+                    faecher=gruppen,
+                    modus=modus,  # type: ignore[arg-type]
+                    bestaetigung=ansicht == "fach" and bool(eins("bestaetigung")),
+                    rueckgabe_bis=eins("rueckgabe_bis") or None,
+                    rueckgabe_an=eins("rueckgabe_an") or None,
+                    doppelseitig=bool(eins("doppelseitig")),
+                    nur_falls_noetig=bool(eins("falls_noetig")),
+                )
+            )
     except Exception as exc:  # noqa: BLE001
         return _hinweis(request, "PDF nicht erzeugt",
                         f"Beim Erzeugen des PDFs ist ein Fehler aufgetreten: {exc}", 500)
@@ -168,12 +197,22 @@ def uebersicht(request: Request, ansicht: str) -> Response:
     if isinstance(daten, Response):
         return daten
     name, gruppierung = _ANSICHTEN[ansicht]
+    gruppen = gruppierung(daten) if gruppierung else ()
+    # Was im Druckmenü zur Auswahl steht: die Gruppennamen, bei Jahrgang die
+    # Listen mit Jahrgang ("Jahrgang 5", wie buecherlisten.core sie nennt).
+    druck_gruppen = (
+        [f"Jahrgang {liste.jahrgang}" for liste in daten.listen if liste.jahrgang is not None]
+        if ansicht == "jahrgang" else [g.name for g in gruppen]
+    )
     return _seite(request, "buecherliste_uebersicht.html", {
         "ansicht": ansicht,
+        # Jede Ansicht hat ein Druckmenü; nur sein Inhalt unterscheidet sich.
+        "druckbar": True,
         "ansicht_name": name,
         "schuljahr": daten.schuljahr,
         "listen": daten.listen,
-        "gruppen": gruppierung(daten) if gruppierung else (),
+        "gruppen": gruppen,
+        "druck_gruppen": druck_gruppen,
     })
 
 
@@ -187,6 +226,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     ansicht_name, gruppierung = _ANSICHTEN[ansicht]
     werte: dict[str, Any] = {
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
+        "druckbar": True,
     }
     if gruppierung is None:
         liste = daten.liste_fuer_jahrgang(int(name)) if name.isdigit() else None

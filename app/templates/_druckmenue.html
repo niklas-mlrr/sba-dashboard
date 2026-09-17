@@ -1,23 +1,31 @@
 {#
-  Druckmenü der Bücherlisten nach Fach. Aufgebaut wie die IServ-Menüs
-  "Druck Leihscheine" und "Druck Klassenliste" (Bootstrap-Modal mit
+  Druckmenü der Bücherlisten (Fach, Verlag, Jahrgang). Aufgebaut wie die
+  IServ-Menüs "Druck Leihscheine" und "Druck Klassenliste" (Bootstrap-Modal mit
   form-horizontal: Beschriftung rechtsbündig links, Optionen rechts, unten
   "Abbrechen" und "PDF öffnen"), live angesehen am 2026-09-17.
 
-  Erwartet: druck_faecher (Liste der Fachnamen) auf der Gesamtseite, oder
-  druck_fach (ein Name) auf der Seite eines Fachs. Verhalten in
+  Erwartet: druck_ansicht ("fach"/"verlag"/"jahrgang"), dazu entweder
+  druck_gruppen (Liste der Namen) auf der Übersicht oder druck_gruppe (ein
+  Name, für die URL) auf der Seite einer Gruppe. Verhalten in
   static/druckmenue.js; das Formular öffnet das PDF in einem neuen Tab.
+
+  Nur Fächer lassen sich bestätigen (die Bestätigung ist an die
+  Fachkonferenzleitung adressiert) und nach Aufgabenfeld sortieren; nur
+  Jahrgänge haben die Schülerliste, also die Druckversion aus IServ.
 
   GET, damit alle Angaben in der URL stehen und F5 im PDF-Tab ohne Rückfrage
   dasselbe PDF neu lädt (app/api/buecherliste.py).
 #}
+{% set feld = {"fach": "faecher", "verlag": "verlage", "jahrgang": "jahrgaenge"}[druck_ansicht] %}
+{% set wort = {"fach": "Fächer", "verlag": "Verlage", "jahrgang": "Jahrgänge"}[druck_ansicht] %}
 <dialog id="druckmenue" class="iserv-modal" aria-labelledby="druckmenue-titel">
   <form id="druckformular" method="get" target="_blank"
-    action="/buecherliste/fach/{% if druck_fach %}{{ druck_fach|urlencode }}/{% endif %}pdf">
+    action="/buecherliste/{{ druck_ansicht }}/{% if druck_gruppe %}{{ druck_gruppe|urlencode }}/{% endif %}pdf">
     <div class="modal-header">
-      <h3 class="modal-title" id="druckmenue-titel">Druck Bücherliste {{ druck_fach or "Fächer" }}</h3>
+      <h3 class="modal-title" id="druckmenue-titel">Druck Bücherliste {{ druck_gruppe or wort }}</h3>
     </div>
     <div class="modal-body">
+      {% if druck_ansicht == "fach" %}
       <div class="form-group">
         <label class="control-label spalte-beschriftung" for="druck-bestaetigung">Bestätigung:</label>
         <div class="spalte-inhalt">
@@ -47,40 +55,57 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
-      {% if druck_faecher %}
+      {% if druck_ansicht == "jahrgang" %}
       <div class="form-group">
-        <label class="control-label spalte-beschriftung">Fächer:</label>
+        <label class="control-label spalte-beschriftung" for="druck-schuelerliste">Schülerliste:</label>
+        <div class="spalte-inhalt">
+          <div class="checkbox">
+            <label><input type="checkbox" name="schuelerliste" value="1" id="druck-schuelerliste">&nbsp;Druckversion aus IServ</label>
+          </div>
+          <p class="small help-block">Nimmt die Bücherliste, die IServ selbst druckt: mit Grundpaket
+            und Wahlbereichen einzeln. Ohne Häkchen stehen alle Bücher des Jahrgangs in einer
+            Tabelle, im Aussehen der Listen nach Fach.</p>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if druck_gruppen %}
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung">{{ wort }}:</label>
         <div class="spalte-inhalt">
           {#
             "veränderte" und "nicht bestätigte" sind Platzhalter: sie wählen,
-            bis es die Angaben dazu gibt, alle Fächer (data-faecher="alle").
+            bis es die Angaben dazu gibt, alle Fächer (data-gruppen="alle").
             "Prüfen" ist ebenfalls ein Platzhalter: später vergleicht er mit dem
             gespeicherten Stand und hakt die veränderten Fächer bei
             "Individuell" an, damit die URL feste Fächer enthält.
           #}
-          <div class="radio"><label><input type="radio" name="faecher_auswahl" value="alle"
-            data-faecher="alle" checked>Alle</label></div>
+          <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="alle"
+            data-gruppen="alle" checked>Alle</label></div>
+          {% if druck_ansicht == "fach" %}
           <div class="radio radio-mit-auswahl">
-            <label><input type="radio" name="faecher_auswahl" value="veraenderte"
-              data-faecher="alle">veränderte</label>
+            <label><input type="radio" name="{{ feld }}_auswahl" value="veraenderte"
+              data-gruppen="alle">veränderte</label>
             <button type="button" class="btn btn-default" id="druck-veraenderte-pruefen" disabled
               title="Folgt, sobald sich ein Stand der Bücherlisten speichern lässt">Prüfen</button>
           </div>
-          <div class="radio"><label><input type="radio" name="faecher_auswahl" value="nicht_bestaetigte"
-            data-faecher="alle">nicht bestätigte</label></div>
+          <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="nicht_bestaetigte"
+            data-gruppen="alle">nicht bestätigte</label></div>
+          {% endif %}
           <div class="radio radio-mit-auswahl">
-            <label><input type="radio" name="faecher_auswahl" value="individuell"
+            <label><input type="radio" name="{{ feld }}_auswahl" value="individuell"
               id="druck-individuell">Individuell</label>
-            <div class="dropdown" id="druck-faecherliste">
-              <button type="button" class="btn btn-default dropdown-toggle" id="druck-faecherliste-knopf"
+            <div class="dropdown" id="druck-gruppenliste">
+              <button type="button" class="btn btn-default dropdown-toggle" id="druck-gruppenliste-knopf"
                 aria-haspopup="true" aria-expanded="false" disabled><span
-                id="druck-faecherliste-text">{{ druck_faecher|length }} von {{ druck_faecher|length }}</span>&nbsp;<span
+                id="druck-gruppenliste-text">{{ druck_gruppen|length }} von {{ druck_gruppen|length }}</span>&nbsp;<span
                 class="caret"></span></button>
               <ul class="dropdown-menu faecherauswahl" role="menu">
-                {% for fach in druck_faecher %}
-                <li><label><input type="checkbox" name="faecher" value="{{ fach }}" checked
-                  disabled>&nbsp;{{ fach }}</label></li>
+                {% for gruppe in druck_gruppen %}
+                <li><label><input type="checkbox" name="{{ feld }}" value="{{ gruppe }}" checked
+                  disabled>&nbsp;{{ gruppe }}</label></li>
                 {% endfor %}
               </ul>
             </div>
@@ -88,6 +113,7 @@
         </div>
       </div>
 
+      {% if druck_ansicht == "fach" %}
       <div class="form-group">
         <label class="control-label spalte-beschriftung">Reihenfolge:</label>
         <div class="spalte-inhalt">
@@ -97,6 +123,7 @@
             value="aufgabenfeld">Nach Aufgabenfeld</label></div>
         </div>
       </div>
+      {% endif %}
       {% endif %}
 
       <div class="form-group">

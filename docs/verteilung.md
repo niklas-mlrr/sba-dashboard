@@ -99,9 +99,10 @@ importiert, und zwei zusätzliche Räder, an denen die Ersteinrichtung scheitern
 konnte.
 
 **Seit 2026-09-17 braucht das Dashboard reportlab doch.** Es druckt die
-Bücherlisten nach Fach (`GET /buecherliste/fach/pdf`) mit
+Bücherlisten nach Fach, Verlag und Jahrgang (`GET /buecherliste/{ansicht}/pdf`) mit
 `buecherlisten.core` aus `sba-bestand`, und hängt deshalb an
-`sba-bestand[pdf]`. reportlab und Pillow stehen damit wieder in
+`sba-bestand[pdf]`. reportlab, Pillow und (fürs Zusammenhängen der
+IServ-Druckversionen beim Jahrgang) pypdf stehen damit wieder in
 `requirements.txt`. Das Risiko von oben gilt wieder: findet pip für die
 Python-Version des Laptops kein Pillow-Rad, scheitert die Ersteinrichtung.
 Prüfpunkt G2-7 in `schul-laptop-test.md`.
