@@ -376,6 +376,23 @@ bekommt den Client als Parameter und hält eine eigene Referenz. Verfällt die
 Anmeldung mitten in einem langen Lauf, läuft er zu Ende; erst der nächste Abruf
 verlangt eine neue. Deshalb braucht es dort keinen Wächter.
 
+### Die Domain ist an die Anmeldung gebunden
+
+Aus demselben Grund, aus dem das Passwort im Client liegt, folgt eine zweite
+Einschränkung: der gehaltene Client ist an **eine** Domain gebunden und meldet
+sich bei einem 401 dort selbsttätig neu an. Wird `iserv_domain` unter ihm
+gewechselt, arbeitet das Dashboard ab da mit einer Anmeldung, die zu keiner
+Einstellung mehr passt — und der nächste Abruf scheitert an einer Stelle, die
+nichts mehr mit der Ursache zu tun hat.
+
+`POST /api/einstellungen` weist eine **abweichende** Domain deshalb mit **409**
+ab, solange jemand angemeldet ist; dieselbe Domain mit einem neuen Ordner bleibt
+erlaubt, sonst könnte niemand die Mappe umstellen, ohne sich abzumelden. Das
+Programmfenster sperrt das Serverfeld im angemeldeten Zustand zusätzlich und
+schreibt den Grund unter das Feld (`app/_fenster_tk.py`) — die Sperre dort ist
+Bequemlichkeit, die Prüfung im Server ist die Zusage. `tests/test_domainsperre.py`
+hält beide Seiten fest.
+
 | Fehler | Status | Klartext |
 |--------|--------|----------|
 | `AuthError` | 401 | Zugangsdaten stimmen nicht |
