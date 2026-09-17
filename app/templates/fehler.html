@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block titel %}{{ titel }} — Schulbuchausleihe{% endblock %}
+{% block ueberschrift %}{{ ueberschrift or "Bestand und Nachbestellung" }}{% endblock %}
 {% block inhalt %}
 <section class="karte fehler">
   <h2>{{ titel }}</h2>

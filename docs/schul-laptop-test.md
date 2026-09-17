@@ -218,6 +218,15 @@ Befund, nicht die Vermutung.
 | G2 | In Fenster 1 eine Zahl ändern, dann in Fenster 2 dieselbe Zeile | Fenster 2 meldet, die Datei habe sich geändert, und lädt neu | Meldung |
 | G3 | In beiden Fenstern gleichzeitig abrufen | Einer läuft, der andere wartet oder wird abgewiesen — **nie beide gleichzeitig schreiben** | Verhalten |
 
+### G2. Bücherlisten
+
+| # | Schritt | Erwartet |
+|---|---------|----------|
+| G2-1 | Ohne Anmeldung „Bücherliste" → „Fach" | Hinweis, im Programmfenster anzumelden; kein JSON |
+| G2-2 | Angemeldet „Fach", „Verlag", „Jahrgang" öffnen | Tabellen wie bei IServ, Status als graues Label „offen"; wie lange dauert das Laden? |
+| G2-3 | Ein Fach anklicken (z. B. Chemie) | Bücher mit Jahrgang, Mehrjahresbände nur einmal; „« Zurück zur Übersicht" funktioniert |
+| G2-4 | „Jahrgang 5" anklicken | Grundpaket und Wahlbereiche wie bei IServ, ohne Bearbeitungsknöpfe |
+
 ### H. Beenden
 
 Der Anlass für das Programmfenster steht in H2: der Weg zurück, wenn der Tab weg

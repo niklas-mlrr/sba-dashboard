@@ -17,7 +17,23 @@
   #}
   <nav class="navleiste" aria-label="Hauptnavigation">
     <ul class="reiter">
-      <li class="aktiv"><a href="/" aria-current="page"><span
+      {#
+        Aufgebaut wie der Reiter "Schuljahr" bei IServ. Welcher Reiter aktiv ist,
+        setzt die Route über "reiter"; ohne Angabe ist es der Bestand.
+      #}
+      {% set aktiver_reiter = reiter | default("bestand") %}
+      <li class="dropdown{% if aktiver_reiter == 'buecherliste' %} aktiv{% endif %}" id="buecherliste">
+        <a href="#" id="buecherliste-oeffnen" class="dropdown-toggle" role="button"
+          aria-haspopup="true" aria-expanded="false"><span
+          class="glyphicon glyphicon-list" aria-hidden="true"></span>&nbsp;&nbsp;Bücherliste&nbsp;<span
+          class="caret"></span></a>
+        <ul class="dropdown-menu" role="menu" aria-labelledby="buecherliste-oeffnen">
+          <li role="menuitem"><a href="/buecherliste/verlag">Verlag</a></li>
+          <li role="menuitem"><a href="/buecherliste/fach">Fach</a></li>
+          <li role="menuitem"><a href="/buecherliste/jahrgang">Jahrgang</a></li>
+        </ul>
+      </li>
+      <li{% if aktiver_reiter == 'bestand' %} class="aktiv"{% endif %}><a href="/"{% if aktiver_reiter == 'bestand' %} aria-current="page"{% endif %}><span
         class="glyphicon glyphicon-equalizer" aria-hidden="true"></span>&nbsp;&nbsp;Bestand</a></li>
     </ul>
     <ul class="reiter reiter-rechts">
@@ -29,10 +45,11 @@
     </ul>
   </nav>
 
-  <div class="seite">
+  <div class="seite {% block seitenklasse %}{% endblock %}">
     <header class="kopf">
       <div class="kopfaktionen">{% block kopfaktionen %}{% endblock %}</div>
-      <h1>Bestand und Nachbestellung</h1>
+      <h1>{% block ueberschrift %}Bestand und Nachbestellung{% endblock %}</h1>
+      {% block unter_ueberschrift %}{% endblock %}
     </header>
     {% block kopfzeile %}{% endblock %}
     <main>

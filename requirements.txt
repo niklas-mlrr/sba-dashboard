@@ -42,7 +42,9 @@ idna==3.19
     #   anyio
     #   requests
 isbnlib==3.10.14
-    # via sba-bestand
+    # via
+    #   sba-bestand
+    #   sba-dashboard
 jinja2==3.1.6
     # via sba-dashboard
 markupsafe==3.0.3

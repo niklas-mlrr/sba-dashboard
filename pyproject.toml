@@ -8,6 +8,8 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "jinja2>=3.1",
     "openpyxl>=3.1,<4",
+    # ISBN mit Bindestrichen auf den Bücherlisten-Seiten (app/buecherlisten.py).
+    "isbnlib>=3.10",
     # Geschwister-Repos, siehe [tool.uv.sources] und ../README.md
     "iserv-ausleihe-api",
     "sba-bestand",
@@ -149,7 +151,7 @@ warn_unused_ignores = true
 # liefert. Seit 2026-09-05 ist das nur noch openpyxl - `ausleihe.*` stand bis
 # dahin hier und ist die letzte Paketgrenze, die jetzt geprüft wird.
 [[tool.mypy.overrides]]
-module = ["openpyxl.*"]
+module = ["openpyxl.*", "isbnlib.*"]
 ignore_missing_imports = true
 
 # bestand.core und ausleihe werden für ihre Typen gelesen, aber nicht hier

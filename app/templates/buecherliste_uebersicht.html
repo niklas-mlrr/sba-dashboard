@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block titel %}Bücherliste nach {{ ansicht_name }} — Schulbuchausleihe{% endblock %}
+{% block seitenklasse %}seite-voll{% endblock %}
+{% block ueberschrift %}Bücherliste nach {{ ansicht_name }}{% endblock %}
+
+{#
+  Nachgebaut nach der IServ-Seite "Bücherlisten" (#/schoolyear/…/booklists):
+  table.table, Bezeichnung als Link, Status als Label. Ohne "Liste
+  hinzufügen" und ohne "Bücherlisten übernehmen" - das Dashboard liest nur.
+
+  Status ist vorerst ein Platzhalter; was dort stehen soll, wird noch
+  festgelegt.
+#}
+{% block inhalt %}
+<div class="tabellenrahmen">
+<table class="iserv-tabelle">
+  {% if ansicht == "jahrgang" %}
+  <thead>
+    <tr>
+      <th>Bezeichnung</th>
+      <th>Jahrgang</th>
+      <th>Leihmodalität</th>
+      <th>Festpreis</th>
+      <th>Anmeldung</th>
+      <th>Beginn</th>
+      <th>Ende</th>
+      <th>Zahlungsfrist</th>
+      <th>Bankverbindung</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for liste in listen %}
+    <tr>
+      <td>{% if liste.jahrgang is not none %}<a href="/buecherliste/jahrgang/{{ liste.jahrgang }}">{{ liste.titel }}</a>{% else %}{{ liste.titel }}{% endif %}</td>
+      <td>{{ liste.jahrgang if liste.jahrgang is not none else "" }}</td>
+      <td>{{ liste.leihmodalitaet }}</td>
+      <td>{% if liste.festpreis %}{{ "%.2f"|format(liste.festpreis)|replace(".", ",") }}&nbsp;€{% else %}<span class="klein grau">Nein</span>{% endif %}</td>
+      <td>{% if liste.anmeldung_moeglich %}<span class="label label-success">möglich</span>{% else %}<span class="label label-default">z. Z. nicht möglich</span>{% endif %}</td>
+      <td><b>{{ liste.beginn.strftime("%d.%m.%y") if liste.beginn else "" }}</b></td>
+      <td><b>{{ liste.ende.strftime("%d.%m.%y") if liste.ende else "" }}</b></td>
+      <td><b>{{ liste.zahlungsfrist.strftime("%d.%m.%y") if liste.zahlungsfrist else "" }}</b></td>
+      <td>{{ liste.bank }}</td>
+      <td><span class="label label-status">offen</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% else %}
+  <thead>
+    <tr>
+      <th>Bezeichnung</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for gruppe in gruppen %}
+    <tr>
+      <td><a href="/buecherliste/{{ ansicht }}/{{ gruppe.name|urlencode }}">{{ gruppe.name }}</a></td>
+      <td><span class="label label-status">offen</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% endif %}
+</table>
+</div>
+{% endblock %}

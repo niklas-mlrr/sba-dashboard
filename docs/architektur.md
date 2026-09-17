@@ -81,9 +81,11 @@ app/
     seite.py        GET /            und GET/POST /api/einstellungen  (HTML + Fenster)
     tabelle.py      GET /api/rows    und POST /api/cell
     abruf.py        /api/anmeldung, POST /api/refresh, GET /api/refresh/status
+    buecherliste.py GET /buecherliste/... (HTML, live aus IServ)
     system.py       GET /health      und POST /api/beenden
     gemeinsam.py    Vorlagen, Einstellungen aus dem Request, der 503-Leerfall
   rows.py           Raster -> Anzeigezeilen, lies_tabelle -> Tabellenstand
+  buecherlisten.py  Bücherlisten laden und nach Fach/Verlag/Jahrgang ordnen
   excel.py          Laden, Sperren, Schreiben, Prüfen einer Mappe
   refresh.py        IServ-Abruf mit instanzgebundenem Fortschritt
   sitzung.py        Die Anmeldung: ein Client, ein Zeitschloss, kein Leck
@@ -96,7 +98,7 @@ app/
   _fenster_tk.py    Die Widgets. Keine Entscheidung, nur Anzeige.
 ```
 
-`rows.py`, `excel.py`, `refresh.py`, `sitzung.py`, `cache.py`, `settings.py`,
+`rows.py`, `buecherlisten.py`, `excel.py`, `refresh.py`, `sitzung.py`, `cache.py`, `settings.py`,
 `paths.py`, `dateien.py` und `fenster.py` importieren **kein FastAPI**. Das ist keine Ordnungsliebe, sondern
 die Voraussetzung für den nächsten Abschnitt: Ausnahmen, die nichts über HTTP
 wissen, lassen sich an einer Stelle auf HTTP abbilden.

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titel %}Bücherliste {{ titel }} — Schulbuchausleihe{% endblock %}
+{% block seitenklasse %}seite-voll{% endblock %}
+{% block ueberschrift %}Bücherliste {{ titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
+{% block unter_ueberschrift %}<p class="zurueck"><a href="/buecherliste/{{ ansicht }}">« Zurück zur Übersicht</a></p>{% endblock %}
+
+{#
+  Nachgebaut nach der IServ-Detailseite einer Bücherliste, nur lesend: ohne
+  Zurückhalten/Einstellungen/Vorschau/Drucken, ohne Hinzufügen und Entfernen,
+  und "Leihbar" ist ein Häkchen, das sich nicht umschalten lässt.
+
+  Bei Fach und Verlag kommen die Bücher aus mehreren Jahrgangslisten; dort
+  steht deshalb zusätzlich die Spalte Jahrgang.
+#}
+{% macro buchtabelle(buecher, mit_jahrgang) %}
+<div class="tabellenrahmen">
+<table class="iserv-tabelle">
+  <thead>
+    <tr>
+      <th>Titel</th>
+      {% if mit_jahrgang %}<th>Jahrgang</th>{% endif %}
+      <th>Fach</th>
+      <th>Verlag</th>
+      <th>ISBN</th>
+      <th>Neupreis</th>
+      <th>Leihgebühr</th>
+      <th>Leihbar</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for buch in buecher %}
+    <tr>
+      <td>{{ buch.titel }}</td>
+      {% if mit_jahrgang %}<td>{{ buch.jahrgang_anzeige }}</td>{% endif %}
+      <td>{{ buch.fach_anzeige }}</td>
+      <td>{{ buch.verlag }}</td>
+      <td><samp>{{ buch.isbn_anzeige }}</samp></td>
+      <td>{{ euro(buch.neupreis) }}</td>
+      <td>{{ euro(buch.leihgebuehr) }}</td>
+      <td><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
+        {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
+      <td><span class="label label-status">offen</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+{% macro euro(wert) -%}
+{%- if wert is not none -%}{{ "%.2f"|format(wert)|replace(".", ",") }}&nbsp;€{%- endif -%}
+{%- endmacro %}
+
+{% block inhalt %}
+{% if liste %}
+  {% if liste.grundpaket %}
+  <h2 class="iserv-h2">Grundpaket</h2>
+  {% for option in liste.grundpaket.optionen %}{{ buchtabelle(option.buecher, false) }}{% endfor %}
+  {% endif %}
+  {% if liste.wahlbereiche %}
+  <h2 class="iserv-h2">Wahlbereiche</h2>
+  {% for bereich in liste.wahlbereiche %}
+  <h3 class="iserv-h3">{{ bereich.titel }}</h3>
+  {% for option in bereich.optionen %}
+  <h4 class="iserv-h4">{{ option.titel }}</h4>
+  {{ buchtabelle(option.buecher, false) }}
+  {% endfor %}
+  {% endfor %}
+  {% endif %}
+{% else %}
+  {{ buchtabelle(gruppe.buecher, true) }}
+{% endif %}
+{% endblock %}
