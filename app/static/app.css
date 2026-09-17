@@ -527,33 +527,31 @@ td.frisch {
 .iserv-h3 { margin: 20px 0 10px; font-size: 24px; }
 .iserv-h4 { margin: 10px 0; font-size: 18px; }
 
-/* Umschaltfeld "Paketansicht": Rahmen wie Bootstrap btn btn-default, darin
- * ein gewöhnliches Häkchen wie in der Spalte "Leihbar". */
+/* Umschaltfeld "Paketansicht": ein gewöhnliches Häkchen wie in der Spalte
+ * "Leihbar", ohne Rahmen. Die Höhe entspricht der des Druckknopfs daneben. */
 .iserv-knopf {
   display: inline-flex;
   align-items: center;
   margin: 0;
-  padding: 6px 12px;
+  padding: 7px 12px;
   font-family: var(--iserv-schrift);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.42857143;
   color: #333;
   white-space: nowrap;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 4px;
   cursor: pointer;
   user-select: none;
 }
-.iserv-knopf:hover { background: #e6e6e6; border-color: #adadad; }
 .iserv-knopf input { margin: 0; cursor: pointer; }
 /* Wie .ueberlagerung: [hidden] darf gegen keine display-Regel verlieren. */
 #gesamtansicht[hidden], #paketteile[hidden] { display: none !important; }
 
 /* Sortierrichtung als Dreieck wie der Pfeil am Reiter "Bücherliste" (caret),
- * nach oben für aufsteigend. Nur hier - die Bestandstabelle behält ihre Pfeile. */
-.iserv-tabelle > thead > tr > th[aria-sort]::after {
+ * nach oben für aufsteigend. Nur hier - die Bestandstabelle behält ihre Pfeile.
+ * Der Platz fürs Dreieck steht an jeder sortierbaren Überschrift bereit, sonst
+ * verschieben sich die Spaltenbreiten beim Sortieren. */
+.iserv-tabelle > thead > tr > th[data-sort]::after {
   content: "";
   display: inline-block;
   width: 0;
