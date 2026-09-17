@@ -293,7 +293,7 @@ def test_zahlenspalten_haben_zahlen_als_schluessel(seiten: TestClient):
 def test_paketliste_hat_den_umschalter_und_eine_versteckte_gesamttabelle(seiten: TestClient):
     _anmelden(seiten)
     text = seiten.get("/buecherliste/jahrgang/5").text
-    assert 'id="paketansicht"' in text and 'aria-pressed="true"' in text
+    assert '<input type="checkbox" id="paketansicht" checked>' in text
     assert '<div id="gesamtansicht" hidden>' in text
     assert '<script src="/static/paketansicht.js"></script>' in text
     sammler = _Tabellen()

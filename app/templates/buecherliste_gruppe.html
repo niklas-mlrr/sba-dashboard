@@ -9,8 +9,7 @@
   static/sortieren.js überträgt die bisherige Sortierung (siehe dort).
 #}
 {% block kopfaktionen %}{% if liste and liste.paket %}
-<button type="button" id="paketansicht" class="iserv-knopf aktiv" aria-pressed="true"><span
-  class="glyphicon glyphicon-check" aria-hidden="true"></span>&nbsp;&nbsp;Paketansicht</button>
+<label class="iserv-knopf"><input type="checkbox" id="paketansicht" checked>&nbsp;Paketansicht</label>
 {% endif %}{% endblock %}
 {% block unter_ueberschrift %}<p class="zurueck"><a href="/buecherliste/{{ ansicht }}">« Zurück zur Übersicht</a></p>{% endblock %}
 
