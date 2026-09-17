@@ -7,15 +7,17 @@
   Erwartet: druck_faecher (Liste der Fachnamen) auf der Gesamtseite, oder
   druck_fach (ein Name) auf der Seite eines Fachs. Verhalten in
   static/druckmenue.js; das Formular öffnet das PDF in einem neuen Tab.
+
+  GET, damit alle Angaben in der URL stehen und F5 im PDF-Tab ohne Rückfrage
+  dasselbe PDF neu lädt (app/api/buecherliste.py).
 #}
 <dialog id="druckmenue" class="iserv-modal" aria-labelledby="druckmenue-titel">
-  <form id="druckformular" method="post" action="/buecherliste/fach/druck" target="_blank">
+  <form id="druckformular" method="get" target="_blank"
+    action="/buecherliste/fach/{% if druck_fach %}{{ druck_fach|urlencode }}/{% endif %}pdf">
     <div class="modal-header">
       <h3 class="modal-title" id="druckmenue-titel">Druck Bücherliste {{ druck_fach or "Fächer" }}</h3>
     </div>
     <div class="modal-body">
-      {% if druck_fach %}<input type="hidden" name="einzeln" value="{{ druck_fach }}">{% endif %}
-
       <div class="form-group">
         <label class="control-label spalte-beschriftung" for="druck-bestaetigung">Bestätigung:</label>
         <div class="spalte-inhalt">
@@ -53,11 +55,18 @@
           {#
             "veränderte" und "nicht bestätigte" sind Platzhalter: sie wählen,
             bis es die Angaben dazu gibt, alle Fächer (data-faecher="alle").
+            "Prüfen" ist ebenfalls ein Platzhalter: später vergleicht er mit dem
+            gespeicherten Stand und hakt die veränderten Fächer bei
+            "Individuell" an, damit die URL feste Fächer enthält.
           #}
           <div class="radio"><label><input type="radio" name="faecher_auswahl" value="alle"
             data-faecher="alle" checked>Alle</label></div>
-          <div class="radio"><label><input type="radio" name="faecher_auswahl" value="veraenderte"
-            data-faecher="alle">veränderte</label></div>
+          <div class="radio radio-mit-auswahl">
+            <label><input type="radio" name="faecher_auswahl" value="veraenderte"
+              data-faecher="alle">veränderte</label>
+            <button type="button" class="btn btn-default" id="druck-veraenderte-pruefen" disabled
+              title="Folgt, sobald sich ein Stand der Bücherlisten speichern lässt">Prüfen</button>
+          </div>
           <div class="radio"><label><input type="radio" name="faecher_auswahl" value="nicht_bestaetigte"
             data-faecher="alle">nicht bestätigte</label></div>
           <div class="radio radio-mit-auswahl">

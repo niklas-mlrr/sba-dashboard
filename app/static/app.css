@@ -1,10 +1,9 @@
 /* Gestaltungs-Marken (Tokens).
  *
- * VORLÄUFIG. Das Dashboard soll sich am offiziellen Schulbuchausleihe-Modul
- * orientieren; dafür liegt noch keine Vorlage vor (siehe docs/PLAN.md,
- * Schritt 1). Bis dahin gilt ein zurückhaltender Verwaltungs-Stil. Wenn die
- * Vorlage da ist, werden ausschließlich die Werte in :root ersetzt - die
- * Regeln darunter bleiben, wie sie sind.
+ * Kopf, Bücherlisten und Druckmenü folgen seit 2026-09-17 dem IServ-Modul
+ * (Werte aus dessen Bootstrap 3.3.7, Quellen in den jeweiligen Abschnitten).
+ * Die Marken für die Bestandstabelle sind weiterhin der vorläufige
+ * Verwaltungs-Stil (siehe docs/roadmap.md, "Gestaltungsvorlage").
  */
 :root {
   --grund: #ffffff;

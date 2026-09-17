@@ -235,17 +235,44 @@ Besonders zu prüfen, weil hier zuletzt etwas Grundlegendes umgestellt wurde:
   Dashboard auf den lokalen Ordner aus? (Die Antwort steht in den Warnungen des
   Abrufs.)
 
-### 2. Gestaltungsvorlage — weiterhin blockiert
+### 2. Gestaltungsvorlage — für Kopf und Bücherlisten erledigt (2026-09-17)
 
-**Offen und nicht auflösbar, solange keine Referenz vorliegt.** Das Dashboard
-soll sich am offiziellen Schulbuchausleihe-Modul orientieren. Es gibt lokal
-keine brauchbare Vorlage: die PNGs in `ausleihe-ausgabe/` sind Clipart,
-`web/scan-view.css` ist iOS-Stil.
+Die Referenz lag die ganze Zeit vor: `ausleihe-ausgabe/automation/out/`
+(gitignored) enthält Screenshots und HTML des echten Moduls, und dessen
+Stylesheets (Bootstrap 3.3.7 plus `sbl_app.<hash>.css`) sind unter
+`https://ausleihe.<domain>/` ohne Anmeldung abrufbar. Kopf, Bücherlisten-
+Tabellen und das Druckmenü übernehmen diese Werte; die Abschnitte in
+`app/static/app.css` nennen jeweils die Quelle.
 
-Gebraucht werden Screenshots des Moduls oder eine Beschreibung von Farben,
-Typografie, Tabellenkopf und Knopfformen. Bis dahin läuft `app/static/app.css`
-mit einem zurückhaltenden Platzhaltersatz an Marken; wenn die Vorlage da ist,
-werden **nur die Werte in `:root`** ersetzt, nicht die Regeln darunter.
+Offen:
+
+- **Bestandstabelle** — hat weiterhin ihre eigenen Marken in `:root`; ob sie
+  ebenfalls ins IServ-Aussehen wechselt, ist noch nicht entschieden.
+- **Cache-Busting** — `/static/*` hat keine Versionsnummer. Nach jeder
+  Gestaltungsänderung zeigt der Browser erst nach Strg+F5 die neue Fassung;
+  das hat am 2026-09-17 eine Rückmeldung zum Aussehen verfälscht.
+- **Status-Spalte** der Bücherlisten und die Fächer-Optionen „veränderte" /
+  „nicht bestätigte" im Druckmenü sind Platzhalter, bis feststeht, was sie
+  zeigen.
+
+### Geplant: Stand speichern und „veränderte" drucken
+
+Noch nicht gebaut, aber der PDF-Druck ist schon darauf ausgelegt (seit
+2026-09-17 `GET /buecherliste/fach/pdf`, Optionen in der URL):
+
+- **Stand speichern** - die aktuelle Bücherliste wird als Vergleichsstand
+  abgelegt. Ändert Daten, also POST; Speicherort eher neben der Mappe auf dem
+  Gruppenlaufwerk, damit alle denselben Stand sehen.
+- **Prüfen** - der (noch gesperrte) Knopf hinter „veränderte" im Druckmenü
+  vergleicht sofort mit dem Stand und hakt die geänderten Fächer bei
+  „Individuell" an. Erst danach wird das PDF geöffnet.
+- **Warum erst prüfen, dann drucken:** die PDF-URL enthält so die fertige
+  Fächerliste. F5 im PDF-Tab zeigt dieselben Fächer, auch wenn inzwischen ein
+  neuer Stand gespeichert wurde - würde die Route selbst prüfen, käme dann
+  eine leere Auswahl heraus.
+- **Offen:** was als Änderung zählt (nur ISBN neu/entfallen oder auch Preis,
+  Leihbar, Jahrgang); was angezeigt wird, wenn nichts geändert ist.
+  „nicht bestätigte" folgt demselben Muster.
 
 ## Struktur-Backlog (Review vom 2026-09-05) — abgearbeitet
 

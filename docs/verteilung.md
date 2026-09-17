@@ -99,7 +99,7 @@ importiert, und zwei zusätzliche Räder, an denen die Ersteinrichtung scheitern
 konnte.
 
 **Seit 2026-09-17 braucht das Dashboard reportlab doch.** Es druckt die
-Bücherlisten nach Fach (`POST /buecherliste/fach/druck`) mit
+Bücherlisten nach Fach (`GET /buecherliste/fach/pdf`) mit
 `buecherlisten.core` aus `sba-bestand`, und hängt deshalb an
 `sba-bestand[pdf]`. reportlab und Pillow stehen damit wieder in
 `requirements.txt`. Das Risiko von oben gilt wieder: findet pip für die

@@ -11,9 +11,9 @@ Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 ## Stand
 
 Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
-geprüft. Offen sind nur noch der **Testlauf auf dem Schul-Laptop**
-([Prüfliste](docs/schul-laptop-test.md)) und die **Gestaltungsvorlage**, für die
-es noch keine Referenz gibt.
+geprüft. Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, mit Druck als
+PDF) folgen seit 2026-09-17 dem IServ-Modul Schulbuchausleihe. Offen ist vor
+allem der **Testlauf auf dem Schul-Laptop** ([Prüfliste](docs/schul-laptop-test.md)).
 
 | Dokument | Wofür |
 |----------|-------|
@@ -34,7 +34,8 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
 | `GET /buecherliste/{fach,verlag,jahrgang}` | Bücherlisten-Übersicht, live aus IServ (braucht Anmeldung) |
 | `GET /buecherliste/{ansicht}/{name}` | Bücher eines Fachs, Verlags oder Jahrgangs |
-| `POST /buecherliste/fach/druck` | Bücherliste nach Fach als PDF (Formular aus dem Druckmenü, Antwort `inline`) |
+| `GET /buecherliste/fach/pdf` | Bücherliste mehrerer Fächer als PDF (Druckmenü, Optionen in der URL, Antwort `inline`) |
+| `GET /buecherliste/fach/{name}/pdf` | Bücherliste eines Fachs als PDF |
 | `GET /api/rows` | Zeilen als JSON, mit `mtime` und Cache-Alter |
 | `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423/500/503 |
 | `GET /api/einstellungen` | Server, Ordner und gefundene Mappe (fürs Fenster) |

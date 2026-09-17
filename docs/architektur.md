@@ -81,7 +81,7 @@ app/
     seite.py        GET /            und GET/POST /api/einstellungen  (HTML + Fenster)
     tabelle.py      GET /api/rows    und POST /api/cell
     abruf.py        /api/anmeldung, POST /api/refresh, GET /api/refresh/status
-    buecherliste.py GET /buecherliste/... (HTML, live aus IServ), POST .../fach/druck (PDF
+    buecherliste.py GET /buecherliste/... (HTML, live aus IServ), GET .../fach/pdf (PDF
                     über buecherlisten.core aus sba-bestand)
     system.py       GET /health      und POST /api/beenden
     gemeinsam.py    Vorlagen, Einstellungen aus dem Request, der 503-Leerfall

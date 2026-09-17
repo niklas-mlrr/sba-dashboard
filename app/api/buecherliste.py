@@ -7,7 +7,7 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 from __future__ import annotations
 
 from typing import Any, Callable
-from urllib.parse import parse_qs, quote
+from urllib.parse import quote
 
 from buecherlisten.core.daten import lade_buecherdaten, waehle_faecher
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs
@@ -69,42 +69,65 @@ def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
     return _hinweis(request, "Unbekannte Ansicht", f"Es gibt keine Ansicht „{ansicht}“.", 404)
 
 
-@router.post("/buecherliste/fach/druck")
-async def drucken(request: Request) -> Response:
-    """Das Druckmenü (templates/_druckmenue.html) schickt hierher; Antwort ist das PDF.
+# Beide PDF-Routen stehen vor "/buecherliste/{ansicht}/{name:path}", sonst
+# fängt diese "fach/pdf" und "fach/<Fach>/pdf" als Gruppennamen ab.
+@router.get("/buecherliste/fach/pdf")
+async def pdf_faecher(request: Request) -> Response:
+    """PDF mehrerer Fächer; das Druckmenü der Fachübersicht schickt hierher.
 
-    Das Formular öffnet einen neuen Tab. ``Content-Disposition: inline`` sorgt
-    dafür, dass der Browser das PDF dort anzeigt, statt es herunterzuladen.
+    GET statt POST, wie die PDF-Exporte von IServ (``loan-slips``,
+    ``forms/export/form-students``): alle Angaben stehen in der URL, also lädt
+    F5 im PDF-Tab ohne "Formular erneut senden" dasselbe PDF neu, und nach
+    einer abgelaufenen Anmeldung genügt Neuladen.
 
-    Gelesen wird der Körper von Hand statt über ``Form(...)``: das spart
-    python-multipart als Abhängigkeit, und ein URL-kodiertes Formular ist mit
-    ``parse_qs`` vollständig beschrieben. Gesperrte Felder schickt der Browser
-    nicht - fehlt ``bestaetigung``, fehlen also auch die Rückgabe-Angaben.
+    Die Fächer kommen bei "Individuell" als fertige Liste. Das soll so
+    bleiben: "veränderte" wird später im Menü geprüft und hakt die Fächer
+    dort an, damit F5 dieselben Fächer zeigt, auch wenn sich danach etwas
+    geändert hat (docs/roadmap.md).
     """
-    felder = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+    abfrage = request.query_params
+
+    def auswahl(alle: list[str]) -> tuple[list[str], str]:
+        modus = abfrage.get("reihenfolge", "")
+        if abfrage.get("faecher_auswahl") == "individuell":
+            return abfrage.getlist("faecher"), modus
+        # "Alle" sowie die Platzhalter "veränderte" und "nicht bestätigte".
+        return alle, modus
+
+    return await _pdf(request, auswahl)
+
+
+@router.get("/buecherliste/fach/{name}/pdf")
+async def pdf_fach(request: Request, name: str) -> Response:
+    """PDF eines Fachs, aufgerufen aus dem Druckmenü auf dessen Seite."""
+    return await _pdf(request, lambda alle: ([name], "split"))
+
+
+async def _pdf(request: Request,
+               auswahl: Callable[[list[str]], tuple[list[str], str]]) -> Response:
+    """Lädt die Daten, wählt die Fächer und liefert das PDF zum Anzeigen.
+
+    ``Content-Disposition: inline`` sorgt dafür, dass der Browser das PDF im
+    neuen Tab anzeigt, statt es herunterzuladen. Gesperrte Felder schickt der
+    Browser nicht - fehlt ``bestaetigung``, fehlen also auch die Rückgabe-Angaben.
+    """
+    abfrage = request.query_params
 
     def eins(name: str) -> str:
-        return (felder.get(name) or [""])[0].strip()
+        return (abfrage.get(name) or "").strip()
 
     try:
         client = request.app.state.anmeldung.client()
     except (NichtAngemeldet, Abgelaufen) as exc:
         return _hinweis(request, "Nicht angemeldet",
-                        f"{exc} Danach das Druckmenü erneut öffnen.", 401)
+                        f"{exc} Danach diese Seite neu laden.", 401)
     try:
         daten = await run_in_threadpool(lade_buecherdaten, client)
     except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
         return _hinweis(request, "IServ nicht erreichbar",
                         f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502)
 
-    einzeln = eins("einzeln")
-    if einzeln:
-        gewuenscht, modus = [einzeln], "split"
-    elif eins("faecher_auswahl") == "individuell":
-        gewuenscht, modus = felder.get("faecher", []), eins("reihenfolge")
-    else:
-        # "Alle" sowie die Platzhalter "veränderte" und "nicht bestätigte".
-        gewuenscht, modus = daten.faecher, eins("reihenfolge")
+    gewuenscht, modus = auswahl(list(daten.faecher))
     if modus not in {"alphabet", "aufgabenfeld", "split"}:
         modus = "alphabet"
     faecher, unbekannt = waehle_faecher(daten.faecher, gewuenscht)

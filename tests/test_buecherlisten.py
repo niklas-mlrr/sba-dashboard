@@ -339,7 +339,8 @@ def test_druckmenue_eines_fachs_ohne_faecherauswahl(seiten: TestClient):
     _anmelden(seiten)
     text = seiten.get("/buecherliste/fach/Chemie").text
     assert "Druck Bücherliste Chemie" in text
-    assert '<input type="hidden" name="einzeln" value="Chemie">' in text
+    assert 'action="/buecherliste/fach/Chemie/pdf"' in text and 'method="get"' in text
+    assert 'name="einzeln"' not in text
     assert 'name="faecher_auswahl"' not in text and 'name="reihenfolge"' not in text
 
 
@@ -377,10 +378,9 @@ def erzeuger(monkeypatch) -> _Erzeuger:
     return ersatz
 
 
-def _drucken(client: TestClient, felder: list[tuple[str, str]]):
+def _drucken(client: TestClient, felder: list[tuple[str, str]], pfad: str = "/buecherliste/fach/pdf"):
     from urllib.parse import urlencode
-    return client.post("/buecherliste/fach/druck", content=urlencode(felder),
-                       headers={"Content-Type": "application/x-www-form-urlencoded"})
+    return client.get(f"{pfad}?{urlencode(felder)}")
 
 
 def test_drucken_ohne_anmeldung_zeigt_hinweis(seiten: TestClient, erzeuger: _Erzeuger):
@@ -428,17 +428,30 @@ def test_individuell_mit_allen_optionen(seiten: TestClient, erzeuger: _Erzeuger)
 
 def test_einzelnes_fach_wird_eigenes_pdf(seiten: TestClient, erzeuger: _Erzeuger):
     _anmelden(seiten)
-    _drucken(seiten, [("einzeln", "Chemie")])
+    _drucken(seiten, [], "/buecherliste/fach/Chemie/pdf")
     assert erzeuger.aufrufe[0]["faecher"] == ["Chemie"]
     assert erzeuger.aufrufe[0]["modus"] == "split"
 
 
-@pytest.mark.parametrize("felder", [
-    [("faecher_auswahl", "individuell")],
-    [("faecher_auswahl", "individuell"), ("faecher", "Alchemie")],
-    [("einzeln", "Alchemie")],
+@pytest.mark.parametrize("felder, pfad", [
+    ([("faecher_auswahl", "individuell")], "/buecherliste/fach/pdf"),
+    ([("faecher_auswahl", "individuell"), ("faecher", "Alchemie")], "/buecherliste/fach/pdf"),
+    ([], "/buecherliste/fach/Alchemie/pdf"),
 ])
-def test_ungueltige_auswahl_ergibt_400(seiten: TestClient, erzeuger: _Erzeuger, felder):
+def test_ungueltige_auswahl_ergibt_400(seiten: TestClient, erzeuger: _Erzeuger, felder, pfad):
     _anmelden(seiten)
-    assert _drucken(seiten, felder).status_code == 400
+    assert _drucken(seiten, felder, pfad).status_code == 400
     assert erzeuger.aufrufe == []
+
+
+def test_fachnamen_stehen_fest_in_der_pdf_url(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert _drucken(seiten, [], "/buecherliste/fach/Deutsch/pdf").status_code == 200
+    assert _drucken(seiten, [("faecher_auswahl", "individuell"), ("faecher", "Chemie"),
+                             ("faecher", "Deutsch")]).status_code == 200
+    assert [a["faecher"] for a in erzeuger.aufrufe] == [["Deutsch"], ["Chemie", "Deutsch"]]
+
+
+def test_alte_post_route_gibt_es_nicht_mehr(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert seiten.post("/buecherliste/fach/druck").status_code in (404, 405)
