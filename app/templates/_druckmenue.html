@@ -17,7 +17,8 @@
       {% if druck_fach %}<input type="hidden" name="einzeln" value="{{ druck_fach }}">{% endif %}
 
       <div class="form-group">
-        <div class="spalte-inhalt spalte-versetzt">
+        <label class="control-label spalte-beschriftung" for="druck-bestaetigung">Bestätigung:</label>
+        <div class="spalte-inhalt">
           <div class="checkbox">
             <label><input type="checkbox" name="bestaetigung" value="1" id="druck-bestaetigung">&nbsp;Bestätigungsaufforderung</label>
           </div>
@@ -98,7 +99,7 @@
           <div class="checkbox eingerueckt" id="druck-falls-noetig-zeile">
             <label><input type="checkbox" name="falls_noetig" value="1" id="druck-falls-noetig"
               disabled>&nbsp;falls nötig</label>
-            <span class="small help-inline">optimiert nur, falls eines mehr als eine Seite einnimmt</span>
+            <span class="small help-inline">optimiert nur, falls mind. 1 mehr als eine Seite einnimmt</span>
           </div>
         </div>
       </div>

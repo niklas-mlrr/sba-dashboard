@@ -624,7 +624,6 @@ td.frisch {
 .iserv-modal .form-group:last-child { margin-bottom: 0; }
 .iserv-modal .spalte-beschriftung { flex: 0 0 33.33333333%; padding: 0 15px; }
 .iserv-modal .spalte-inhalt { flex: 0 0 66.66666667%; padding: 0 15px; min-width: 0; }
-.iserv-modal .spalte-versetzt { margin-left: 33.33333333%; }
 .iserv-modal .control-label {
   display: inline-block;
   margin: 0;
