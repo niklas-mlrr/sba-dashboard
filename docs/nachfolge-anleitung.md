@@ -80,7 +80,10 @@ und die Sicherungen im Unterordner `backups` ebenfalls.
 
 Im selben Fenster steht auch der **IServ-Server** (etwa `iserv-trg-oha.de`) —
 ohne `https://` davor. Er wird für die Anmeldung gebraucht und muss normalerweise
-nie geändert werden.
+nie geändert werden. Ändern lässt er sich nur, solange niemand angemeldet ist:
+im angemeldeten Zustand ist das Feld gesperrt, und darunter steht der Hinweis
+„Änderbar nur im abgemeldeten Zustand". Wer den Server wechseln muss, klickt also
+zuerst in der Bedienansicht auf **Abmelden**.
 
 Das Programm öffnet die gefundene Datei und prüft, ob sie wirklich die
 Bestandsliste ist, bevor es sich den Ordner merkt. Ein falscher Ordner kann den

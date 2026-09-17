@@ -63,6 +63,19 @@ def api_einstellungen(request: Request, anfrage: EinstellungenAnfrage) -> JSONRe
     if domain_fehler:
         return JSONResponse({"fehler": domain_fehler}, status_code=400)
 
+    einstellungen = aktuelle_einstellungen(request)
+    if (anfrage.server != einstellungen.iserv_domain
+            and request.app.state.anmeldung.status()["angemeldet"]):
+        # Der gehaltene IServ-Client ist an die alte Domain gebunden (er meldet
+        # sich bei einem 401 dort selbsttätig neu an, siehe app/sitzung.py).
+        # Die Domain unter ihm zu wechseln ergäbe eine Anmeldung, die zu keiner
+        # Einstellung mehr passt - deshalb erst abmelden, dann umstellen.
+        return JSONResponse(
+            {"fehler": "Die IServ-Domain lässt sich nur im abgemeldeten Zustand "
+                       "ändern. Bitte zuerst abmelden."},
+            status_code=409,
+        )
+
     ordner = Path(anfrage.ordner)
     if not ordner.is_dir():
         return JSONResponse(
@@ -75,7 +88,6 @@ def api_einstellungen(request: Request, anfrage: EinstellungenAnfrage) -> JSONRe
             status_code=400,
         )
 
-    einstellungen = aktuelle_einstellungen(request)
     # Wirft MappeUngeeignet -> 400 samt Klartext (app/fehler.py).
     validiere_excel_mappe(mappe, einstellungen.blatt_raster)
 

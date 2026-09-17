@@ -20,6 +20,16 @@ from .fenster import STATUS_TAKT_MS, FensterFehler, Fenstersteuerung
 
 _RAND = 12
 
+# Die Domain gehört zur Anmeldung: der gehaltene IServ-Client meldet sich bei
+# ihr selbsttätig neu an (app/sitzung.py). Deshalb sperrt das Fenster das Feld,
+# solange jemand angemeldet ist - und sagt auch, warum. Der Server weist eine
+# Änderung im angemeldeten Zustand ohnehin ab (app/api/seite.py); die Sperre
+# hier erspart nur den Weg über die Fehlermeldung.
+_HINWEIS_DOMAIN = "ohne https://, zum Beispiel meine-schule.de"
+_HINWEIS_DOMAIN_GESPERRT = (
+    "Änderbar nur im abgemeldeten Zustand - bitte zuerst abmelden."
+)
+
 
 class Hauptfenster:
     """Ein Fenster mit zwei Ansichten: Bedienung und (hinterm Zahnrad) Einstellungen."""
@@ -106,10 +116,12 @@ class Hauptfenster:
                   font=("TkDefaultFont", 12, "bold")).grid(row=0, column=0, columnspan=3,
                                                            sticky="w")
         ttk.Label(rahmen, text="IServ-Server").grid(row=1, column=0, sticky="w", pady=(_RAND, 0))
-        ttk.Entry(rahmen, textvariable=self._server).grid(
+        self._feld_server = ttk.Entry(rahmen, textvariable=self._server)
+        self._feld_server.grid(
             row=1, column=1, columnspan=2, sticky="ew", padx=(8, 0), pady=(_RAND, 0))
-        ttk.Label(rahmen, text="ohne https://, zum Beispiel meine-schule.de",
-                  foreground="#777").grid(row=2, column=1, columnspan=2, sticky="w", padx=(8, 0))
+        self._hinweis_server = ttk.Label(rahmen, text=_HINWEIS_DOMAIN, wraplength=460,
+                                         justify="left", foreground="#777")
+        self._hinweis_server.grid(row=2, column=1, columnspan=2, sticky="w", padx=(8, 0))
 
         ttk.Label(rahmen, text="Ordner der Mappe").grid(row=3, column=0, sticky="w", pady=(8, 0))
         ttk.Entry(rahmen, textvariable=self._ordner).grid(
@@ -243,6 +255,11 @@ class Hauptfenster:
         zustand = "disabled" if angemeldet else "normal"
         self._feld_benutzer.configure(state=zustand)
         self._feld_passwort.configure(state=zustand)
+        self._feld_server.configure(state=zustand)
+        self._hinweis_server.configure(
+            text=_HINWEIS_DOMAIN_GESPERRT if angemeldet else _HINWEIS_DOMAIN,
+            foreground="#a60" if angemeldet else "#777",
+        )
 
     def _aktualisiere_status(self) -> None:
         """Fragt den Anmeldestand und plant die nächste Abfrage.
