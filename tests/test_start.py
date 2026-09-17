@@ -77,8 +77,9 @@ def test_beenden_setzt_das_abschaltsignal(client):
         client.app.state.server = None
 
 
-def test_die_seite_hat_einen_beenden_knopf(client):
-    assert 'id="beenden"' in client.get("/").text
+def test_die_seite_hat_keinen_beenden_knopf_mehr(client):
+    """Beendet wird seit 2026-09-17 nur noch im Programmfenster."""
+    assert 'id="beenden"' not in client.get("/").text
 
 
 def _config(tmp_path: Path) -> Path:

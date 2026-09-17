@@ -225,7 +225,7 @@ ist. Bis dahin gab es keinen.
 
 | # | Schritt | Erwartet |
 |---|---------|----------|
-| H1 | Knopf „Beenden" auf der Seite | Seite sagt, man könne das Fenster schließen; beide Fenster enden |
+| H1 | Kopf der Seite ansehen | Reiterleiste im IServ-Stil mit „Bestand", rechts „?" (noch ohne Funktion) und Zahnrad; **kein** Beenden-Knopf. Das Zahnrad öffnet den Einstellungsdialog mit dem Schuljahr |
 | H2 | Neu starten, **Browser-Tab schließen**, dann „Seite öffnen" im Programmfenster | Der Tab ist wieder da, mit derselben Liste |
 | H3 | Knopf „Beenden" im Programmfenster | Rückfrage, danach endet alles; `http://127.0.0.1:8765/` ist nicht mehr erreichbar |
 | H4 | Neu starten und das Programmfenster über das **X** schließen | Dieselbe Rückfrage, dasselbe Ergebnis |

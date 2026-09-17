@@ -14,7 +14,7 @@
 //   * Nach einer Änderung setzt `/api/cell` die fertige Zeile zurück; das
 //     Skript trägt sie ein, statt "zu bestellen" selbst nachzurechnen.
 //
-// Fünf Teile, die sich nichts teilen außer der Tabelle:
+// Vier Teile, die sich nichts teilen außer der Tabelle:
 //   1. Filtern und Sortieren - rein im Browser, die Tabelle ist vollständig
 //      gerendert und eine Serverrunde je Tastendruck wäre auf dem Netzlaufwerk
 //      spürbar.
@@ -25,7 +25,6 @@
 //   4. Den Stand beim Laden nachholen: einen laufenden Abruf weiterverfolgen
 //      und hervorheben, was der letzte geändert hat - die Bezüge kommen vom
 //      Server, weil der Browser sein Vorher mit dem Neuladen verloren hat.
-//   5. Beenden.
 //
 // Ab etwa 400 Zeilen Code lässt sich das ohne Build in Module trennen
 // (`<script type="module">` lädt echte ES-Module direkt aus dem Ordner); bei
@@ -440,20 +439,4 @@
   }
 
   standNachladen();
-
-  // ── 5. Beenden ─────────────────────────────────────────────────────────────
-
-  document.getElementById("beenden").addEventListener("click", async () => {
-    if (!window.confirm("Das Dashboard beenden? Gespeicherte Änderungen bleiben erhalten.")) {
-      return;
-    }
-    try {
-      const antwort = await fetch("/api/beenden", { method: "POST" });
-      const koerper = await antwort.json().catch(() => ({}));
-      zeige(koerper.text || koerper.fehler || "Beendet.", antwort.ok ? "" : "warnung");
-    } catch (fehler) {
-      // Der Server hat abgeschaltet, bevor er antworten konnte - genau richtig.
-      zeige("Das Dashboard ist beendet. Sie können das Fenster schließen.", "");
-    }
-  });
 })();

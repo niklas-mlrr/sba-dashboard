@@ -41,7 +41,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `DELETE /api/anmeldung` | Abmelden, Client verwerfen |
 | `POST /api/refresh` | Abruf starten, **ohne Körper** → 202/401/409/503 |
 | `GET /api/refresh/status` | Fortschritt des Abrufs (immer 200) |
-| `POST /api/beenden` | Server beenden (Knopf im Fenster und auf der Seite) |
+| `POST /api/beenden` | Server beenden (Knopf im Programmfenster) |
 | `GET /health` | `{"status": "ok"}` |
 
 Jede Fehlerantwort hat die Form `{"fehler": "<deutscher Klartext>"}`; welche

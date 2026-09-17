@@ -214,7 +214,7 @@ Zwei Dinge, die dabei zu wissen sind:
 
 ## 7. Beenden
 
-Knopf **„Beenden"** — im Programmfenster oder auf der Seite, beide tun dasselbe.
+Knopf **„Beenden"** im Programmfenster. Die Seite selbst hat keinen eigenen Beenden-Knopf.
 Danach kann auch das schwarze Fenster geschlossen werden.
 
 Der Knopf im Programmfenster ist der Weg, der immer funktioniert: Er ist auch

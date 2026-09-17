@@ -91,6 +91,14 @@ def test_jede_id_aus_app_js_gibt_es_auch_auf_der_seite(seite: _Sammler, js: str)
     assert gesucht <= seite.ids, f"fehlen auf der Seite: {sorted(gesucht - seite.ids)}"
 
 
+def test_jede_id_aus_kopf_js_gibt_es_auch_auf_der_seite(seite: _Sammler):
+    """Dasselbe für das kleine Skript des Kopfs aus ``base.html``."""
+    kopf_js = APP_JS.with_name("kopf.js").read_text(encoding="utf-8")
+    gesucht = set(re.findall(r'getElementById\("([^"]+)"\)', kopf_js))
+    assert gesucht, "die Suche selbst ist kaputt, wenn kopf.js keine IDs nachschlägt"
+    assert gesucht <= seite.ids, f"fehlen auf der Seite: {sorted(gesucht - seite.ids)}"
+
+
 def test_jede_klasse_aus_app_js_kommt_auf_der_seite_vor(seite: _Sammler, js: str):
     """``querySelector('.bedarfszelle')`` und Geschwister.
 
@@ -112,6 +120,12 @@ def test_versteckte_neulade_ueberlagerung_bleibt_auch_in_safari_unsichtbar():
     """
     css = APP_CSS.read_text(encoding="utf-8")
     assert ".ueberlagerung[hidden] { display: none !important; }" in css
+
+
+def test_verstecktes_meldungsfeld_bleibt_unsichtbar():
+    """``.meldung { display: block }`` schlug das Attribut ``hidden``."""
+    css = APP_CSS.read_text(encoding="utf-8")
+    assert ".meldung[hidden] { display: none; }" in css
 
 
 # ── Die Datenattribute, aus denen app.js liest ────────────────────────────────

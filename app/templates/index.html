@@ -2,11 +2,11 @@
 {% block titel %}Bestand — Schulbuchausleihe{% endblock %}
 
 {#
-  Die beiden Knöpfe stehen in der Kopfzeile und nicht mehr in der Filterleiste
-  über der Tabelle. Dort standen sie zwischen Suchfeld und Zeilenzähler und
-  sahen aus wie ein weiterer Filter - dabei ist der Abruf die eine Handlung,
-  wegen der das Dashboard überhaupt geöffnet wird. Er trägt deshalb auch die
-  Haupt-Auszeichnung, "Beenden" die leise.
+  Der Abruf steht neben der Überschrift und nicht in der Filterleiste über der
+  Tabelle: dort sah er aus wie ein weiterer Filter - dabei ist er die eine
+  Handlung, wegen der das Dashboard überhaupt geöffnet wird. Einen
+  Beenden-Knopf hat die Seite seit 2026-09-17 nicht mehr; das Programmfenster
+  hat einen, und zwei Wege zum selben Ziel waren einer zu viel.
 #}
 {% block kopfzeile %}
 <p class="meta">
@@ -19,7 +19,6 @@
 {% block kopfaktionen %}
 <button type="button" id="abruf-oeffnen"
   class="knopf knopf-haupt">Aktuelle Daten aus IServ abrufen</button>
-<button type="button" id="beenden" class="knopf knopf-leise">Beenden</button>
 {% endblock %}
 
 {% block inhalt %}

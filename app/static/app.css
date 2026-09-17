@@ -23,6 +23,12 @@
    * Tabelle schon für den Bedarf vergeben. */
   --frisch-grund: #fff4c2;
   --frisch-rand: #e0c65a;
+  /* Kopf: Werte der IServ-Navigationsleiste (Bootstrap 3). */
+  --nav-grund: #f8f8f8;
+  --nav-rand: #e7e7e7;
+  --nav-aktiv: #e7e7e7;
+  --nav-text: #555555;
+  --trennlinie: #eeeeee;
   --schrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --zeilenhoehe: 1.45;
 }
@@ -31,25 +37,68 @@
 
 body {
   margin: 0;
-  padding: 0 1.5rem 3rem;
+  padding: 0 0 3rem;
   background: var(--grund);
   color: var(--text);
   font: 15px/var(--zeilenhoehe) var(--schrift);
 }
+main { padding: 0 1.5rem; }
+
+/* ── Kopf im Stil des IServ-Moduls ─────────────────────────────────────────── */
+
+.navleiste {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  min-height: 49px;
+  background: var(--nav-grund);
+  border-bottom: 1px solid var(--nav-rand);
+  font-size: 14px;
+}
+.reiter { display: flex; margin: 0; padding: 0; list-style: none; }
+.reiter a {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  height: 100%;
+  padding: 0 15px;
+  color: var(--nav-text);
+  text-decoration: none;
+}
+.reiter a:hover { color: var(--text); }
+.reiter .aktiv a { background: var(--nav-aktiv); color: var(--text); }
+.navsymbole { display: flex; align-items: center; gap: .25rem; padding-right: .75rem; }
+.navsymbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nav-text);
+  cursor: pointer;
+}
+.navsymbol:hover { color: var(--text); background: var(--nav-aktiv); }
+.symbol { width: 14px; height: 14px; fill: currentColor; flex: none; }
 
 .kopf {
+  margin: 0 1.5rem;
+  padding: 1.75rem 0 .75rem;
+  border-bottom: 1px solid var(--trennlinie);
+}
+.kopfzeile {
   display: flex;
   flex-wrap: wrap;
   gap: .75rem 1.5rem;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 1.5rem 0 1rem;
-  border-bottom: 1px solid var(--rand);
 }
-.kopf h1 { margin: 0; font-size: 1.35rem; font-weight: 600; }
-.kopftext { min-width: 0; }
+.kopf h1 { margin: 0; font-size: 2.1rem; font-weight: 400; line-height: 1.2; }
 .kopfaktionen { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
-.meta { margin: .35rem 0 0; color: var(--text-leise); font-size: .875rem; }
+.meta { margin: .5rem 0 0; color: var(--text-leise); font-size: .875rem; }
 
 .hinweis {
   margin: 1rem 0 0;
@@ -178,6 +227,9 @@ tbody tr[data-bedarf="1"] td:first-child { box-shadow: inset 3px 0 0 var(--bedar
 .zellwert { -moz-appearance: textfield; appearance: textfield; }
 
 .meldung { display: block; }
+/* Ohne diese Zeile gewinnt ``display: block`` gegen das Attribut ``hidden``, und
+ * das leere Meldungsfeld stand als grauer Balken über der Tabelle. */
+.meldung[hidden] { display: none; }
 
 /* ── Knöpfe ────────────────────────────────────────────────────────────────── */
 
@@ -260,7 +312,8 @@ tbody tr[data-bedarf="1"] td:first-child { box-shadow: inset 3px 0 0 var(--bedar
 .dialog-text { margin: 0 0 .75rem; font-size: .9rem; color: var(--text-leise); }
 .dialog-text.warnhinweis { color: var(--bedarf); }
 .dialog label { display: block; margin-bottom: .75rem; font-size: .9rem; }
-.dialog label input {
+.dialog label input,
+.dialog label select {
   display: block;
   width: 100%;
   margin-top: .25rem;
