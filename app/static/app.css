@@ -27,8 +27,12 @@
   --nav-grund: #f8f8f8;
   --nav-rand: #e7e7e7;
   --nav-aktiv: #e7e7e7;
-  --nav-text: #555555;
+  --nav-text: #777777;
+  --nav-text-hover: #333333;
+  --nav-text-aktiv: #555555;
   --trennlinie: #eeeeee;
+  --iserv-text: #333333;
+  --iserv-schrift: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --schrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --zeilenhoehe: 1.45;
 }
@@ -37,68 +41,90 @@
 
 body {
   margin: 0;
-  padding: 0 0 3rem;
+  /* Platz für die fest stehende Reiterleiste (48px + 1px Rand), wie IServ. */
+  padding: 50px 0 3rem;
   background: var(--grund);
   color: var(--text);
   font: 15px/var(--zeilenhoehe) var(--schrift);
 }
-main { padding: 0 1.5rem; }
 
 /* ── Kopf im Stil des IServ-Moduls ─────────────────────────────────────────── */
 
+/* Die Werte sind aus Bootstrap 3.3.7 (navbar, navbar-default, page-header,
+ * container) und aus sbl_app.css des Moduls (navbar-overrides) übernommen.
+ * Nicht verschönern: der Kopf soll aussehen wie dort. */
+@font-face {
+  font-family: "Glyphicons Halflings";
+  src: url("vendor/glyphicons-halflings-regular.woff2") format("woff2");
+}
+.glyphicon {
+  position: relative;
+  top: 1px;
+  display: inline-block;
+  font-family: "Glyphicons Halflings";
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.glyphicon-equalizer::before { content: "\e210"; }
+.glyphicon-question-sign::before { content: "\e085"; }
+.glyphicon-cog::before { content: "\e019"; }
+
 .navleiste {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1030;
   display: flex;
-  align-items: stretch;
   justify-content: space-between;
-  min-height: 49px;
+  min-height: 48px;
+  padding-right: 15px;
   background: var(--nav-grund);
   border-bottom: 1px solid var(--nav-rand);
+  font-family: var(--iserv-schrift);
   font-size: 14px;
+  line-height: 20px;
 }
 .reiter { display: flex; margin: 0; padding: 0; list-style: none; }
+.reiter-rechts { margin-right: 0; }
 .reiter a {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  height: 100%;
-  padding: 0 15px;
+  display: block;
+  padding: 14px 15px;
   color: var(--nav-text);
   text-decoration: none;
 }
-.reiter a:hover { color: var(--text); }
-.reiter .aktiv a { background: var(--nav-aktiv); color: var(--text); }
-.navsymbole { display: flex; align-items: center; gap: .25rem; padding-right: .75rem; }
-.navsymbol {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--nav-text);
-  cursor: pointer;
-}
-.navsymbol:hover { color: var(--text); background: var(--nav-aktiv); }
-.symbol { width: 14px; height: 14px; fill: currentColor; flex: none; }
+.reiter a:hover, .reiter a:focus { color: var(--nav-text-hover); background: transparent; }
+.reiter .aktiv a { color: var(--nav-text-aktiv); background: var(--nav-aktiv); }
+
+/* container-fluid (15px) um container (15px, feste Breiten je Bildschirm). */
+.seite { padding: 0 15px; }
+@media (min-width: 768px) { .seite { width: 780px; margin: 0 auto; } }
+@media (min-width: 992px) { .seite { width: 1000px; } }
+@media (min-width: 1200px) { .seite { width: 1200px; } }
+.seite > * { margin-left: 15px !important; margin-right: 15px !important; }
 
 .kopf {
-  margin: 0 1.5rem;
-  padding: 1.75rem 0 .75rem;
+  margin-top: 40px;
+  margin-bottom: 20px;
+  padding-bottom: 9px;
   border-bottom: 1px solid var(--trennlinie);
+  font-family: var(--iserv-schrift);
 }
-.kopfzeile {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .75rem 1.5rem;
-  align-items: center;
-  justify-content: space-between;
+/* 28px und .67em Abstand sind, was das Modul tatsächlich zeigt (am
+ * Screenshot nachgemessen) - nicht Bootstraps 36px. */
+.kopf h1 {
+  margin: .67em 0;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--iserv-text);
 }
-.kopf h1 { margin: 0; font-size: 2.1rem; font-weight: 400; line-height: 1.2; }
-.kopfaktionen { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
-.meta { margin: .5rem 0 0; color: var(--text-leise); font-size: .875rem; }
+/* Der Abruf-Knopf steht rechts in der Überschriftenzeile (pull-right). */
+.kopfaktionen { float: right; display: flex; gap: .6rem; margin-top: -5px; }
+.meta { margin: 0; color: var(--text-leise); font-size: .875rem; }
 
 .hinweis {
   margin: 1rem 0 0;
@@ -142,7 +168,8 @@ main { padding: 0 1.5rem; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 thead th {
   position: sticky;
-  top: 0;
+  /* Unter der fest stehenden Reiterleiste, nicht hinter ihr. */
+  top: 49px;
   background: var(--flaeche);
   border-bottom: 1px solid var(--rand);
   padding: .5rem .6rem;
@@ -277,7 +304,7 @@ tbody tr[data-bedarf="1"] td:first-child { box-shadow: inset 3px 0 0 var(--bedar
 .ueberlagerung {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 1040;
   display: flex;
   align-items: center;
   justify-content: center;
