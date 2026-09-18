@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import Any, Callable, cast
 from urllib.parse import quote
 
-from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
-from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
+
+from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
+from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 
 from ..buecherlisten import (
     Buecherlisten,

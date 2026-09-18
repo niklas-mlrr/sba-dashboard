@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bestand.core import parse_grid
 from openpyxl import load_workbook
 from openpyxl.utils.cell import range_boundaries
+
+from bestand.core import parse_grid
 
 VORLAGE = (
     Path(__file__).parent.parent / "vorlage" / "Bestand- und Nachbestellungsliste 2026.xlsx"

@@ -31,8 +31,6 @@ from pathlib import Path
 from threading import Barrier, Event, Thread
 
 import pytest
-from bestand.core import parse_grid
-from bestand.core.testing import SHEET_NAME, FakeClient
 from openpyxl import load_workbook
 
 from app import excel as excel_modul
@@ -47,6 +45,8 @@ from app.excel import (
 )
 from app.refresh import RefreshManager
 from app.settings import Einstellungen
+from bestand.core import parse_grid
+from bestand.core.testing import SHEET_NAME, FakeClient
 
 # Ein Thread-Schreibvorgang (Excel laden, ändern, atomar speichern) dauert auf
 # gewöhnlicher Hardware deutlich unter einer Sekunde; 20 Versuche je Thread und

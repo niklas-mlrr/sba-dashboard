@@ -1,30 +1,31 @@
 name: CI
 
-# Läuft bei jedem Push und bei jedem Pull Request. Keine Secrets nötig: alle drei
-# Repos (sba-dashboard, sba-bestand, ausleihe-api) sind öffentlich, und die
-# Tests laufen grundsätzlich offline - kein Netz, kein IServ (siehe
-# tests/conftest.py: bestand.core.testing.FakeClient und build_workbook).
+# Läuft bei jedem Push und bei jedem Pull Request. Keine Secrets nötig: beide
+# Repos (sba-dashboard, ausleihe-api) sind öffentlich, und die Tests laufen
+# grundsätzlich offline - kein Netz, kein IServ (siehe tests/conftest.py:
+# bestand.core.testing.FakeClient und build_workbook).
 on:
   push:
   pull_request:
 
 # GitHub Actions kann nur innerhalb von $GITHUB_WORKSPACE auschecken. Das
-# Geschwister-Layout aus README.md ("ausleihe-api/, sba-bestand/,
-# sba-dashboard/ liegen nebeneinander") wird deshalb direkt im Workspace
-# nachgebaut:
+# Geschwister-Layout aus README.md ("ausleihe-api/ und sba-dashboard/ liegen
+# nebeneinander") wird deshalb direkt im Workspace nachgebaut:
 #
 #   $GITHUB_WORKSPACE/
 #     sba-dashboard/   <- dieses Repo
-#     sba-bestand/     <- Geschwister-Repo, öffentlich
 #     ausleihe-api/    <- Geschwister-Repo, öffentlich
 #
-# pyproject.toml bindet beide über [tool.uv.sources] als relativen,
-# editierbaren Pfad ein ("../ausleihe-api", "../sba-bestand") - ohne dieses
-# Layout schlägt schon `uv sync` fehl. Dieselben zwei Pfade stehen dort als
-# mypy_path: der editable-Install legt kein Paket in site-packages, mypy findet
-# bestand.core und ausleihe also nur über den Quellbaum daneben. Beide
-# Auscheck-Schritte holen den Standardzweig - wer hier etwas ändert, das ein
-# Geschwister-Repo braucht, pusht dort zuerst.
+# pyproject.toml bindet ausleihe-api über [tool.uv.sources] als relativen,
+# editierbaren Pfad ein ("../ausleihe-api") - ohne dieses Layout schlägt schon
+# `uv sync` fehl. Derselbe Pfad steht dort als mypy_path: der editable-Install
+# legt kein Paket in site-packages, mypy findet ausleihe also nur über den
+# Quellbaum daneben. Der Auscheck-Schritt holt den Standardzweig - wer hier
+# etwas ändert, das das Geschwister-Repo braucht, pusht dort zuerst.
+#
+# Bis 2026-09-18 wurde ein drittes Repo ausgecheckt, sba-bestand. Seine Pakete
+# (bestand/, buecherlisten/) liegen jetzt in diesem Repo und kommen mit dem
+# ersten Checkout mit.
 jobs:
   tests:
     name: tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
@@ -75,12 +76,6 @@ jobs:
         with:
           path: sba-dashboard
 
-      - name: sba-bestand auschecken (Geschwister-Repo)
-        uses: actions/checkout@v5
-        with:
-          repository: niklas-mlrr/sba-bestand
-          path: sba-bestand
-
       - name: ausleihe-api auschecken (Geschwister-Repo)
         uses: actions/checkout@v5
         with:
@@ -115,7 +110,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Ruff (Lint)
-        run: uv run ruff check app tests
+        run: uv run ruff check app tests bestand buecherlisten
 
       # Auf jedem Runner mit dessen eigener Plattform, nicht nur einmal auf
       # Linux: app/excel.py hat je einen Zweig für msvcrt (Windows) und fcntl
@@ -144,14 +139,8 @@ jobs:
         with:
           path: sba-dashboard
 
-      # uv export löst den Lockfile gegen [tool.uv.sources] auf und braucht die
-      # beiden Geschwister-Pfade dafür ebenso wie `uv sync` im tests-Job.
-      - name: sba-bestand auschecken (Geschwister-Repo)
-        uses: actions/checkout@v5
-        with:
-          repository: niklas-mlrr/sba-bestand
-          path: sba-bestand
-
+      # uv export löst den Lockfile gegen [tool.uv.sources] auf und braucht den
+      # Geschwister-Pfad dafür ebenso wie `uv sync` im tests-Job.
       - name: ausleihe-api auschecken (Geschwister-Repo)
         uses: actions/checkout@v5
         with:
@@ -180,7 +169,7 @@ jobs:
           set -euo pipefail
 
           uv export --no-dev --no-hashes --no-emit-project \
-              --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \
+              --no-emit-package iserv-ausleihe-api \
               --format requirements-txt -o /tmp/requirements.exportiert.txt
 
           # requirements.txt hat einen handgeschriebenen Kommentarkopf, den
@@ -201,7 +190,7 @@ jobs:
             echo "::error::requirements.txt ist veraltet (Diff oben: '-' vorhanden, '+' erwartet)."
             echo "Reparieren mit:"
             echo "    uv export --no-dev --no-hashes --no-emit-project \\"
-            echo "        --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \\"
+            echo "        --no-emit-package iserv-ausleihe-api \\"
             echo "        --format requirements-txt -o requirements.txt"
             echo
             echo "Danach den handgeschriebenen Kommentarkopf von requirements.txt"

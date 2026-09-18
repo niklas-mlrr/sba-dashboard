@@ -177,9 +177,8 @@ def test_wettlauf_beim_abruf_ist_409_mit_status(client, monkeypatch):
     zweimal, einmal als Position und einmal als Feld ``status`` des Körpers.
     Gefunden hat das mypy, nicht die Suite - deshalb steht hier jetzt ein Test.
     """
-    from bestand.core.testing import FakeClient
-
     from app.refresh import LaeuftBereits, RefreshManager
+    from bestand.core.testing import FakeClient
 
     def belegt(self, einstellungen, client, *, sy_id=None):
         raise LaeuftBereits("Es läuft bereits ein Abruf. Bitte warten, bis er fertig ist.")

@@ -10,10 +10,22 @@ __pycache__/
 htmlcov/
 *.egg-info/
 backups/
+# Das eigene Venv des Bestands-Werkzeugs, das sba-launcher anlegt (.venv-bestand).
+.venv-*/
+# setuptools/uv-Bauverzeichnisse
+build/
+dist/
 ~$*.xlsx
 .env
 *.dashboard-cache.json
 *.sba-dashboard.lock
+# Datenexporte der Bücherlisten - enthalten Schüler- und Personendaten und
+# gehoeren unter keinen Umstaenden ins Git (uebernommen aus sba-bestand).
+*.pdf
+# Excel-Arbeitsmappen sind Binärdateien: keine Diffs, nur Bloat. Die Zeile muss
+# VOR der Ausnahme unten stehen - in .gitignore gewinnt die letzte zutreffende
+# Regel, und die Vorlage soll versioniert bleiben.
+*.xlsx
 !vorlage/Bestand- und Nachbestellungsliste 2026.xlsx
 # Die Arbeitskopie, die START.sh im Projektordner anlegt, samt der
 # Konfiguration, die auf sie zeigt. Beide sind mit "/" verankert, damit die

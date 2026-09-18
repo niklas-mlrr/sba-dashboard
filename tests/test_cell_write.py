@@ -5,8 +5,6 @@ from pathlib import Path
 from threading import Event, Thread
 
 import pytest
-from bestand.core import parse_grid
-from bestand.core.testing import SHEET_NAME
 from openpyxl import load_workbook
 
 from app import excel as excel_modul
@@ -18,6 +16,8 @@ from app.excel import (
     pruefe_wert,
     schreibe_zelle,
 )
+from bestand.core import parse_grid
+from bestand.core.testing import SHEET_NAME
 
 
 def _zeilen(client):

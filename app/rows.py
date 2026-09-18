@@ -18,8 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from bestand.core import Grid, GridEntry, parse_grid
 from openpyxl.worksheet.worksheet import Worksheet
+
+from bestand.core import Grid, GridEntry, parse_grid
 
 from . import cache as cache_modul
 from .cache import Cache

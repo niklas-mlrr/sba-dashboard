@@ -46,12 +46,13 @@ from pathlib import Path
 from typing import IO, Iterator
 from zipfile import BadZipFile
 
-# Aus bestand.core, nicht mehr aus dem IServ-Client: dauerhaftes Speichern
-# einer Mappe kennt weder IServ noch HTTP (siehe docs/verteilung.md).
-from bestand.core import GridEntry, atomic_save_workbook, parse_grid
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.worksheet.worksheet import Worksheet
+
+# Aus bestand.core, nicht mehr aus dem IServ-Client: dauerhaftes Speichern
+# einer Mappe kennt weder IServ noch HTTP (siehe docs/verteilung.md).
+from bestand.core import GridEntry, atomic_save_workbook, parse_grid
 
 # Nur diese eine Spalte ist von Hand änderbar.
 #

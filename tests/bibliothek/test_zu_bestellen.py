@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
-from conftest import SHEET_NAME
 from openpyxl import load_workbook
 from openpyxl.utils import range_boundaries
 
@@ -18,6 +17,7 @@ from bestand.core import (
     parse_grid,
     rebuild_zu_bestellen,
 )
+from bestand.core.testing import SHEET_NAME
 
 
 @pytest.fixture()

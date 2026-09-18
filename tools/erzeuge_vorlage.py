@@ -10,14 +10,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from bestand.core import parse_grid, resolve_anchor
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.utils.cell import range_boundaries
 
+from bestand.core import parse_grid, resolve_anchor
+
 WURZEL = Path(__file__).resolve().parent.parent
 STANDARD_EINGABE = (
-    WURZEL.parent / "sba-bestand" / "bestand" / "Bestand- und Nachbestellungsliste 2026.xlsx"
+    WURZEL / "bestand" / "Bestand- und Nachbestellungsliste 2026.xlsx"
 )
 STANDARD_AUSGABE = WURZEL / "vorlage" / "Bestand- und Nachbestellungsliste 2026.xlsx"
 

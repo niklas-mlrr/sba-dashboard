@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
-from conftest import ISBN_DEUTSCH_5, ISBN_ERDKUNDE_56, SHEET_NAME
 from openpyxl import load_workbook
 
 from bestand.core import (
@@ -17,6 +16,7 @@ from bestand.core import (
     parse_grid,
     write_stand,
 )
+from bestand.core.testing import ISBN_DEUTSCH_5, ISBN_ERDKUNDE_56, SHEET_NAME
 
 
 @pytest.fixture()

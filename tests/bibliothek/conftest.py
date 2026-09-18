@@ -1,27 +1,25 @@
-"""pytest-Fixtures um die geteilten Bausteine aus ``bestand.core.testing``."""
+"""Fixtures der Bibliothekstests - dieselben Bausteine, andere Erwartung.
+
+Dieser Ordner existiert wegen genau einer Zeile hier: ``workbook_path``. Das
+Dashboard versteht darunter eine über ``apply_snapshot`` GEFÜLLTE Mappe
+(``tests/conftest.py``), die Bibliothekstests die rohe, leere aus
+``build_workbook``. Beides ist richtig - aber nur solange die beiden Fixtures
+nicht in derselben Datei stehen. Zusammengelegt hätte eine der beiden Suiten
+still die falsche Mappe bekommen: kein roter Lauf, nur Tests, die etwas anderes
+prüfen als ihr Name sagt. Ein Unterordner mit eigener ``conftest.py`` ist die
+Trennung, die pytest dafür anbietet.
+
+Der ``sys.path``-Einschub, der hier bis zur Zusammenlegung (2026-09-18) stand,
+ist weg: ``tests/conftest.py`` legt die Projektwurzel schon auf den Pfad, und
+diese Datei wird erst danach eingelesen.
+"""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-_ROOT = Path(__file__).resolve().parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
-from bestand.core.testing import (  # noqa: E402,F401
-    ISBN_DEUTSCH_5,
-    ISBN_DEUTSCH_6,
-    ISBN_DEUTSCH_7,
-    ISBN_DEUTSCH_12,
-    ISBN_ERDKUNDE_7,
-    ISBN_ERDKUNDE_56,
-    ISBN_ERDKUNDE_EA_12,
-    SHEET_NAME,
-    FakeClient,
-    build_workbook,
-)
+from bestand.core.testing import FakeClient, build_workbook
 
 
 @pytest.fixture()

@@ -1,7 +1,7 @@
 """Friert die Konsolenausgabe von update_bestand_auto.py ein.
 
 Der Refactor auf ``bestand/core/`` darf die Ausgabe nicht verändern. Der
-Vergleich läuft gegen die Dateien in ``tests/golden/``, die vor dem Refactor
+Vergleich läuft gegen die Dateien in ``tests/bibliothek/golden/``, die vor dem Refactor
 vom alten Skript aufgezeichnet wurden. Zeitpunkt, Pfade und Backup-Stempel
 werden normalisiert - alles andere muss zeichengleich sein.
 """
@@ -15,9 +15,10 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import FakeClient, build_workbook
 
-_ROOT = Path(__file__).resolve().parent.parent
+from bestand.core.testing import FakeClient, build_workbook
+
+_ROOT = Path(__file__).resolve().parents[2]
 _GOLDEN = Path(__file__).parent / "golden"
 _TIMESTAMP = re.compile(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}")
 _BACKUP_STAMP = re.compile(r"Bestand-Test\.\d{8}-\d{6}(-\d+)?\.xlsx")

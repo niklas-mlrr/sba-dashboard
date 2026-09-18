@@ -8,9 +8,9 @@ from __future__ import annotations
 import logging
 
 import pytest
-from bestand.core.testing import FakeClient
 
 from app.sitzung import ABLAUF_SEKUNDEN, Abgelaufen, Anmeldung, NichtAngemeldet
+from bestand.core.testing import FakeClient
 
 PASSWORT = "geheim-Kennwort-2026!"
 BENUTZER = "b.lehrer"

@@ -81,8 +81,9 @@ def test_beenden_mit_eigenem_origin_geht_durch(client: TestClient):
 
 
 def test_schreiben_von_fremder_seite_aendert_die_mappe_nicht(client: TestClient, workbook_path):
-    from bestand.core.testing import SHEET_NAME
     from openpyxl import load_workbook
+
+    from bestand.core.testing import SHEET_NAME
 
     daten = client.get("/api/rows").json()
     zeile = next(z for z in daten["zeilen"] if z["bestand_ref"] == "G3")

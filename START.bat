@@ -5,13 +5,13 @@ rem
 rem  Doppelklick genuegt. Was hier passiert und warum:
 rem
 rem  1. Python suchen (portabel -> py-Launcher -> PATH). Ohne Admin-Rechte.
-rem  2. Die drei Quellordner vom Netzlaufwerk nach %LOCALAPPDATA% spiegeln.
+rem  2. Die beiden Quellordner vom Netzlaufwerk nach %LOCALAPPDATA% spiegeln.
 rem     Ausgefuehrt wird lokal: ein venv auf einem SMB-Laufwerk ist quaelend
 rem     langsam und geht bei Verbindungsabbruch kaputt.
 rem  3. Beim ersten Start ein venv anlegen und die Pakete installieren.
-rem     Die beiden Geschwister-Bibliotheken werden dabei richtig ins venv
-rem     installiert, nicht ueber den PYTHONPATH untergeschoben: die laufende
-rem     Anwendung haengt dann an keinem Ordner mehr, nur noch am venv.
+rem     Der IServ-Client wird dabei richtig ins venv installiert, nicht ueber
+rem     den PYTHONPATH untergeschoben: die laufende Anwendung haengt dann an
+rem     keinem Ordner mehr, nur noch am venv und am eigenen Quellbaum.
 rem  4. Server starten. Die Excel-Datei bleibt die ganze Zeit auf dem
 rem     Netzlaufwerk - kopiert wird nur der Programmcode.
 rem ==========================================================================
@@ -83,14 +83,14 @@ rem Dazu config.local.json (zeigt auf die Arbeitskopie) und die Nachbardateien,
 rem die neben einer geoeffneten Mappe entstehen.
 set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude htmlcov node_modules backups /XF *.pyc .coverage *.xlsx config.local.json *.dashboard-cache.json *.sba-dashboard.lock"
 rem robocopy meldet mit Rueckgabecode 1 "es wurde etwas kopiert". Genau daran
-rem haengt weiter unten die Frage, ob die beiden Bibliotheken neu installiert
-rem werden muessen - sonst liefe nach einem Update weiter der alte Stand.
+rem haengt weiter unten die Frage, ob der IServ-Client neu installiert werden
+rem muss - sonst liefe nach einem Update weiter der alte Stand.
 set "GESCHWISTER_NEU=0"
 robocopy "%~dp0."          "%CODE%\sba-dashboard" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
 if errorlevel 8 goto :kopierfehler
-robocopy "%~dp0..\sba-bestand"  "%CODE%\sba-bestand"  /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
-if errorlevel 8 goto :kopierfehler
-if errorlevel 1 set "GESCHWISTER_NEU=1"
+rem Nur noch ein Nachbarordner: bestand\ und buecherlisten\ lagen bis
+rem 2026-09-18 im eigenen Repo sba-bestand und wurden hier gespiegelt; sie
+rem liegen jetzt IN sba-dashboard und kommen mit dem Spiegel darueber.
 robocopy "%~dp0..\ausleihe-api" "%CODE%\ausleihe-api" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF .env >nul
 if errorlevel 8 goto :kopierfehler
 if errorlevel 1 set "GESCHWISTER_NEU=1"
@@ -146,7 +146,7 @@ if "%VENV_NEU%"=="1" echo   Einrichtung fertig.
 
 :pakete_fertig
 
-rem ── 3b. Die beiden Bibliotheken ins venv ──────────────────────────────────
+rem ── 3b. Der IServ-Client ins venv ─────────────────────────────────────────
 rem Nicht editable und nicht ueber den PYTHONPATH, sondern ein gewoehnlicher
 rem Install aus dem gespiegelten Quellbaum. Damit haengt die laufende Anwendung
 rem an nichts ausser dem venv; ein halb geloeschter Spiegelordner oder ein
@@ -154,10 +154,16 @@ rem vergessenes PYTHONPATH-Fenster kann sie nicht mehr auf halbem Weg brechen.
 rem --no-build-isolation nutzt das oben installierte setuptools statt eines
 rem frisch heruntergeladenen; --no-deps, weil requirements.txt die einzige
 rem Quelle fuer Paketversionen bleibt.
+rem
+rem Bis 2026-09-18 wurde hier ein zweites Paket installiert, sba-bestand. Das
+rem ist mit der Zusammenlegung entfallen, ohne die Regel zu brechen: bestand\
+rem und buecherlisten\ liegen jetzt neben app\ im Arbeitsverzeichnis, aus dem
+rem der Start unten laeuft - sie werden von dort importiert wie app selbst und
+rem haengen damit an genau derselben einen Kopie, nicht an einem Nachbarordner.
 if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"
 if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig
-echo   Bibliotheken werden eingerichtet...
-"%VENV%\Scripts\python.exe" -m pip install --no-build-isolation --no-deps --quiet "%CODE%\ausleihe-api" "%CODE%\sba-bestand"
+echo   Bibliothek wird eingerichtet...
+"%VENV%\Scripts\python.exe" -m pip install --no-build-isolation --no-deps --quiet "%CODE%\ausleihe-api"
 if errorlevel 1 goto :geschwisterfehler
 :geschwister_fertig
 
@@ -215,7 +221,7 @@ exit /b 1
 
 :geschwisterfehler
 echo.
-echo   Die mitgelieferten Bibliotheken liessen sich nicht einrichten.
+echo   Die mitgelieferte Bibliothek liess sich nicht einrichten.
 echo   Meist heisst das: das Netzlaufwerk war beim Kopieren nicht vollstaendig
 echo   verbunden. Bitte es erneut versuchen und, falls es wieder passiert,
 echo   Niklas Bescheid geben.

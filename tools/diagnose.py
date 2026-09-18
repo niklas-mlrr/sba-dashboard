@@ -88,31 +88,47 @@ def _pruefe_system(bericht: Bericht) -> None:
 
 def _pruefe_pakete(bericht: Bericht) -> None:
     """Prüft, ob die Bibliotheken wirklich im venv liegen - nicht nur irgendwo."""
-    for name in ("fastapi", "uvicorn", "jinja2", "openpyxl", "ausleihe", "bestand"):
+    for name in ("fastapi", "uvicorn", "jinja2", "openpyxl", "reportlab", "ausleihe",
+                 "bestand", "buecherlisten"):
         try:
             modul = __import__(name)
         except ImportError as exc:
             bericht.notiere(f"Paket {name}", FEHLER, f"nicht importierbar: {exc}")
             continue
         ort = getattr(modul, "__file__", None) or "(eingebaut)"
-        if name not in ("ausleihe", "bestand"):
+        if name in ("bestand", "buecherlisten"):
+            # Diese zwei sind seit der Zusammenlegung (2026-09-18) kein Paket
+            # mehr, das installiert werden müsste, sondern Teil dieses
+            # Quellbaums - wie app selbst. Die interessante Frage ist deshalb
+            # eine andere als unten: kommen sie aus DIESEM Ordner? Ein Treffer
+            # von woanders (ein übriggebliebener Install des alten Repos
+            # sba-bestand, ein PYTHONPATH auf einen zweiten Klon) wäre genau
+            # die Verwechslung, die man sonst stundenlang sucht.
+            if _WURZEL in Path(str(ort)).resolve().parents:
+                bericht.notiere(f"Paket {name}", OK, f"aus dem Projektbaum, {ort}")
+            else:
+                bericht.notiere(f"Paket {name}", FEHLER,
+                                f"kommt NICHT aus {_WURZEL}, sondern aus {ort} - "
+                                f"vermutlich ein Restbestand des alten Repos sba-bestand. "
+                                f"Dort deinstallieren: pip uninstall sba-bestand")
+            continue
+        if name != "ausleihe":
             bericht.notiere(f"Paket {name}", OK, str(ort))
             continue
-        # Bei den beiden Geschwister-Bibliotheken ist die interessante Frage
-        # nicht, wo die Dateien liegen, sondern ob sie *installiert* sind. Ein
+        # Bei der Geschwister-Bibliothek ist die interessante Frage nicht, wo
+        # die Dateien liegen, sondern ob sie *installiert* ist. Ein
         # editable-Install in der Entwicklung zeigt zu Recht auf den Quellbaum;
         # was auf dem Schul-Laptop nicht sein soll, ist ein Paket, das nur über
         # den Suchpfad gefunden wird und in keiner Installation steht.
         from importlib.metadata import PackageNotFoundError, distribution
-        verteilung = {"ausleihe": "iserv-ausleihe-api", "bestand": "sba-bestand"}[name]
         try:
-            distribution(verteilung)
+            distribution("iserv-ausleihe-api")
         except PackageNotFoundError:
             bericht.notiere(f"Paket {name}", WARNUNG,
                             f"nicht ins venv installiert, nur über den Suchpfad gefunden "
                             f"({ort}). Auf dem Schul-Laptop erledigt das START.bat.")
         else:
-            bericht.notiere(f"Paket {name}", OK, f"{verteilung} installiert, aus {ort}")
+            bericht.notiere(f"Paket {name}", OK, f"iserv-ausleihe-api installiert, aus {ort}")
     if os.environ.get("PYTHONPATH"):
         bericht.notiere("PYTHONPATH", WARNUNG,
                         f"gesetzt auf {os.environ['PYTHONPATH']!r} - seit 2026-09-04 "

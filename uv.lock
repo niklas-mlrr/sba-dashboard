@@ -1295,43 +1295,6 @@ wheels = [
 ]
 
 [[package]]
-name = "sba-bestand"
-version = "0.1.0"
-source = { editable = "../sba-bestand" }
-dependencies = [
-    { name = "isbnlib" },
-    { name = "iserv-ausleihe-api" },
-    { name = "openpyxl" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-]
-
-[package.optional-dependencies]
-pdf = [
-    { name = "pypdf" },
-    { name = "reportlab" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "isbnlib", specifier = ">=3.10" },
-    { name = "iserv-ausleihe-api", editable = "../ausleihe-api" },
-    { name = "openpyxl", specifier = ">=3.1,<4" },
-    { name = "pypdf", marker = "extra == 'pdf'", specifier = ">=5,<7" },
-    { name = "python-dotenv", specifier = ">=1,<2" },
-    { name = "reportlab", marker = "extra == 'pdf'", specifier = ">=4,<5" },
-    { name = "requests", specifier = ">=2.31,<3" },
-]
-provides-extras = ["pdf"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.11,<2" },
-    { name = "pytest", specifier = ">=8,<9" },
-    { name = "ruff", specifier = ">=0.8,<1" },
-]
-
-[[package]]
 name = "sba-dashboard"
 version = "0.1.0"
 source = { virtual = "." }
@@ -1341,7 +1304,10 @@ dependencies = [
     { name = "iserv-ausleihe-api" },
     { name = "jinja2" },
     { name = "openpyxl" },
-    { name = "sba-bestand", extra = ["pdf"] },
+    { name = "pypdf" },
+    { name = "python-dotenv" },
+    { name = "reportlab" },
+    { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1362,7 +1328,10 @@ requires-dist = [
     { name = "iserv-ausleihe-api", editable = "../ausleihe-api" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "openpyxl", specifier = ">=3.1,<4" },
-    { name = "sba-bestand", extras = ["pdf"], editable = "../sba-bestand" },
+    { name = "pypdf", specifier = ">=5,<7" },
+    { name = "python-dotenv", specifier = ">=1,<2" },
+    { name = "reportlab", specifier = ">=4,<5" },
+    { name = "requests", specifier = ">=2.31,<3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]
 

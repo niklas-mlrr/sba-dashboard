@@ -15,8 +15,6 @@ UV_EXPORT = [
     "--no-emit-project",
     "--no-emit-package",
     "iserv-ausleihe-api",
-    "--no-emit-package",
-    "sba-bestand",
     "--format",
     "requirements-txt",
 ]
@@ -62,10 +60,11 @@ def test_start_spiegelt_keine_arbeitsmappe_mit():
     for name in ("*.xlsx", "config.local.json", "*.dashboard-cache.json",
                  "*.sba-dashboard.lock"):
         assert name in zeile, name
-    # Der Ausschluss gilt fuer jeden der drei robocopy-Aufrufe, nicht nur fuer
-    # den des Dashboards - sonst kaeme die Mappe ueber ein Nachbarrepo mit.
+    # Der Ausschluss gilt fuer BEIDE robocopy-Aufrufe, nicht nur fuer den des
+    # Dashboards - sonst kaeme die Mappe ueber das Nachbarrepo mit. Es waren
+    # drei, bis sba-bestand am 2026-09-18 in dieses Repo aufging.
     kopierzeilen = [z for z in inhalt.splitlines() if z.startswith("robocopy ")]
-    assert len(kopierzeilen) == 3
+    assert len(kopierzeilen) == 2
     assert all("%AUSSCHLUSS%" in z for z in kopierzeilen)
 
 
@@ -139,14 +138,29 @@ def test_start_installiert_die_geschwister_ins_venv_statt_pythonpath():
     Ordnerstruktur: ein halb gespiegelter Baum oder ein Fenster mit altem
     ``PYTHONPATH`` bricht die Anwendung an einer Stelle, an der niemand sucht.
     Begründung und Rollback stehen in ``docs/verteilung.md``.
+
+    Installiert wird seit 2026-09-18 nur noch ein Paket. ``bestand`` und
+    ``buecherlisten`` lagen bis dahin im Geschwister-Repo sba-bestand und
+    mussten deshalb denselben Weg gehen; sie liegen jetzt in diesem Repo, also
+    im gespiegelten Arbeitsverzeichnis selbst, und werden von dort importiert
+    wie ``app``. Dass sie NICHT mehr in dieser Zeile stehen, ist damit kein
+    Rückfall auf einen Ordner daneben - die Zusicherung auf den fehlenden
+    ``PYTHONPATH`` oben gilt unverändert.
     """
     inhalt = START.read_text(encoding="utf-8")
 
     assert "set \"PYTHONPATH=" not in inhalt
     assert (
         '"%VENV%\\Scripts\\python.exe" -m pip install --no-build-isolation --no-deps '
-        '--quiet "%CODE%\\ausleihe-api" "%CODE%\\sba-bestand"'
+        '--quiet "%CODE%\\ausleihe-api"'
     ) in inhalt
+    # Und zwar genau ein Paket: ein zweiter Pfad in dieser Zeile waere ein
+    # Ordner, an dem die Laufzeit wieder haengt. (Der Name sba-bestand steht in
+    # START.bat noch in einem Kommentar - deshalb wird die Zeile geprueft, nicht
+    # die Datei.)
+    assert "sba-bestand" not in next(
+        z for z in inhalt.splitlines() if "pip install --no-build-isolation" in z
+    )
     # setuptools muss im venv liegen, sonst hat --no-build-isolation kein Backend.
     assert "pip install --upgrade pip setuptools wheel --quiet" in inhalt
 
@@ -160,7 +174,7 @@ def test_start_installiert_die_geschwister_nur_bei_geaenderten_quellen():
     inhalt = START.read_text(encoding="utf-8")
 
     assert 'set "GESCHWISTER_NEU=0"' in inhalt
-    assert inhalt.count('if errorlevel 1 set "GESCHWISTER_NEU=1"') == 2
+    assert inhalt.count('if errorlevel 1 set "GESCHWISTER_NEU=1"') == 1
     assert 'if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"' in inhalt
     assert 'if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig' in inhalt
     # Ein Kopierfehler bleibt ein Kopierfehler: die 8er-Pruefung steht davor.

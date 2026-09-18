@@ -12,6 +12,8 @@ _WURZEL = Path(__file__).resolve().parent.parent
 if str(_WURZEL) not in sys.path:
     sys.path.insert(0, str(_WURZEL))
 
+from app.main import create_app  # noqa: E402
+from app.settings import Einstellungen  # noqa: E402
 from bestand.core import (  # noqa: E402
     UpdateResult,
     apply_snapshot,
@@ -22,9 +24,6 @@ from bestand.core import (  # noqa: E402
 )
 from bestand.core.config import BestandConfig  # noqa: E402
 from bestand.core.testing import SHEET_NAME, FakeClient, build_workbook  # noqa: E402
-
-from app.main import create_app  # noqa: E402
-from app.settings import Einstellungen  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

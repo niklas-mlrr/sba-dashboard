@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from bestand.core.testing import FakeClient
 from fastapi.testclient import TestClient
 
 from app.fenster import Antwort, FensterFehler, Fenstersteuerung, tkinter_verfuegbar
+from bestand.core.testing import FakeClient
 from conftest import TEST_BASIS_URL, TEST_BENUTZER, TEST_PASSWORT
 
 
