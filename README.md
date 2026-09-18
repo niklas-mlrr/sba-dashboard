@@ -79,14 +79,29 @@ Das **Geschwister-Layout ist verbindlich** (siehe `../README.md`):
 ```
 <irgendein-ordner>/
   ausleihe-api/     IServ-Client + .env
-  sba-bestand/      Bibliothek bestand/core/ + CLI
   sba-dashboard/    dieses Repo
 ```
+
+Bis 2026-09-18 stand daneben ein drittes Repo, `sba-bestand`. Seine beiden
+Pakete liegen jetzt hier:
+
+```
+app/                Weboberfläche: FastAPI, Templates, Programmfenster
+bestand/            Excel-Kern (core/) + das Bestands-CLI
+buecherlisten/      Bücherlisten-Kern (core/), trg_web.py + das Listen-CLI
+tests/              Tests der Weboberfläche
+tests/bibliothek/   Tests der beiden übernommenen Pakete
+tools/              Diagnose und Vorlagen-Erzeuger, nicht Teil des Starts
+vorlage/            leere Excel-Vorlage für START.sh und die Tests
+```
+
+Was die beiden Pakete enthalten und warum sie hier liegen, steht in
+[`docs/bibliothek.md`](docs/bibliothek.md).
 
 ```bash
 uv sync --all-groups
 uv run pytest            # offline, ohne IServ und ohne echte Excel-Datei
-uv run ruff check app tests
+uv run ruff check app tests bestand buecherlisten
 uv run mypy              # Dateiliste und Strenge in pyproject.toml
 ```
 
@@ -148,8 +163,8 @@ dann nicht; ein Abruf braucht dort ein `POST` auf `/api/anmeldung`.
 startet `START.sh` das Dashboard mit einer lokalen Arbeitskopie. Standardmäßig
 nimmt es die mitgelieferte, leere Excel-Vorlage. Sie hat dieselben Blätter,
 Merges, Formeln und Formatierungen wie die echte Mappe, aber keine Arbeitsdaten.
-Das Geschwister-Layout aus `ausleihe-api/`, `sba-bestand/` und
-`sba-dashboard/` bleibt für die Python-Abhängigkeiten nötig.
+Das Geschwister-Layout aus `ausleihe-api/` und `sba-dashboard/` bleibt für die
+Python-Abhängigkeiten nötig.
 
 ```bash
 cd ~/projects/sba/sba-dashboard
@@ -182,32 +197,33 @@ für eine kontrollierte Aktualisierung der Vorlage gedacht.
 
 ## Auf dem Schul-Laptop
 
-`START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die drei
-Quellbäume nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten Mal ein
-venv anlegen, `ausleihe-api` und `sba-bestand` dort hinein installieren, dann
+`START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die
+beiden Quellbäume nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten
+Mal ein venv anlegen, `ausleihe-api` dort hinein installieren, dann
 `python -m app.start`. Bei späteren Starts vergleicht es `requirements.txt` mit
 dem zuletzt erfolgreich installierten Stand und aktualisiert Pakete nur bei einer
-Änderung; die beiden Bibliotheken installiert es nur neu, wenn `robocopy`
-gemeldet hat, dass sich an ihren Quellen etwas geändert hat.
+Änderung; den Client installiert es nur neu, wenn `robocopy` gemeldet hat, dass
+sich an seinen Quellen etwas geändert hat. `bestand/` und `buecherlisten/`
+brauchen diesen Weg seit 2026-09-18 nicht mehr — sie liegen im gespiegelten
+Projektbaum selbst und werden von dort importiert wie `app`.
 
 `requirements.txt` wird erzeugt, nicht von Hand gepflegt:
 
 ```bash
 uv export --no-dev --no-hashes --no-emit-project \
-    --no-emit-package iserv-ausleihe-api --no-emit-package sba-bestand \
+    --no-emit-package iserv-ausleihe-api \
     --format requirements-txt -o requirements.txt
 ```
 
-Die beiden Geschwister-Repos stehen bewusst nicht darin: als Pfad-Abhängigkeiten
-hätten sie in einer Datei, die auf einem fremden Rechner mit `pip install -r`
-verarbeitet wird, keine gültige Adresse. `START.bat` installiert sie stattdessen
-aus den gespiegelten Quellbäumen mit `pip install --no-build-isolation --no-deps`
-in dasselbe venv. **Zur Laufzeit ist deshalb kein `PYTHONPATH` mehr nötig** — die
+`ausleihe-api` steht bewusst nicht darin: als Pfad-Abhängigkeit hätte es in einer
+Datei, die auf einem fremden Rechner mit `pip install -r` verarbeitet wird, keine
+gültige Adresse. `START.bat` installiert es stattdessen aus dem gespiegelten
+Quellbaum mit `pip install --no-build-isolation --no-deps` in dasselbe venv. **Zur Laufzeit ist deshalb kein `PYTHONPATH` mehr nötig** — die
 Anwendung hängt an nichts außer dem venv.
 
-Warum es drei Repos bleiben, was die Alternativen wären (uv-Workspace,
-versionierte Wheels) und wie man den Schritt zurückdreht, steht in
-[`docs/verteilung.md`](docs/verteilung.md).
+Warum es zwei Repos bleiben (und seit 2026-09-18 nicht mehr drei), was die
+Alternativen wären (uv-Workspace, versionierte Wheels) und wie man den Schritt
+zurückdreht, steht in [`docs/verteilung.md`](docs/verteilung.md).
 
 ## Gestaltung
 

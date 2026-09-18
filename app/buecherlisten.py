@@ -7,12 +7,19 @@ einmal und stellt sie um - ohne FastAPI, damit es sich mit einem Fake-Client
 prüfen lässt.
 
 Das Zusammenführen folgt ``collect_entries`` in
-``sba-bestand/buecherlisten/generate_booklists.py``: ein Mehrjahresband
+``buecherlisten/generate_booklists.py``: ein Mehrjahresband
 (z. B. "Elemente Chemie 5/6") steht in mehreren Jahrgangslisten und wird je
 Gruppe **ein** Eintrag mit allen Jahrgängen, in denen er tatsächlich vorkommt -
 nicht mit ``series_data.gradesFlat``, das ein Serienattribut ist und von den
-Listen abweichen kann. Nachgebaut statt importiert, weil ``buecherlisten/``
-nicht ins venv des Dashboards installiert wird.
+Listen abweichen kann.
+
+Nachgebaut statt importiert, weil ``buecherlisten/`` damals nicht ins venv des
+Dashboards installiert wurde. Dieser Grund ist mit der Zusammenlegung am
+2026-09-18 entfallen: das Paket liegt jetzt im selben Baum und wird von
+``app/api/buecherliste.py`` schon importiert. Die Doppelung ist damit
+auflösbar, aber nicht automatisch falsch - sie zusammenzulegen ist eine
+Änderung am Verhalten zweier Seiten und steht als eigener Punkt in
+``docs/roadmap.md``, nicht als Nebenwirkung eines Ordnerumzugs.
 
 Geladen wird live bei jedem Seitenaufruf (Entscheidung 2026-09-17): die Seiten
 sollen den Stand in IServ zeigen, nicht den des letzten Abrufs.

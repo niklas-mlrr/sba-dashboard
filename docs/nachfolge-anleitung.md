@@ -253,8 +253,11 @@ mitten im Speichern lässt die alte Fassung unberührt.
 
 ## 9. Für den Fall, dass jemand Technisches übernimmt
 
-- Der Quellcode liegt auf GitHub: `niklas-mlrr/sba-dashboard`, dazu die beiden
-  Bibliotheken `niklas-mlrr/sba-bestand` und `niklas-mlrr/ausleihe-api`.
+- Der Quellcode liegt auf GitHub: `niklas-mlrr/sba-dashboard`, dazu die
+  Bibliothek `niklas-mlrr/ausleihe-api` (der IServ-Client). Das Excel-Tooling
+  war bis zum 2026-09-18 ein drittes Repo, `niklas-mlrr/sba-bestand`, und liegt
+  jetzt hier in `bestand/` und `buecherlisten/` — siehe
+  [`bibliothek.md`](bibliothek.md).
 - Warum es so gebaut ist: [`architektur.md`](architektur.md).
 - Wie es auf den Laptop kommt und wie man das zurückdreht:
   [`verteilung.md`](verteilung.md).

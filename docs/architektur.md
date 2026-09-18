@@ -82,7 +82,7 @@ app/
     tabelle.py      GET /api/rows    und POST /api/cell
     abruf.py        /api/anmeldung, POST /api/refresh, GET /api/refresh/status
     buecherliste.py GET /buecherliste/... (HTML, live aus IServ), GET .../fach/pdf (PDF
-                    über buecherlisten.core aus sba-bestand)
+                    über buecherlisten.core)
     system.py       GET /health      und POST /api/beenden
     gemeinsam.py    Vorlagen, Einstellungen aus dem Request, der 503-Leerfall
   rows.py           Raster -> Anzeigezeilen, lies_tabelle -> Tabellenstand
@@ -148,44 +148,63 @@ Regel gehört zur Mappe und steht mit ihrer Begründung in `app.excel.pruefe_wer
 
 ```
 ausleihe-api/      IServ-Client, hält die .env
-sba-bestand/       bestand/core/  ← die gesamte Logik, netzfrei testbar
-                   bestand/update_bestand_auto.py  ← nur noch CLI-Schale
-sba-dashboard/     app/  ← FastAPI, Vorlagen, Zeilenmodell
+sba-dashboard/     app/             ← FastAPI, Vorlagen, Zeilenmodell
+                   bestand/core/    ← die gesamte Excel-Logik, netzfrei testbar
+                   bestand/update_bestand_auto.py   ← nur noch CLI-Schale
+                   buecherlisten/   ← Bücherlisten-Kern, trg_web.py, CLI
 ```
 
-`bestand/core/` liest kein `os.environ`, lädt keine `.env`, parst keine Argumente
-und schreibt nichts nach stdout. Der IServ-Client wird **injiziert**. Deshalb
-laufen die Tests beider Repos ohne Netz und ohne die echte Mappe: beide bauen
+Bis 2026-09-18 waren `bestand/` und `buecherlisten/` ein drittes Repo,
+`sba-bestand`, das hier als Pfad-Abhängigkeit eingebunden war. Die Trennung
+kostete drei Repos, zwei mypy-Läufe, zwei Testsuiten, je einen Checkout-Schritt
+pro CI-Job und ein Geschwister-Layout, das jeder Klon kennen musste — für zwei
+Pakete mit genau einem Leser. Ein Paketrand zwischen zwei Ordnern derselben
+Anwendung trennte nichts, was getrennt gehörte. Herkunft und Rest-Verpflichtung
+(das eingefrorene GitHub-Repo für `sba-launcher`) stehen in
+[`bibliothek.md`](bibliothek.md) und [`verteilung.md`](verteilung.md).
+
+**Die Schichtung selbst bleibt, und darauf kommt es an:** `bestand/core/` liest
+kein `os.environ`, lädt keine `.env`, parst keine Argumente und schreibt nichts
+nach stdout. Der IServ-Client wird **injiziert**. Genau deshalb können ein
+Webserver und ein Kommandozeilenskript dieselben Funktionen aufrufen, und
+deshalb laufen beide Testsuiten ohne Netz und ohne die echte Mappe: sie bauen
 sich ihr Prüfblatt mit `bestand.core.testing.build_workbook`, das die vier
-Befunde oben im Kleinen nachbildet.
+Befunde oben im Kleinen nachbildet. Die Grenze ist seit der Zusammenlegung eine
+Ordner- statt einer Repo-Grenze — nicht weniger verbindlich, nur billiger.
 
 ### Die Paketgrenze ist geprüft, nicht nur beschrieben
 
-`sba-bestand` liefert seit dem 2026-09-05 eine `bestand/py.typed`. Vorher waren
-`Snapshot`, `GridEntry`, `UpdateResult` und `BestandConfig` für mypy hier
-schlicht `Any`: sie standen in den Signaturen von `app/refresh.py` für den
-Leser, geprüft wurde an der Grenze nichts. Ein vertauschtes Argumentpaar wäre
-erst zur Laufzeit aufgefallen.
+`bestand/py.typed` gibt es seit dem 2026-09-05. Vorher waren `Snapshot`,
+`GridEntry`, `UpdateResult` und `BestandConfig` für mypy hier schlicht `Any`:
+sie standen in den Signaturen von `app/refresh.py` für den Leser, geprüft wurde
+an der Grenze nichts. Ein vertauschtes Argumentpaar wäre erst zur Laufzeit
+aufgefallen.
 
 Zwei Dinge waren dafür nötig, und das zweite ist das unerwartete:
 
 1. Der Marker selbst plus sein Eintrag in `[tool.setuptools.package-data]` von
-   `sba-bestand` — `packages.find` sammelt nur `.py`-Dateien ein.
+   `sba-bestand` — `packages.find` sammelte nur `.py`-Dateien ein.
 2. `mypy_path = "../sba-bestand"` **hier**. Der editable-Install von setuptools
-   legt in `site-packages` keinen Paketordner ab, sondern einen Import-Finder
+   legte in `site-packages` keinen Paketordner ab, sondern einen Import-Finder
    (`__editable___sba_bestand_0_1_0_finder.py` plus `.pth`). mypy liest
    `sys.path`, nicht die Import-Hooks der Laufzeit, und sah das Paket damit
    überhaupt nicht — der Marker allein hätte nichts geändert. Nachgeprüft mit
    `reveal_type`, nicht am ausbleibenden Fehler.
 
-Deshalb steht in `[tool.mypy]` auch **kein** globales `ignore_missing_imports`
-mehr, sondern nur noch die namentliche Ausnahme. Global gesetzt würde es einen
-Bruch der Pfad-Auflösung lautlos verschlucken: `bestand.core` fiele auf `Any`
-zurück, und kein Lauf würde rot.
+Beide Punkte sind mit der Zusammenlegung erledigt: `bestand/` liegt im
+Projektbaum, mypy findet es ohne Pfad und ohne Marker, und es steht seit dem
+2026-09-18 selbst in `files` — die Prüfung des Bibliothekscodes ist damit von
+einem zweiten Repo hierher gewandert, nicht weggefallen. Der Marker bleibt
+trotzdem liegen: er kostet nichts und deckt weiter den Klon, den `sba-launcher`
+zieht.
 
-Die CI baut das Geschwister-Layout im Workspace nach (`sba-dashboard/`,
-`sba-bestand/`, `ausleihe-api/` nebeneinander), der relative Pfad trägt dort
-also genauso.
+Was bleibt, ist die Regel dahinter: in `[tool.mypy]` steht **kein** globales
+`ignore_missing_imports`, sondern nur die namentliche Ausnahme. Global gesetzt
+würde es einen Bruch der Pfad-Auflösung lautlos verschlucken — `ausleihe` fiele
+auf `Any` zurück, und kein Lauf würde rot.
+
+Die CI baut das Geschwister-Layout im Workspace nach (`sba-dashboard/` und
+`ausleihe-api/` nebeneinander), der relative Pfad trägt dort also genauso.
 
 Am selben Tag bekam `ausleihe-api` dieselbe Behandlung — es war die letzte
 Stelle, an der eine Paketgrenze unkontrolliert war, und sie stand in **beiden**
@@ -205,13 +224,19 @@ Was das hier konkret bringt, sind zwei Stellen in `app/refresh.py`:
   aufrufbar ist und etwas mit `login() -> None` zurückgibt. Gegengeprüft: eine
   andere Klasse aus `ausleihe` an derselben Stelle wird abgelehnt.
 
-`ausleihe.*` steht jetzt wie `bestand.*` unter `follow_imports = "silent"` —
-Typen benutzen, aber Meldungen aus dem Bibliothekscode dort melden, wo er
-gepflegt wird. Beide Bibliotheken haben dafür einen eigenen mypy-Lauf;
-`ausleihe-api` prüft in seiner CI mit.
+`ausleihe.*` steht unter `follow_imports = "silent"` — Typen benutzen, aber
+Meldungen aus dem Bibliothekscode dort melden, wo er gepflegt wird.
+`ausleihe-api` hat dafür einen eigenen mypy-Lauf und prüft in seiner CI mit.
 
-Damit liefern alle drei Repos des Geschwister-Layouts `py.typed`, und die
-einzige verbliebene namentliche Ausnahme ist `openpyxl.*`.
+`bestand.*` und `buecherlisten.*` standen bis 2026-09-18 aus demselben Grund
+dort. Mit dem Wegfall ihres eigenen Laufs wäre `silent` aber kein
+Arbeitsteilungs-Vermerk mehr, sondern ein blinder Fleck — sie werden hier
+geprüft. Ausnahme bleibt `buecherlisten.core.layout`: reportlab liefert kein
+`py.typed`, und die Datei ist rund 1300 Zeilen ausgemessene Punkt-Konstanten.
+
+Damit liefern beide Repos `py.typed`, und namentlich ausgenommen bleibt nur, was
+wirklich keines hat: `openpyxl.*`, `isbnlib.*`, `reportlab.*`, `requests.*` und
+`dotenv.*`.
 
 ## Warum 127.0.0.1
 

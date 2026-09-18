@@ -1,12 +1,40 @@
 # Was noch offen ist
 
-Stand: 2026-09-10. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
+Stand: 2026-09-18. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
 liegt als abgeschlossener v1-Plan in [`archiv/`](archiv/PLAN.md).
 
 Der **Struktur-Backlog** aus dem Review vom 2026-09-05 ist abgearbeitet (unten,
 mit dem, was sich dabei geändert hat). Offen bleiben damit nur noch die beiden
 **Funktionslücken**, die niemand außer Niklas erledigen kann — allen voran der
 Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
+
+## sba-bestand ist hier aufgegangen (2026-09-18) — erledigt, mit einem Nachfolgepunkt
+
+`bestand/` und `buecherlisten/` waren ein eigenes Repo, `sba-bestand`, das hier
+als editierbare Pfad-Abhängigkeit hing. Das kostete für zwei Pakete mit genau
+einem Leser: drei Repos, zwei mypy-Läufe, zwei Testsuiten, je einen
+Checkout-Schritt pro CI-Job, einen zweiten robocopy-Spiegel samt pip-Install in
+`START.bat` und ein Geschwister-Layout, das jeder Klon kennen musste.
+Übernommen wurde alles, samt Historie (`git subtree`) und samt der beiden CLIs.
+Begründung und Herkunft: [`bibliothek.md`](bibliothek.md),
+[`verteilung.md`](verteilung.md#das-eingefrorene-repo-sba-bestand).
+
+Zwei Dinge sind dabei aufgefallen und stehen bewusst offen:
+
+**Nachfolgepunkt 1: `sba-launcher` hängt am eingefrorenen GitHub-Repo.** Er
+klont `niklas-mlrr/sba-bestand` und startet daraus
+`bestand/update_bestand_auto.py`. Das Repo bleibt deshalb online, ist aber ein
+Stand von heute: eine Korrektur in `bestand/core/`, die auch den Bestands-Abruf
+des Launchers betrifft, muss bis auf Weiteres **in beiden** Repos landen. Der
+Weg heraus ist eine Änderung in `sba-launcher` (Klon-URL, Venv-Pfad, Skriptpfad
+in `core/bestand.py`) und gehört in dessen Repo, nicht hierher.
+
+**Nachfolgepunkt 2: `app/buecherlisten.py` baut `collect_entries` nach.** Das
+war richtig, solange `buecherlisten/` nicht im venv lag — dieser Grund ist jetzt
+weg, und `app/api/buecherliste.py` importiert das Paket ohnehin schon. Die
+Doppelung aufzulösen ist aber eine Verhaltensänderung an zwei Seiten (HTML und
+PDF) und keine Nebenwirkung eines Ordnerumzugs; sie braucht einen eigenen
+Durchgang mit eigenen Tests.
 
 ## Das Programmfenster (2026-09-10) — erledigt, mit einem Nachfolgepunkt
 
