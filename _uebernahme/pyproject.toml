@@ -1,0 +1,150 @@
+# Installierbares Paket, damit sba-dashboard es als Geschwister-Pfad einbinden
+# kann ([tool.uv.sources] dort). Die Excel-Dateien in bestand/ sind Daten, kein
+# Paketinhalt - setuptools nimmt nur die Python-Module auf.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sba-bestand"
+version = "0.1.0"
+description = "Excel-Tooling der Schulbuchausleihe: Bestands-/Nachbestellungsliste und Bücherlisten nach Fach"
+requires-python = ">=3.10"
+dependencies = [
+    # Bestand (update_bestand*.py) und bestand/core/
+    "openpyxl>=3.1,<4",
+    "isbnlib>=3.10",
+    "python-dotenv>=1,<2",
+    "requests>=2.31,<3",
+    # IServ-API-Client (Geschwister-Repo, siehe [tool.uv.sources])
+    "iserv-ausleihe-api",
+]
+
+# reportlab (und das davon gezogene Pillow) sowie pypdf brauchen ausschliesslich der
+# PDF-Erzeuger buecherlisten/ (Skript und core/). Seit 2026-09-17 zieht
+# sba-dashboard das Extra selbst an, weil es die Buecherlisten druckt. Als Pflichtabhaengigkeit
+# haette sba-dashboard auf dem Schul-Laptop rund 15 MB Pakete installiert, die
+# es nie importiert - und jede Installation waere an einem fehlenden Pillow-Rad
+# gescheitert. Wer die Buecherlisten-PDFs braucht: `uv sync --extra pdf`
+# bzw. `pip install "sba-bestand[pdf]"`. pypdf kam 2026-09-17 dazu: es haengt
+# die IServ-Druckversionen der Jahrgangslisten aneinander (--student-list).
+[project.optional-dependencies]
+pdf = ["reportlab>=4,<5", "pypdf>=5,<7"]
+
+[dependency-groups]
+dev = ["ruff>=0.8,<1", "pytest>=8,<9", "mypy>=1.11,<2"]
+
+# ausleihe-api wird als Geschwister-Repo geklont; identisches Muster wie in
+# ausleihe-ausgabe/pyproject.toml.
+[tool.uv.sources]
+iserv-ausleihe-api = { path = "../ausleihe-api", editable = true }
+
+# buecherlisten* seit 2026-09-17: buecherlisten/core/ ist die Bibliothek hinter
+# generate_booklists.py, und sba-dashboard druckt damit die Bücherlisten -
+# dasselbe Muster wie bestand/core/ hinter update_bestand.py.
+[tool.setuptools.packages.find]
+include = ["bestand*", "buecherlisten*"]
+
+# PEP-561-Marker. bestand/core/ ist durchgehend annotiert, aber ohne diese
+# leere Datei im Rad ignoriert jeder Typpruefer die Annotationen: fuer mypy in
+# sba-dashboard waren Snapshot, GridEntry, UpdateResult und BestandConfig
+# schlicht Any - sie standen in den Signaturen von app/refresh.py fuer den
+# Leser da, geprueft wurde an der Paketgrenze nichts. Der Marker liegt in
+# bestand/ und gilt damit auch fuer bestand.core; package-data traegt ihn ins
+# Rad, weil packages.find nur .py-Dateien einsammelt.
+[tool.setuptools.package-data]
+bestand = ["py.typed"]
+"buecherlisten.core" = ["py.typed"]
+
+# mypy gehoert erst seit dem py.typed-Marker hierher, und zwar zwingend: der
+# Marker ist ein Versprechen an jeden Nutzer des Pakets ("die Annotationen hier
+# stimmen"), und sba-dashboard verlaesst sich seither darauf, statt Snapshot,
+# GridEntry, UpdateResult und BestandConfig als Any zu behandeln. Ohne eine
+# Pruefung *hier* waere das Versprechen ungedeckt - der Bruch fiele im
+# Geschwister-Repo auf, nicht in dem, das ihn verursacht.
+[tool.mypy]
+files = ["bestand", "buecherlisten/trg_web.py", "buecherlisten/core/daten.py", "buecherlisten/core/erzeugen.py"]
+python_version = "3.10"
+
+# ausleihe-api liefert seit seinem py.typed echte Typen - aber mypy findet sie
+# nur ueber diesen Pfad. Der editable-Install von setuptools legt in
+# site-packages keinen Paketordner ab, sondern einen Import-Finder
+# (`__editable___iserv_ausleihe_api_0_2_0_finder.py` plus .pth); mypy liest
+# sys.path, nicht die Import-Hooks der Laufzeit, und sah das Paket damit
+# ueberhaupt nicht. Ohne diese Zeile blieben AusleiheClient, NotFoundError und
+# match_book also `Any`, py.typed hin oder her - nachgeprueft mit `reveal_type`
+# (2026-09-05: dreimal "Any" bei gruenem Lauf). Der relative Pfad ist zulaessig,
+# weil das Geschwister-Layout verbindlich ist (siehe [tool.uv.sources] oben).
+mypy_path = "../ausleihe-api"
+
+# Nicht auf tests/: geprueft wird, was das Rad ausliefert und was py.typed
+# deckt, tests/ gehoert zu keinem von beidem. buecherlisten/trg_web.py ist
+# seit der Trennung von den reportlab-/ausleihe-/dotenv-Importen in
+# generate_booklists.py (2026-09-05) sauber, durchgehend annotiert und
+# dependency-arm (nur html/re/difflib/requests) - die Pruefung kostet hier
+# nichts und haette den in ihm behobenen Regex-Bug (inkonsistentes
+# <table>- vs. <table[^>]*>-Pattern, siehe Modul-Docstring dort) nicht
+# gefunden, aber jede kuenftige Typ-Regression schon. generate_booklists.py
+# selbst bleibt ausserhalb: reportlab liefert kein py.typed, und die
+# Layout-Haelfte des Skripts ist rund 1100 Zeilen ausgemessener
+# Punkt-Konstanten - beides ausserhalb des Aufwands, der hier gerechtfertigt
+# waere.
+#
+# disallow_untyped_defs ist der Punkt: ohne die Zeile ueberspringt mypy eine
+# untypisierte Funktion samt Rumpf, und die Pruefung hoerte beim ersten
+# untypisierten Neuzugang lautlos auf zu pruefen. Gleiche Begruendung wie in
+# sba-dashboard/pyproject.toml.
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# openpyxl, isbnlib, requests und dotenv liefern kein py.typed. Namentlich
+# statt global, damit ein Tippfehler in einem Import aus dem eigenen Paket ein
+# Fehler bleibt und nicht still zu Any wird - und damit ein Bruch der
+# Pfad-Aufloesung oben rot wird, statt ausleihe.* lautlos wieder auf Any
+# zurueckfallen zu lassen. `ausleihe.*` stand bis 2026-09-05 in dieser Liste.
+[[tool.mypy.overrides]]
+module = ["openpyxl.*", "isbnlib.*", "requests.*", "dotenv.*"]
+ignore_missing_imports = true
+
+# ausleihe wird fuer seine Typen gelesen, aber nicht hier geprueft: Fehler im
+# Bibliothekscode gehoeren in ausleihe-api, das dafuer einen eigenen mypy-Lauf
+# hat. `silent` heisst genau das - Typen benutzen, Meldungen aus diesen Modulen
+# unterdruecken.
+[[tool.mypy.overrides]]
+module = ["ausleihe.*"]
+follow_imports = "silent"
+
+# Das Layout ist aus generate_booklists.py verschoben und bleibt wie dort
+# ungeprüft (reportlab ohne py.typed, ~1100 Zeilen ausgemessene Konstanten);
+# daten.py und erzeugen.py oben werden geprüft und sehen es nur als Import.
+[[tool.mypy.overrides]]
+module = ["buecherlisten.core.layout"]
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+module = ["reportlab.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+# bestand/update_bestand.py ist der veraltete Vor-Refactor-Ansatz
+# (bestand/README.md markiert ihn "⚠️ veraltet — Nicht mehr verwenden",
+# update_bestand_auto.py ist der Ersatz) und bleibt bewusst unveraendert
+# liegen: ihn anzufassen, nur um den Linter zufriedenzustellen, wuerde in
+# Code Unruhe stiften, den niemand mehr ausfuehrt. Die Ignorierung ist auf
+# genau diesen einen Pfad begrenzt (nicht global E402/E501), damit eine neue
+# Datei diese Nachsicht nicht automatisch erbt. Gleiches Muster wie in
+# ausleihe-ausgabe/pyproject.toml.
+[tool.ruff.lint.per-file-ignores]
+"bestand/update_bestand.py" = ["E402", "E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
