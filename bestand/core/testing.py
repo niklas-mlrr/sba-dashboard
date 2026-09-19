@@ -218,6 +218,10 @@ class _Schoolyears:
 
 
 class _Admin:
+    def get_school_address(self) -> dict[str, Any]:
+        return {"name": "Testschule", "street": "Schulstr.", "nr": "1",
+                "zip": "12345", "city": "Teststadt"}
+
     def get_enrollments(self, sy_id: str) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for (grade, isbn), (count, paid) in _ENROLLMENTS.items():

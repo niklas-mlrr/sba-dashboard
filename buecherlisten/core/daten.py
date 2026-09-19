@@ -28,6 +28,9 @@ class BuecherlistenClient(Protocol):
     @property
     def schoolyears(self) -> Any: ...
 
+    @property
+    def admin(self) -> Any: ...
+
 
 def format_isbn(isbn: str) -> str:
     try:
@@ -211,6 +214,10 @@ class Buecherdaten:
     je_jahrgang: dict[str, dict[str, list[dict]]] = field(default_factory=dict)
     # "Jahrgang N" -> ID der IServ-Bücherliste (für deren Druckversion).
     listen_ids: dict[str, int] = field(default_factory=dict)
+    # Schulname und Ort aus ``GET /school/address`` für die Fußzeile der PDFs;
+    # ``None`` heißt: nicht abrufbar, die Fußzeile nimmt dann ihren Rückfall.
+    schule_name: str | None = None
+    schule_ort: str | None = None
 
     @property
     def faecher(self) -> list[str]:
@@ -236,6 +243,19 @@ def _jahrgang_zahl(name: str) -> int:
     return int(name.rsplit(" ", 1)[-1])
 
 
+def hole_schulanschrift(client: BuecherlistenClient) -> tuple[str | None, str | None]:
+    """(Schulname, Ort) aus der Ausleihe-API; scheitert nie, liefert dann
+    ``(None, None)``. Die Bücherlisten sollen auch ohne Verwalter-Rechte oder
+    bei einem Netzfehler entstehen — die Fußzeile nimmt dann ihren Rückfall."""
+    try:
+        anschrift = client.admin.get_school_address() or {}
+    except Exception:
+        return None, None
+    name = (anschrift.get("name") or "").strip() or None
+    ort = (anschrift.get("city") or "").strip() or None
+    return name, ort
+
+
 def lade_buecherdaten(client: BuecherlistenClient, schuljahr: str | None = None) -> Buecherdaten:
     """Lädt ein Schuljahr (Default: das laufende). ``NotFoundError`` fliegt durch."""
     if schuljahr:
@@ -245,6 +265,7 @@ def lade_buecherdaten(client: BuecherlistenClient, schuljahr: str | None = None)
         aktuell = client.schoolyears.get_current()
         schuljahr_id, name = aktuell["id"], aktuell.get("name") or aktuell["id"]
     listen = hole_jahrgangslisten(client, schuljahr_id)
+    schule_name, schule_ort = hole_schulanschrift(client)
     return Buecherdaten(
         schuljahr_id=schuljahr_id,
         schuljahr_name=name,
@@ -252,6 +273,8 @@ def lade_buecherdaten(client: BuecherlistenClient, schuljahr: str | None = None)
         je_verlag=dict(build_subject_tables(_sammle(listen, _verlag_von))),
         je_jahrgang=build_grade_tables(listen),
         listen_ids={jahrgangsname(grade): bl_id for grade, bl_id, _ in listen},
+        schule_name=schule_name,
+        schule_ort=schule_ort,
     )
 
 

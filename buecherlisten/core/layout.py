@@ -35,8 +35,9 @@ from reportlab.platypus import (
 
 from buecherlisten.trg_web import find_kollegium_kuerzel, find_mapped_value
 
-# Schulname für die Fußzeile — an der Aufmachung der offiziellen IServ-
-# Bücherlisten-PDFs orientiert (dort im Footer geführt).
+# Rückfall für die Fußzeile, falls die Anschrift der Schule nicht aus der
+# Ausleihe-API zu holen ist (``GET /school/address``) — an der Aufmachung der
+# offiziellen IServ-Bücherlisten-PDFs orientiert (dort im Footer geführt).
 SCHOOL_NAME = "Tilman-Riemenschneider-Gymnasium Osterode am Harz"
 
 # ── Maße aus der offiziellen IServ-Bücherliste ───────────────────────────────
@@ -1154,13 +1155,19 @@ def measure_subject_pages(
     return page_counts
 
 
-def footer_context(subject_or_label: str, schoolyear_name: str) -> str:
+def footer_context(
+    subject_or_label: str, schoolyear_name: str, *,
+    school_name: str | None = None, school_city: str | None = None,
+) -> str:
     """Rechtsbündiger Fußzeilentext, Wort für Wort wie im Original-PDF
     aufgebaut ("<Schule>, <Ort> – Bücherliste <Kontext> (Schuljahr 26/27)") —
-    nur der Kontext ist hier das Fach bzw. "Fächer" statt "Jahrgang X"."""
+    nur der Kontext ist hier das Fach bzw. "Fächer" statt "Jahrgang X".
+
+    Schule und Ort kommen aus der Ausleihe-API (``GET /school/address``); ohne
+    Angabe bleibt es bei SCHOOL_NAME/SCHOOL_CITY."""
     return (
-        f"{SCHOOL_NAME}, {SCHOOL_CITY} – Bücherliste {subject_or_label} "
-        f"({schoolyear_name})"
+        f"{school_name or SCHOOL_NAME}, {school_city or SCHOOL_CITY} – "
+        f"Bücherliste {subject_or_label} ({schoolyear_name})"
     )
 
 
@@ -1291,6 +1298,7 @@ def write_combined_confirmation_pdf(
     schoolyear_name: str, *, fkl_map: dict[str, str], kollegium_map: dict[str, str], title: str,
     duplex: bool = False, page_counts: list[int] | None = None,
     return_by: str | None = None, return_to: str | None = None,
+    school_name: str | None = None, school_city: str | None = None,
 ) -> None:
     """Wie write_pdf, aber ein eigenes PageTemplate je Fach: mit --confirmation
     soll die Seitenzahl je Fach wieder bei 1 beginnen und die Fußzeile das
@@ -1312,7 +1320,9 @@ def write_combined_confirmation_pdf(
             LEFT_MARGIN, BOTTOM_MARGIN, CONTENT_WIDTH, FRAME_TOP - BOTTOM_MARGIN,
             leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id=f"content-{i}",
         )
-        footer_center = footer_context(subject, schoolyear_name)
+        footer_center = footer_context(
+            subject, schoolyear_name, school_name=school_name, school_city=school_city,
+        )
         template_id = f"fach-{i}"
         templates.append(
             PageTemplate(

@@ -78,6 +78,34 @@ def test_falls_noetig_polstert_nicht_wenn_alles_einseitig_ist(daten):
     assert _seiten(pdf.inhalt) == 2
 
 
+def test_schulanschrift_kommt_aus_der_api(daten):
+    from buecherlisten.core.layout import footer_context
+
+    assert (daten.schule_name, daten.schule_ort) == ("Testschule", "Teststadt")
+    assert footer_context(
+        "Fächer", daten.schuljahr_name,
+        school_name=daten.schule_name, school_city=daten.schule_ort,
+    ).startswith("Testschule, Teststadt – Bücherliste Fächer")
+
+
+def test_fehlende_schulanschrift_wird_warnung_statt_abbruch(daten, monkeypatch):
+    from buecherlisten.core.layout import SCHOOL_CITY, SCHOOL_NAME, footer_context
+
+    class KaputterAdmin:
+        def get_school_address(self) -> dict[str, str]:
+            raise OSError("kein Netz")
+
+    kaputt = FakeClient()
+    kaputt.admin = KaputterAdmin()
+    ohne_anschrift = lade_buecherdaten(kaputt)
+    assert (ohne_anschrift.schule_name, ohne_anschrift.schule_ort) == (None, None)
+    assert footer_context("Fächer", "2026/2027").startswith(f"{SCHOOL_NAME}, {SCHOOL_CITY} –")
+
+    (pdf,) = erzeuge_buecherlisten_pdfs(ohne_anschrift, zuordnungen=OHNE_NETZ)
+    assert pdf.inhalt.startswith(b"%PDF")
+    assert [w for w in pdf.warnungen if "Schulname/Ort" in w]
+
+
 def test_fehlende_website_wird_warnung_statt_abbruch(daten, monkeypatch):
     from buecherlisten.core import erzeugen
 

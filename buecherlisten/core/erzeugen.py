@@ -169,6 +169,12 @@ def erzeuge_buecherlisten_pdfs(
     warnungen: list[str] = []
     by_subject = daten.tabellen(ansicht)
     schoolyear_name = daten.schuljahr_name
+    schule, ort = daten.schule_name, daten.schule_ort
+    if not (schule and ort):
+        warnungen.append(
+            "Warnung: Schulname/Ort konnten nicht aus der Ausleihe-API geladen werden "
+            "— die Fußzeile nennt ersatzweise die hinterlegten Vorgabewerte."
+        )
     reihenfolge = daten.gruppen(ansicht)
     if faecher is None:
         subjects = reihenfolge
@@ -228,6 +234,7 @@ def erzeuge_buecherlisten_pdfs(
                 fkl_map=fkl_map, kollegium_map=kollegium_map, title=title,
                 duplex=effective_duplex, page_counts=page_counts,
                 return_by=rueckgabe_bis, return_to=rueckgabe_an,
+                school_name=schule, school_city=ort,
             )
         else:
             blank_pages: set[int] = set()
@@ -243,7 +250,10 @@ def erzeuge_buecherlisten_pdfs(
                     )
                 )
             write_pdf(
-                puffer, story, title=title, footer_center=footer_context(label, schoolyear_name),
+                puffer, story, title=title,
+                footer_center=footer_context(
+                    label, schoolyear_name, school_name=schule, school_city=ort,
+                ),
                 blank_pages=blank_pages,
             )
         return [ErzeugtesPdf(puffer.getvalue(), dateiname, title, warnungen)]
@@ -263,7 +273,10 @@ def erzeuge_buecherlisten_pdfs(
         title = f"{title_prefix}Bücherliste {subject} {daten.schuljahr_id}"
         puffer = io.BytesIO()
         write_pdf(
-            puffer, story, title=title, footer_center=footer_context(subject, schoolyear_name),
+            puffer, story, title=title,
+            footer_center=footer_context(
+                subject, schoolyear_name, school_name=schule, school_city=ort,
+            ),
             blank_pages=einzel_leer,
         )
         ergebnisse.append(ErzeugtesPdf(
