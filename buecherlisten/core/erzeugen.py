@@ -70,7 +70,19 @@ class ErzeugtesPdf:
     warnungen: list[str] = field(default_factory=list)
 
 
-def _aufgabenfelder(vorgabe: dict[str, str] | None, warnungen: list[str]) -> dict[str, str]:
+def aufgabenfeld_zuordnung(
+    vorgabe: dict[str, str] | None,
+    warnungen: list[str],
+    *,
+    rueckfall: str = "Fächer werden stattdessen alphabetisch sortiert",
+) -> dict[str, str]:
+    """Fach -> Aufgabenfeld, von der Schulwebsite; scheitert nie, warnt nur.
+
+    Öffentlich, seit ``mehrjahresbaende/`` dieselbe Zuordnung für die Spalten
+    seiner Übersicht braucht. ``rueckfall`` sagt im Warntext, was ohne die
+    Zuordnung geschieht - beim PDF ist das die alphabetische Sortierung, in der
+    Mehrjahresbände-Übersicht die Spaltenfolge der vorhandenen Datei.
+    """
     if vorgabe is not None:
         return vorgabe
     zuordnung: dict[str, str] = {}
@@ -91,10 +103,13 @@ def _aufgabenfelder(vorgabe: dict[str, str] | None, warnungen: list[str]) -> dic
             break
     if not zuordnung:
         warnungen.append(
-            "Warnung: Aufgabenfeld-Zuordnung von keiner Quelle verfügbar "
-            "— Fächer werden stattdessen alphabetisch sortiert."
+            f"Warnung: Aufgabenfeld-Zuordnung von keiner Quelle verfügbar — {rueckfall}."
         )
     return zuordnung
+
+
+# Der alte, paketinterne Name - bis 2026-09-19 der einzige.
+_aufgabenfelder = aufgabenfeld_zuordnung
 
 
 def _bestaetigungs_zuordnungen(

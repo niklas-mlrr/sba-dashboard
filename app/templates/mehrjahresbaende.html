@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block titel %}Mehrjahresbände — Schulbuchausleihe{% endblock %}
+{% block seitenklasse %}seite-voll{% endblock %}
+{% block ueberschrift %}Mehrjahresbände{% endblock %}
+
+{#
+  Die Matrix aus der Exceldatei, Zelle für Zelle änderbar. Aufgebaut wie die
+  Datei selbst - Aufgabenfelder über den Fächern, Jahrgänge untereinander -,
+  damit wer beides nebeneinander hat, nicht übersetzen muss.
+
+  Die Marken stehen als <select>, nicht als Textfeld: es gibt genau die
+  Buchstaben, die in der Legende dieser Datei erklärt sind, und ein getippter
+  fünfter wäre für jeden, der die Datei ohne das Dashboard öffnet, nicht
+  auflösbar. Welche das sind, sagt der Server (uebersicht.erlaubte_marken).
+#}
+{% block kopfzeile %}
+{% if uebersicht %}
+<p class="meta">
+  <span title="{{ datei }}">{{ datei.name }}</span>
+  {% if uebersicht.herkunft %}· {{ uebersicht.herkunft }}{% endif %}
+</p>
+{% endif %}
+{% endblock %}
+
+{% block kopfaktionen %}
+<button type="button" id="erzeugen" class="knopf knopf-haupt">Aus IServ erzeugen</button>
+{% endblock %}
+
+{% block inhalt %}
+{% if in_excel_geoeffnet %}
+<p class="hinweis warnung">Die Datei ist gerade in Excel geöffnet. Änderungen lassen
+  sich erst speichern, wenn sie dort geschlossen wird.</p>
+{% endif %}
+
+<p class="hinweis meldung" id="meldung" hidden></p>
+
+{% if not uebersicht %}
+<div class="karte">
+  <h2>Noch keine Übersicht</h2>
+  <p>Unter <code>{{ datei if datei else "(kein Ordner eingestellt)" }}</code> liegt noch
+    keine Datei. „Aus IServ erzeugen“ vergleicht die Jahrgangs-Bücherlisten des
+    abgelaufenen Schuljahres mit denen des laufenden und legt sie dort an.</p>
+  <p class="meta">Dafür muss im Programmfenster eine Anmeldung bei IServ bestehen.</p>
+</div>
+{% else %}
+{% for warnung in uebersicht.warnungen %}
+<p class="hinweis warnung">{{ warnung }}</p>
+{% endfor %}
+
+<div class="tabellenrahmen">
+<table class="iserv-tabelle matrix" id="matrix" data-mtime="{{ mtime }}">
+  <thead>
+    <tr>
+      <th></th>
+      {% for gruppe, spalten in uebersicht.spalten | groupby("aufgabenfeld") %}
+      <th colspan="{{ spalten | length }}" class="aufgabenfeld">{{ gruppe }}</th>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th>Jahrgang</th>
+      {% for spalte in uebersicht.spalten %}
+      <th class="fach">{{ spalte.fach }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for zeile in uebersicht.zeilen %}
+    <tr data-jahrgang="{{ zeile.jahrgang }}">
+      <th scope="row">{{ zeile.name }}</th>
+      {% if zeile.hinweis %}
+      <td colspan="{{ uebersicht.spalten | length }}" class="zeilenhinweis">{{ zeile.hinweis }}</td>
+      {% else %}
+      {% for spalte in uebersicht.spalten %}
+      {% set zelle = zeile.zelle(spalte.fach) %}
+      <td class="markenzelle"{% if zelle and zelle.buecher %} title="{% for buch in zelle.buecher %}{{ buch.titel }} — {{ buch.ausgang }}{% if not loop.last %} | {% endif %}{% endfor %}"{% endif %}>
+        <select class="marke" data-fach="{{ spalte.fach }}"
+          aria-label="{{ zeile.name }}, {{ spalte.fach }}">
+          {% for marke in uebersicht.erlaubte_marken %}
+          <option value="{{ marke }}"{% if zelle and zelle.marke == marke %} selected{% endif %}>{{ marke if marke else "—" }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      {% endfor %}
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2 class="legende-kopf">Legende</h2>
+<ul class="legende">
+  {% for eintrag in uebersicht.legende %}
+  <li>{{ eintrag }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<dialog id="erzeugen-dialog" class="dialog">
+  <form method="dialog">
+    <h2>Aus IServ erzeugen</h2>
+    <p class="dialog-text">Vergleicht alle Jahrgangs-Bücherlisten des abgelaufenen
+      Schuljahres mit denen des laufenden und schreibt die Datei neu.
+      <strong>Von Hand geänderte Zellen gehen dabei verloren.</strong></p>
+    <div class="dialog-knoepfe">
+      <button type="submit" value="abbruch" class="knopf knopf-leise">Abbrechen</button>
+      <button type="submit" value="los" class="knopf knopf-haupt" id="erzeugen-los">Erzeugen</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="ueberlagerung" id="seite-laedt" hidden>
+  <div class="ueberlagerung-karte">
+    <span class="spinner spinner-gross"></span>
+    <p id="seite-laedt-text">Bitte warten …</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block skripte %}<script src="/static/mehrjahresbaende.js"></script>{% endblock %}

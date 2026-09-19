@@ -1,12 +1,32 @@
 # Was noch offen ist
 
-Stand: 2026-09-18. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
+Stand: 2026-09-19. Diese Datei löst `PLAN.md` als Arbeitsliste ab; `PLAN.md`
 liegt als abgeschlossener v1-Plan in [`archiv/`](archiv/PLAN.md).
 
 Der **Struktur-Backlog** aus dem Review vom 2026-09-05 ist abgearbeitet (unten,
 mit dem, was sich dabei geändert hat). Offen bleiben damit nur noch die beiden
 **Funktionslücken**, die niemand außer Niklas erledigen kann — allen voran der
 Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
+
+## Der Reiter „Mehrjahresbände" (2026-09-19) — gebaut, zwei Punkte offen
+
+Neu sind das Paket `mehrjahresbaende/`, der gleichnamige Reiter zwischen
+„Bücherlisten" (so heißt der erste Reiter jetzt) und „Bestand" sowie die vier
+Routen darunter. Was dabei entschieden wurde, steht in
+[`architektur.md`](architektur.md#die-mehrjahresbände-übersicht), die Regeln
+selbst in [`../mehrjahresbaende/README.md`](../mehrjahresbaende/README.md).
+
+**Offen 1: die Fach-Aliase nach dem ersten echten Lauf.** IServ-Fachnamen und
+Spaltennamen der Datei müssen zusammenpassen; wo sie es nicht tun (die
+vorhandene Datei hat z. B. eine Spalte „Religion (ev./kath.)"), braucht es einen
+Eintrag in `mehrjahresbaende_fach_aliase` (`config.json`). Welche das sind,
+zeigt erst ein Lauf gegen die echten Bücherlisten: ein nicht zuordenbares Fach
+bekommt eine eigene, neue Spalte, und die fällt in der Tabelle sofort auf.
+
+**Offen 2: das Bedien-Design der Seite.** Die Matrix mit einem Auswahlfeld je
+Zelle ist ein erster Vorschlag, kein festgelegter Entwurf. Ändern lässt sich
+daran alles, ohne die Domäne anzufassen — `mehrjahresbaende/core/` weiß nichts
+von HTML.
 
 ## sba-bestand ist hier aufgegangen (2026-09-18) — erledigt, mit einem Nachfolgepunkt
 

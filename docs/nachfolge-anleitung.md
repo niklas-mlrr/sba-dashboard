@@ -183,7 +183,7 @@ aufbauen.
 | „Konto hat keine Ausleihe-Verwalter-Rolle" | Ihr IServ-Konto darf diese Zahlen nicht sehen. Ansehen und Ändern geht trotzdem — nur der Abruf nicht. Wer die Rolle vergeben kann, ist die IServ-Administration |
 | „IServ hat nicht geantwortet" | Netzverbindung weg oder IServ gerade nicht erreichbar. Später erneut versuchen |
 | „Die Zuordnung Fach zu Buch ist nicht eindeutig" | In IServ stehen für ein Fach mehrere Bücher, und das Programm kann nicht raten, welches gemeint ist. **Es wurde nichts gespeichert.** Die Liste darunter sagt, welche Fächer betroffen sind — das muss jemand Technisches auflösen |
-| „Die Datei ist gerade in Excel geöffnet" | Siehe nächster Abschnitt |
+| „Die Datei ist gerade in Excel geöffnet" | Siehe Abschnitt 7 |
 
 Wichtig beim vorletzten Fall: Das Programm speichert lieber **gar nichts** als
 die Hälfte. Eine halb aktualisierte Liste wäre schlimmer als eine veraltete,
@@ -195,7 +195,31 @@ Anzeigespalten können leer bleiben. Kein Grund, den Abruf zu wiederholen.
 
 ---
 
-## 6. „Die Datei ist gerade in Excel geöffnet"
+## 6. Mehrjahresbände: wer was abgeben muss
+
+Oben in der Leiste steht **„Mehrjahresbände"**. Dahinter liegt die Tabelle, die
+für jeden Jahrgang und jedes Fach sagt, ob das Buch am Schuljahresende abzugeben
+ist — dieselbe, die früher von Hand in
+`Mehrjahresbände Schulbuchausleihe.xlsx` gepflegt wurde. Diese Datei gibt es
+weiterhin, sie liegt im selben Ordner wie die Bestandsliste und wird vom
+Programm geschrieben; wer nur nachsehen will, kann sie also auch einfach in
+Excel öffnen.
+
+**„Aus IServ erzeugen"** (Knopf oben rechts) vergleicht dafür die Bücherlisten
+des vergangenen Schuljahres mit denen des laufenden und füllt die ganze Tabelle
+neu. Das ist der Knopf für **einmal im Jahr** — er überschreibt dabei auch alles,
+was Sie von Hand geändert haben, und fragt deshalb vorher nach.
+
+**Einzelne Zellen ändern:** In jeder Zelle steht ein kleines Auswahlfeld. Was
+dort steht, ist sofort gespeichert. Was die Zeichen bedeuten, steht unter der
+Tabelle in der Legende — `X` heißt abgeben, ein leeres Feld heißt behalten, `---`
+heißt „gibt es in diesem Fach nicht", `B` heißt „die Reihe wird ausgemustert,
+darf behalten werden". Kommen Buchstaben wie `A` oder `C` vor, betrifft das ein
+Fach mit mehreren Büchern; die Legende nennt dann die Titel einzeln.
+
+---
+
+## 7. „Die Datei ist gerade in Excel geöffnet"
 
 Der häufigste Fehler im Alltag — und meist der eigene zweite Bildschirm.
 
@@ -215,7 +239,7 @@ Zwei Dinge, die dabei zu wissen sind:
 
 ---
 
-## 7. Beenden
+## 8. Beenden
 
 Knopf **„Beenden"** im Programmfenster. Die Seite selbst hat keinen eigenen Beenden-Knopf.
 Danach kann auch das schwarze Fenster geschlossen werden.
@@ -227,7 +251,7 @@ alles. Es geht dabei nichts verloren, weil jede Änderung sofort gespeichert wir
 
 ---
 
-## 8. Wenn gar nichts geht
+## 9. Wenn gar nichts geht
 
 Der Reihe nach:
 
@@ -251,7 +275,7 @@ mitten im Speichern lässt die alte Fassung unberührt.
 
 ---
 
-## 9. Für den Fall, dass jemand Technisches übernimmt
+## 10. Für den Fall, dass jemand Technisches übernimmt
 
 - Der Quellcode liegt auf GitHub: `niklas-mlrr/sba-dashboard`, dazu die
   Bibliothek `niklas-mlrr/ausleihe-api` (der IServ-Client). Das Excel-Tooling

@@ -8,5 +8,7 @@
   "sicherheitsbestand": 5,
   "match_overrides": {},
   "port": 8765,
-  "backups_behalten": 30
+  "backups_behalten": 30,
+  "mehrjahresbaende_datei": "Mehrjahresbände Schulbuchausleihe.xlsx",
+  "mehrjahresbaende_fach_aliase": {}
 }

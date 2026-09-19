@@ -78,6 +78,37 @@ class ZellAnfrage(BaseModel):
     mtime: float
 
 
+class MarkenAnfrage(BaseModel):
+    """``POST /api/mehrjahresbaende/marke`` - eine Zelle der Übersicht.
+
+    Angesprochen wird die Zelle über ihre Beschriftung (Jahrgang und Fach), nie
+    über einen Zellbezug - aus demselben Grund wie bei ``ZellAnfrage``: eine in
+    Excel verschobene Zeile darf keine falsche Zelle treffen.
+
+    ``marke`` darf leer sein: das ist die Marke „darf behalten werden", die in
+    der Datei als leere Zelle steht. Welche Buchstaben sonst erlaubt sind, hängt
+    an der Legende **dieser** Datei und wird deshalb erst beim Schreiben geprüft
+    (``app.mehrjahresbaende.schreibe_marke``).
+    """
+
+    jahrgang: int
+    fach: NichtLeer
+    marke: str = ""
+    mtime: float
+
+
+class ErzeugenAnfrage(BaseModel):
+    """``POST /api/mehrjahresbaende/erzeugen`` - beide Schuljahre, beide freiwillig.
+
+    Ohne Angabe gilt das laufende Schuljahr aus IServ und das daraus
+    abgeleitete Vorjahr. Übersteuern lässt sich beides, weil der Wechsel
+    manchmal vor und manchmal nach dem Schuljahresbeginn erledigt wird.
+    """
+
+    schuljahr: str | None = None
+    vorjahr: str | None = None
+
+
 class AnmeldeAnfrage(BaseModel):
     """``POST /api/anmeldung`` - die Zugangsdaten, die das Programmfenster sendet.
 
@@ -105,6 +136,8 @@ MELDUNGEN: dict[str, str] = {
     "key": "Es fehlt der Schlüssel der Zeile.",
     "spalte": erlaubte_spalten_satz(),
     "mtime": "Es fehlt eine gültige Änderungszeit der geladenen Datei.",
+    "jahrgang": "Es fehlt der Jahrgang der Zeile.",
+    "fach": "Es fehlt das Fach der Spalte.",
     "benutzer": "Bitte IServ-Benutzername und Passwort eingeben.",
     "passwort": "Bitte IServ-Benutzername und Passwort eingeben.",
 }

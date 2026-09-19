@@ -83,10 +83,13 @@ app/
     abruf.py        /api/anmeldung, POST /api/refresh, GET /api/refresh/status
     buecherliste.py GET /buecherliste/... (HTML, live aus IServ), GET .../fach/pdf (PDF
                     über buecherlisten.core)
+    mehrjahresbaende.py  GET /mehrjahresbaende (HTML) + drei API-Routen
     system.py       GET /health      und POST /api/beenden
     gemeinsam.py    Vorlagen, Einstellungen aus dem Request, der 503-Leerfall
   rows.py           Raster -> Anzeigezeilen, lies_tabelle -> Tabellenstand
   buecherlisten.py  Bücherlisten laden und nach Fach/Verlag/Jahrgang ordnen
+  mehrjahresbaende.py  Dateiort, Erzeugen, eine Marke schreiben (über
+                    mehrjahresbaende.core)
   excel.py          Laden, Sperren, Schreiben, Prüfen einer Mappe
   refresh.py        IServ-Abruf mit instanzgebundenem Fortschritt
   sitzung.py        Die Anmeldung: ein Client, ein Zeitschloss, kein Leck
@@ -99,7 +102,7 @@ app/
   _fenster_tk.py    Die Widgets. Keine Entscheidung, nur Anzeige.
 ```
 
-`rows.py`, `buecherlisten.py`, `excel.py`, `refresh.py`, `sitzung.py`, `cache.py`, `settings.py`,
+`rows.py`, `buecherlisten.py`, `mehrjahresbaende.py`, `excel.py`, `refresh.py`, `sitzung.py`, `cache.py`, `settings.py`,
 `paths.py`, `dateien.py` und `fenster.py` importieren **kein FastAPI**. Das ist keine Ordnungsliebe, sondern
 die Voraussetzung für den nächsten Abschnitt: Ausnahmen, die nichts über HTTP
 wissen, lassen sich an einer Stelle auf HTTP abbilden.
@@ -152,6 +155,7 @@ sba-dashboard/     app/             ← FastAPI, Vorlagen, Zeilenmodell
                    bestand/core/    ← die gesamte Excel-Logik, netzfrei testbar
                    bestand/update_bestand_auto.py   ← nur noch CLI-Schale
                    buecherlisten/   ← Bücherlisten-Kern, trg_web.py, CLI
+                   mehrjahresbaende/ ← Vergleich zweier Schuljahre, CLI
 ```
 
 Bis 2026-09-18 waren `bestand/` und `buecherlisten/` ein drittes Repo,
@@ -350,6 +354,52 @@ der UTF-16-Fassung ist es das Nullbyte des ersten Zeichens.
 Eine vorhandene `~$…`-Datei allein blockiert das Schreiben **nicht**: sie kann
 verwaist sein (Excel abgestürzt). Erst der echte `PermissionError` ist einer.
 Die Startseite weist trotzdem darauf hin.
+
+## Die Mehrjahresbände-Übersicht
+
+Am Schuljahreswechsel muss jede Klasse wissen, welche Bücher abzugeben sind und
+welche bleiben. Die Auskunft steht schon in IServ: vergleicht man die
+Jahrgangs-Bücherlisten des abgelaufenen Schuljahres mit denen des neuen, ergibt
+sich jede Zelle von selbst. Die Regeln stehen vollständig in
+[`mehrjahresbaende/README.md`](../mehrjahresbaende/README.md); hier stehen die
+drei Entscheidungen dahinter.
+
+**Die Exceldatei bleibt die Ausgabe, nicht das Dashboard.** Die Übersicht wurde
+seit Jahren in `Mehrjahresbände Schulbuchausleihe.xlsx` gepflegt, und dort sucht
+sie jede Kollegin auch dann, wenn dieses Programm nicht läuft, nicht startet
+oder niemanden mehr hat, der es pflegt. Sie wird deshalb in **dieselbe Datei mit
+demselben Aufbau** geschrieben — Aufgabenfelder als verbundene Kopfzellen,
+gedrehte Fachnamen, Legende darunter — und liegt neben der Bestandsmappe, im
+selben Ordner (`Einstellungen.mehrjahresbaende_pfad`). Das ist der Grund, warum
+auch die Sonderfall-Buchstaben mit ausgeschriebenen Buchtiteln in die Legende
+wandern: eine Marke, die nur das Dashboard auflösen kann, wäre auf Papier
+wertlos.
+
+Die Gestaltung wird dabei **gerechnet und nicht aus der alten Datei geklont**:
+Spalten kommen und gehen (ein neues Fach, ein Fach ohne Aufgabenfeld), und ein
+geklonter Stil aus der fünften Spalte passt dann an keiner Stelle mehr. Die
+Regeln (ungerade Zeilen grau, links dick, zwischen den Fächern gestrichelt, am
+Anfang eines Aufgabenfelds mittel) sind aus der vorhandenen Datei abgelesen und
+stehen in `mehrjahresbaende/core/mappe.py`.
+
+**Die Seite liest die Datei, nicht IServ.** Die Bücherlisten-Seiten laden bei
+jedem Aufruf live (siehe `app/buecherlisten.py`) — die Übersicht nicht. Sie ist
+eine Entscheidung, keine Abfrage: sie entsteht einmal im Jahr, wird von Hand
+nachkorrigiert, und genau der korrigierte Stand soll auf der Seite stehen. Nur
+„Aus IServ erzeugen" geht ins Netz, und nur das braucht eine Anmeldung.
+
+**„Erzeugen" überschreibt, es führt nicht zusammen.** Ein Lauf schreibt alle
+Zellen neu, auch die von Hand geänderten; die Oberfläche fragt vorher. Die
+Alternative wäre, gerechnete und nachgebesserte Werte in derselben Datei
+nebeneinander zu halten — nach einem Jahr wüsste niemand mehr, welche Zelle
+welcher Art ist, und die Datei hätte zwei Wahrheiten statt einer. Erhalten
+bleibt nur die **Spaltenfolge** der vorhandenen Datei: wer sie kennt, soll seine
+Fächer wiederfinden.
+
+Der Schreibpfad ist derselbe wie bei der Bestandsmappe — Schloss, `mtime`-Vergleich,
+atomar ersetzen, Sicherung in `backups/` (siehe oben, „Der Schreibpfad"). Eine
+zweite, laxere Fassung für die zweite Datei wäre genau die Drift, gegen die die
+erste angetreten ist.
 
 ## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 

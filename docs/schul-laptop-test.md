@@ -236,6 +236,23 @@ Befund, nicht die Vermutung.
 | G2-12 | „Jahrgang" → Druck-Knopf, „Schülerliste" **aus** | Eigene Liste je Jahrgang, Spalten wie die IServ-Liste, alle Bücher in einer Tabelle |
 | G2-13 | Dasselbe mit „Schülerliste" **an** | Die IServ-Druckversionen, aneinandergehängt; mit „doppelseitig" endet jeder Jahrgang auf gerader Seitenzahl |
 
+### G4. Mehrjahresbände
+
+Der Reiter schreibt in eine **zweite** Datei im Ordner der Bestandsmappe. Vor
+G4-3 eine Kopie der bisherigen `Mehrjahresbände Schulbuchausleihe.xlsx`
+beiseitelegen — „Erzeugen" überschreibt sie vollständig.
+
+| # | Schritt | Erwartet |
+|---|---------|----------|
+| G4-1 | Reiter „Mehrjahresbände" ohne Anmeldung öffnen | Die vorhandene Übersicht wird angezeigt, Spalten und Jahrgänge wie in der Datei |
+| G4-2 | Legende unter der Tabelle lesen | Dieselben vier Zeilen wie in der Datei |
+| G4-3 | Angemeldet „Aus IServ erzeugen", Rückfrage bestätigen | Dauer? Danach Tabelle neu, unten „Erzeugt am … aus 2025/2026 → 2026/2027" |
+| G4-4 | Die erzeugte Datei in Excel öffnen | Sieht aus wie die alte: Aufgabenfelder oben, Fachnamen gedreht, Legende unten |
+| G4-5 | Erzeugte Marken mit der beiseitegelegten Kopie vergleichen | Jede Abweichung erklären: entweder eine echte Änderung in IServ oder ein Fehler in der Regel |
+| G4-6 | Steht ein Fach doppelt oder mit unbekanntem Namen in den Spalten? | Dann einen Eintrag in `mehrjahresbaende_fach_aliase` (siehe `docs/roadmap.md`) |
+| G4-7 | Eine Zelle über das Auswahlfeld ändern | Feld kurz hervorgehoben; in Excel steht der neue Wert, `backups/` hat eine Sicherung |
+| G4-8 | Dieselbe Datei in Excel offen lassen und erneut ändern | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |
+
 ### H. Beenden
 
 Der Anlass für das Programmfenster steht in H2: der Weg zurück, wenn der Tab weg

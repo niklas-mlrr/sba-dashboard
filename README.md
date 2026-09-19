@@ -11,7 +11,10 @@ Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 ## Stand
 
 Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
-geprüft. Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
+geprüft. Seit 2026-09-19 gibt es den Reiter **Mehrjahresbände**: er vergleicht
+die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
+welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher
+(`mehrjahresbaende/`, [`docs/architektur.md`](docs/architektur.md#die-mehrjahresbände-übersicht)). Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
 als PDF) folgen seit 2026-09-17 dem IServ-Modul Schulbuchausleihe. Beim
 Jahrgang druckt „Schülerliste" die Druckversion aus IServ statt der eigenen. Offen ist vor
 allem der **Testlauf auf dem Schul-Laptop** ([Prüfliste](docs/schul-laptop-test.md)).
@@ -37,6 +40,10 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `GET /buecherliste/{ansicht}/{name}` | Bücher eines Fachs, Verlags oder Jahrgangs |
 | `GET /buecherliste/{ansicht}/pdf` | Bücherlisten mehrerer Fächer, Verlage oder Jahrgänge als PDF (Druckmenü, Optionen in der URL, Antwort `inline`) |
 | `GET /buecherliste/{ansicht}/{name}/pdf` | Bücherliste eines Fachs, Verlags oder Jahrgangs als PDF |
+| `GET /mehrjahresbaende` | Übersicht, welche Bücher am Schuljahreswechsel abzugeben sind (aus der Exceldatei, ohne Anmeldung) |
+| `GET /api/mehrjahresbaende` | dieselbe Übersicht als JSON |
+| `POST /api/mehrjahresbaende/erzeugen` | Aus zwei Schuljahren neu rechnen und die Datei schreiben: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |
+| `POST /api/mehrjahresbaende/marke` | Eine Zelle ändern: `{jahrgang, fach, marke, mtime}` → 200/400/409/423/503 |
 | `GET /api/rows` | Zeilen als JSON, mit `mtime` und Cache-Alter |
 | `POST /api/cell` | Eine Zahl ändern: `{key, spalte, wert, mtime}` → 200/400/409/423/500/503 |
 | `GET /api/einstellungen` | Server, Ordner und gefundene Mappe (fürs Fenster) |
@@ -89,8 +96,9 @@ Pakete liegen jetzt hier:
 app/                Weboberfläche: FastAPI, Templates, Programmfenster
 bestand/            Excel-Kern (core/) + das Bestands-CLI
 buecherlisten/      Bücherlisten-Kern (core/), trg_web.py + das Listen-CLI
+mehrjahresbaende/   Mehrjahresbände-Kern (core/) + das Übersichts-CLI
 tests/              Tests der Weboberfläche
-tests/bibliothek/   Tests der beiden übernommenen Pakete
+tests/bibliothek/   Tests der drei Bibliothekspakete
 tools/              Diagnose und Vorlagen-Erzeuger, nicht Teil des Starts
 vorlage/            leere Excel-Vorlage für START.sh und die Tests
 ```
@@ -101,7 +109,7 @@ Was die beiden Pakete enthalten und warum sie hier liegen, steht in
 ```bash
 uv sync --all-groups
 uv run pytest            # offline, ohne IServ und ohne echte Excel-Datei
-uv run ruff check app tests bestand buecherlisten
+uv run ruff check app tests bestand buecherlisten mehrjahresbaende
 uv run mypy              # Dateiliste und Strenge in pyproject.toml
 ```
 

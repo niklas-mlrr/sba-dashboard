@@ -1,6 +1,6 @@
-# `bestand/` und `buecherlisten/` — das Excel-Tooling
+# `bestand/`, `buecherlisten/` und `mehrjahresbaende/` — das Excel-Tooling
 
-Zwei Pakete und zwei Kommandozeilenwerkzeuge, die die IServ-Ausleihe-API **nur
+Drei Pakete und drei Kommandozeilenwerkzeuge, die die IServ-Ausleihe-API **nur
 lesend** (GET) abfragen und daraus Dateien erzeugen:
 
 | Ordner | Werkzeug | Ergebnis |
@@ -10,14 +10,23 @@ lesend** (GET) abfragen und daraus Dateien erzeugen:
 | `buecherlisten/core/` | Bibliothek | Bücherdaten gruppieren und als PDF setzen — das, was auch das Dashboard druckt |
 | `buecherlisten/` | `generate_booklists.py` | erzeugt die Bücherlisten-PDFs je Fach, Verlag oder Jahrgang (`--view`) |
 | `buecherlisten/trg_web.py` | Bibliothek | die drei TRG-Website-Scraper (Fachkonferenzleitungen, Fächer, Kollegium) — netzlos testbar, siehe `tests/bibliothek/test_trg_web.py` |
+| `mehrjahresbaende/core/` | Bibliothek | zwei Schuljahre vergleichen und die Übersicht als `.xlsx` schreiben — siehe `mehrjahresbaende/README.md` |
+| `mehrjahresbaende/` | `erzeuge_mehrjahresbaende.py` | erzeugt die Mehrjahresbände-Übersicht ohne Weboberfläche (`--trocken` zeigt nur) |
 
 Es wird **nie** nach IServ geschrieben.
 
 Die Weboberfläche in `app/` benutzt `bestand.core` für jeden Abruf und jedes
 Speichern (`app/refresh.py`, `app/excel.py`, `app/rows.py`) und
-`buecherlisten.core` für den Druck der Listen (`app/api/buecherliste.py`). Die
-beiden CLIs sind der zweite Nutzer derselben Pakete: sie laufen ohne die
-Weboberfläche, direkt von der Kommandozeile.
+`buecherlisten.core` für den Druck der Listen (`app/api/buecherliste.py`) und
+`mehrjahresbaende.core` für den gleichnamigen Reiter
+(`app/mehrjahresbaende.py`). Die drei CLIs sind der zweite Nutzer derselben
+Pakete: sie laufen ohne die Weboberfläche, direkt von der Kommandozeile.
+
+`mehrjahresbaende/` kam am 2026-09-19 dazu und hält sich an denselben Schnitt:
+`core/vergleich.py` rechnet ohne Netz und ohne Excel, `core/laden.py` bekommt
+den IServ-Client injiziert, `core/mappe.py` kennt nur openpyxl. Sperren,
+`mtime`-Prüfung und Sicherungen liegen bewusst **nicht** dort, sondern im
+Dashboard, wo sie für die Bestandsmappe schon stehen.
 
 ## `bestand/core/` — die Bibliothek
 

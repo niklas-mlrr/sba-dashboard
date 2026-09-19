@@ -7,7 +7,7 @@ Datei, die jedes neue Feature anfassen musste. Die beiden letzten Aufgaben
 enthielten keine Zeile FastAPI und liegen jetzt in ``app/rows.py`` bzw.
 ``app/excel.py``; ``create_app`` ist reine Verdrahtung.
 
-Die fünf Router hier sind nach dem geschnitten, was ein Leser sucht:
+Die sechs Router hier sind nach dem geschnitten, was ein Leser sucht:
 
 * :mod:`~app.api.seite` - die HTML-Oberfläche (``GET /``) und die Einstellungen,
   die das Programmfenster liest und schreibt (``GET/POST /api/einstellungen``).
@@ -16,6 +16,8 @@ Die fünf Router hier sind nach dem geschnitten, was ein Leser sucht:
   Fortschritt des IServ-Abrufs.
 * :mod:`~app.api.buecherliste` - die Bücherlisten nach Fach, Verlag und
   Jahrgang, live aus IServ (HTML).
+* :mod:`~app.api.mehrjahresbaende` - die Übersicht, welche Bücher am
+  Schuljahreswechsel abzugeben sind (HTML plus drei API-Routen).
 * :mod:`~app.api.system` - Lebenszeichen und Beenden.
 
 Was in **keinem** dieser Module steht: eine Abbildung von Ausnahmen auf
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 from .abruf import router as abruf_router
 from .buecherliste import router as buecherliste_router
+from .mehrjahresbaende import router as mehrjahresbaende_router
 from .seite import router as seite_router
 from .system import router as system_router
 from .tabelle import router as tabelle_router
@@ -33,6 +36,7 @@ from .tabelle import router as tabelle_router
 # zuletzt, damit sein ``GET /`` keine der spezifischeren API-Routen verdeckt -
 # heute unkritisch (die Pfade überschneiden sich nicht), aber die Regel kostet
 # nichts und hält das so.
-ROUTER = (system_router, tabelle_router, abruf_router, buecherliste_router, seite_router)
+ROUTER = (system_router, tabelle_router, abruf_router, buecherliste_router,
+          mehrjahresbaende_router, seite_router)
 
 __all__ = ["ROUTER"]

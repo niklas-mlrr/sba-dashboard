@@ -72,6 +72,7 @@ body {
 .glyphicon-cog::before { content: "\e019"; }
 .glyphicon-list::before { content: "\e056"; }
 .glyphicon-print::before { content: "\e045"; }
+.glyphicon-transfer::before { content: "\e178"; }
 
 .navleiste {
   position: fixed;
@@ -692,3 +693,55 @@ td.frisch {
   cursor: pointer;
 }
 .iserv-modal .faecherauswahl label:hover { background: #f5f5f5; }
+
+/* ── Mehrjahresbände ────────────────────────────────────────────────────────
+   Die Matrix Jahrgang × Fach. Anders als die übrigen Tabellen hat sie sehr
+   viele, sehr schmale Spalten: die Fachnamen stehen deshalb gedreht, wie in
+   der Exceldatei, und die Zellen sind mittig statt linksbündig. */
+.matrix > thead > tr > th { cursor: default; text-align: center; }
+.matrix > thead > tr > th.aufgabenfeld {
+  border-bottom: 1px solid #ddd;
+  font-weight: 600;
+  color: var(--text-leise);
+}
+.matrix > thead > tr > th.fach {
+  height: 9rem;
+  padding: 4px 2px;
+  vertical-align: bottom;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.matrix > tbody > tr > th {
+  padding: 8px;
+  border-top: 1px solid #ddd;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.matrix > tbody > tr > td { padding: 3px; text-align: center; vertical-align: middle; }
+.matrix .zeilenhinweis {
+  text-align: left;
+  color: var(--text-leise);
+  font-size: .875rem;
+}
+.marke {
+  width: 100%;
+  min-width: 3.2rem;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  text-align: center;
+  font: inherit;
+}
+.marke:hover { border-color: var(--akzent); }
+.marke:disabled { opacity: .5; }
+.marke.gespeichert { border-color: var(--akzent); background: var(--flaeche); }
+.marke.fehlerhaft { border-color: var(--bedarf); background: var(--warnung-grund); }
+.marke.speichert { opacity: .6; }
+
+.legende-kopf { margin: 1.5rem 0 .4rem; font-size: 1rem; }
+.legende { margin: 0 0 2rem; padding-left: 1.2rem; color: var(--text-leise); font-size: .875rem; }
+.legende li { margin-bottom: .2rem; }

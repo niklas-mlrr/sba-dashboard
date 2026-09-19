@@ -93,6 +93,8 @@ _BEKANNTE_SCHLUESSEL = frozenset({
     "match_overrides",
     "port",
     "backups_behalten",
+    "mehrjahresbaende_datei",
+    "mehrjahresbaende_fach_aliase",
 })
 
 _DOMAIN_MUSTER = re.compile(r"[A-Za-z0-9.-]+")
@@ -229,6 +231,14 @@ class Einstellungen:
     match_overrides: dict[str, str] = field(default_factory=dict)
     port: int = 8765
     backups_behalten: int = 30
+    # Die Mehrjahresbände-Übersicht liegt **neben** der Bestandsmappe, im
+    # selben Ordner: wer das Dashboard nicht hat, sucht sie genau dort. Anders
+    # als bei der Bestandsmappe steht hier der Dateiname, nicht der Ordner - der
+    # Name trägt keine Jahreszahl, die Datei überlebt den Schuljahreswechsel.
+    mehrjahresbaende_datei: str = "Mehrjahresbände Schulbuchausleihe.xlsx"
+    # IServ-Fachname → Spaltenname der Übersicht, für Fächer, die in der Datei
+    # anders heißen ("Religion (ev./kath.)"). Leer heißt: die Namen stimmen.
+    mehrjahresbaende_fach_aliase: dict[str, str] = field(default_factory=dict)
     # Nicht Teil der Konfigurationsdatei selbst (daher ohne Gegenstück in
     # config.json): der Ort, an den speichere_benutzerwerte schreibt. Im
     # --config-Modus (Einstellungen.laden) zeigt das Feld auf dieselbe Datei,
@@ -385,6 +395,22 @@ class Einstellungen:
                 "config.json: 'backups_behalten' muss eine ganze Zahl zwischen 0 und 1000 sein."
             )
 
+        datei = roh.get("mehrjahresbaende_datei", "Mehrjahresbände Schulbuchausleihe.xlsx")
+        if not isinstance(datei, str) or not datei.strip() or "/" in datei or "\\" in datei:
+            raise EinstellungsFehler(
+                "config.json: 'mehrjahresbaende_datei' muss ein Dateiname ohne Pfad sein - "
+                "die Datei liegt im Ordner der Bestandsmappe."
+            )
+
+        aliase = roh.get("mehrjahresbaende_fach_aliase", {})
+        if not isinstance(aliase, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in aliase.items()
+        ):
+            raise EinstellungsFehler(
+                "config.json: 'mehrjahresbaende_fach_aliase' muss ein Objekt aus "
+                "IServ-Fachnamen und Spaltennamen sein."
+            )
+
         unbekannt = tuple(sorted(schluessel for schluessel in roh if schluessel not in _BEKANNTE_SCHLUESSEL))
 
         return cls(
@@ -396,6 +422,8 @@ class Einstellungen:
             match_overrides=dict(overrides),
             port=port,
             backups_behalten=backups,
+            mehrjahresbaende_datei=datei.strip(),
+            mehrjahresbaende_fach_aliase=dict(aliase),
             benutzer_config_pfad=Path(benutzer_config_pfad) if benutzer_config_pfad is not None else None,
             unbekannte_schluessel=unbekannt,
         )
@@ -425,6 +453,22 @@ class Einstellungen:
             if vorhanden:
                 return pfad
         return None
+
+    def mehrjahresbaende_pfad(self) -> Path | None:
+        """Die Mehrjahresbände-Übersicht im Ordner der Bestandsmappe.
+
+        Der Ordner ist der eingestellte (``excel_ordner``), sonst der der
+        gefundenen Bestandsmappe. Ist beides unbekannt, ist auch dieser Pfad
+        unbekannt - dann muss zuerst der Ordner eingestellt werden.
+
+        Gibt den Pfad zurück, **auch wenn die Datei noch nicht existiert**: vor
+        dem ersten Erzeugen gibt es sie nicht, und dann ist genau dieser Pfad
+        die Antwort auf die Frage, wo sie entstehen wird.
+        """
+        if self.excel_ordner is not None:
+            return self.excel_ordner / self.mehrjahresbaende_datei
+        mappe = self.excel_pfad()
+        return mappe.parent / self.mehrjahresbaende_datei if mappe else None
 
     def bestand_config(self) -> BestandConfig:
         """Übersetzt in die Konfiguration der Bibliothek (englische Feldnamen)."""

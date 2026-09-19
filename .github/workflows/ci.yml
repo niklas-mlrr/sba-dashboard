@@ -110,7 +110,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Ruff (Lint)
-        run: uv run ruff check app tests bestand buecherlisten
+        run: uv run ruff check app tests bestand buecherlisten mehrjahresbaende
 
       # Auf jedem Runner mit dessen eigener Plattform, nicht nur einmal auf
       # Linux: app/excel.py hat je einen Zweig für msvcrt (Windows) und fcntl
