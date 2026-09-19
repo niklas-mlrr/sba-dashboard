@@ -13,7 +13,9 @@ bei ihnen; was nirgends mehr steht, ist ausgemustert und darf ebenfalls bleiben;
 alles andere ist abzugeben.
 
 Betrachtet werden nur **leihbare** Bücher. Ein Kaufbuch gehört den Schülern
-ohnehin, es kann weder abgegeben noch ausgemustert werden.
+ohnehin, es kann weder abgegeben noch ausgemustert werden. Aus demselben Grund
+bekommt ein Jahrgang, der im Vorjahr **kein einziges** leihbares Buch hatte,
+gar keine Zeile.
 
 ## Warum "ausgemustert" über alle Jahrgänge geht
 
@@ -261,6 +263,12 @@ def vergleiche(
 
     zeilen: list[Jahrgangszeile] = []
     for liste in sorted(alt.listen, key=lambda liste: liste.jahrgang):
+        # Jahrgänge ohne ein einziges leihbares Buch im Vorjahr bekommen keine
+        # Zeile: dort ist nichts ausgeliehen worden, also ist auch nichts
+        # abzugeben. Eine Zeile aus lauter "---" wäre keine Auskunft, sondern
+        # eine Frage danach, warum sie dasteht.
+        if not liste.leihbare:
+            continue
         naechste = neu.liste(liste.jahrgang + 1)
         # Der letzte Jahrgang zuerst: dort gibt es kein "nächstes Jahr" mehr, in
         # das ein Buch mitwandern könnte - auch dann nicht, wenn dieser Jahrgang

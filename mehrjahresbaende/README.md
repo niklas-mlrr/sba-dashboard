@@ -19,7 +19,9 @@ Rein lesend gegenüber IServ (nur GET).
 Zeile „Jahrgang N" meint die Schülerinnen und Schüler, die im **abgelaufenen**
 Schuljahr in N waren. Verglichen wird mit **Jahrgang N+1** des laufenden.
 Betrachtet werden nur **leihbare** Bücher — ein Kaufbuch gehört ohnehin den
-Schülern.
+Schülern. Ein Jahrgang, der im Vorjahr **kein einziges** leihbares Buch hatte,
+bekommt gar keine Zeile: dort ist nichts ausgeliehen worden, also ist auch
+nichts abzugeben.
 
 Je Buch ergibt sich einer von drei Ausgängen:
 

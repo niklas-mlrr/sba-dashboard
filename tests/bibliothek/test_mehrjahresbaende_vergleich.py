@@ -80,8 +80,9 @@ def test_fach_ohne_leihbares_buch_bekommt_striche() -> None:
 
 def test_kaufbuch_zaehlt_nicht_mit() -> None:
     """Ein nicht leihbares Buch gehört dem Schüler - es taucht nirgends auf."""
-    alt = jahr("2025/2026", liste(5, buch("1", "Arbeitsheft", "Deutsch", leihbar=False)))
-    neu = jahr("2026/2027", liste(6))
+    alt = jahr("2025/2026", liste(5, buch("1", "Arbeitsheft", "Deutsch", leihbar=False),
+                                  buch("2", "Lambacher 5", "Mathematik")))
+    neu = jahr("2026/2027", liste(6, buch("2", "Lambacher 5", "Mathematik")))
     uebersicht = rechne(alt, neu)
     # Die Spalte bleibt - das Fach wird ja unterrichtet -, aber ohne Marke.
     assert marke(uebersicht, 5, "Deutsch") == "---"
@@ -157,6 +158,16 @@ def test_letzter_jahrgang_gibt_alles_ab_auch_bei_individueller_ausleihe() -> Non
     assert marke(uebersicht, 13, "Mathematik") == "X"
     # Ausgemustert bleibt ausgemustert, auch im letzten Jahrgang.
     assert marke(uebersicht, 13, "Deutsch") == "B"
+
+
+def test_jahrgang_ohne_leihbares_buch_bekommt_keine_zeile() -> None:
+    """Wo nichts ausgeliehen wurde, ist auch nichts abzugeben."""
+    alt = jahr("2025/2026",
+               liste(5, buch("1", "Deutschbuch 5", "Deutsch")),
+               liste(6, buch("9", "Arbeitsheft", "Deutsch", leihbar=False)),
+               liste(7))
+    neu = jahr("2026/2027", liste(6, buch("1", "Deutschbuch 5", "Deutsch")))
+    assert [zeile.jahrgang for zeile in rechne(alt, neu).zeilen] == [5]
 
 
 def test_fach_ohne_aufgabenfeld_steht_in_der_letzten_spalte() -> None:

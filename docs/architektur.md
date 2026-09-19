@@ -382,6 +382,10 @@ Regeln (ungerade Zeilen grau, links dick, zwischen den Fächern gestrichelt, am
 Anfang eines Aufgabenfelds mittel) sind aus der vorhandenen Datei abgelesen und
 stehen in `mehrjahresbaende/core/mappe.py`.
 
+Zeilen gibt es nur für die Jahrgänge, die im Vorjahr **mindestens ein**
+leihbares Buch hatten. Eine Zeile aus lauter `---` wäre keine Auskunft, sondern
+eine Frage danach, warum sie dasteht.
+
 **Die Seite liest die Datei, nicht IServ.** Die Bücherlisten-Seiten laden bei
 jedem Aufruf live (siehe `app/buecherlisten.py`) — die Übersicht nicht. Sie ist
 eine Entscheidung, keine Abfrage: sie entsteht einmal im Jahr, wird von Hand
