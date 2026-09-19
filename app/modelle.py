@@ -37,6 +37,7 @@ scheitert.
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
@@ -109,6 +110,91 @@ class ErzeugenAnfrage(BaseModel):
     vorjahr: str | None = None
 
 
+class AbgleichAnfrage(BaseModel):
+    """``POST /api/buchplanung/abgleich`` - beide Schuljahre, beide freiwillig.
+
+    Wie ``ErzeugenAnfrage``: ohne Angabe gilt das laufende Schuljahr aus IServ
+    und das daraus abgeleitete Vorjahr.
+    """
+
+    schuljahr: str | None = None
+    vorjahr: str | None = None
+
+
+class _BuchplanungAnfrage(BaseModel):
+    """Was jede Eintragung in die Buchplanung mitbringt.
+
+    ``schuljahr`` steht hier, weil es je Schuljahr **eine eigene Datei** gibt -
+    es sagt nicht, was eingetragen wird, sondern wohin. ``mtime`` ist wie
+    überall der beim Laden gesehene Stand: ohne ihn wird nicht geschrieben.
+    """
+
+    schuljahr: NichtLeer
+    mtime: float
+
+
+class PreisAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/preis`` - der geprüfte Preis eines Buchs.
+
+    ``preis = None`` ist kein fehlendes Feld, sondern der Weg zurück auf
+    „offen": so wird eine versehentliche Bestätigung zurückgenommen.
+    """
+
+    isbn: NichtLeer
+    preis: float | None = None
+    kuerzel: str = ""
+    datum: date | None = None
+    bemerkung: str = ""
+
+
+class VerlagspreisAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/preise`` - eine ganze Verlagsliste auf einmal."""
+
+    verlag: NichtLeer
+    kuerzel: NichtLeer
+    datum: date | None = None
+
+
+class FachbestaetigungAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/fach`` - die Freigabe durch die Fachkonferenzleitung.
+
+    ``kuerzel`` darf leer sein: das nimmt die Bestätigung zurück.
+    """
+
+    fach: NichtLeer
+    kuerzel: str = ""
+    datum: date | None = None
+    bemerkung: str = ""
+
+
+class PlanungsAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/planung`` - Einführung und Ausmusterung.
+
+    Der Jahrgang muss kein heutiges Vorkommen des Buchs sein: „wird ab 2028/29
+    auch in Jahrgang 9 eingeführt" ist der Fall, für den es diese Zeile gibt.
+    Sind alle vier Textfelder leer, verschwindet die Zeile wieder.
+    """
+
+    isbn: NichtLeer
+    jahrgang: int
+    eingefuehrt_ab: str = ""
+    ausgemustert_nach: str = ""
+    beschluss: str = ""
+    bemerkung: str = ""
+
+
+class RuecklageAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/ruecklage`` - der Wunsch einer Fachschaft."""
+
+    isbn: NichtLeer
+    fach: NichtLeer
+    anzahl: int | None = None
+    status: str = ""
+    kuerzel: str = ""
+    datum: date | None = None
+    bemerkung: str = ""
+
+
 class AnmeldeAnfrage(BaseModel):
     """``POST /api/anmeldung`` - die Zugangsdaten, die das Programmfenster sendet.
 
@@ -138,6 +224,10 @@ MELDUNGEN: dict[str, str] = {
     "mtime": "Es fehlt eine gültige Änderungszeit der geladenen Datei.",
     "jahrgang": "Es fehlt der Jahrgang der Zeile.",
     "fach": "Es fehlt das Fach der Spalte.",
+    "isbn": "Es fehlt die ISBN des Buchs.",
+    "verlag": "Es fehlt der Verlag.",
+    "kuerzel": "Bitte das Kürzel eintragen, mit dem bestätigt wird.",
+    "schuljahr": "Es fehlt das Schuljahr, zu dem die Datei gehört.",
     "benutzer": "Bitte IServ-Benutzername und Passwort eingeben.",
     "passwort": "Bitte IServ-Benutzername und Passwort eingeben.",
 }

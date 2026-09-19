@@ -11,7 +11,14 @@ Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 ## Stand
 
 Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
-geprüft. Seit 2026-09-19 gibt es den Reiter **Mehrjahresbände**: er vergleicht
+geprüft. Ebenfalls seit 2026-09-19 lässt sich der **Arbeitsstand der
+Bücherlisten speichern** — Preisprüfung, Freigabe durch die
+Fachkonferenzleitungen, Einführung und Ausmusterung je Jahrgang sowie
+Rücklagen für die Fachschaften. Er liegt als Exceldatei je Schuljahr neben der
+Bestandsmappe (`buchplanung/`,
+[`docs/architektur.md`](docs/architektur.md#die-buchplanung-preise-prüfen-listen-freigeben-einführung-und-ausmusterung),
+Regeln in [`buchplanung/README.md`](buchplanung/README.md)); eingetragen wird in
+den Bücherlisten-Seiten selbst. Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
 die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
 welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher
 (`mehrjahresbaende/`, [`docs/architektur.md`](docs/architektur.md#die-mehrjahresbände-übersicht)). Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
@@ -41,6 +48,13 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `GET /buecherliste/{ansicht}/pdf` | Bücherlisten mehrerer Fächer, Verlage oder Jahrgänge als PDF (Druckmenü, Optionen in der URL, Antwort `inline`) |
 | `GET /buecherliste/{ansicht}/{name}/pdf` | Bücherliste eines Fachs, Verlags oder Jahrgangs als PDF |
 | `GET /mehrjahresbaende` | Übersicht, welche Bücher am Schuljahreswechsel abzugeben sind (aus der Exceldatei, ohne Anmeldung) |
+| `GET /api/buchplanung?schuljahr=…` | Der gespeicherte Stand eines Schuljahrs als JSON (ohne Datei: `planung: null`) |
+| `POST /api/buchplanung/abgleich` | Beide Schuljahre aus IServ holen und zusammenführen: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |
+| `POST /api/buchplanung/preis` | Geprüfter Preis eines Buchs: `{schuljahr, isbn, preis, kuerzel, datum, mtime}` → 200/400/409/423/503 |
+| `POST /api/buchplanung/preise` | Eine ganze Verlagsliste: `{schuljahr, verlag, kuerzel, datum, mtime}` |
+| `POST /api/buchplanung/fach` | Freigabe der Fachkonferenzleitung: `{schuljahr, fach, kuerzel, datum, mtime}` |
+| `POST /api/buchplanung/planung` | Einführung/Ausmusterung: `{schuljahr, isbn, jahrgang, eingefuehrt_ab, ausgemustert_nach, mtime}` |
+| `POST /api/buchplanung/ruecklage` | Rücklage einer Fachschaft: `{schuljahr, isbn, fach, anzahl, status, mtime}` |
 | `GET /api/mehrjahresbaende` | dieselbe Übersicht als JSON |
 | `POST /api/mehrjahresbaende/erzeugen` | Aus zwei Schuljahren neu rechnen und die Datei schreiben: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |
 | `POST /api/mehrjahresbaende/marke` | Eine Zelle ändern: `{jahrgang, fach, marke, mtime}` → 200/400/409/423/503 |

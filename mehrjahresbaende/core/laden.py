@@ -11,8 +11,9 @@ Abhängigkeit in diese Richtung wäre die erste im Projekt.
 """
 from __future__ import annotations
 
-import re
 from typing import Any, Protocol
+
+from buecherlisten.core.daten import UnbekanntesSchuljahr, vorjahr_kennung
 
 from .modelle import Buchvorkommen, Jahrgangsliste, Schuljahr
 
@@ -31,31 +32,11 @@ class AusleiheClient(Protocol):
     def schoolyears(self) -> Any: ...
 
 
-# IServ-Schuljahre heißen "2026/2027". Das Vorjahr daraus abzuleiten ist die
-# einzige Stelle, an der dieses Format ausgewertet wird - einen Endpunkt "alle
-# Schuljahre" gibt es nicht (siehe ausleihe/schoolyears.py).
-_JAHRESPAAR = re.compile(r"^(\d{4})\s*/\s*(\d{4})$")
-
-
-class UnbekanntesSchuljahr(ValueError):
-    """Aus der Kennung des Schuljahrs lässt sich kein Vorjahr ableiten."""
-
-
-def vorjahr_kennung(kennung: str) -> str:
-    """``"2026/2027"`` → ``"2025/2026"``.
-
-    Wirft :class:`UnbekanntesSchuljahr`, wenn die Kennung nicht so aussieht -
-    dann muss das Vorjahr von Hand angegeben werden, statt eine falsche
-    Übersicht zu erzeugen.
-    """
-    treffer = _JAHRESPAAR.match(kennung.strip())
-    if treffer is None:
-        raise UnbekanntesSchuljahr(
-            f"Aus dem Schuljahr {kennung!r} lässt sich das Vorjahr nicht ableiten. "
-            "Erwartet wird die IServ-Schreibweise „2026/2027“."
-        )
-    erstes, zweites = (int(teil) for teil in treffer.groups())
-    return f"{erstes - 1}/{zweites - 1}"
+# Die Schuljahres-Schreibweise (``vorjahr_kennung``, ``UnbekanntesSchuljahr``)
+# steht seit 2026-09-19 in ``buecherlisten/core/daten.py``: inzwischen brauchen
+# sie drei Pakete, und ein zweiter Parser wäre genau die Stelle, an der sie
+# auseinanderlaufen. Beide Namen bleiben von hier aus erreichbar, damit alles,
+# was sie bisher hier importiert hat, unverändert weiterläuft.
 
 
 def _buch(item: dict) -> Buchvorkommen | None:
@@ -112,3 +93,11 @@ def lade_schuljahr(client: AusleiheClient, kennung: str | None = None) -> Schulj
             listen.append(liste)
     listen.sort(key=lambda liste: liste.jahrgang)
     return Schuljahr(kennung=schuljahr_id, name=str(name), listen=tuple(listen))
+
+
+__all__ = [
+    "AusleiheClient",
+    "UnbekanntesSchuljahr",
+    "lade_schuljahr",
+    "vorjahr_kennung",
+]

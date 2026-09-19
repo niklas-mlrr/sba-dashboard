@@ -518,7 +518,10 @@ td.frisch {
 }
 .label-default { background-color: #777; }
 .label-success { background-color: #5cb85c; }
-/* Platzhalter, bis feststeht, was "Status" zeigt. */
+.label-danger { background-color: #d9534f; }
+.label-warning { background-color: #f0ad4e; }
+.label-info { background-color: #5bc0de; }
+/* "offen" und alles, was noch keinen eigenen Ton hat. */
 .label-status { background-color: #777; }
 .klein { font-size: 85%; }
 .grau { color: #777; }
@@ -745,3 +748,54 @@ td.frisch {
 .legende-kopf { margin: 1.5rem 0 .4rem; font-size: 1rem; }
 .legende { margin: 0 0 2rem; padding-left: 1.2rem; color: var(--text-leise); font-size: .875rem; }
 .legende li { margin-bottom: .2rem; }
+
+
+/* ── Buchplanung: Preisprüfung, Freigabe, Einführung/Ausmusterung ───────────
+   Eingetragen wird in den Bücherlisten-Seiten selbst (Entscheidung
+   2026-09-19), deshalb liegen die Bedienelemente zwischen den Tabellen und
+   nicht auf einer eigenen Seite. Sie sollen dort sichtbar, aber ruhig sein:
+   die Bücherliste bleibt das, was man liest. */
+
+.planung-formular {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin-right: .6rem;
+}
+.planung-feld {
+  padding: .25rem .4rem;
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  font: inherit;
+  font-size: .875rem;
+  background: var(--flaeche);
+  color: inherit;
+}
+.planung-feld[type="number"] { width: 5rem; }
+
+.knopf-klein {
+  margin-left: .4rem;
+  padding: .1rem .45rem;
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  background: var(--flaeche);
+  color: inherit;
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.knopf-klein:hover { border-color: var(--akzent); }
+
+.planung-details > td { background: var(--warnung-grund); padding: .8rem 1rem; }
+.planung-raster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: flex-start;
+}
+.planung-block h4 { margin: 0 0 .5rem; font-size: .95rem; }
+.planung-block label { display: block; margin-bottom: .4rem; font-size: .875rem; }
+.planung-tabelle { border-collapse: collapse; font-size: .875rem; }
+.planung-tabelle th,
+.planung-tabelle td { padding: .2rem .5rem; text-align: left; font-weight: 400; }
+.planung-tabelle th { color: var(--text-leise); font-size: .8rem; }

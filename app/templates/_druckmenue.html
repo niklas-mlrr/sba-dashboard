@@ -76,11 +76,14 @@
         <label class="control-label spalte-beschriftung">{{ wort }}:</label>
         <div class="spalte-inhalt">
           {#
-            "veränderte" und "nicht bestätigte" sind Platzhalter: sie wählen,
-            bis es die Angaben dazu gibt, alle Fächer (data-gruppen="alle").
-            "Prüfen" ist ebenfalls ein Platzhalter: später vergleicht er mit dem
-            gespeicherten Stand und hakt die veränderten Fächer bei
-            "Individuell" an, damit die URL feste Fächer enthält.
+            "nicht bestätigte" ist seit 2026-09-19 echt: der Server legt in
+            data-gruppen die Fächer ohne Freigabe der Fachkonferenzleitung ab,
+            das Skript hakt sie an und schaltet auf "Individuell" - so enthält
+            die PDF-URL feste Fächer, und F5 im PDF-Tab zeigt dieselben, auch
+            wenn inzwischen eines bestätigt wurde.
+
+            "veränderte" bleibt ein Platzhalter (data-gruppen="alle"), bis
+            feststeht, was als Änderung zählt; "Prüfen" daneben ebenso.
           #}
           <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="alle"
             data-gruppen="alle" checked>Alle</label></div>
@@ -92,7 +95,9 @@
               title="Folgt, sobald sich ein Stand der Bücherlisten speichern lässt">Prüfen</button>
           </div>
           <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="nicht_bestaetigte"
-            data-gruppen="alle">nicht bestätigte</label></div>
+            data-gruppen="{{ (druck_nicht_bestaetigt | tojson) if druck_nicht_bestaetigt is not none else 'alle' }}"
+            {% if druck_nicht_bestaetigt is not none and not druck_nicht_bestaetigt %}disabled
+            title="Alle Fächer sind bestätigt."{% endif %}>nicht bestätigte</label></div>
           {% endif %}
           <div class="radio radio-mit-auswahl">
             <label><input type="radio" name="{{ feld }}_auswahl" value="individuell"

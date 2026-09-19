@@ -1,19 +1,30 @@
 {% extends "base.html" %}
+{% import "_buchplanung.html" as bp with context %}
 {% block titel %}Bücherliste nach {{ ansicht_name }} — Schulbuchausleihe{% endblock %}
 {% block seitenklasse %}seite-voll{% endblock %}
 {% block ueberschrift %}Bücherliste nach {{ ansicht_name }}{% endblock %}
-{% block kopfaktionen %}{% if druckbar %}
+{% block kopfaktionen %}{{ bp.kopfknoepfe(planung, ansicht, none) }}{% if druckbar %}
 <button type="button" class="btn btn-default" id="druck-oeffnen" title="Drucken" aria-label="Drucken"><span
   class="glyphicon glyphicon-print" aria-hidden="true"></span></button>
 {% endif %}{% endblock %}
+
+{% block kopfzeile %}
+<div id="buchplanung" data-schuljahr="{{ planung.schuljahr }}"
+  {% if planung.mtime is not none %}data-mtime="{{ planung.mtime }}"{% endif %}
+  data-ansicht="{{ ansicht }}"></div>
+<p id="planung-meldung" class="hinweis meldung" hidden></p>
+{{ bp.hinweise(planung, ansicht, none) }}
+{% endblock %}
 
 {#
   Nachgebaut nach der IServ-Seite "Bücherlisten" (#/schoolyear/…/booklists):
   table.table, Bezeichnung als Link, Status als Label. Ohne "Liste
   hinzufügen" und ohne "Bücherlisten übernehmen" - das Dashboard liest nur.
 
-  Status ist vorerst ein Platzhalter; was dort stehen soll, wird noch
-  festgelegt.
+  Die Status-Spalte zeigt seit 2026-09-19 den gespeicherten Stand: beim Fach
+  die Freigabe durch die Fachkonferenzleitung, bei Verlag und Jahrgang, wie
+  viele Preise schon geprüft sind. Bestätigt wird nur je Fach - die
+  Fachkonferenz entscheidet über ihre Bücher, nicht über einen Jahrgang.
 
   Sortierbar über static/sortieren.js: data-sort an jeder Überschrift,
   data-wert an Zellen, deren Anzeige nicht selbst der Schlüssel ist.
@@ -48,7 +59,19 @@
       <td data-wert="{{ liste.ende.isoformat() if liste.ende else '' }}"><b>{{ liste.ende.strftime("%d.%m.%y") if liste.ende else "" }}</b></td>
       <td data-wert="{{ liste.zahlungsfrist.isoformat() if liste.zahlungsfrist else '' }}"><b>{{ liste.zahlungsfrist.strftime("%d.%m.%y") if liste.zahlungsfrist else "" }}</b></td>
       <td>{{ liste.bank }}</td>
-      <td><span class="label label-status">offen</span></td>
+      <td>
+        {% if planung.mtime is none %}<span class="label label-status">offen</span>
+        {% else %}
+          {% set zaehler = namespace(geprueft=0, gesamt=0) %}
+          {% for buch in liste.alle_buecher %}
+            {% set preis = planung.preis_je_isbn.get(buch.isbn) %}
+            {% set zaehler.gesamt = zaehler.gesamt + 1 %}
+            {% if preis and preis.status == "bestätigt" %}{% set zaehler.geprueft = zaehler.geprueft + 1 %}{% endif %}
+          {% endfor %}
+          {% if zaehler.gesamt and zaehler.geprueft == zaehler.gesamt %}{{ bp.statuslabel("bestätigt") }}
+          {% else %}<span class="label label-status">{{ zaehler.geprueft }} von {{ zaehler.gesamt }} geprüft</span>{% endif %}
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -63,7 +86,21 @@
     {% for gruppe in gruppen %}
     <tr>
       <td><a href="/buecherliste/{{ ansicht }}/{{ gruppe.name|urlencode }}">{{ gruppe.name }}</a></td>
-      <td><span class="label label-status">offen</span></td>
+      <td>
+        {% if planung.mtime is none %}<span class="label label-status">offen</span>
+        {% elif ansicht == "fach" %}
+          {% set stand = planung.fach_je_name.get(gruppe.name) %}
+          {{ bp.statuslabel(stand.status if stand else "offen") }}
+        {% else %}
+          {% set zaehler = namespace(geprueft=0) %}
+          {% for buch in gruppe.buecher %}
+            {% set preis = planung.preis_je_isbn.get(buch.isbn) %}
+            {% if preis and preis.status == "bestätigt" %}{% set zaehler.geprueft = zaehler.geprueft + 1 %}{% endif %}
+          {% endfor %}
+          {% if zaehler.geprueft == gruppe.buecher|length %}{{ bp.statuslabel("bestätigt") }}
+          {% else %}<span class="label label-status">{{ zaehler.geprueft }} von {{ gruppe.buecher|length }} geprüft</span>{% endif %}
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -76,4 +113,5 @@
 {% endblock %}
 
 {% block skripte %}<script src="/static/sortieren.js"></script>
+<script src="/static/buchplanung.js"></script>
 {% if druckbar %}<script src="/static/druckmenue.js"></script>{% endif %}{% endblock %}

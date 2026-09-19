@@ -10,5 +10,6 @@
   "port": 8765,
   "backups_behalten": 30,
   "mehrjahresbaende_datei": "Mehrjahresbände Schulbuchausleihe.xlsx",
-  "mehrjahresbaende_fach_aliase": {}
+  "mehrjahresbaende_fach_aliase": {},
+  "buchplanung_datei": "Bücherlisten und Planung {schuljahr}.xlsx"
 }

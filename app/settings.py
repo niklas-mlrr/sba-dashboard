@@ -95,6 +95,7 @@ _BEKANNTE_SCHLUESSEL = frozenset({
     "backups_behalten",
     "mehrjahresbaende_datei",
     "mehrjahresbaende_fach_aliase",
+    "buchplanung_datei",
 })
 
 _DOMAIN_MUSTER = re.compile(r"[A-Za-z0-9.-]+")
@@ -239,6 +240,14 @@ class Einstellungen:
     # IServ-Fachname → Spaltenname der Übersicht, für Fächer, die in der Datei
     # anders heißen ("Religion (ev./kath.)"). Leer heißt: die Namen stimmen.
     mehrjahresbaende_fach_aliase: dict[str, str] = field(default_factory=dict)
+    # Die Buchplanung liegt ebenfalls neben der Bestandsmappe, aber **je
+    # Schuljahr** in einer eigenen Datei: sie hält Preisprüfung, Freigaben und
+    # Planung eines Schuljahres fest, und der Stand des Vorjahres soll beim
+    # Wechsel nicht überschrieben, sondern zum Nachschlagen liegen bleiben.
+    # ``{schuljahr}`` wird durch die IServ-Kennung ersetzt, Schrägstrich als
+    # Bindestrich ("2026/2027" → "2026-2027"): ein Schrägstrich im Dateinamen
+    # wäre unter Windows wie unter Linux ein Pfadtrenner.
+    buchplanung_datei: str = "Bücherlisten und Planung {schuljahr}.xlsx"
     # Nicht Teil der Konfigurationsdatei selbst (daher ohne Gegenstück in
     # config.json): der Ort, an den speichere_benutzerwerte schreibt. Im
     # --config-Modus (Einstellungen.laden) zeigt das Feld auf dieselbe Datei,
@@ -411,6 +420,18 @@ class Einstellungen:
                 "IServ-Fachnamen und Spaltennamen sein."
             )
 
+        planung = roh.get("buchplanung_datei", "Bücherlisten und Planung {schuljahr}.xlsx")
+        if not isinstance(planung, str) or not planung.strip() or "/" in planung or "\\" in planung:
+            raise EinstellungsFehler(
+                "config.json: 'buchplanung_datei' muss ein Dateiname ohne Pfad sein - "
+                "die Datei liegt im Ordner der Bestandsmappe."
+            )
+        if "{schuljahr}" not in planung:
+            raise EinstellungsFehler(
+                "config.json: 'buchplanung_datei' muss '{schuljahr}' enthalten - je "
+                "Schuljahr entsteht eine eigene Datei."
+            )
+
         unbekannt = tuple(sorted(schluessel for schluessel in roh if schluessel not in _BEKANNTE_SCHLUESSEL))
 
         return cls(
@@ -424,6 +445,7 @@ class Einstellungen:
             backups_behalten=backups,
             mehrjahresbaende_datei=datei.strip(),
             mehrjahresbaende_fach_aliase=dict(aliase),
+            buchplanung_datei=planung.strip(),
             benutzer_config_pfad=Path(benutzer_config_pfad) if benutzer_config_pfad is not None else None,
             unbekannte_schluessel=unbekannt,
         )
@@ -469,6 +491,23 @@ class Einstellungen:
             return self.excel_ordner / self.mehrjahresbaende_datei
         mappe = self.excel_pfad()
         return mappe.parent / self.mehrjahresbaende_datei if mappe else None
+
+    def buchplanung_pfad(self, schuljahr: str) -> Path | None:
+        """Die Buchplanungs-Datei **dieses** Schuljahrs, neben der Bestandsmappe.
+
+        Wie :meth:`mehrjahresbaende_pfad`, nur mit dem Schuljahr im Namen -
+        jedes Schuljahr bekommt seine eigene Datei. Der Pfad kommt auch dann
+        zurück, wenn es die Datei noch nicht gibt: vor dem ersten Abgleich ist
+        genau er die Antwort auf die Frage, wo sie entstehen wird.
+        """
+        ordner = self.excel_ordner
+        if ordner is None:
+            mappe = self.excel_pfad()
+            if mappe is None:
+                return None
+            ordner = mappe.parent
+        name = self.buchplanung_datei.replace("{schuljahr}", schuljahr.replace("/", "-").strip())
+        return ordner / name
 
     def bestand_config(self) -> BestandConfig:
         """Übersetzt in die Konfiguration der Bibliothek (englische Feldnamen)."""

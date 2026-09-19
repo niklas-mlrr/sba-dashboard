@@ -13,9 +13,17 @@ from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
+from buchplanung.core import (
+    FACH_BESTAETIGT,
+    RUECKLAGE_STATUS,
+    fach_status,
+    planungs_status,
+    preis_status,
+)
 from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 
+from .. import buchplanung as planungsdomaene
 from ..buecherlisten import (
     Buecherlisten,
     finde_gruppe,
@@ -24,7 +32,7 @@ from ..buecherlisten import (
     lade_buecherlisten,
 )
 from ..sitzung import Abgelaufen, NichtAngemeldet
-from .gemeinsam import vorlagen
+from .gemeinsam import aktuelle_einstellungen, vorlagen
 
 router = APIRouter()
 
@@ -64,6 +72,84 @@ def _laden(request: Request) -> Buecherlisten | Response:
             request, "IServ nicht erreichbar",
             f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502,
         )
+
+
+def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
+    """Der gespeicherte Stand dieses Schuljahrs, fertig zum Anzeigen.
+
+    Die Seiten selbst kommen live aus IServ; was geprüft, bestätigt und geplant
+    ist, steht in der Exceldatei. Beides wird hier zusammengelegt - **ohne**
+    dass ein Fehler an der Datei die Bücherliste unbrauchbar macht: fehlt sie
+    oder ist sie unlesbar, zeigt die Seite die Bücher und einen Hinweis.
+
+    Die Status werden nicht mitgeliefert, sondern hier gerechnet - an genau der
+    Stelle, an der auch die API sie rechnet (``buchplanung/core/modelle.py``).
+    """
+    leer: dict[str, Any] = {
+        "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
+        "ruecklage_status": list(RUECKLAGE_STATUS),
+        "preis_je_isbn": {}, "fach_je_name": {}, "planung_je_isbn": {},
+        "ruecklage_je_isbn": {},
+    }
+    try:
+        stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
+    except Exception as exc:  # noqa: BLE001 - eine kaputte Datei darf die Seite nicht abwürgen
+        return {**leer, "fehler": f"Der gespeicherte Stand ist nicht lesbar: {exc}"}
+    if stand is None:
+        return leer
+
+    planung = stand.planung
+    preise: dict[str, dict[str, Any]] = {}
+    zeilen: dict[str, list[dict[str, Any]]] = {}
+    ruecklagen: dict[str, dict[str, Any]] = {}
+    for buch in planung.buecher:
+        pruefung = planung.pruefung(buch.isbn)
+        status, hinweis = preis_status(buch, pruefung)
+        preise[buch.isbn] = {
+            "status": status, "hinweis": hinweis,
+            "preis": pruefung.preis if pruefung else None,
+            "kuerzel": pruefung.kuerzel if pruefung else "",
+            "datum": pruefung.datum if pruefung else None,
+        }
+        zeilen[buch.isbn] = [
+            {"jahrgang": jahrgang,
+             "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
+             "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
+             "beschluss": zeile.beschluss if zeile else "",
+             "herkunft": planung.herkunft(buch, jahrgang),
+             "status": planungs_status(zeile, planung.schuljahr)}
+            for jahrgang in planung.jahrgaenge
+            if jahrgang in buch.jahrgaenge or planung.planungszeile(buch.isbn, jahrgang)
+            for zeile in (planung.planungszeile(buch.isbn, jahrgang),)
+        ]
+    for wunsch in planung.ruecklagen:
+        ruecklagen.setdefault(wunsch.isbn, {})[wunsch.fach] = {
+            "anzahl": wunsch.anzahl, "status": wunsch.status,
+            "kuerzel": wunsch.kuerzel, "datum": wunsch.datum,
+            "bemerkung": wunsch.bemerkung,
+        }
+
+    faecher: dict[str, dict[str, Any]] = {}
+    for fach in planung.faecher:
+        freigabe = planung.bestaetigung(fach)
+        status, hinweis = fach_status(fach, planung.buecher_je_fach(fach), freigabe)
+        faecher[fach] = {
+            "status": status, "hinweis": hinweis,
+            "kuerzel": freigabe.kuerzel if freigabe else "",
+            "datum": freigabe.datum if freigabe else None,
+        }
+
+    return {
+        "schuljahr": schuljahr,
+        "mtime": stand.zustand.mtime,
+        "fehler": None,
+        "warnungen": list(planung.warnungen),
+        "ruecklage_status": list(RUECKLAGE_STATUS),
+        "preis_je_isbn": preise,
+        "fach_je_name": faecher,
+        "planung_je_isbn": zeilen,
+        "ruecklage_je_isbn": ruecklagen,
+    }
 
 
 def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
@@ -205,7 +291,16 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         [f"Jahrgang {liste.jahrgang}" for liste in daten.listen if liste.jahrgang is not None]
         if ansicht == "jahrgang" else [g.name for g in gruppen]
     )
+    kontext = _planungskontext(request, daten.schuljahr)
     return _seite(request, "buecherliste_uebersicht.html", {
+        "planung": kontext,
+        # Was hinter "nicht bestätigte" im Druckmenü steckt: die Fächer ohne
+        # gültige Freigabe. Der Server rechnet sie aus, nicht das Skript - so
+        # steht im HTML dieselbe Liste, die auch die Seite anzeigt.
+        "druck_nicht_bestaetigt": [
+            name for name in druck_gruppen
+            if (kontext["fach_je_name"].get(name) or {}).get("status") != FACH_BESTAETIGT
+        ] if ansicht == "fach" and kontext["mtime"] is not None else None,
         "ansicht": ansicht,
         # Jede Ansicht hat ein Druckmenü; nur sein Inhalt unterscheidet sich.
         "druckbar": True,
@@ -226,6 +321,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         return daten
     ansicht_name, gruppierung = _ANSICHTEN[ansicht]
     werte: dict[str, Any] = {
+        "planung": _planungskontext(request, daten.schuljahr),
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
     }

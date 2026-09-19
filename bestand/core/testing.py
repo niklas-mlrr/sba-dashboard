@@ -197,6 +197,12 @@ class _Schoolyears:
     def get_current(self) -> dict[str, str]:
         return {"id": "2026/2027"}
 
+    def get_by_id(self, sy_id: str) -> dict[str, str]:
+        # Jedes Schuljahr liefert dieselben Listen: dieser Fake prüft nicht den
+        # Jahresunterschied (dafür stehen eigene Fakes in den Tests, die ihn
+        # brauchen), sondern nur, dass der Pfad mit Schuljahresangabe läuft.
+        return {"id": sy_id, "name": sy_id}
+
     def get_booklists(self, sy_id: str) -> list[dict[str, int]]:
         return [{"id": 100 + g, "grade": g} for g in sorted(_BOOKS)]
 

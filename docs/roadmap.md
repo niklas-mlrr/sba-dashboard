@@ -8,6 +8,31 @@ mit dem, was sich dabei geändert hat). Offen bleiben damit nur noch die beiden
 **Funktionslücken**, die niemand außer Niklas erledigen kann — allen voran der
 Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
 
+## Die Buchplanung (2026-09-19) — gebaut
+
+Neu sind das Paket `buchplanung/`, die sieben Routen unter `/api/buchplanung`
+und die Bedienelemente in den Bücherlisten-Seiten: in der Verlags-Ansicht die
+Preisprüfung (je Buch und als ganze Liste), in der Fach-Ansicht die Freigabe
+durch die Fachkonferenzleitung sowie je Buch ein Aufklapper für Einführung,
+Ausmusterung und Rücklage. Gespeichert wird in einer Exceldatei je Schuljahr
+neben der Bestandsmappe. Was dabei entschieden wurde, steht in
+[`architektur.md`](architektur.md#die-buchplanung-preise-prüfen-listen-freigeben-einführung-und-ausmusterung),
+die Regeln in [`../buchplanung/README.md`](../buchplanung/README.md).
+
+Damit sind zwei Platzhalter erledigt: die **Status-Spalte** der Bücherlisten
+zeigt jetzt die Preisprüfung bzw. die Freigabe, und **„nicht bestätigte"** im
+Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
+**„veränderte"** — dafür fehlt weiterhin die Festlegung, was als Änderung zählt.
+
+**Offen: die Fach-Aliase.** Dasselbe Thema wie bei den Mehrjahresbänden, aber
+unkritischer: die Buchplanung übernimmt die IServ-Fachnamen unverändert, ein
+Abgleich mit anderen Schreibweisen findet nicht statt.
+
+**Offen: eine Preisquelle.** Geprüft wird von Hand; warum kein automatischer
+Abruf per ISBN eingebaut ist (VLB nur mit kostenpflichtigem Abo, DNB-SRU ohne
+aktuelle Preise), steht in [`../buchplanung/README.md`](../buchplanung/README.md).
+Am ehesten ließe sich später ein Import der Verlags-Preislisten einhängen.
+
 ## Der Reiter „Mehrjahresbände" (2026-09-19) — gebaut, zwei Punkte offen
 
 Neu sind das Paket `mehrjahresbaende/`, der gleichnamige Reiter zwischen
@@ -299,13 +324,17 @@ Offen:
 - **Cache-Busting** — `/static/*` hat keine Versionsnummer. Nach jeder
   Gestaltungsänderung zeigt der Browser erst nach Strg+F5 die neue Fassung;
   das hat am 2026-09-17 eine Rückmeldung zum Aussehen verfälscht.
-- **Status-Spalte** der Bücherlisten und die Fächer-Optionen „veränderte" /
-  „nicht bestätigte" im Druckmenü sind Platzhalter, bis feststeht, was sie
-  zeigen.
+- **Status-Spalte** der Bücherlisten und „nicht bestätigte" im Druckmenü sind
+  seit der Buchplanung (2026-09-19) echt; nur die Option „veränderte" ist noch
+  ein Platzhalter.
 
-### Geplant: Stand speichern und „veränderte" drucken
+### „veränderte" drucken — der Rest des geplanten Stands
 
-Noch nicht gebaut, aber der PDF-Druck ist schon darauf ausgelegt (seit
+„Stand speichern" ist mit der Buchplanung gebaut (oben); „nicht bestätigte"
+folgt jetzt dem hier beschriebenen Muster — der Server legt die Fächerliste ins
+HTML, das Skript hakt sie an und schaltet auf „Individuell", damit die PDF-URL
+feste Fächer enthält. Offen ist nur noch „veränderte". Der PDF-Druck ist
+weiterhin darauf ausgelegt (seit
 2026-09-17 `GET /buecherliste/fach/pdf`, Optionen in der URL; die Auswahl
 heißt bei den anderen Ansichten `verlage`/`jahrgaenge`):
 

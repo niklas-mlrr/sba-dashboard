@@ -7,6 +7,7 @@ beim Import.
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -22,11 +23,20 @@ class _Schuljahre(Protocol):
     def get_booklist(self, schoolyear_id: str, booklist_id: int) -> dict: ...
 
 
-class BuecherlistenClient(Protocol):
-    """Was von ``ausleihe.AusleiheClient`` gebraucht wird."""
+class SchuljahreClient(Protocol):
+    """Nur die Schuljahre - was zum Laden der Bücherlisten selbst reicht.
+
+    Getrennt von :class:`BuecherlistenClient`, weil die Buchplanung genau das
+    braucht und nicht auch noch Verwalter-Rechte (``admin``), die für die
+    Schulanschrift nötig sind.
+    """
 
     @property
     def schoolyears(self) -> Any: ...
+
+
+class BuecherlistenClient(SchuljahreClient, Protocol):
+    """Was von ``ausleihe.AusleiheClient`` gebraucht wird."""
 
     @property
     def admin(self) -> Any: ...
@@ -67,7 +77,7 @@ OHNE_VERLAG = "(ohne Verlag)"
 Jahrgangslisten = list[tuple[int, int, dict]]
 
 
-def hole_jahrgangslisten(client: BuecherlistenClient, schoolyear_id: str) -> Jahrgangslisten:
+def hole_jahrgangslisten(client: SchuljahreClient, schoolyear_id: str) -> Jahrgangslisten:
     """Alle Jahrgangs-Bücherlisten eines Schuljahrs, einmal geladen für alle Ansichten."""
     booklists = client.schoolyears.get_booklists(schoolyear_id)
     by_grade = {bl["grade"]: bl for bl in booklists if bl.get("grade") is not None}
@@ -110,6 +120,45 @@ def _faecher_von(sd: dict) -> list[str]:
 
 def _verlag_von(sd: dict) -> list[str]:
     return [sd.get("publisher") or OHNE_VERLAG]
+
+
+# IServ-Schuljahre heißen "2026/2027". Das Vorjahr daraus abzuleiten ist die
+# einzige Stelle, an der dieses Format ausgewertet wird - einen Endpunkt "alle
+# Schuljahre" gibt es nicht (siehe ausleihe/schoolyears.py). Bis 2026-09-19
+# stand das in ``mehrjahresbaende/core/laden.py``; es liegt jetzt hier, weil
+# inzwischen drei Pakete die Schreibweise brauchen und keines das andere
+# importieren soll. ``mehrjahresbaende.core.laden`` reicht beide Namen weiter.
+_JAHRESPAAR = re.compile(r"^(\d{4})\s*/\s*(\d{4})$")
+
+
+class UnbekanntesSchuljahr(ValueError):
+    """Aus der Kennung des Schuljahrs lässt sich kein Vorjahr ableiten."""
+
+
+def vorjahr_kennung(kennung: str) -> str:
+    """``"2026/2027"`` → ``"2025/2026"``.
+
+    Wirft :class:`UnbekanntesSchuljahr`, wenn die Kennung nicht so aussieht -
+    dann muss das Vorjahr von Hand angegeben werden, statt eine falsche
+    Übersicht zu erzeugen.
+    """
+    treffer = _JAHRESPAAR.match(kennung.strip())
+    if treffer is None:
+        raise UnbekanntesSchuljahr(
+            f"Aus dem Schuljahr {kennung!r} lässt sich das Vorjahr nicht ableiten. "
+            "Erwartet wird die IServ-Schreibweise „2026/2027“."
+        )
+    erstes, zweites = (int(teil) for teil in treffer.groups())
+    return f"{erstes - 1}/{zweites - 1}"
+
+
+def sammle_je_isbn(listen: Jahrgangslisten) -> dict[str, dict]:
+    """Alle Bücher eines Schuljahrs, je ISBN einmal, mit der Vereinigung der Jahrgänge.
+
+    Dieselbe Zusammenführung wie :func:`collect_entries`, nur ohne Gruppierung:
+    die Buchplanung braucht je Buch **eine** Zeile, keine je Fach.
+    """
+    return {isbn: eintrag for (_, isbn), eintrag in _sammle(listen, lambda sd: [""]).items()}
 
 
 def collect_entries(client: BuecherlistenClient, schoolyear_id: str) -> dict[tuple[str, str], dict]:

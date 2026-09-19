@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_buchplanung.html" as bp with context %}
 {% block titel %}Bücherliste {{ titel }} — Schulbuchausleihe{% endblock %}
 {% block seitenklasse %}seite-voll{% endblock %}
 {% block ueberschrift %}Bücherliste {{ titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
@@ -7,14 +8,25 @@
   getrennt wie bei IServ, aus = alle Bücher in einer Tabelle. Beide Ansichten
   stehen fertig im HTML; static/paketansicht.js blendet um, und
   static/sortieren.js überträgt die bisherige Sortierung (siehe dort).
+
+  Die Knöpfe der Buchplanung stehen links vom Drucker: erst prüfen und
+  bestätigen, dann drucken - in der Reihenfolge des Arbeitsablaufs.
 #}
-{% block kopfaktionen %}{% if druckbar %}
+{% block kopfaktionen %}{{ bp.kopfknoepfe(planung, ansicht, gruppe.name if gruppe else none) }}{% if druckbar %}
 <button type="button" class="btn btn-default" id="druck-oeffnen" title="Drucken" aria-label="Drucken"><span
   class="glyphicon glyphicon-print" aria-hidden="true"></span></button>
 {% endif %}{% if liste and liste.paket %}
 <label class="iserv-knopf"><input type="checkbox" id="paketansicht" checked>&nbsp;Paketansicht</label>
 {% endif %}{% endblock %}
 {% block unter_ueberschrift %}<p class="zurueck"><a href="/buecherliste/{{ ansicht }}">« Zurück zur Übersicht</a></p>{% endblock %}
+
+{% block kopfzeile %}
+<div id="buchplanung" data-schuljahr="{{ planung.schuljahr }}"
+  {% if planung.mtime is not none %}data-mtime="{{ planung.mtime }}"{% endif %}
+  data-ansicht="{{ ansicht }}"></div>
+<p id="planung-meldung" class="hinweis meldung" hidden></p>
+{{ bp.hinweise(planung, ansicht, gruppe.name if gruppe else none) }}
+{% endblock %}
 
 {#
   Nachgebaut nach der IServ-Detailseite einer Bücherliste, nur lesend: ohne
@@ -27,8 +39,14 @@
 
   Weg bleibt, was schon in der Überschrift steht: auf einer Fach-Seite die
   Spalte Fach, auf einer Verlags-Seite die Spalte Verlag (``ohne``).
+
+  Die Status-Spalte zeigt die Preisprüfung: sie ist das, was an einem
+  einzelnen Buch offen sein kann. Die Freigabe durch die Fachkonferenz gilt
+  der Liste als Ganzes und steht deshalb oben, nicht je Zeile.
 #}
-{% macro buchtabelle(buecher, mit_jahrgang, gesamt=false, ohne="") %}
+{% macro buchtabelle(buecher, mit_jahrgang, gesamt=false, ohne="", fach=none) %}
+{% set spalten = 8 + (1 if mit_jahrgang else 0) - (1 if ohne == "fach" else 0)
+                   - (1 if ohne == "verlag" else 0) %}
 <div class="tabellenrahmen">
 <table class="iserv-tabelle sortierbar"{% if gesamt %} data-gesamt{% endif %}>
   <thead>
@@ -46,7 +64,8 @@
   </thead>
   <tbody>
     {% for buch in buecher %}
-    <tr>
+    {% set preis = planung.preis_je_isbn.get(buch.isbn) %}
+    <tr data-isbn="{{ buch.isbn }}">
       <td>{{ buch.titel }}</td>
       {% if mit_jahrgang %}<td>{{ buch.jahrgang_anzeige }}</td>{% endif %}
       {% if ohne != "fach" %}<td>{{ buch.fach_anzeige }}</td>{% endif %}
@@ -56,8 +75,26 @@
       <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ euro(buch.leihgebuehr) }}</td>
       <td data-wert="{{ 1 if buch.leihbar else 0 }}"><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
         {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
-      <td><span class="label label-status">offen</span></td>
+      <td class="preis-status"{% if preis and preis.hinweis %} title="{{ preis.hinweis }}"{% endif %}>
+        {% if planung.mtime is none %}<span class="label label-status">offen</span>
+        {% else %}{{ bp.statuslabel(preis.status if preis else "offen") }}
+        {% if ansicht == "verlag" %}
+        <button type="button" class="knopf-klein" data-planung="preis" data-isbn="{{ buch.isbn }}"
+          data-preis="{{ buch.neupreis if buch.neupreis is not none else '' }}"
+          title="Diesen Preis als gegen die Verlagsliste geprüft eintragen">prüfen</button>
+        {% elif fach %}
+        {#
+          Die Planung hängt an der Status-Spalte und bekommt keine eigene: jede
+          Spaltenüberschrift der Bücherlisten trägt ein data-sort, und eine
+          Spalte aus lauter Knöpfen ließe sich nicht sinnvoll sortieren
+          (tests/test_buecherlisten.py hält diesen Vertrag fest).
+        #}
+        <button type="button" class="knopf-klein" data-planung="aufklappen" data-isbn="{{ buch.isbn }}"
+          aria-expanded="false" title="Einführung, Ausmusterung und Rücklage">Planung…</button>
+        {% endif %}{% endif %}
+      </td>
     </tr>
+    {% if fach and planung.mtime is not none %}{{ bp.planungszeile(planung, buch, fach, spalten) }}{% endif %}
     {% endfor %}
   </tbody>
 </table>
@@ -89,7 +126,8 @@
   <div id="gesamtansicht" hidden>{{ buchtabelle(liste.alle_buecher, false, true) }}</div>
   {% endif %}
 {% else %}
-  {{ buchtabelle(gruppe.buecher, true, ohne=ansicht) }}
+  {{ buchtabelle(gruppe.buecher, true, ohne=ansicht,
+                 fach=gruppe.name if ansicht == "fach" else none) }}
 {% endif %}
 {% if druckbar %}
 {% with druck_ansicht = ansicht, druck_gruppen = none,
@@ -100,4 +138,5 @@
 
 {% block skripte %}<script src="/static/sortieren.js"></script>
 {% if liste and liste.paket %}<script src="/static/paketansicht.js"></script>{% endif %}
+<script src="/static/buchplanung.js"></script>
 {% if druckbar %}<script src="/static/druckmenue.js"></script>{% endif %}{% endblock %}

@@ -1,0 +1,139 @@
+{#
+  Die Bedienelemente der Buchplanung, eingebettet in die Bücherlisten-Seiten.
+
+  Eingetragen wird dort, wo die Bücher ohnehin stehen - nicht auf einem eigenen
+  Reiter (Entscheidung 2026-09-19). Deshalb liegt hier nur, was beide Ansichten
+  brauchen, und die beiden Ansichten rufen daraus das auf, was zu ihnen gehört:
+
+  * Verlag - der Beauftragte prüft die Preise, einzeln oder als ganze Liste.
+  * Fach   - die Fachkonferenzleitung bestätigt die Liste als Ganzes, und je
+             Buch werden Einführung, Ausmusterung und Rücklage eingetragen.
+
+  Ohne gespeicherten Stand (``planung.mtime is none``) steht statt allem der
+  Knopf „Aus IServ aktualisieren": vorher gibt es keine Datei, in die etwas
+  eingetragen werden könnte.
+#}
+
+{% macro statuslabel(status) -%}
+{%- set klasse = {"bestätigt": "label-success", "abweichend": "label-danger",
+                  "veraltet": "label-warning", "offen": "label-status",
+                  "geplant": "label-info", "läuft aus": "label-warning",
+                  "ausgemustert": "label-default", "im Einsatz": "label-success"}.get(status, "label-status") -%}
+<span class="label {{ klasse }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro kopfknoepfe(planung, ansicht, gruppe) %}
+{% if planung.mtime is none %}
+<button type="button" class="btn btn-default" data-planung="abgleich">Aus IServ aktualisieren</button>
+{% elif gruppe and ansicht == "verlag" %}
+<span class="planung-formular">
+  <input type="text" class="planung-feld" data-planung-feld="kuerzel" maxlength="10"
+    placeholder="Kürzel" aria-label="Kürzel der Preisprüfung">
+  <input type="date" class="planung-feld" data-planung-feld="datum" aria-label="Datum der Preisprüfung">
+  <button type="button" class="btn btn-default" data-planung="preise" data-verlag="{{ gruppe }}"
+    title="Alle Preise dieser Verlagsliste als geprüft eintragen">Preise bestätigen</button>
+</span>
+{% elif gruppe and ansicht == "fach" %}
+<span class="planung-formular">
+  {% set stand = planung.fach_je_name.get(gruppe) %}
+  {% if stand %}{{ statuslabel(stand.status) }}{% endif %}
+  <input type="text" class="planung-feld" data-planung-feld="kuerzel" maxlength="10"
+    placeholder="Kürzel" value="{{ stand.kuerzel if stand else '' }}"
+    aria-label="Kürzel der Fachkonferenzleitung">
+  <input type="date" class="planung-feld" data-planung-feld="datum"
+    value="{{ stand.datum.isoformat() if stand and stand.datum else '' }}"
+    aria-label="Datum der Bestätigung">
+  <button type="button" class="btn btn-default" data-planung="fach" data-fach="{{ gruppe }}"
+    title="Diese Bücherliste als bestätigt eintragen">Liste bestätigen</button>
+</span>
+{% endif %}
+{% endmacro %}
+
+{% macro hinweise(planung, ansicht, gruppe) %}
+{% if planung.fehler %}<p class="hinweis warnung">{{ planung.fehler }}</p>{% endif %}
+{% if planung.mtime is none and not planung.fehler %}
+<p class="hinweis">Für das Schuljahr {{ planung.schuljahr }} ist noch nichts gespeichert.
+  „Aus IServ aktualisieren“ legt die Datei an; darin stehen danach die Bücher dieses
+  und des vorigen Schuljahres.</p>
+{% endif %}
+{% if gruppe and ansicht == "fach" %}
+  {% set stand = planung.fach_je_name.get(gruppe) %}
+  {% if stand and stand.hinweis %}
+  <p class="hinweis {{ 'warnung' if stand.status == 'veraltet' else '' }}">{{ stand.hinweis }}</p>
+  {% endif %}
+{% endif %}
+{% endmacro %}
+
+{#
+  Die Zeile unter einem Buch: je Jahrgang ein Paar Schuljahre, dazu ein Feld für
+  einen weiteren Jahrgang und die Rücklage. Sie steht eingeklappt im HTML und
+  nicht erst nach einem Abruf - so ist sie auch im Ausdruck und im Seitenquelltext
+  vorhanden, und das Skript muss nichts nachladen.
+#}
+{% macro planungszeile(planung, buch, fach, spalten) %}
+{% set zeilen = planung.planung_je_isbn.get(buch.isbn, []) %}
+{% set ruecklage = planung.ruecklage_je_isbn.get(buch.isbn, {}).get(fach) %}
+<tr class="planung-details" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}" hidden>
+  <td colspan="{{ spalten }}">
+    <div class="planung-raster">
+      <div class="planung-block">
+        <h4>Einführung und Ausmusterung</h4>
+        <table class="planung-tabelle">
+          <thead><tr><th>Jahrgang</th><th>eingeführt ab</th><th>ausgemustert nach</th><th>Beschluss</th><th></th></tr></thead>
+          <tbody>
+            {% for zeile in zeilen %}
+            <tr data-jahrgang="{{ zeile.jahrgang }}">
+              <td>{{ zeile.jahrgang }}{% if zeile.herkunft == "nur Planung" %}
+                <span class="klein grau">(geplant)</span>{% endif %}</td>
+              <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
+                value="{{ zeile.eingefuehrt_ab }}" placeholder="2028/2029" size="9"
+                aria-label="eingeführt ab Schuljahr"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
+                value="{{ zeile.ausgemustert_nach }}" placeholder="2029/2030" size="9"
+                aria-label="ausgemustert nach Schuljahr"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="beschluss"
+                value="{{ zeile.beschluss }}" placeholder="FK 12.05.2026" size="14"
+                aria-label="Beschluss der Fachkonferenz"></td>
+              <td>{{ statuslabel(zeile.status) }}</td>
+            </tr>
+            {% endfor %}
+            <tr data-jahrgang="">
+              <td><input type="number" class="planung-feld" data-planung-feld="jahrgang"
+                min="1" max="13" size="3" placeholder="Jg." aria-label="weiterer Jahrgang"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
+                placeholder="2028/2029" size="9" aria-label="eingeführt ab Schuljahr"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
+                placeholder="2029/2030" size="9" aria-label="ausgemustert nach Schuljahr"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="beschluss"
+                placeholder="FK 12.05.2026" size="14" aria-label="Beschluss der Fachkonferenz"></td>
+              <td><span class="klein grau">weiterer Jahrgang</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="planung-block">
+        <h4>Rücklage für die Fachschaft {{ fach }}</h4>
+        <label>Exemplare
+          <input type="number" class="planung-feld" data-planung-feld="anzahl" min="0" max="2000"
+            value="{{ ruecklage.anzahl if ruecklage and ruecklage.anzahl is not none else '' }}"
+            size="4" aria-label="Anzahl der Exemplare">
+        </label>
+        <label>Stand
+          <select class="planung-feld" data-planung-feld="status" aria-label="Status der Rücklage">
+            <option value=""{% if not ruecklage or not ruecklage.status %} selected{% endif %}>—</option>
+            {% for wert in planung.ruecklage_status %}
+            <option value="{{ wert }}"{% if ruecklage and ruecklage.status == wert %} selected{% endif %}>{{ wert }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Bemerkung
+          <input type="text" class="planung-feld" data-planung-feld="bemerkung"
+            value="{{ ruecklage.bemerkung if ruecklage else '' }}" aria-label="Bemerkung zur Rücklage">
+        </label>
+        <button type="button" class="btn btn-default" data-planung="ruecklage"
+          data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}">Rücklage speichern</button>
+      </div>
+    </div>
+  </td>
+</tr>
+{% endmacro %}

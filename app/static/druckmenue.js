@@ -10,8 +10,11 @@
 //     Gesperrte Felder schickt der Browser nicht mit.
 //   * Die Auswahl steht bei jedem Öffnen auf "Alle".
 //   * Wechsel auf "Individuell": die Häkchen zeigen die Gruppen der zuletzt
-//     gewählten Option. "veränderte" und "nicht bestätigte" sind Platzhalter
-//     und stehen für alle Fächer (data-gruppen="alle").
+//     gewählten Option. "alle" heißt alle; sonst steht in data-gruppen die
+//     Liste der Namen (JSON), die der Server ausgerechnet hat - heute für
+//     "nicht bestätigte". Eine solche Option schaltet selbst auf
+//     "Individuell": nur so steht die fertige Auswahl in der PDF-URL, und F5
+//     im PDF-Tab zeigt dieselben Fächer. "veränderte" ist noch "alle".
 //   * Ohne einen einzigen angehakten Eintrag lässt sich kein PDF öffnen.
 // Alle anderen Felder behalten ihren Wert, bis die Seite neu geladen wird.
 (function () {
@@ -62,8 +65,20 @@
     }
 
     function uebernimm(option) {
-      // Heute steht jede Option außer "Individuell" für alle Einträge.
-      if (option.dataset.gruppen === "alle") for (const h of haekchen) h.checked = true;
+      const gruppen = option.dataset.gruppen;
+      if (gruppen === undefined) return;
+      if (gruppen === "alle") {
+        for (const h of haekchen) h.checked = true;
+        return;
+      }
+      let namen;
+      try {
+        namen = new Set(JSON.parse(gruppen));
+      } catch (fehler) {
+        for (const h of haekchen) h.checked = true;
+        return;
+      }
+      for (const h of haekchen) h.checked = namen.has(h.value);
     }
 
     for (const option of optionen) {
@@ -71,6 +86,16 @@
         const eigene = option === individuell;
         if (eigene) uebernimm(zuletzt);
         else zuletzt = option;
+        // Eine Option mit fertiger Namensliste wählt sie selbst aus und gibt
+        // an "Individuell" ab - sonst stünde in der URL wieder "alle".
+        if (!eigene && option.dataset.gruppen && option.dataset.gruppen !== "alle") {
+          uebernimm(option);
+          individuell.checked = true;
+          listenKnopf.disabled = false;
+          for (const h of haekchen) h.disabled = false;
+          auswahlPruefen();
+          return;
+        }
         listenKnopf.disabled = !eigene;
         for (const h of haekchen) h.disabled = !eigene;
         if (!eigene) listeOffen(false);

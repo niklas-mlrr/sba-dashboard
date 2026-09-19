@@ -183,7 +183,7 @@ aufbauen.
 | „Konto hat keine Ausleihe-Verwalter-Rolle" | Ihr IServ-Konto darf diese Zahlen nicht sehen. Ansehen und Ändern geht trotzdem — nur der Abruf nicht. Wer die Rolle vergeben kann, ist die IServ-Administration |
 | „IServ hat nicht geantwortet" | Netzverbindung weg oder IServ gerade nicht erreichbar. Später erneut versuchen |
 | „Die Zuordnung Fach zu Buch ist nicht eindeutig" | In IServ stehen für ein Fach mehrere Bücher, und das Programm kann nicht raten, welches gemeint ist. **Es wurde nichts gespeichert.** Die Liste darunter sagt, welche Fächer betroffen sind — das muss jemand Technisches auflösen |
-| „Die Datei ist gerade in Excel geöffnet" | Siehe Abschnitt 7 |
+| „Die Datei ist gerade in Excel geöffnet" | Siehe Abschnitt 8 |
 
 Wichtig beim vorletzten Fall: Das Programm speichert lieber **gar nichts** als
 die Hälfte. Eine halb aktualisierte Liste wäre schlimmer als eine veraltete,
@@ -219,7 +219,79 @@ Fach mit mehreren Büchern; die Legende nennt dann die Titel einzeln.
 
 ---
 
-## 7. „Die Datei ist gerade in Excel geöffnet"
+## 7. Bücherlisten: Preise prüfen, Listen bestätigen, Bücher ein- und ausmustern
+
+Oben in der Leiste steht **„Bücherlisten"** mit den drei Ansichten Verlag, Fach
+und Jahrgang. Sie zeigen immer den Stand aus IServ. Was darüber hinaus über ein
+Schuljahr hinweg entschieden wird — geprüfte Preise, Freigaben der
+Fachkonferenzen, Einführungen, Ausmusterungen, Rücklagen — speichert das
+Programm in einer eigenen Exceldatei je Schuljahr, im selben Ordner wie die
+Bestandsliste (`Bücherlisten und Planung 2026-2027.xlsx`). Wer nur nachsehen
+will, kann sie in Excel öffnen; das Programm muss dafür nicht laufen.
+
+**Einmal zu Beginn: „Aus IServ aktualisieren"** (Knopf oben). Er holt die
+Bücherlisten dieses und des vorigen Schuljahres und legt die Datei an. Später
+drückt man ihn wieder, wenn sich in IServ etwas geändert hat. Er überschreibt
+dabei **nichts** von dem, was Sie eingetragen haben — nur Titel, Verlage,
+Jahrgänge und Preise kommen frisch aus IServ.
+
+### Schritt 1: die Preise (Ansicht „Verlag")
+
+Öffnen Sie einen Verlag. In der Spalte **Status** steht zu jedem Buch, ob sein
+Preis schon gegen die Verlagsliste geprüft wurde.
+
+- **Ein einzelnes Buch:** Kürzel oben eintragen, dann in der Zeile auf
+  **„prüfen"** klicken.
+- **Die ganze Verlagsliste:** Kürzel und Datum oben eintragen, dann
+  **„Preise bestätigen"**.
+
+Gespeichert wird dabei der **Betrag**, nicht nur ein Haken. Ändert jemand den
+Preis später in IServ, springt die Zeile auf **„abweichend"** — dann stimmt die
+Bücherliste nicht mehr mit dem überein, was geprüft wurde, und der Preis gehört
+in IServ korrigiert. Ein **neu hinzugekommenes Buch** steht automatisch wieder
+auf „offen"; Sie müssen nicht daran denken, nach einer Fachkonferenz erneut zu
+prüfen.
+
+### Schritt 2: die Fachkonferenzen (Ansicht „Fach")
+
+Öffnen Sie ein Fach. Oben stehen Kürzel, Datum und **„Liste bestätigen"** — die
+Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch.
+
+Kommt danach ein Buch hinzu oder fällt eines weg, wechselt der Status auf
+**„veraltet"**, und darunter steht, welche Titel es betrifft. Kürzel und Datum
+der letzten Freigabe bleiben lesbar stehen.
+
+Im Druckmenü wählt **„nicht bestätigte"** genau die Fächer aus, deren Freigabe
+noch fehlt oder veraltet ist.
+
+### Schritt 3: Einführung, Ausmusterung, Rücklage (ebenfalls Ansicht „Fach")
+
+Hinter jedem Buch steht **„Planung…"**. Ein Klick klappt darunter zwei Dinge
+auf:
+
+**Links: je Jahrgang zwei Felder.** „eingeführt ab" und „ausgemustert nach",
+jeweils ein Schuljahr in der Schreibweise `2028/2029`. Das ist bewusst je
+Jahrgang einzeln: Wird ein Mehrjahresband gestaffelt eingeführt — erst Jg. 7,
+ein Jahr später Jg. 8 —, tragen Sie beides getrennt ein. In der letzten Zeile
+lässt sich ein **weiterer Jahrgang** eintragen, auch einer, der das Buch heute
+noch gar nicht hat. Gespeichert wird, sobald Sie ein Feld verlassen. Ins Feld
+**Beschluss** gehört, worauf die Entscheidung beruht, z. B. `FK 12.05.2026`.
+
+**Rechts: die Rücklage.** Wie viele Exemplare die Fachschaft behalten möchte,
+statt sie wegzuwerfen, dazu ein Stand (gewünscht / zugesagt / zurückgelegt) und
+eine Bemerkung. Dann **„Rücklage speichern"**.
+
+### Was in der Datei steht
+
+Fünf Blätter: **Preise je Verlag**, **Bücher je Fach**, **Bücher je Jahrgang**,
+**Fachbestätigung** und **Info**. Dieselben Bücher stehen also mehrfach — einmal
+je Arbeitsschritt. Wenn Sie direkt in Excel arbeiten wollen: Es werden nur die
+**hell hinterlegten** Spalten gelesen. Alles andere schreibt das Programm bei
+jedem „Aus IServ aktualisieren" neu; Änderungen daran gehen verloren.
+
+---
+
+## 8. „Die Datei ist gerade in Excel geöffnet"
 
 Der häufigste Fehler im Alltag — und meist der eigene zweite Bildschirm.
 
@@ -239,7 +311,7 @@ Zwei Dinge, die dabei zu wissen sind:
 
 ---
 
-## 8. Beenden
+## 9. Beenden
 
 Knopf **„Beenden"** im Programmfenster. Die Seite selbst hat keinen eigenen Beenden-Knopf.
 Danach kann auch das schwarze Fenster geschlossen werden.
@@ -251,7 +323,7 @@ alles. Es geht dabei nichts verloren, weil jede Änderung sofort gespeichert wir
 
 ---
 
-## 9. Wenn gar nichts geht
+## 10. Wenn gar nichts geht
 
 Der Reihe nach:
 
@@ -275,7 +347,7 @@ mitten im Speichern lässt die alte Fassung unberührt.
 
 ---
 
-## 10. Für den Fall, dass jemand Technisches übernimmt
+## 11. Für den Fall, dass jemand Technisches übernimmt
 
 - Der Quellcode liegt auf GitHub: `niklas-mlrr/sba-dashboard`, dazu die
   Bibliothek `niklas-mlrr/ausleihe-api` (der IServ-Client). Das Excel-Tooling

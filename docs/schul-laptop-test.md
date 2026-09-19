@@ -253,6 +253,28 @@ beiseitelegen — „Erzeugen" überschreibt sie vollständig.
 | G4-7 | Eine Zelle über das Auswahlfeld ändern | Feld kurz hervorgehoben; in Excel steht der neue Wert, `backups/` hat eine Sicherung |
 | G4-8 | Dieselbe Datei in Excel offen lassen und erneut ändern | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |
 
+### G5. Buchplanung (Preise, Freigaben, Einführung/Ausmusterung)
+
+Schreibt in eine **dritte** Datei im Ordner der Bestandsmappe, je Schuljahr eine
+eigene (`Bücherlisten und Planung 2026-2027.xlsx`). Sie entsteht neu; es gibt
+nichts zu sichern.
+
+| # | Schritt | Erwartet |
+|---|---------|----------|
+| G5-1 | Angemeldet „Bücherlisten → Fach" öffnen | Hinweis „Für das Schuljahr … ist noch nichts gespeichert", Knopf „Aus IServ aktualisieren" |
+| G5-2 | „Aus IServ aktualisieren" | Dauer? Danach liegt die Datei im Ordner der Bestandsmappe |
+| G5-3 | Die Datei in Excel öffnen | Fünf Blätter; die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
+| G5-4 | Blatt „Bücher je Jahrgang" durchsehen | Enthält auch Bücher **nur** des Vorjahres (Spalte Herkunft) — das sind die ausgemusterten |
+| G5-5 | Verlags-Ansicht: Kürzel eintragen, „Preise bestätigen" | Alle Zeilen des Verlags auf „bestätigt"; in der Übersicht „x von x geprüft" |
+| G5-6 | Denselben Verlag in IServ um einen Cent ändern, dann „Aus IServ aktualisieren" | Die geänderte Zeile steht auf „abweichend", die übrigen bleiben „bestätigt" |
+| G5-7 | Fach-Ansicht: Kürzel + Datum, „Liste bestätigen" | Status „bestätigt"; im Blatt „Fachbestätigung" stehen Kürzel, Datum und die ISBNs |
+| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „veraltet", darunter „hinzugekommen: …"; das neue Buch steht beim Preis auf „offen" |
+| G5-9 | „Planung…" bei einem Buch: Ausmusterung eintragen | Status der Zeile wechselt; in Excel steht das Schuljahr in „ausgemustert nach" |
+| G5-10 | „Planung…": weiterer Jahrgang mit „eingeführt ab" | Neue Zeile im Blatt „Bücher je Jahrgang", Herkunft „nur Planung", Status „geplant" |
+| G5-11 | Rücklage mit Anzahl und Bemerkung speichern | Steht im Blatt „Bücher je Fach" beim richtigen Fach |
+| G5-12 | Datei in Excel offen lassen und etwas eintragen | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |
+| G5-13 | Druckmenü der Fach-Übersicht: „nicht bestätigte" | Hakt genau die Fächer ohne Freigabe an und springt auf „Individuell"; die PDF-URL nennt sie |
+
 ### H. Beenden
 
 Der Anlass für das Programmfenster steht in H2: der Weg zurück, wenn der Tab weg

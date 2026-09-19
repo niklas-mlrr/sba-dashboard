@@ -405,6 +405,56 @@ atomar ersetzen, Sicherung in `backups/` (siehe oben, „Der Schreibpfad"). Eine
 zweite, laxere Fassung für die zweite Datei wäre genau die Drift, gegen die die
 erste angetreten ist.
 
+## Die Buchplanung: Preise prüfen, Listen freigeben, Einführung und Ausmusterung
+
+Eine Bücherliste ist über ein Schuljahr hinweg ein Arbeitsablauf: der
+Beauftragte prüft die Preise gegen die Verlagslisten, die Fachkonferenzleitungen
+geben ihre Fächer frei, dabei werden Bücher eingeführt und ausgemustert, und
+Fachschaften bitten darum, Exemplare zurückzulegen. IServ hält nichts davon
+fest. Die Regeln stehen vollständig in
+[`buchplanung/README.md`](../buchplanung/README.md); hier stehen die vier
+Entscheidungen dahinter.
+
+**Eine Exceldatei je Schuljahr, nicht eine Datenbank.** Derselbe Grund wie bei
+den Mehrjahresbänden: fällt das Dashboard aus — etwa nach einem IServ-Update —,
+liegt der Stand weiter auf dem Gruppenlaufwerk und ist ohne dieses Programm
+lesbar. Je Schuljahr eine eigene Datei, weil der Stand des Vorjahres beim
+Wechsel nicht überschrieben, sondern zum Nachschlagen liegen bleiben soll;
+der Dateiname trägt das Schuljahr (`Einstellungen.buchplanung_pfad`).
+
+**Dieselben Bücher stehen dreimal — einmal je Arbeitsschritt.** Verlag für die
+Preisprüfung (jedes Buch hat genau einen), Fach für Freigabe und Rücklage (ein
+Buch kann zu mehreren gehören), Jahrgang für Einführung und Ausmusterung. Wer
+die Datei ohne das Dashboard öffnet, findet drei Listen, die drei Personen
+entsprechen, statt eines Rohdatenblatts mit Anhangstabellen. Widerspruchsfrei
+bleibt das durch **eine** Regel: aus jedem Blatt wird nur seine eigene
+Eintragungs-Spalte zurückgelesen, alles andere wird bei jedem Schreiben neu
+gesetzt. Dieselbe Regel wie beim Mehrjahresbände-Blatt, nur auf fünf Blätter
+angewandt.
+
+**Kein Status wird gespeichert, jeder wird gerechnet.** „bestätigt",
+„abweichend", „veraltet", „läuft aus" folgen aus den eingetragenen Werten
+(`buchplanung/core/modelle.py`). Ein gespeicherter Status könnte den Werten
+widersprechen, aus denen er stammt, und niemand wüsste, welcher recht hat. Zwei
+Anforderungen fallen daraus von selbst: ein neu eingeführtes Buch hat keinen
+geprüften Preis und steht damit auf „offen" — niemand muss daran denken, nach
+einer Fachkonferenz erneut prüfen zu lassen —, und ein in IServ geänderter
+Preis kippt die Zeile auf „abweichend". Deshalb wird der **Betrag** gespeichert
+und nicht nur ein Haken.
+
+**Der Abgleich führt zusammen, er überschreibt nicht.** Anders als bei den
+Mehrjahresbänden: dort ist die Datei die gerechnete Ausgabe eines Vergleichs,
+hier ist sie der Arbeitsstand von vier Personen. Aus IServ kommen Titel,
+Verlag, Fächer, Jahrgänge und Preise; alles von Hand Eingetragene bleibt,
+solange sein Schlüssel existiert. Was wegfällt — ein Buch, das in beiden
+Schuljahren nicht mehr vorkommt —, fällt **mit einer Warnung** weg, die im
+Blatt `Info` landet.
+
+Eingetragen wird in den Bücherlisten-Seiten selbst (Verlag: Preise; Fach:
+Freigabe, Einführung, Ausmusterung, Rücklage), nicht auf einem eigenen Reiter —
+dort stehen die Bücher ohnehin. Der Schreibpfad ist wieder derselbe: Schloss,
+`mtime`-Vergleich, atomar ersetzen, Sicherung.
+
 ## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 
 `POST /api/anmeldung` prüft die Zugangsdaten **synchron** (`AusleiheClient(...)`,
