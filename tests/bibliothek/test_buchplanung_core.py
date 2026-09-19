@@ -314,11 +314,12 @@ class _ZweiJahre:
     }
 
     class _Schuljahre:
+        # Kennung und Anzeigename sind verschieden - wie im echten IServ.
         def get_current(self):
-            return {"id": "2026/2027", "name": "2026/2027"}
+            return {"id": "2026/2027", "name": "Schuljahr 26/27"}
 
         def get_by_id(self, kennung):
-            return {"id": kennung, "name": kennung}
+            return {"id": kennung, "name": "Schuljahr 26/27"}
 
         def get_booklists(self, kennung):
             if kennung not in _ZweiJahre.LISTEN:
@@ -341,7 +342,10 @@ class _ZweiJahre:
 def test_schnappschuss_legt_beide_schuljahre_uebereinander():
     schnappschuss = lade_schnappschuss(_ZweiJahre(), heute=date(2026, 9, 19))
 
+    # Die Kennung, nicht der Name: mit ihr adressiert IServ das Schuljahr, und
+    # nur sie lässt sich mit "eingeführt ab" und "ausgemustert nach" vergleichen.
     assert schnappschuss.schuljahr == "2026/2027"
+    assert schnappschuss.name == "Schuljahr 26/27"
     assert schnappschuss.vorjahr == "2025/2026"
     je_isbn = {buch.isbn: buch for buch in schnappschuss.buecher}
     assert je_isbn[DEUTSCH].jahrgaenge_aktuell == (5,)

@@ -77,6 +77,10 @@ def _laden(request: Request) -> Buecherlisten | Response:
 def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
     """Der gespeicherte Stand dieses Schuljahrs, fertig zum Anzeigen.
 
+    ``schuljahr`` ist die IServ-**Kennung** ("2026/2027"), nicht der
+    Anzeigename: sie ist der Schlüssel der Datei und geht von der Seite
+    unverändert in jede Eintragung zurück.
+
     Die Seiten selbst kommen live aus IServ; was geprüft, bestätigt und geplant
     ist, steht in der Exceldatei. Beides wird hier zusammengelegt - **ohne**
     dass ein Fehler an der Datei die Bücherliste unbrauchbar macht: fehlt sie
@@ -291,7 +295,7 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         [f"Jahrgang {liste.jahrgang}" for liste in daten.listen if liste.jahrgang is not None]
         if ansicht == "jahrgang" else [g.name for g in gruppen]
     )
-    kontext = _planungskontext(request, daten.schuljahr)
+    kontext = _planungskontext(request, daten.kennung)
     return _seite(request, "buecherliste_uebersicht.html", {
         "planung": kontext,
         # Was hinter "nicht bestätigte" im Druckmenü steckt: die Fächer ohne
@@ -321,7 +325,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         return daten
     ansicht_name, gruppierung = _ANSICHTEN[ansicht]
     werte: dict[str, Any] = {
-        "planung": _planungskontext(request, daten.schuljahr),
+        "planung": _planungskontext(request, daten.kennung),
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
     }

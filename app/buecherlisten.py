@@ -140,8 +140,17 @@ class Gruppe:
 
 @dataclass(frozen=True)
 class Buecherlisten:
+    """Die Listen eines Schuljahrs, mit **beiden** Bezeichnungen.
+
+    ``schuljahr`` ist der Anzeigename ("Schuljahr 26/27"), ``kennung`` die ID,
+    mit der IServ das Jahr adressiert ("2026/2027"). Die beiden sind nicht
+    austauschbar: die Kennung ist der Schlüssel der Buchplanungs-Datei und
+    lässt sich mit anderen Schuljahren vergleichen, der Name nicht.
+    """
+
     schuljahr: str
     listen: tuple[Liste, ...]
+    kennung: str = ""
 
     def liste_fuer_jahrgang(self, jahrgang: int) -> Liste | None:
         return next((liste for liste in self.listen if liste.jahrgang == jahrgang), None)
@@ -159,7 +168,8 @@ def lade_buecherlisten(client: BuecherlistenClient, *, heute: date | None = None
         detail = client.schoolyears.get_booklist(schuljahr_id, kopf["id"])
         listen.append(_liste(kopf, detail, heute))
     listen.sort(key=lambda liste: (liste.jahrgang is None, liste.jahrgang or 0, liste.titel))
-    return Buecherlisten(schuljahr=schuljahr.get("name") or schuljahr_id, listen=tuple(listen))
+    return Buecherlisten(schuljahr=schuljahr.get("name") or schuljahr_id,
+                         listen=tuple(listen), kennung=str(schuljahr_id))
 
 
 def _datum(roh: Any) -> date | None:

@@ -4,6 +4,14 @@ Ohne Netz: der Fake-Client liefert zwei Schuljahre, deren Unterschied die drei
 Fälle abdeckt, um die es geht - ein Buch bleibt, eines kommt neu dazu, eines
 gibt es nur noch im Vorjahr (ausgemustert, Rücklage-Kandidat).
 
+Der Fake gibt dem Schuljahr einen **anderen Namen als seine Kennung**
+("Schuljahr 26/27" gegenüber "2026/2027"), so wie das echte IServ. Das ist
+kein Detail: die Kennung adressiert das Jahr in der API, steht im Dateinamen
+und wird mit anderen Schuljahren verglichen; der Name ist nur Beschriftung.
+Ein Fake, in dem beide gleich sind, verwechselt sie folgenlos - die Anwendung
+tat es am 2026-09-19 nicht folgenlos ("Nicht gefunden:
+/schoolyears/Schuljahr%2026%2F27").
+
 Was diese Datei festhält, sind die Zusagen der Schreibkette: ohne gültige
 ``mtime`` wird nicht geschrieben (409), ohne Datei gibt es nichts einzutragen
 (503), und jede Fehlermeldung ist ein deutscher Satz.
@@ -37,14 +45,17 @@ _BUECHER: dict[str, dict[int, list[tuple[str, str, list[str], str, float]]]] = {
 }
 
 
+NAME = "Schuljahr 26/27"
+
+
 class _Schuljahre:
     def get_current(self) -> dict:
-        return {"id": "2026/2027", "name": "2026/2027"}
+        return {"id": "2026/2027", "name": NAME}
 
     def get_by_id(self, schoolyear_id: str) -> dict:
         if schoolyear_id not in _BUECHER:
-            raise KeyError(schoolyear_id)
-        return {"id": schoolyear_id, "name": schoolyear_id}
+            raise KeyError(f"Nicht gefunden: /schoolyears/{schoolyear_id}")
+        return {"id": schoolyear_id, "name": NAME}
 
     def get_booklists(self, schoolyear_id: str) -> list[dict]:
         return [{"id": 100 + grade, "grade": grade}
@@ -107,6 +118,24 @@ def test_abgleich_ohne_anmeldung_ist_401(seiten: TestClient) -> None:
     assert "fehler" in antwort.json()
 
 
+def test_die_seite_reicht_die_kennung_weiter_nicht_den_namen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Der Rückfall vom 2026-09-19: der Anzeigename ging als Kennung an IServ.
+
+    Die Seite trägt die Kennung in ``data-schuljahr``, und genau sie kommt bei
+    jeder Eintragung zurück. Stünde dort der Name, verlangte der nächste
+    Abgleich von IServ ein Schuljahr namens „Schuljahr 26/27" - das es nicht
+    gibt.
+    """
+    text = seiten.get("/buecherliste/fach").text
+    assert 'data-schuljahr="2026/2027"' in text
+    assert NAME not in text.split("<main>")[0].split('data-schuljahr')[1][:40]
+    # Und ein zweiter Abgleich von der Seite aus läuft durch.
+    assert seiten.post("/api/buchplanung/abgleich",
+                       json={"schuljahr": "2026/2027"}).status_code == 200
+
+
 def test_abgleich_schreibt_die_datei_je_schuljahr(
     abgeglichen: dict, einstellungen: Einstellungen,
 ) -> None:
@@ -117,6 +146,8 @@ def test_abgleich_schreibt_die_datei_je_schuljahr(
     assert abgeglichen["datei"] == str(pfad)
 
     planung = abgeglichen["planung"]
+    # Die Kennung, nicht der Anzeigename: sie steht im Dateinamen und wird mit
+    # den Schuljahren der Planung verglichen.
     assert planung["schuljahr"] == "2026/2027"
     assert planung["vorjahr"] == "2025/2026"
     je_isbn = {buch["isbn"]: buch for buch in planung["buecher"]}
@@ -229,6 +260,19 @@ def test_fachbestaetigung_veraltet_wenn_ein_buch_dazukommt(
 
 
 # ── Planung und Rücklage ─────────────────────────────────────────────────────
+
+
+def test_planungsstatus_wird_gegen_die_kennung_gerechnet(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Mit dem Anzeigenamen als Schuljahr stünde hier immer „im Einsatz"."""
+    antwort = seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "jahrgang": 5,
+        "ausgemustert_nach": "2025/2026", "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert next(z for z in buch["planung"] if z["jahrgang"] == 5)["status"] == "ausgemustert"
 
 
 def test_einfuehrung_in_einen_kuenftigen_jahrgang(

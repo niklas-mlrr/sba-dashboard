@@ -33,12 +33,21 @@ AusleiheClient = SchuljahreClient
 
 @dataclass(frozen=True)
 class Schnappschuss:
-    """Was IServ zu zwei Schuljahren sagt - der Eingabestand des Abgleichs."""
+    """Was IServ zu zwei Schuljahren sagt - der Eingabestand des Abgleichs.
+
+    ``schuljahr`` ist die **Kennung** (``"2026/2027"``), nicht der Anzeigename
+    (``"Schuljahr 26/27"``). Beides kommt aus demselben Objekt und sieht
+    ähnlich aus, ist aber nicht dasselbe: die Kennung adressiert das Schuljahr
+    in IServ, steht im Dateinamen und wird mit anderen Schuljahren verglichen
+    (``eingeführt ab``, ``ausgemustert nach``). Der Name ist nur Beschriftung -
+    und könnte morgen "SJ 2026/27" heißen, ohne dass sich etwas ändert.
+    """
 
     schuljahr: str
     vorjahr: str
     buecher: tuple[Buch, ...]
     stand: date
+    name: str = ""
     warnungen: tuple[str, ...] = ()
 
 
@@ -97,7 +106,7 @@ def lade_schnappschuss(
         ))
 
     return Schnappschuss(
-        schuljahr=name, vorjahr=vorjahr_id, buecher=tuple(buecher),
+        schuljahr=kennung, vorjahr=vorjahr_id, buecher=tuple(buecher), name=name,
         stand=heute or date.today(), warnungen=tuple(warnungen),
     )
 

@@ -422,6 +422,17 @@ lesbar. Je Schuljahr eine eigene Datei, weil der Stand des Vorjahres beim
 Wechsel nicht überschrieben, sondern zum Nachschlagen liegen bleiben soll;
 der Dateiname trägt das Schuljahr (`Einstellungen.buchplanung_pfad`).
 
+Schlüssel ist dabei immer die **Kennung** des Schuljahrs (`2026/2027`), nie
+sein Anzeigename (`Schuljahr 26/27`). IServ liefert beides im selben Objekt,
+und sie sehen sich ähnlich genug, um verwechselt zu werden — mit zwei Folgen:
+der nächste Abruf fragt nach einem Schuljahr, das es nicht gibt (`Nicht
+gefunden: /schoolyears/Schuljahr%2026%2F27`, am 2026-09-19 passiert), und die
+Planungsstatus lassen sich nicht mehr rechnen, weil aus „Schuljahr 26/27"
+keine Jahreszahl zu lesen ist. `Buecherlisten` trägt deshalb beide Felder
+getrennt (`schuljahr` für die Anzeige, `kennung` als Schlüssel), und die
+Testfakes geben ihnen **verschiedene** Werte — ein Fake, in dem beide gleich
+sind, hätte den Fehler mitgetragen.
+
 **Dieselben Bücher stehen dreimal — einmal je Arbeitsschritt.** Verlag für die
 Preisprüfung (jedes Buch hat genau einen), Fach für Freigabe und Rücklage (ein
 Buch kann zu mehreren gehören), Jahrgang für Einführung und Ausmusterung. Wer
