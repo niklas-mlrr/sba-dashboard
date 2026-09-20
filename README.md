@@ -18,7 +18,12 @@ Rücklagen für die Fachschaften. Er liegt als Exceldatei je Schuljahr neben der
 Bestandsmappe (`buecherlisten/planung/`,
 [`docs/architektur.md`](docs/architektur.md#die-buchplanung-preise-prüfen-listen-freigeben-einführung-und-ausmusterung),
 Regeln in [`buecherlisten/planung/README.md`](buecherlisten/planung/README.md)); eingetragen wird in
-den Bücherlisten-Seiten selbst. Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
+den Bücherlisten-Seiten selbst. Seit 2026-09-20 öffnet dort ein Klick auf eine
+Buchzeile ein **Planungsmenü** (Einführung und Ausmusterung je Jahrgang,
+„+ Jahrgang“, Rücklage, Bemerkungen) mit Abbrechen und Speichern; was geplant
+ist, steht danach in der Jahrgang-Spalte der Liste — `7, 8 (ab 2028/2029)`.
+Bestätigt wird weiterhin die Liste als Ganzes, über „Liste bestätigen“ oben auf
+der Seite. Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
 die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
 welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher
 (`mehrjahresbaende/`, [`docs/architektur.md`](docs/architektur.md#die-mehrjahresbände-übersicht)). Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
@@ -53,7 +58,8 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `POST /api/buchplanung/preis` | Geprüfter Preis eines Buchs: `{schuljahr, isbn, preis, kuerzel, datum, mtime}` → 200/400/409/423/503 |
 | `POST /api/buchplanung/preise` | Eine ganze Verlagsliste: `{schuljahr, verlag, kuerzel, datum, mtime}` |
 | `POST /api/buchplanung/fach` | Freigabe der Fachkonferenzleitung: `{schuljahr, fach, kuerzel, datum, mtime}` |
-| `POST /api/buchplanung/planung` | Einführung/Ausmusterung je Fach und Jahrgang: `{schuljahr, isbn, fach, jahrgang, eingefuehrt_ab, ausgemustert_nach, kuerzel, datum, mtime}` |
+| `POST /api/buchplanung/buch` | Das Planungsmenü eines Buchs in einem Fach, in einem Zug: `{schuljahr, isbn, fach, zeilen: [{jahrgang, eingefuehrt_ab, ausgemustert_nach, bemerkung}], ruecklage, mtime}` — `zeilen` ist der ganze Stand, ein fehlender Jahrgang wird gelöscht |
+| `POST /api/buchplanung/planung` | Eine einzelne Zeile: `{schuljahr, isbn, fach, jahrgang, eingefuehrt_ab, ausgemustert_nach, kuerzel, datum, mtime}` |
 | `POST /api/buchplanung/ruecklage` | Rücklage einer Fachschaft: `{schuljahr, isbn, fach, anzahl, status, mtime}` |
 | `GET /api/mehrjahresbaende` | dieselbe Übersicht als JSON |
 | `POST /api/mehrjahresbaende/erzeugen` | Aus zwei Schuljahren neu rechnen und die Datei schreiben: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |

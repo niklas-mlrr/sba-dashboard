@@ -453,6 +453,24 @@ den bestätigten Stand als ISBN-Liste mitführte, um „veraltet" erkennen zu
 können. Das entfällt: ein neu dazugekommenes Buch bringt eine Zeile ohne
 Kürzel mit, und das Fach fällt von allein auf „teilweise" zurück.
 
+Eingetragen wird die Bestätigung **nur** dort, oben auf der Fach-Seite — das
+Planungsmenü eines Buchs kennt weder Kürzel noch Datum. Ändert sich eine schon
+bestätigte Zeile, entscheidet **das laufende Schuljahr**, ob die Bestätigung
+stehen bleibt (`wirkt_im_schuljahr`, `setze_buchplanung`): eine Ausmusterung,
+die erst in drei Jahren greift, ändert nichts an der Liste, die bestätigt
+wurde, und das Kürzel bleibt. Wird ein Buch dagegen ab sofort eingeführt oder
+ist es ab sofort weg, fällt die Bestätigung dieser Zeile — die
+Fachkonferenzleitung hat diese Liste nie gesehen.
+
+**Das Blatt `Fächer & Jahrgang` sagt, woher eine Zeile stammt.** Die Spalte
+`in der Bücherliste` trennt die (Fach, Jahrgang)-Paare aus IServ von denen, die
+nur geplant sind. Ohne sie wären beide nach dem ersten Speichern nicht mehr zu
+unterscheiden — das Blatt trägt sie nebeneinander, und beim Lesen sähen sie
+gleich aus. Zwei Dinge hängen daran: das Menü lässt die Einführung eines
+laufenden Jahrgangs nicht ändern (daran ist nichts mehr zu entscheiden), und
+eine geleerte Planungszeile verschwindet wirklich, statt als leere Zeile
+zurückzukommen.
+
 **In der Datei steht das laufende Schuljahr und aus dem Vorjahr, was leihbar
 war.** Ein Kaufbuch, das aus der Bücherliste verschwindet, liegt in keinem
 Regal der Schule — es gibt daran nichts auszumustern und nichts
@@ -481,6 +499,33 @@ Eingetragen wird in den Bücherlisten-Seiten selbst (Verlag: Preise; Fach:
 Freigabe, Einführung, Ausmusterung, Rücklage), nicht auf einem eigenen Reiter —
 dort stehen die Bücher ohnehin. Der Schreibpfad ist wieder derselbe: Schloss,
 `mtime`-Vergleich, atomar ersetzen, Sicherung.
+
+**Je Buch ein Menü, kein Aufklapper.** In der Fach-Ansicht öffnet ein Klick auf
+die Buchzeile einen `<dialog>` im Aufbau des Druckmenüs: Einführung und
+Ausmusterung je Jahrgang, „+ Jahrgang" für eine Neueinführung, die Rücklage,
+darunter Abbrechen und Speichern. Bis 2026-09-20 stand das als eingeklappte
+Tabellenzeile unter dem Buch, und **jedes Feld** speicherte für sich beim
+Verlassen. Beides ist entfallen:
+
+* Ein Menü speichert auf einen Knopfdruck, also auch mehrere Jahrgänge und die
+  Rücklage auf einmal. Nacheinander abgeschickte Einzelanfragen würden an der
+  zweiten am `mtime`-Vergleich scheitern — schon die erste schreibt die Datei
+  neu. Deshalb gibt es `POST /api/buchplanung/buch`: alle Zeilen eines
+  (Buch, Fach) in **einem** Schreibvorgang. `zeilen` ist dabei der ganze Stand,
+  nicht eine Liste von Änderungen — das Menü zeigt alles, also schickt es auch
+  alles zurück, und ein fehlender Jahrgang heißt „gelöscht".
+* Der Inhalt des Menüs steht je Buch fertig gerendert in einem `<template>` und
+  wird beim Öffnen in den einen Dialog der Seite geklont. Eine zweite Fassung
+  der Darstellung in JavaScript wäre die Doppelung, die mit der Vorlage
+  auseinanderläuft; ein `<tr hidden>` je Buch war es nicht, wurde aber von
+  `static/sortieren.js` beim Sortieren von seiner Buchzeile getrennt.
+
+Was geplant ist, steht danach in der **Jahrgang-Spalte** der Bücherliste:
+`7, 8 (ab 2028/2029)` bzw. `9 (bis 2029/2030)`. Unterscheiden sich die
+Jahrgänge, hängt der Zusatz am einzelnen — eine gestaffelte Einführung ist
+gerade der Fall, für den es die Zeilen je Jahrgang gibt, und sie darf in der
+Anzeige nicht wieder verschwinden. Sortiert wird weiter nach den nackten
+Jahrgängen (`data-wert`).
 
 ## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 

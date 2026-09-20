@@ -93,6 +93,13 @@ class MappeUnlesbar(ValueError):
 SPALTE_PREIS = "geprüfter Preis"
 SPALTE_EINFUEHRUNG = "Einführung"
 SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
+# Steht dieses (Fach, Jahrgang) in einer Bücherliste aus IServ - oder ist es
+# bloß geplant? Ohne diese Spalte wäre das nach einem Speichern nicht mehr zu
+# unterscheiden: das Blatt trägt beide Arten von Zeile, und beim Lesen sähen
+# sie gleich aus. Daran hängen zwei Dinge - das Menü lässt die Einführung eines
+# laufenden Jahrgangs nicht ändern, und eine geleerte Planungszeile
+# verschwindet wirklich, statt als leere Zeile wiederzukommen.
+SPALTE_IN_LISTE = "in der Bücherliste"
 
 _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
     BLATT_BUECHER: (
@@ -113,6 +120,7 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("ISBN", 18, False),
         ("Fach", 22, False),
         ("Jahrgang", 10, False),
+        (SPALTE_IN_LISTE, 18, False),
         (SPALTE_EINFUEHRUNG, 13, True),
         (SPALTE_AUSMUSTERUNG, 24, True),
         ("Kürzel", 10, True),
@@ -233,6 +241,10 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     ``Buchreihen`` sind nur die Zusammenfassung dieser Paare und werden nicht
     gelesen - sie stehen dort, damit ein Buch auch ohne das zweite Blatt
     einzuordnen ist.
+
+    Zu den Paaren des Buchs (``kombinationen``) zählen nur die Zeilen, die
+    ``in der Bücherliste`` mit "ja" führen: das Blatt trägt auch die bloß
+    geplanten Jahrgänge, und die stehen gerade **nicht** in einer Liste.
     """
     fehlend = [name for name in BLAETTER if name not in wb.sheetnames]
     if fehlend:
@@ -252,7 +264,11 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
         jahrgang = _ganzzahl(zeile.get("Jahrgang"))
         if not isbn or jahrgang is None:
             continue
-        kombinationen.setdefault(isbn, set()).add((fach, jahrgang))
+        # Eine Datei aus der Zeit vor dieser Spalte kennt den Unterschied
+        # nicht; dort zählt wie früher jede Zeile als Vorkommen. Der nächste
+        # Abgleich stellt die Wahrheit aus IServ ohnehin wieder her.
+        if SPALTE_IN_LISTE not in zeile or _text(zeile.get(SPALTE_IN_LISTE)).casefold() == _JA:
+            kombinationen.setdefault(isbn, set()).add((fach, jahrgang))
         eintrag = Planungszeile(
             isbn=isbn,
             fach=fach,
@@ -415,9 +431,12 @@ def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
     """Je (Buch, Fach, Jahrgang) eine Zeile - sortiert nach Fach, Jahrgang, Titel."""
     zeilen: list[dict[str, object]] = []
     aufgestellt: list[tuple[str, int, str, str]] = []
+    aus_liste: set[tuple[str, str, int]] = set()
     for buch in stand.buecher:
         for fach, jahrgang in stand.zeilen_des_buchs(buch):
             aufgestellt.append((fach, jahrgang, buch.titel.casefold(), buch.isbn))
+        for fach, jahrgang in buch.kombinationen:
+            aus_liste.add((buch.isbn, fach, jahrgang))
     for fach, jahrgang, _, isbn in sorted(
             aufgestellt, key=lambda e: (e[0].casefold(), e[1], e[2], e[3])):
         zeile = stand.planungszeile(isbn, fach, jahrgang)
@@ -425,6 +444,7 @@ def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "ISBN": isbn,
             "Fach": fach,
             "Jahrgang": jahrgang,
+            SPALTE_IN_LISTE: _JA if (isbn, fach, jahrgang) in aus_liste else _NEIN,
             SPALTE_EINFUEHRUNG: zeile.eingefuehrt_ab if zeile else "",
             SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach if zeile else "",
             "Kürzel": zeile.kuerzel if zeile else "",

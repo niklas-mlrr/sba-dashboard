@@ -186,6 +186,45 @@ class PlanungsAnfrage(_BuchplanungAnfrage):
     bemerkung: str = ""
 
 
+class JahrgangEingabe(BaseModel):
+    """Eine Zeile der Planungstabelle im Menü eines Buchs.
+
+    Ohne Kürzel und Datum: bestätigt wird die Liste als Ganzes, oben auf der
+    Fach-Seite (``POST /api/buchplanung/fach``). Was mit einer schon
+    bestätigten Zeile geschieht, wenn sie sich ändert, entscheidet
+    ``buecherlisten/planung/abgleich.py::setze_buchplanung`` - nicht der Körper
+    der Anfrage.
+    """
+
+    jahrgang: int
+    eingefuehrt_ab: str = ""
+    ausgemustert_nach: str = ""
+    bemerkung: str = ""
+
+
+class RuecklageEingabe(BaseModel):
+    """Der Rücklage-Block desselben Menüs."""
+
+    anzahl: int | None = None
+    status: str = ""
+    bemerkung: str = ""
+
+
+class BuchplanungsAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/buch`` - das ganze Menü eines Buchs in einem Fach.
+
+    ``zeilen`` ist der **vollständige** Stand dieses (Buch, Fach): ein Jahrgang,
+    der nicht mehr darin steht, wurde im Menü gelöscht und verschwindet aus der
+    Datei. Eine Liste von Änderungen wäre hier falsch - das Menü zeigt den
+    ganzen Stand, also schickt es ihn auch ganz zurück.
+    """
+
+    isbn: NichtLeer
+    fach: NichtLeer
+    zeilen: list[JahrgangEingabe] = []
+    ruecklage: RuecklageEingabe | None = None
+
+
 class RuecklageAnfrage(_BuchplanungAnfrage):
     """``POST /api/buchplanung/ruecklage`` - der Wunsch einer Fachschaft."""
 

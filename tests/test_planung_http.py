@@ -350,6 +350,161 @@ def test_schuljahr_ohne_schraegstrich_wird_abgelehnt(
     assert "2026/2027" in antwort.json()["fehler"]
 
 
+# ── Das Planungsmenü: alles zu einem Buch in einem Zug ───────────────────────
+
+
+def _zeilen(antwort: dict, isbn: str, fach: str) -> dict[int, dict]:
+    buch = next(b for b in antwort["planung"]["buecher"] if b["isbn"] == isbn)
+    return {z["jahrgang"]: z for z in buch["planung"] if z["fach"] == fach}
+
+
+def test_menue_schreibt_mehrere_jahrgaenge_und_die_ruecklage_auf_einmal(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Ein Menü, ein Knopf, eine Anfrage - sonst käme die zweite auf ein 409."""
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [
+            {"jahrgang": 5, "ausgemustert_nach": "2029/2030", "bemerkung": "FK 05/26"},
+            {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"},
+            {"jahrgang": 8, "eingefuehrt_ab": "2029/2030"},
+        ],
+        "ruecklage": {"anzahl": 4, "bemerkung": "für die Sammlung"},
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    zeilen = _zeilen(antwort.json(), DEUTSCH, "Deutsch")
+    assert zeilen[5]["ausgemustert_nach"] == "2029/2030"
+    assert zeilen[5]["bemerkung"] == "FK 05/26"
+    assert zeilen[5]["status"] == "läuft aus"
+    assert zeilen[7]["status"] == "geplant"
+    assert zeilen[8]["eingefuehrt_ab"] == "2029/2030"
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert buch["ruecklagen"] == [{
+        "fach": "Deutsch", "anzahl": 4, "status": "gewünscht", "kuerzel": "",
+        "datum": None, "bemerkung": "für die Sammlung",
+    }]
+
+
+def test_ein_nicht_mitgeschickter_jahrgang_verschwindet(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Das Menü zeigt den ganzen Stand, also schickt es ihn auch ganz zurück."""
+    stand = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5}, {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"}],
+        "mtime": abgeglichen["mtime"],
+    }).json()
+    assert 7 in _zeilen(stand, DEUTSCH, "Deutsch")
+
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5}], "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    # Jahrgang 5 steht in einer Bücherliste und bleibt deshalb als Zeile stehen;
+    # der nur geplante Jahrgang 7 ist weg.
+    assert 7 not in _zeilen(antwort.json(), DEUTSCH, "Deutsch")
+
+
+def test_derselbe_jahrgang_zweimal_wird_abgelehnt(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 7, "eingefuehrt_ab": "2028/2029"},
+                   {"jahrgang": 7, "eingefuehrt_ab": "2029/2030"}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert "zweimal" in antwort.json()["fehler"]
+
+
+def test_kuenftige_ausmusterung_laesst_die_bestaetigung_stehen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Was erst in drei Jahren greift, ändert die bestätigte Liste nicht."""
+    stand = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "mtime": abgeglichen["mtime"],
+    }).json()
+
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2029/2030"}],
+        "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    assert _zeilen(antwort.json(), DEUTSCH, "Deutsch")[5]["status"] == "läuft aus"
+    fach = next(f for f in antwort.json()["planung"]["faecher"] if f["fach"] == "Deutsch")
+    assert fach["status"] == "bestätigt"
+    assert fach["kuerzel"] == "ABC"
+
+
+def test_ausmusterung_im_laufenden_schuljahr_nimmt_die_bestaetigung_zurueck(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Jetzt fehlt das Buch in der Liste, die bestätigt wurde - also neu prüfen."""
+    stand = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "mtime": abgeglichen["mtime"],
+    }).json()
+
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026"}],
+        "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    assert _zeilen(antwort.json(), DEUTSCH, "Deutsch")[5]["status"] == "ausgemustert"
+    fach = next(f for f in antwort.json()["planung"]["faecher"] if f["fach"] == "Deutsch")
+    # Deutsch hat genau diese eine Zeile; ohne ihr Kürzel ist nicht "teilweise"
+    # bestätigt, sondern gar nichts.
+    assert fach["status"] == "offen"
+    assert fach["kuerzel"] == ""
+
+
+def test_das_menue_weist_ein_fremdes_fach_ab(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Chemie",
+        "zeilen": [{"jahrgang": 5}], "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert "gehört nicht zum Fach" in antwort.json()["fehler"]
+
+
+def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Geplantes sieht man in der Liste selbst, nicht erst im Menü.
+
+    Terra steht in Erdkunde in Jahrgang 6. Ein geplanter Jahrgang 7 kommt in
+    der Spalte dazu, obwohl er in keiner Bücherliste steht - sonst wäre die
+    Einführung nirgends zu sehen.
+    """
+    stand = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [{"jahrgang": 6, "ausgemustert_nach": "2029/2030"},
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"}],
+        "mtime": abgeglichen["mtime"],
+    }).json()
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    # Zwei verschiedene Zusätze: jeder hängt an seinem Jahrgang.
+    assert "6 (bis 2029/2030), 7 (ab 2028/2029)" in text
+    # Sortiert wird weiter nach den nackten Jahrgängen.
+    assert 'data-wert="6, 7"' in text
+
+    # Derselbe Zusatz für alle: dann steht er einmal hinter der ganzen Zelle.
+    seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [{"jahrgang": 6, "ausgemustert_nach": "2029/2030"}],
+        "mtime": stand["mtime"],
+    })
+    assert "6 (bis 2029/2030)" in seiten.get("/buecherliste/fach/Erdkunde").text
+
+
 # ── Die Schreibkette ─────────────────────────────────────────────────────────
 
 
@@ -413,15 +568,51 @@ def test_verlagsseite_bietet_preispruefung(seiten: TestClient, abgeglichen: dict
     assert 'data-planung="aufklappen"' not in text
 
 
-def test_fachseite_bietet_freigabe_und_planung(seiten: TestClient, abgeglichen: dict) -> None:
+def test_fachseite_bietet_freigabe_und_planungsmenue(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Die Buchzeile ist der Knopf, und das Menü steht fertig als Vorlage da."""
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    assert 'data-planung="fach"' in text
+    assert 'data-planung="fach"' in text                     # Freigabe, oben
+    assert 'class="aufklappbar"' in text                     # die Zeile öffnet das Menü
     assert 'data-planung="aufklappen"' in text
-    assert 'data-planung="ruecklage"' in text
+    assert 'class="planung-vorlage"' in text
+    assert '<dialog id="planungsmenue"' in text
+    assert 'data-planung="jahrgang-anfuegen"' in text        # "+ Jahrgang"
+    assert 'data-planung="speichern"' in text
+    assert 'data-planung="abbrechen"' in text
     assert 'data-planung-feld="eingefuehrt_ab"' in text
     assert 'data-planung-feld="ausgemustert_nach"' in text
+    assert 'data-planung-feld="bemerkung"' in text
+    # Kürzel und Datum stehen nur oben an der Freigabe, nicht je Zeile: die
+    # Fachkonferenzleitung bestätigt die Liste als Ganzes.
+    assert text.count('data-planung-feld="kuerzel"') == 1
+    assert text.count('data-planung-feld="datum"') == 1
     # Preise werden beim Verlag geprüft, nicht beim Fach.
     assert 'data-planung="preis"' not in text
+
+
+def test_jahrgang_eines_laufenden_buchs_traegt_nur_die_ausmusterung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Jahrgang 5 steht in einer Bücherliste - daran ist nichts mehr zu planen.
+
+    Die Einführung ist Geschichte und darf nicht als Eingabefeld aussehen; der
+    Jahrgang selbst schon gar nicht. Offen ist nur noch die Ausmusterung.
+    """
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    vorlage = text.split('class="planung-vorlage"')[1].split("</template>")[0]
+    zeile = " ".join(vorlage.split("<tr data-planung-zeile")[1].split("</tr>")[0].split())
+    assert "data-aktuell" in zeile
+    # Jahrgang und Einführung nur als verstecktes Feld - der Server bekommt sie
+    # zurück, aber niemand tippt sie um.
+    assert 'type="hidden" data-planung-feld="jahrgang"' in zeile
+    assert 'type="hidden" data-planung-feld="eingefuehrt_ab"' in zeile
+    # Offen ist die Ausmusterung, und die Bemerkung zu dieser Zeile.
+    assert 'type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"' in zeile
+    assert 'data-planung-feld="bemerkung"' in zeile
+    # Ein laufender Jahrgang lässt sich nicht wegklicken.
+    assert 'data-planung="jahrgang-entfernen"' not in zeile
 
 
 def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(

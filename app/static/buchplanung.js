@@ -1,4 +1,4 @@
-// Die Buchplanung in den Bücherlisten-Seiten - fünf Knöpfe, sonst nichts.
+// Die Buchplanung in den Bücherlisten-Seiten - vier Knöpfe und ein Menü.
 //
 // Dieselbe Regel wie in app.js und mehrjahresbaende.js: so dumm wie möglich.
 // Das Skript rechnet keinen Status aus und entscheidet nicht, ob ein Preis
@@ -11,9 +11,16 @@
 //   2. Preis prüfen: je Buch (Verlags-Ansicht) oder als ganze Verlagsliste.
 //   3. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht),
 //      die Kürzel und Datum in alle Zeilen dieses Fachs schreibt.
-//   4. Planung: Einführung, Ausmusterung und Bestätigung je Fach und Jahrgang,
-//      im Aufklapper.
-//   5. Rücklage: wie viele Exemplare die Fachschaft behalten möchte.
+//   4. Das Planungsmenü: ein Klick auf eine Buchzeile öffnet den Dialog mit
+//      Einführung, Ausmusterung und Rücklage dieses Buchs in diesem Fach.
+//      Gespeichert wird alles auf einmal - ein Menü, ein Knopf, eine Anfrage
+//      (POST /api/buchplanung/buch). Abbrechen verwirft.
+//
+// Der Menü-Inhalt wird NICHT hier gebaut: er steht je Buch fertig gerendert in
+// einem <template class="planung-vorlage"> (templates/_buchplanung.html) und
+// wird beim Öffnen in den einen Dialog der Seite geklont. Eine zweite Fassung
+// der Darstellung in JavaScript wäre genau die Doppelung, die mit der Vorlage
+// auseinanderläuft.
 //
 // Antwortet der Server mit 409, hat jemand anderes die Datei angefasst; dann
 // wird nicht überschrieben, sondern nachgeladen.
@@ -22,6 +29,8 @@
   if (!wurzel) return;
   const meldung = document.getElementById("planung-meldung");
   const schuljahr = wurzel.dataset.schuljahr;
+  const menue = document.getElementById("planungsmenue");
+  const leerzeile = document.getElementById("planung-leerzeile");
 
   function zeige(text, art) {
     if (!meldung) return;
@@ -41,8 +50,8 @@
   }
 
   // Der Server schickt den ganzen neuen Stand zurück. Statt ihn hier Zelle für
-  // Zelle einzubauen - Statuslabel, Aufklapper, Übersichtszähler -, wird die
-  // Seite neu geladen: sie kommt ohnehin live aus IServ, und der eine
+  // Zelle einzubauen - Statuslabel, Jahrgang-Spalte, Übersichtszähler -, wird
+  // die Seite neu geladen: sie kommt ohnehin live aus IServ, und der eine
   // zusätzliche Aufruf ist billiger als eine zweite Fassung der Darstellung,
   // die mit der Vorlage auseinanderlaufen kann.
   async function sende(pfad, koerper, erfolg) {
@@ -91,6 +100,77 @@
     return Number.isFinite(wert) ? wert : null;
   }
 
+  // ── Das Planungsmenü ──────────────────────────────────────────────────────
+
+  function oeffne(zeile) {
+    if (!menue) return;
+    const vorlage = document.querySelector(
+      '.planung-vorlage[data-isbn="' + CSS.escape(zeile.dataset.isbn) + '"]' +
+      '[data-fach="' + CSS.escape(zeile.dataset.fach) + '"]');
+    if (!vorlage) return;
+    menue.replaceChildren(vorlage.content.cloneNode(true));
+    menue.dataset.isbn = zeile.dataset.isbn;
+    menue.dataset.fach = zeile.dataset.fach;
+    const titel = menue.querySelector(".modal-title");
+    if (titel) titel.id = "planungsmenue-titel";
+    menue.showModal();
+  }
+
+  // Eine neue Leerzeile übernimmt die Sperre der Ausmusterung von den schon
+  // vorhandenen Zeilen: ob das Buch leihbar ist, weiß die Vorlage des Buchs,
+  // nicht die eine Leerzeile der Seite.
+  function fuegeJahrgangAn(knopf) {
+    const koerper = knopf.closest(".planung-block").querySelector("[data-planung-zeilen]");
+    if (!koerper || !leerzeile) return;
+    const neu = leerzeile.content.cloneNode(true);
+    const gesperrt = koerper.querySelector(
+      '[data-planung-feld="ausgemustert_nach"][disabled]') !== null;
+    if (gesperrt) {
+      const feld = neu.querySelector('[data-planung-feld="ausgemustert_nach"]');
+      feld.disabled = true;
+      feld.title = "kein Leihbuch - wird nicht ausgemustert";
+    }
+    koerper.appendChild(neu);
+    koerper.lastElementChild.querySelector('[data-planung-feld="jahrgang"]').focus();
+  }
+
+  // Gesperrte Felder liest felder() als leeren Text - genau richtig: ein
+  // Kaufbuch wird nicht ausgemustert, und der Server weist es ohnehin ab.
+  function speichere() {
+    const zeilen = [];
+    for (const zeile of menue.querySelectorAll("[data-planung-zeile]")) {
+      const werte = felder(zeile);
+      const jahrgang = Number(werte.jahrgang);
+      // Eine Leerzeile, in die niemand etwas eingetragen hat, wird still
+      // verworfen - "+ Jahrgang" einmal zu oft gedrückt ist kein Fehler.
+      if (!werte.jahrgang) {
+        if (werte.eingefuehrt_ab || werte.ausgemustert_nach || werte.bemerkung) {
+          zeige("Bitte zu jeder Zeile den Jahrgang eintragen.", "fehlerhaft");
+          return;
+        }
+        continue;
+      }
+      zeilen.push({
+        jahrgang: jahrgang,
+        eingefuehrt_ab: werte.eingefuehrt_ab || "",
+        ausgemustert_nach: werte.ausgemustert_nach || "",
+        bemerkung: werte.bemerkung || "",
+      });
+    }
+    const block = menue.querySelector(".planung-ruecklage").closest(".planung-block");
+    const werte = felder(block);
+    sende("/api/buchplanung/buch", {
+      isbn: menue.dataset.isbn,
+      fach: menue.dataset.fach,
+      zeilen: zeilen,
+      ruecklage: {
+        anzahl: werte.anzahl === "" ? null : Number(werte.anzahl),
+        status: werte.status || "",
+        bemerkung: werte.bemerkung || "",
+      },
+    }, () => "Die Planung wurde gespeichert.");
+  }
+
   // ── Die Knöpfe ────────────────────────────────────────────────────────────
 
   document.addEventListener("click", (ereignis) => {
@@ -99,13 +179,16 @@
     const art = knopf.dataset.planung;
 
     if (art === "aufklappen") {
-      const zeile = document.querySelector(
-        '.planung-details[data-isbn="' + CSS.escape(knopf.dataset.isbn) + '"]');
-      if (!zeile) return;
-      zeile.hidden = !zeile.hidden;
-      knopf.setAttribute("aria-expanded", String(!zeile.hidden));
+      // Die ganze Zeile ist der Knopf. Was in ihr selbst bedienbar ist -
+      // das Häkchen "Leihbar", ein Link -, behält seinen eigenen Klick.
+      if (ereignis.target.closest("a, button, input, select, label")) return;
+      oeffne(knopf);
       return;
     }
+    if (art === "jahrgang-anfuegen") { fuegeJahrgangAn(knopf); return; }
+    if (art === "jahrgang-entfernen") { knopf.closest("[data-planung-zeile]").remove(); return; }
+    if (art === "abbrechen") { menue.close(); return; }
+    if (art === "speichern") { speichere(); return; }
 
     if (art === "abgleich") {
       zeige("Beide Schuljahre werden aus IServ geholt. Das dauert einen Moment…", "");
@@ -147,43 +230,16 @@
       }, (daten) => werte.kuerzel
           ? daten.bestaetigt + " Zeile(n) dieses Fachs bestätigt."
           : "Die Bestätigung wurde zurückgenommen.");
-      return;
-    }
-
-    if (art === "ruecklage") {
-      const block = knopf.closest(".planung-block");
-      const werte = felder(block);
-      sende("/api/buchplanung/ruecklage", {
-        isbn: knopf.dataset.isbn, fach: knopf.dataset.fach,
-        anzahl: werte.anzahl === "" ? null : Number(werte.anzahl),
-        status: werte.status || "", bemerkung: werte.bemerkung || "",
-      }, () => "Die Rücklage wurde gespeichert.");
     }
   });
 
-  // ── Planung: beim Verlassen eines Feldes speichern ────────────────────────
-  //
-  // Kein eigener Knopf je Jahrgang: die beiden Felder gehören zusammen, und
-  // "change" feuert erst, wenn sich der Wert wirklich geändert hat.
-  document.addEventListener("change", (ereignis) => {
-    const feld = ereignis.target.closest('.planung-tabelle [data-planung-feld]');
-    if (!feld) return;
-    const zeile = feld.closest("tr");
-    const details = feld.closest(".planung-details");
-    const werte = felder(zeile);
-    const jahrgang = zeile.dataset.jahrgang || werte.jahrgang;
-    if (!jahrgang) {
-      zeige("Bitte zuerst den Jahrgang eintragen.", "fehlerhaft");
-      return;
-    }
-    sende("/api/buchplanung/planung", {
-      isbn: details.dataset.isbn,
-      fach: details.dataset.fach,
-      jahrgang: Number(jahrgang),
-      eingefuehrt_ab: werte.eingefuehrt_ab || "",
-      ausgemustert_nach: werte.ausgemustert_nach || "",
-      kuerzel: werte.kuerzel || "",
-      datum: werte.datum || null,
-    }, () => "Die Planung wurde gespeichert.");
+  // Die Zeile ist ein Knopf (role="button"), also öffnet sie auch mit der
+  // Tastatur. Die Leertaste würde sonst die Seite scrollen.
+  document.addEventListener("keydown", (ereignis) => {
+    if (ereignis.key !== "Enter" && ereignis.key !== " ") return;
+    const zeile = ereignis.target.closest('[data-planung="aufklappen"]');
+    if (!zeile || zeile !== ereignis.target) return;
+    ereignis.preventDefault();
+    oeffne(zeile);
   });
 })();

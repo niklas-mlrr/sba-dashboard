@@ -31,7 +31,7 @@ alles andere darunter.
 | Blatt | Schlüssel | eintragbar |
 |-------|-----------|------------|
 | `Buchreihen` | ISBN | geprüfter Preis, Kürzel, Datum, Bemerkung |
-| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung |
+| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung (dazu `in der Bücherliste`, gesetzt) |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
@@ -105,6 +105,43 @@ Damit braucht es keinen gespeicherten „bestätigten Stand" mehr, gegen den zu
 prüfen wäre, ob sich die Liste seither geändert hat: kommt ein Buch dazu,
 bringt es eine Zeile ohne Kürzel mit, und das Fach steht von allein wieder auf
 `teilweise`.
+
+### Wann eine Änderung die Bestätigung kostet
+
+Eingetragen wird die Bestätigung nur über „Liste bestätigen"; das Planungsmenü
+eines Buchs kennt weder Kürzel noch Datum. Ändert `setze_buchplanung` eine
+schon bestätigte Zeile, entscheidet das **laufende** Schuljahr, ob sie stehen
+bleibt — `wirkt_im_schuljahr` fragt dazu nur eines: steht das Buch dieses Jahr
+in diesem Fach und Jahrgang im Regal?
+
+| Änderung | Status vorher → nachher | Kürzel |
+|----------|------------------------|--------|
+| Ausmusterung nach 2029/2030 eingetragen | `im Einsatz` → `läuft aus` | bleibt |
+| Ausmusterung nach 2025/2026 eingetragen | `im Einsatz` → `ausgemustert` | fällt weg |
+| Einführung ab 2028/2029 eingetragen | `im Einsatz` → `geplant` | fällt weg |
+| geplante Einführung vorgezogen | `geplant` → `im Einsatz` | fällt weg |
+
+Der Gedanke dahinter: die Fachkonferenzleitung hat eine Liste bestätigt. Was
+erst in drei Jahren greift, ändert diese Liste nicht. Was das laufende Jahr
+betrifft, schon — und diese Liste hat sie nie gesehen.
+
+### Welche Zeilen aus IServ stammen
+
+`Fächer & Jahrgang` trägt beide Arten von Zeile nebeneinander: die (Fach,
+Jahrgang)-Paare aus den Bücherlisten und die, für die nur etwas geplant ist.
+Die Spalte `in der Bücherliste` (`ja`/`nein`) hält fest, welche welche ist —
+beim Lesen sähen sie sonst gleich aus, und der Unterschied wäre nach dem ersten
+Speichern verloren. Daran hängen zwei Dinge:
+
+* Das Planungsmenü lässt die **Einführung** eines Jahrgangs, in dem das Buch
+  schon geführt wird, nicht ändern — daran ist nichts mehr zu entscheiden,
+  offen ist nur die Ausmusterung.
+* Eine geleerte Planungszeile verschwindet wirklich, statt beim nächsten Lesen
+  als leere Zeile zurückzukommen.
+
+Eine Datei aus der Zeit vor dieser Spalte hat sie nicht; dort zählt wie früher
+jede Zeile als Vorkommen. Der nächste Abgleich stellt die Wahrheit aus IServ
+ohnehin wieder her.
 
 ## Status werden gerechnet, nie eingetragen
 

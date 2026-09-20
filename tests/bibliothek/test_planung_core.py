@@ -26,6 +26,8 @@ from buecherlisten.planung import (
     PREIS_OFFEN,
     Buch,
     Buchplanung,
+    Jahrgangseingabe,
+    Ruecklageneingabe,
     Schnappschuss,
     UnbekanntesBuch,
     UngueltigeEingabe,
@@ -36,10 +38,12 @@ from buecherlisten.planung import (
     planungs_status,
     preis_status,
     schreibe_datei,
+    setze_buchplanung,
     setze_planung,
     setze_preis,
     setze_preise_des_verlags,
     setze_ruecklage,
+    wirkt_im_schuljahr,
     zusammenfuehren,
 )
 from buecherlisten.planung.modelle import Planungszeile
@@ -162,6 +166,26 @@ def test_eine_planung_ohne_heutiges_vorkommen_bleibt_erhalten(tmp_path, stand):
     zeile = gelesen.planungszeile(DEUTSCH, "Deutsch", 7)
     assert zeile.eingefuehrt_ab == "2028/2029"
     assert planungs_status(zeile, gelesen.schuljahr) == PLANUNG_GEPLANT
+    # Der geplante Jahrgang wird dadurch **kein** Vorkommen: das Buch steht in
+    # Jahrgang 7 in keiner Bücherliste. Daran hängt, dass das Planungsmenü die
+    # Einführung dort noch ändern lässt (Spalte "in der Bücherliste").
+    assert gelesen.buch(DEUTSCH).jahrgaenge == (5,)
+    assert gelesen.zeilen_des_buchs(gelesen.buch(DEUTSCH)) == (("Deutsch", 5), ("Deutsch", 7))
+
+
+def test_eine_geleerte_planungszeile_kommt_nicht_als_leere_zeile_zurueck(tmp_path, stand):
+    """Sonst ließe sich ein versehentlich angelegter Jahrgang nie mehr loswerden."""
+    stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                          eingefuehrt_ab="2028/2029")
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+
+    geleert = setze_planung(lies_datei(pfad), isbn=DEUTSCH, fach="Deutsch", jahrgang=7)
+    schreibe_datei(pfad, geleert)
+    gelesen = lies_datei(pfad)
+
+    assert gelesen.planungszeile(DEUTSCH, "Deutsch", 7) is None
+    assert gelesen.zeilen_des_buchs(gelesen.buch(DEUTSCH)) == (("Deutsch", 5),)
 
 
 def test_von_hand_geaenderter_mitgefuehrter_wert_wirkt_nicht_zurueck(tmp_path, stand):
@@ -317,6 +341,81 @@ def test_fach_ohne_bestaetigung_ist_offen(stand):
 ])
 def test_planungsstatus_wird_gegen_das_schuljahr_gerechnet(zeile, erwartet):
     assert planungs_status(zeile, "2026/2027") == erwartet
+
+
+@pytest.mark.parametrize(("zeile", "erwartet"), [
+    (None, True),                                                        # im Einsatz
+    (Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
+                   ausgemustert_nach="2029/2030"), True),                # läuft aus
+    (Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
+                   eingefuehrt_ab="2028/2029"), False),                  # geplant
+    (Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
+                   ausgemustert_nach="2025/2026"), False),               # ausgemustert
+])
+def test_wirkt_im_schuljahr_trennt_da_von_nicht_da(zeile, erwartet):
+    """"läuft aus" heißt: dieses Jahr noch da, ausgemustert wird erst danach."""
+    assert wirkt_im_schuljahr(zeile, "2026/2027") is erwartet
+
+
+# ── Das Planungsmenü: alle Zeilen eines Buchs in einem Fach ──────────────────
+
+
+def test_setze_buchplanung_schreibt_mehrere_jahrgaenge_und_entfernt_fehlende(stand):
+    neu = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2029/2030", bemerkung="FK"),
+        Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/2029"),
+        Jahrgangseingabe(jahrgang=8, eingefuehrt_ab="2029/2030"),
+    ], ruecklage=Ruecklageneingabe(anzahl=4, bemerkung="für die Sammlung"))
+    assert neu.planungszeile(DEUTSCH, "Deutsch", 5).ausgemustert_nach == "2029/2030"
+    assert neu.planungszeile(DEUTSCH, "Deutsch", 8).eingefuehrt_ab == "2029/2030"
+    assert neu.ruecklage(DEUTSCH, "Deutsch").anzahl == 4
+
+    # Jahrgang 8 nicht mehr mitgeschickt: das Menü zeigt den ganzen Stand, also
+    # heißt "fehlt" hier "gelöscht".
+    ohne = setze_buchplanung(neu, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2029/2030"),
+        Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/2029"),
+    ])
+    assert ohne.planungszeile(DEUTSCH, "Deutsch", 8) is None
+
+
+def test_derselbe_jahrgang_zweimal_wird_abgelehnt(stand):
+    with pytest.raises(UngueltigeEingabe, match="zweimal"):
+        setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+            Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/2029"),
+            Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2029/2030"),
+        ])
+
+
+def test_bestaetigung_bleibt_bei_einer_aenderung_fuer_ein_kuenftiges_jahr(stand):
+    """Was erst 2029 greift, ändert die Liste nicht, die 2026 bestätigt wurde."""
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
+    neu = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2029/2030"),
+    ])
+    zeile = neu.planungszeile(DEUTSCH, "Deutsch", 5)
+    assert (zeile.kuerzel, zeile.datum) == ("ABC", date(2026, 9, 3))
+    assert fach_status(neu, "Deutsch")[0] == FACH_BESTAETIGT
+
+
+@pytest.mark.parametrize("eingabe", [
+    # Ab sofort weg …
+    Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026"),
+    # … und ab sofort erst geplant: beides ändert die Liste dieses Schuljahrs.
+    Jahrgangseingabe(jahrgang=5, eingefuehrt_ab="2028/2029"),
+])
+def test_bestaetigung_faellt_weg_wenn_sich_das_laufende_schuljahr_aendert(stand, eingabe):
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
+    neu = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[eingabe])
+    zeile = neu.planungszeile(DEUTSCH, "Deutsch", 5)
+    assert (zeile.kuerzel, zeile.datum) == ("", None)
+    assert fach_status(neu, "Deutsch")[0] == FACH_OFFEN
+
+
+def test_das_menue_weist_ein_fremdes_fach_ab(stand):
+    with pytest.raises(UngueltigeEingabe, match="gehört nicht zum Fach"):
+        setze_buchplanung(stand, isbn=DEUTSCH, fach="Chemie",
+                          zeilen=[Jahrgangseingabe(jahrgang=5)])
 
 
 # ── Was nicht eingetragen werden darf ────────────────────────────────────────

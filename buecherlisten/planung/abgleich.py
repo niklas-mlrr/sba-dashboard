@@ -19,8 +19,8 @@ Dashboard.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import replace
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any, TypeVar
 
@@ -36,6 +36,7 @@ from .modelle import (
     Ruecklage,
     UngueltigesSchuljahr,
     schuljahr_zahl,
+    wirkt_im_schuljahr,
 )
 
 # Ein Jahrgang, den es an einer Schule geben kann. Die Grenzen sind bewusst
@@ -269,6 +270,100 @@ def setze_planung(
             neuer,
         ),
     )
+
+
+@dataclass(frozen=True)
+class Jahrgangseingabe:
+    """Eine Zeile des Planungsmenüs: ein Jahrgang mit seinen beiden Schuljahren.
+
+    Ohne ``kuerzel`` und ``datum``: bestätigt wird nicht je Zeile, sondern die
+    Liste als Ganzes über :func:`bestaetige_fach` (der Knopf „Liste bestätigen“
+    oben auf der Fach-Seite).
+    """
+
+    jahrgang: int
+    eingefuehrt_ab: str = ""
+    ausgemustert_nach: str = ""
+    bemerkung: str = ""
+
+
+@dataclass(frozen=True)
+class Ruecklageneingabe:
+    """Der Rücklage-Block desselben Menüs."""
+
+    anzahl: int | None = None
+    status: str = ""
+    bemerkung: str = ""
+
+
+def setze_buchplanung(
+    stand: Buchplanung, *, isbn: str, fach: str,
+    zeilen: Sequence[Jahrgangseingabe], ruecklage: Ruecklageneingabe | None = None,
+) -> Buchplanung:
+    """Alles, was das Planungsmenü eines Buchs in einem Fach einträgt - in einem Zug.
+
+    Das Menü speichert auf einen Knopfdruck: mehrere Jahrgänge und die
+    Rücklage. Nacheinander abgeschickte Einzelanfragen würden am
+    ``mtime``-Vergleich scheitern (``app/buchplanung.py``), denn schon die
+    erste schreibt die Datei neu. Deshalb eine Funktion, die alle Zeilen dieses
+    (ISBN, Fach) auf den übergebenen Stand bringt - **auch durch Entfernen**:
+    was nicht mitgeschickt wird, hat der Benutzer im Menü gelöscht.
+
+    ``kuerzel`` und ``datum`` der Fachkonferenzleitung kommen nicht aus dem
+    Menü, gehen aber auch nicht verloren. Sie bleiben genau dann stehen, wenn
+    die Änderung das **laufende** Schuljahr nicht berührt
+    (:func:`~buecherlisten.planung.modelle.wirkt_im_schuljahr`): eine
+    Ausmusterung, die erst in drei Jahren greift, ändert nichts an der Liste,
+    die bestätigt wurde. Wird ein Buch dagegen ab sofort eingeführt oder ist es
+    ab sofort weg, fällt die Bestätigung dieser Zeile - und damit das Fach auf
+    "teilweise".
+    """
+    buch = _geprueftes_buch(stand, isbn)
+    _geprueftes_fach(stand, buch, fach)
+
+    neu = stand
+    gesehen: set[int] = set()
+    for eingabe in zeilen:
+        if eingabe.jahrgang in gesehen:
+            raise UngueltigeEingabe(
+                f"Jahrgang {eingabe.jahrgang} steht zweimal in der Liste. Jeder "
+                "Jahrgang darf nur einmal vorkommen."
+            )
+        gesehen.add(eingabe.jahrgang)
+        vorher = stand.planungszeile(isbn, fach, eingabe.jahrgang)
+
+        def eintragen(basis: Buchplanung, kuerzel: str, datum: date | None,
+                      eingabe: Jahrgangseingabe = eingabe) -> Buchplanung:
+            return setze_planung(
+                basis, isbn=isbn, fach=fach, jahrgang=eingabe.jahrgang,
+                eingefuehrt_ab=eingabe.eingefuehrt_ab,
+                ausgemustert_nach=eingabe.ausgemustert_nach,
+                kuerzel=kuerzel, datum=datum, bemerkung=eingabe.bemerkung,
+            )
+
+        # Erst mit behaltener Bestätigung eintragen - dieser Aufruf prüft auch
+        # die Schuljahresangaben. Erst danach steht fest, ob sie bleiben darf.
+        neu = eintragen(neu, vorher.kuerzel if vorher else "", vorher.datum if vorher else None)
+        if vorher is not None and vorher.bestaetigt:
+            nachher = neu.planungszeile(isbn, fach, eingabe.jahrgang)
+            if (wirkt_im_schuljahr(vorher, stand.schuljahr)
+                    != wirkt_im_schuljahr(nachher, stand.schuljahr)):
+                neu = eintragen(neu, "", None)
+
+    for zeile in stand.planung:
+        if zeile.isbn == isbn and zeile.fach == fach and zeile.jahrgang not in gesehen:
+            # Alles leer heißt in setze_planung: die Zeile verschwindet.
+            neu = setze_planung(neu, isbn=isbn, fach=fach, jahrgang=zeile.jahrgang)
+
+    if ruecklage is not None:
+        vorher_r = stand.ruecklage(isbn, fach)
+        neu = setze_ruecklage(
+            neu, isbn=isbn, fach=fach, anzahl=ruecklage.anzahl, status=ruecklage.status,
+            kuerzel=vorher_r.kuerzel if vorher_r else "",
+            datum=vorher_r.datum if vorher_r else None,
+            bemerkung=ruecklage.bemerkung,
+        )
+    return neu
 
 
 def bestaetige_fach(

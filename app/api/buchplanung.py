@@ -21,6 +21,8 @@ from starlette.concurrency import run_in_threadpool
 
 from buecherlisten.planung import (
     Buchplanung,
+    Jahrgangseingabe,
+    Ruecklageneingabe,
     fach_bestaetigung,
     fach_status,
     planungs_status,
@@ -30,6 +32,7 @@ from buecherlisten.planung import (
 from .. import buchplanung as domaene
 from ..modelle import (
     AbgleichAnfrage,
+    BuchplanungsAnfrage,
     FachbestaetigungAnfrage,
     PlanungsAnfrage,
     PreisAnfrage,
@@ -199,6 +202,33 @@ def api_fach(request: Request, anfrage: FachbestaetigungAnfrage) -> JSONResponse
         datum=anfrage.datum, mtime=anfrage.mtime,
     )
     return _antwort(stand, bestaetigt=anzahl)
+
+
+@router.post("/api/buchplanung/buch")
+def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
+    """Das Planungsmenü eines Buchs in einem Fach: alle Jahrgänge und die Rücklage.
+
+    Das ist der Weg, den die Oberfläche geht - ein Menü, ein Knopf, ein
+    Schreibvorgang. Die beiden Einzelrouten darunter bleiben als kleinste
+    mögliche Eintragung bestehen.
+    """
+    stand = domaene.schreibe_buchplanung(
+        aktuelle_einstellungen(request),
+        schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
+        zeilen=[
+            Jahrgangseingabe(
+                jahrgang=zeile.jahrgang, eingefuehrt_ab=zeile.eingefuehrt_ab,
+                ausgemustert_nach=zeile.ausgemustert_nach, bemerkung=zeile.bemerkung,
+            )
+            for zeile in anfrage.zeilen
+        ],
+        ruecklage=None if anfrage.ruecklage is None else Ruecklageneingabe(
+            anzahl=anfrage.ruecklage.anzahl, status=anfrage.ruecklage.status,
+            bemerkung=anfrage.ruecklage.bemerkung,
+        ),
+        mtime=anfrage.mtime,
+    )
+    return _antwort(stand)
 
 
 @router.post("/api/buchplanung/planung")

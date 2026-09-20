@@ -786,16 +786,35 @@ td.frisch {
 }
 .knopf-klein:hover { border-color: var(--akzent); }
 
-.planung-details > td { background: var(--warnung-grund); padding: .8rem 1rem; }
-.planung-raster {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2rem;
-  align-items: flex-start;
+/* Die Buchzeile als Knopf: in der Fach-Ansicht öffnet ein Klick darauf das
+   Planungsmenü. Der Pfeil sagt das vorher - ohne ihn wäre die Zeile ein
+   Knopf, den man nicht sieht. */
+tr.aufklappbar { cursor: pointer; }
+tr.aufklappbar:hover > td { background: var(--warnung-grund); }
+tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset: -2px; }
+.aufklapper { margin-right: .4rem; color: #777; }
+
+/* Das Planungsmenü selbst. Breiter als das Druckmenü, weil seine Tabelle fünf
+   Spalten trägt; die 600 px des Druckmenüs reichen dafür nicht. */
+.iserv-modal-breit { width: 780px; }
+.iserv-modal .planung-block + .planung-block {
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid #e5e5e5;
 }
 .planung-block h4 { margin: 0 0 .5rem; font-size: .95rem; }
-.planung-block label { display: block; margin-bottom: .4rem; font-size: .875rem; }
-.planung-tabelle { border-collapse: collapse; font-size: .875rem; }
+.planung-tabelle { width: 100%; border-collapse: collapse; font-size: .875rem; }
 .planung-tabelle th,
 .planung-tabelle td { padding: .2rem .5rem; text-align: left; font-weight: 400; }
 .planung-tabelle th { color: var(--text-leise); font-size: .8rem; }
+.planung-tabelle th:first-child,
+.planung-tabelle td:first-child { padding-left: 0; }
+.planung-feld-weit { width: 100%; min-width: 8rem; }
+.planung-zeilenende { white-space: nowrap; }
+
+/* Rücklage: Exemplare und Stand nebeneinander, die Bemerkung darunter über
+   die ganze Breite - sie ist meist ein Satz, kein Wort. */
+.planung-ruecklage { display: flex; flex-wrap: wrap; gap: 1rem; }
+.planung-ruecklage label { font-size: .875rem; }
+.planung-bemerkungszeile { display: block; margin-top: .6rem; font-size: .875rem; }
+.planung-bemerkungszeile .planung-feld { display: block; width: 100%; margin-top: .2rem; }

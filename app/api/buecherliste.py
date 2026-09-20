@@ -123,6 +123,13 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
             zeile = planung.planungszeile(buch.isbn, fach, jahrgang)
             je_fach.setdefault(fach, []).append({
                 "jahrgang": jahrgang,
+                # ``aktuell`` heißt: dieses (Fach, Jahrgang) steht in einer
+                # Bücherliste - in der dieses Schuljahrs oder der des Vorjahrs,
+                # denn beide stehen in der Datei. Das Buch ist dort eingeführt;
+                # zu entscheiden ist nur noch die Ausmusterung. Ein bloß
+                # geplanter Jahrgang steht in keiner Liste und lässt sich
+                # deshalb ganz ändern und wieder entfernen.
+                "aktuell": (fach, jahrgang) in buch.kombinationen,
                 "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
                 "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
                 "kuerzel": zeile.kuerzel if zeile else "",

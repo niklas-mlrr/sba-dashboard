@@ -425,3 +425,22 @@ def planungs_status(zeile: Planungszeile | None, schuljahr: str) -> str:
     if beginn is not None and beginn > jetzt:
         return PLANUNG_GEPLANT
     return PLANUNG_IM_EINSATZ
+
+
+# Die beiden Status, bei denen das Buch in **diesem** Schuljahr im Regal steht.
+# "läuft aus" gehört dazu: ausgemustert wird nach dem angegebenen Schuljahr,
+# also ist es dieses Jahr noch da.
+_ANWESEND = frozenset({PLANUNG_IM_EINSATZ, PLANUNG_LAEUFT_AUS})
+
+
+def wirkt_im_schuljahr(zeile: Planungszeile | None, schuljahr: str) -> bool:
+    """Steht das Buch in diesem Schuljahr in diesem Fach und Jahrgang im Regal?
+
+    Das ist die Frage, an der die Bestätigung der Fachkonferenzleitung hängt:
+    eine Änderung, die nur ein künftiges Schuljahr betrifft ("wird nach
+    2029/2030 ausgemustert"), ändert nichts an der Liste, die bestätigt wurde -
+    eine, die das laufende Schuljahr betrifft, schon. Welche der beiden
+    vorliegt, entscheidet :func:`setze_buchplanung`
+    (``buecherlisten/planung/abgleich.py``) mit genau dieser Funktion.
+    """
+    return planungs_status(zeile, schuljahr) in _ANWESEND

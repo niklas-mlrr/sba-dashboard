@@ -23,7 +23,7 @@ gerade nicht läuft.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from math import isfinite
@@ -32,7 +32,9 @@ from pathlib import Path
 from buecherlisten.core.daten import UnbekanntesSchuljahr
 from buecherlisten.planung import (
     Buchplanung,
+    Jahrgangseingabe,
     MappeUnlesbar,
+    Ruecklageneingabe,
     UnbekanntesBuch,
     UngueltigeEingabe,
     bestaetige_fach,
@@ -41,6 +43,7 @@ from buecherlisten.planung import (
     lies_mappe,
     neue_mappe,
     schreibe_mappe,
+    setze_buchplanung,
     setze_planung,
     setze_preis,
     setze_preise_des_verlags,
@@ -234,6 +237,21 @@ def schreibe_planung(
         stand, isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=eingefuehrt_ab,
         ausgemustert_nach=ausgemustert_nach, kuerzel=kuerzel, datum=datum,
         bemerkung=bemerkung,
+    ))
+
+
+def schreibe_buchplanung(
+    einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str,
+    zeilen: Sequence[Jahrgangseingabe], ruecklage: Ruecklageneingabe | None = None,
+    mtime: float,
+) -> Stand:
+    """Alles, was das Planungsmenü eines Buchs einträgt - in **einem** Schreibvorgang.
+
+    Das Menü kennt nur Speichern und Abbrechen; ein halb geschriebener Stand
+    wäre genau das, was die Sperre und der ``mtime``-Vergleich sonst verhindern.
+    """
+    return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_buchplanung(
+        stand, isbn=isbn, fach=fach, zeilen=zeilen, ruecklage=ruecklage,
     ))
 
 

@@ -17,9 +17,12 @@ Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
 :mod:`~buecherlisten.planung.abgleich` das Zusammenführen und die Eintragungen.
 """
 from .abgleich import (
+    Jahrgangseingabe,
+    Ruecklageneingabe,
     UnbekanntesBuch,
     UngueltigeEingabe,
     bestaetige_fach,
+    setze_buchplanung,
     setze_planung,
     setze_preis,
     setze_preise_des_verlags,
@@ -62,6 +65,7 @@ from .modelle import (
     planungs_status,
     preis_status,
     schuljahr_zahl,
+    wirkt_im_schuljahr,
 )
 
 __all__ = [
@@ -83,10 +87,12 @@ __all__ = [
     "AusleiheClient",
     "Buch",
     "Buchplanung",
+    "Jahrgangseingabe",
     "MappeUnlesbar",
     "Planungszeile",
     "Preispruefung",
     "Ruecklage",
+    "Ruecklageneingabe",
     "Schnappschuss",
     "UnbekanntesBuch",
     "UngueltigeEingabe",
@@ -103,9 +109,11 @@ __all__ = [
     "schreibe_datei",
     "schreibe_mappe",
     "schuljahr_zahl",
+    "setze_buchplanung",
     "setze_planung",
     "setze_preis",
     "setze_preise_des_verlags",
     "setze_ruecklage",
+    "wirkt_im_schuljahr",
     "zusammenfuehren",
 ]

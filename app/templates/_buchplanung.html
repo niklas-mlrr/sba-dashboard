@@ -65,73 +65,137 @@
 {% endmacro %}
 
 {#
-  Die Zeile unter einem Buch: je Jahrgang ein Paar Schuljahre, dazu ein Feld für
-  einen weiteren Jahrgang und die Rücklage. Sie steht eingeklappt im HTML und
-  nicht erst nach einem Abruf - so ist sie auch im Ausdruck und im Seitenquelltext
-  vorhanden, und das Skript muss nichts nachladen.
+  Das Planungsmenü eines Buchs in einem Fach - Aufbau und Verhalten wie das
+  Druckmenü (``_druckmenue.html``): ein ``<dialog>`` mit Kopf, Körper und den
+  beiden Knöpfen Abbrechen und Speichern.
+
+  Der Körper steht je Buch fertig gerendert in einem ``<template>``. Inhalt
+  eines ``<template>`` ist inert: er wird nicht gedruckt, nicht mitsortiert und
+  taucht in keiner Tabellen-Navigation auf - und er ist trotzdem im
+  Seitenquelltext vorhanden, sodass das Skript nichts nachladen muss. Beim
+  Klick auf eine Buchzeile klont ``static/buchplanung.js`` den Inhalt in den
+  einen Dialog der Seite (``planungsmenue``).
+
+  Kürzel und Datum stehen hier **nicht**: bestätigt wird die Liste als Ganzes,
+  oben auf der Seite ("Liste bestätigen"). Was mit einer schon bestätigten
+  Zeile passiert, wenn sie sich ändert, entscheidet der Server
+  (``buecherlisten/planung/abgleich.py::setze_buchplanung``).
 #}
-{% macro planungszeile(planung, buch, fach, spalten) %}
+{#
+  Die Jahrgang-Spalte der Bücherliste, um die Planung ergänzt: hinter dem
+  Jahrgang steht „(ab …)", solange das Buch dort erst in einem späteren
+  Schuljahr eingeführt wird, und „(bis …)", wenn es ausläuft oder schon
+  ausgemustert ist. So sieht man die Planung, ohne ein Menü zu öffnen.
+
+  Gilt für alle gezeigten Jahrgänge derselbe Zusatz, steht er einmal hinter der
+  ganzen Zelle ("7, 8 (ab 2028/2029)"). Unterscheiden sie sich, hängt er am
+  einzelnen Jahrgang ("7 (bis 2029/2030), 9 (ab 2028/2029)") - eine gestaffelte
+  Einführung ist genau der Fall, für den es die Zeilen je Jahrgang gibt, und
+  sie darf in der Anzeige nicht wieder verschwinden.
+
+  Sortiert wird weiter nach den nackten Jahrgängen (``data-wert``), nicht nach
+  dem Zusatz: sonst stünde "7 (ab …)" plötzlich hinter "11".
+#}
+{% macro jahrgangsspalte(planung, buch, fach=none) %}
+{#
+  Die gezeigten Jahrgänge sind die der heutigen Bücherliste (``buch.jahrgaenge``,
+  live aus IServ) und dazu die, für die etwas geplant ist. **Nur** die mit einem
+  Zusatz: die gespeicherte Datei führt beide Schuljahre, und ein Jahrgang, den
+  das Buch nur im Vorjahr hatte, gehört nicht in die Liste dieses Jahres.
+#}
+{%- set zusatz = {} -%}
+{%- for name, zeilen in planung.planung_je_isbn_und_fach.get(buch.isbn, {}).items()
+    if fach is none or name == fach -%}
+  {%- for zeile in zeilen -%}
+    {%- if zeile.status == "geplant" and zeile.eingefuehrt_ab -%}
+      {%- set _ = zusatz.update({zeile.jahrgang: "ab " ~ zeile.eingefuehrt_ab}) -%}
+    {%- elif zeile.status in ("läuft aus", "ausgemustert") and zeile.ausgemustert_nach -%}
+      {%- set _ = zusatz.update({zeile.jahrgang: "bis " ~ zeile.ausgemustert_nach}) -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endfor -%}
+{%- set jahrgaenge = (buch.jahrgaenge | list + zusatz.keys() | list) | unique | sort | list -%}
+{%- set werte = zusatz.values() | unique | list -%}
+<td data-wert="{{ jahrgaenge | join(', ') }}">
+{%- if werte | length == 1 and zusatz | length == jahrgaenge | length -%}
+{{ jahrgaenge | join(", ") }} ({{ werte[0] }})
+{%- else -%}
+{% for jahrgang in jahrgaenge %}{{ jahrgang }}{% if zusatz.get(jahrgang) %} ({{ zusatz[jahrgang] }}){% endif %}{{ ", " if not loop.last }}{% endfor %}
+{%- endif -%}
+</td>
+{%- endmacro %}
+
+{% macro jahrgangszeile(planung, buch, zeile) %}
+{#
+  Ein Jahrgang aus einer heutigen Bücherliste (``zeile.aktuell``) ist
+  eingeführt - daran lässt sich nichts mehr entscheiden, offen ist nur noch
+  die Ausmusterung. Ein bloß geplanter Jahrgang steht in keiner Liste; dort
+  sind alle Felder offen, und er lässt sich auch wieder entfernen.
+#}
+<tr data-planung-zeile{% if zeile.aktuell %} data-aktuell{% endif %}>
+  <td>
+    {% if zeile.aktuell %}{{ zeile.jahrgang }}<input type="hidden"
+      data-planung-feld="jahrgang" value="{{ zeile.jahrgang }}">
+    {% else %}<input type="number" class="planung-feld" data-planung-feld="jahrgang"
+      min="1" max="13" value="{{ zeile.jahrgang }}" aria-label="Jahrgang">{% endif %}
+  </td>
+  <td>
+    {% if zeile.aktuell %}
+    <span class="klein grau">{{ zeile.eingefuehrt_ab or "eingeführt" }}</span>
+    <input type="hidden" data-planung-feld="eingefuehrt_ab" value="{{ zeile.eingefuehrt_ab }}">
+    {% else %}<input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
+      value="{{ zeile.eingefuehrt_ab }}" placeholder="2028/2029" size="9"
+      aria-label="eingeführt ab Schuljahr">{% endif %}
+  </td>
+  {#
+    Ausgemustert wird nur, was die Schule verleiht: ein Kaufbuch liegt in
+    keinem Regal, aus dem es zu entfernen wäre. Der Server weist die Eingabe
+    ohnehin ab (buecherlisten/planung/abgleich.py); gesperrt ist das Feld,
+    damit niemand erst tippt und dann liest.
+  #}
+  <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
+    value="{{ zeile.ausgemustert_nach }}" placeholder="2029/2030" size="9"
+    {% if not buch.leihbar %}disabled title="kein Leihbuch - wird nicht ausgemustert"{% endif %}
+    aria-label="ausgemustert nach Schuljahr"></td>
+  <td><input type="text" class="planung-feld planung-feld-weit" data-planung-feld="bemerkung"
+    value="{{ zeile.bemerkung }}" placeholder="Bemerkung" aria-label="Bemerkung zu diesem Jahrgang"></td>
+  <td class="planung-zeilenende">{{ statuslabel(zeile.status) }}
+    {% if not zeile.aktuell %}<button type="button" class="knopf-klein"
+      data-planung="jahrgang-entfernen" title="Diesen Jahrgang entfernen"
+      aria-label="Jahrgang entfernen">✕</button>{% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
+{% macro planungsvorlage(planung, buch, fach) %}
 {% set zeilen = planung.planung_je_isbn_und_fach.get(buch.isbn, {}).get(fach, []) %}
 {% set ruecklage = planung.ruecklage_je_isbn.get(buch.isbn, {}).get(fach) %}
-<tr class="planung-details" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}" hidden>
-  <td colspan="{{ spalten }}">
-    <div class="planung-raster">
-      <div class="planung-block">
-        <h4>Einführung und Ausmusterung</h4>
-        <table class="planung-tabelle">
-          <thead><tr><th>Jahrgang</th><th>Einführung</th><th>Ausmusterung nach Schuljahr</th>
-            <th>Kürzel</th><th>Datum</th><th></th></tr></thead>
-          <tbody>
-            {% for zeile in zeilen %}
-            <tr data-jahrgang="{{ zeile.jahrgang }}">
-              <td>{{ zeile.jahrgang }}</td>
-              <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
-                value="{{ zeile.eingefuehrt_ab }}" placeholder="2028/2029" size="9"
-                aria-label="eingeführt ab Schuljahr"></td>
-              {#
-                Ausgemustert wird nur, was die Schule verleiht: ein Kaufbuch
-                liegt in keinem Regal, aus dem es zu entfernen wäre. Der Server
-                weist die Eingabe ohnehin ab (buecherlisten/planung/abgleich.py);
-                gesperrt ist das Feld, damit niemand erst tippt und dann liest.
-              #}
-              <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
-                value="{{ zeile.ausgemustert_nach }}" placeholder="2029/2030" size="9"
-                {% if not buch.leihbar %}disabled title="kein Leihbuch - wird nicht ausgemustert"{% endif %}
-                aria-label="ausgemustert nach Schuljahr"></td>
-              <td><input type="text" class="planung-feld" data-planung-feld="kuerzel"
-                value="{{ zeile.kuerzel }}" placeholder="Kürzel" size="6" maxlength="10"
-                aria-label="Kürzel der Fachkonferenzleitung"></td>
-              <td><input type="date" class="planung-feld" data-planung-feld="datum"
-                value="{{ zeile.datum.isoformat() if zeile.datum else '' }}"
-                aria-label="Datum der Bestätigung"></td>
-              <td>{{ statuslabel(zeile.status) }}</td>
-            </tr>
-            {% endfor %}
-            <tr data-jahrgang="">
-              <td><input type="number" class="planung-feld" data-planung-feld="jahrgang"
-                min="1" max="13" size="3" placeholder="Jg." aria-label="weiterer Jahrgang"></td>
-              <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
-                placeholder="2028/2029" size="9" aria-label="eingeführt ab Schuljahr"></td>
-              <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
-                placeholder="2029/2030" size="9"
-                {% if not buch.leihbar %}disabled title="kein Leihbuch - wird nicht ausgemustert"{% endif %}
-                aria-label="ausgemustert nach Schuljahr"></td>
-              <td><input type="text" class="planung-feld" data-planung-feld="kuerzel"
-                placeholder="Kürzel" size="6" maxlength="10"
-                aria-label="Kürzel der Fachkonferenzleitung"></td>
-              <td><input type="date" class="planung-feld" data-planung-feld="datum"
-                aria-label="Datum der Bestätigung"></td>
-              <td><span class="klein grau">weiterer Jahrgang</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="planung-block">
-        <h4>Rücklage für die Fachschaft {{ fach }}</h4>
+<template class="planung-vorlage" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}">
+  <div class="modal-header">
+    <h3 class="modal-title">{{ buch.titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
+  </div>
+  <div class="modal-body">
+    <div class="planung-block">
+      <h4>Einführung und Ausmusterung</h4>
+      <table class="planung-tabelle">
+        <thead><tr><th>Jahrgang</th><th>Einführung</th><th>Ausmusterung nach Schuljahr</th>
+          <th>Bemerkung</th><th></th></tr></thead>
+        <tbody data-planung-zeilen>
+          {% for zeile in zeilen %}{{ jahrgangszeile(planung, buch, zeile) }}{% endfor %}
+        </tbody>
+      </table>
+      <button type="button" class="btn btn-default" data-planung="jahrgang-anfuegen">+ Jahrgang</button>
+      <p class="small help-block">Ein Jahrgang, in dem das Buch schon geführt wird, braucht nur
+        die Ausmusterung. „+ Jahrgang“ trägt eine Neueinführung ein - mit dem Schuljahr, ab dem
+        sie gilt. Schuljahre in der Schreibweise <samp>2028/2029</samp>.</p>
+    </div>
+    <div class="planung-block">
+      <h4>Rücklage für die Fachschaft {{ fach }}</h4>
+      <div class="planung-ruecklage">
         <label>Exemplare
           <input type="number" class="planung-feld" data-planung-feld="anzahl" min="0" max="2000"
             value="{{ ruecklage.anzahl if ruecklage and ruecklage.anzahl is not none else '' }}"
-            size="4" aria-label="Anzahl der Exemplare">
+            aria-label="Anzahl der Exemplare">
         </label>
         <label>Stand
           <select class="planung-feld" data-planung-feld="status" aria-label="Status der Rücklage">
@@ -141,14 +205,45 @@
             {% endfor %}
           </select>
         </label>
-        <label>Bemerkung
-          <input type="text" class="planung-feld" data-planung-feld="bemerkung"
-            value="{{ ruecklage.bemerkung if ruecklage else '' }}" aria-label="Bemerkung zur Rücklage">
-        </label>
-        <button type="button" class="btn btn-default" data-planung="ruecklage"
-          data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}">Rücklage speichern</button>
       </div>
+      <label class="planung-bemerkungszeile">Bemerkung
+        <input type="text" class="planung-feld" data-planung-feld="bemerkung"
+          value="{{ ruecklage.bemerkung if ruecklage else '' }}" aria-label="Bemerkung zur Rücklage">
+      </label>
     </div>
-  </td>
-</tr>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-default" data-planung="abbrechen">Abbrechen</button>
+    <button type="button" class="btn btn-primary" data-planung="speichern">Speichern</button>
+  </div>
+</template>
+{% endmacro %}
+
+{#
+  Die Leerzeile hinter „+ Jahrgang" und der eine Dialog der Seite. Beide stehen
+  einmal je Seite, nicht je Buch: die Leerzeile hängt an keinem Buch, und zwei
+  gleichzeitig offene Menüs gibt es nicht.
+
+  Die Leerzeile trägt kein ``disabled`` an der Ausmusterung - ob das Buch
+  leihbar ist, weiß erst das Skript beim Anfügen (es übernimmt es aus der
+  Tabelle, in die es die Zeile hängt).
+#}
+{% macro planungsmenue() %}
+<template id="planung-leerzeile">
+  <tr data-planung-zeile>
+    <td><input type="number" class="planung-feld" data-planung-feld="jahrgang"
+      min="1" max="13" placeholder="Jg." aria-label="Jahrgang"></td>
+    <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
+      placeholder="2028/2029" size="9" aria-label="eingeführt ab Schuljahr"></td>
+    <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
+      placeholder="2029/2030" size="9" aria-label="ausgemustert nach Schuljahr"></td>
+    <td><input type="text" class="planung-feld planung-feld-weit" data-planung-feld="bemerkung"
+      placeholder="Bemerkung" aria-label="Bemerkung zu diesem Jahrgang"></td>
+    <td class="planung-zeilenende"><span class="klein grau">neu</span>
+      <button type="button" class="knopf-klein" data-planung="jahrgang-entfernen"
+        title="Diesen Jahrgang entfernen" aria-label="Jahrgang entfernen">✕</button></td>
+  </tr>
+</template>
+<dialog id="planungsmenue" class="iserv-modal iserv-modal-breit"
+  aria-labelledby="planungsmenue-titel"></dialog>
 {% endmacro %}
