@@ -16,7 +16,7 @@
 
 {% macro statuslabel(status) -%}
 {%- set klasse = {"bestätigt": "label-success", "abweichend": "label-danger",
-                  "veraltet": "label-warning", "offen": "label-status",
+                  "teilweise": "label-warning", "offen": "label-status",
                   "geplant": "label-info", "läuft aus": "label-warning",
                   "ausgemustert": "label-default", "im Einsatz": "label-success"}.get(status, "label-status") -%}
 <span class="label {{ klasse }}">{{ status }}</span>
@@ -59,7 +59,7 @@
 {% if gruppe and ansicht == "fach" %}
   {% set stand = planung.fach_je_name.get(gruppe) %}
   {% if stand and stand.hinweis %}
-  <p class="hinweis {{ 'warnung' if stand.status == 'veraltet' else '' }}">{{ stand.hinweis }}</p>
+  <p class="hinweis {{ 'warnung' if stand.status == 'teilweise' else '' }}">{{ stand.hinweis }}</p>
   {% endif %}
 {% endif %}
 {% endmacro %}
@@ -71,7 +71,7 @@
   vorhanden, und das Skript muss nichts nachladen.
 #}
 {% macro planungszeile(planung, buch, fach, spalten) %}
-{% set zeilen = planung.planung_je_isbn.get(buch.isbn, []) %}
+{% set zeilen = planung.planung_je_isbn_und_fach.get(buch.isbn, {}).get(fach, []) %}
 {% set ruecklage = planung.ruecklage_je_isbn.get(buch.isbn, {}).get(fach) %}
 <tr class="planung-details" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}" hidden>
   <td colspan="{{ spalten }}">
@@ -79,21 +79,31 @@
       <div class="planung-block">
         <h4>Einführung und Ausmusterung</h4>
         <table class="planung-tabelle">
-          <thead><tr><th>Jahrgang</th><th>eingeführt ab</th><th>ausgemustert nach</th><th>Beschluss</th><th></th></tr></thead>
+          <thead><tr><th>Jahrgang</th><th>Einführung</th><th>Ausmusterung nach Schuljahr</th>
+            <th>Kürzel</th><th>Datum</th><th></th></tr></thead>
           <tbody>
             {% for zeile in zeilen %}
             <tr data-jahrgang="{{ zeile.jahrgang }}">
-              <td>{{ zeile.jahrgang }}{% if zeile.herkunft == "nur Planung" %}
-                <span class="klein grau">(geplant)</span>{% endif %}</td>
+              <td>{{ zeile.jahrgang }}</td>
               <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
                 value="{{ zeile.eingefuehrt_ab }}" placeholder="2028/2029" size="9"
                 aria-label="eingeführt ab Schuljahr"></td>
+              {#
+                Ausgemustert wird nur, was die Schule verleiht: ein Kaufbuch
+                liegt in keinem Regal, aus dem es zu entfernen wäre. Der Server
+                weist die Eingabe ohnehin ab (buecherlisten/planung/abgleich.py);
+                gesperrt ist das Feld, damit niemand erst tippt und dann liest.
+              #}
               <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
                 value="{{ zeile.ausgemustert_nach }}" placeholder="2029/2030" size="9"
+                {% if not buch.leihbar %}disabled title="kein Leihbuch - wird nicht ausgemustert"{% endif %}
                 aria-label="ausgemustert nach Schuljahr"></td>
-              <td><input type="text" class="planung-feld" data-planung-feld="beschluss"
-                value="{{ zeile.beschluss }}" placeholder="FK 12.05.2026" size="14"
-                aria-label="Beschluss der Fachkonferenz"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="kuerzel"
+                value="{{ zeile.kuerzel }}" placeholder="Kürzel" size="6" maxlength="10"
+                aria-label="Kürzel der Fachkonferenzleitung"></td>
+              <td><input type="date" class="planung-feld" data-planung-feld="datum"
+                value="{{ zeile.datum.isoformat() if zeile.datum else '' }}"
+                aria-label="Datum der Bestätigung"></td>
               <td>{{ statuslabel(zeile.status) }}</td>
             </tr>
             {% endfor %}
@@ -103,9 +113,14 @@
               <td><input type="text" class="planung-feld" data-planung-feld="eingefuehrt_ab"
                 placeholder="2028/2029" size="9" aria-label="eingeführt ab Schuljahr"></td>
               <td><input type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"
-                placeholder="2029/2030" size="9" aria-label="ausgemustert nach Schuljahr"></td>
-              <td><input type="text" class="planung-feld" data-planung-feld="beschluss"
-                placeholder="FK 12.05.2026" size="14" aria-label="Beschluss der Fachkonferenz"></td>
+                placeholder="2029/2030" size="9"
+                {% if not buch.leihbar %}disabled title="kein Leihbuch - wird nicht ausgemustert"{% endif %}
+                aria-label="ausgemustert nach Schuljahr"></td>
+              <td><input type="text" class="planung-feld" data-planung-feld="kuerzel"
+                placeholder="Kürzel" size="6" maxlength="10"
+                aria-label="Kürzel der Fachkonferenzleitung"></td>
+              <td><input type="date" class="planung-feld" data-planung-feld="datum"
+                aria-label="Datum der Bestätigung"></td>
               <td><span class="klein grau">weiterer Jahrgang</span></td>
             </tr>
           </tbody>

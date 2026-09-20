@@ -3,8 +3,8 @@ und die einzelnen Eintragungen vornehmen.
 
 Der Abgleich ist die Stelle, an der die beiden Wahrheiten aufeinandertreffen:
 
-* **IServ** sagt, welche Bücher es gibt, in welchen Jahrgängen und zu welchem
-  Preis. Das wird bei jedem Abgleich frisch übernommen.
+* **IServ** sagt, welche Bücher es gibt, in welchen Fächern und Jahrgängen und
+  zu welchem Preis. Das wird bei jedem Abgleich frisch übernommen.
 * **Die Datei** sagt, was geprüft, bestätigt, geplant und zurückgelegt wurde.
   Das überlebt jeden Abgleich.
 
@@ -12,9 +12,10 @@ Was verlorengeht, geht nicht stillschweigend verloren: eine Eintragung zu einem
 Buch, das in beiden Schuljahren nicht mehr vorkommt, wird verworfen **und** als
 Warnung ins Blatt ``Info`` geschrieben.
 
-Alle Funktionen hier geben einen **neuen** :class:`~buchplanung.core.modelle.
-Buchplanung`-Wert zurück; nichts wird an Ort und Stelle verändert. Das
-Speichern (Schloss, ``mtime``, Sicherung) steht im Dashboard.
+Alle Funktionen hier geben einen **neuen**
+:class:`~buecherlisten.planung.modelle.Buchplanung`-Wert zurück; nichts wird an
+Ort und Stelle verändert. Das Speichern (Schloss, ``mtime``, Sicherung) steht im
+Dashboard.
 """
 from __future__ import annotations
 
@@ -30,7 +31,6 @@ from .modelle import (
     RUECKLAGE_STATUS,
     Buch,
     Buchplanung,
-    Fachbestaetigung,
     Planungszeile,
     Preispruefung,
     Ruecklage,
@@ -58,10 +58,12 @@ class UngueltigeEingabe(ValueError):
 def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) -> Buchplanung:
     """Übernimmt die Bücher aus IServ und behält alles von Hand Eingetragene.
 
-    Der Schlüssel ist jeweils der der Tabelle: die ISBN bei der Preisprüfung,
-    (ISBN, Fach) bei der Rücklage, (ISBN, Jahrgang) bei der Planung, das Fach
-    bei der Bestätigung. Fällt der Schlüssel weg, fällt die Eintragung weg -
-    mit einer Warnung, die in der Datei landet.
+    Der Schlüssel ist jeweils der seines Blatts: die ISBN bei der Preisprüfung,
+    (ISBN, Fach, Jahrgang) bei der Planung, (ISBN, Fach) bei der Rücklage.
+    Fällt die ISBN weg, fällt die Eintragung weg - mit einer Warnung, die in der
+    Datei landet. Fach und Jahrgang einer Planungszeile werden **nicht** geprüft:
+    „wird ab 2028/29 auch in Jahrgang 9 eingeführt" ist gerade die Zeile, die es
+    in keiner Bücherliste gibt.
     """
     alt = vorher or Buchplanung()
     bekannt = {buch.isbn for buch in schnappschuss.buecher}
@@ -71,8 +73,8 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
     def verloren(was: str, isbn: str) -> None:
         warnungen.append(
             f"{was} zu ISBN {isbn} wurde verworfen: das Buch steht weder im "
-            f"Schuljahr {schnappschuss.schuljahr} noch im Vorjahr "
-            f"{schnappschuss.vorjahr} in einer Bücherliste."
+            f"Schuljahr {schnappschuss.schuljahr} noch als leihbares Buch im "
+            f"Vorjahr {schnappschuss.vorjahr} in einer Bücherliste."
         )
 
     preise: list[Preispruefung] = []
@@ -82,13 +84,6 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         else:
             verloren("Die Preisprüfung", eintrag.isbn)
 
-    ruecklagen: list[Ruecklage] = []
-    for wunsch in alt.ruecklagen:
-        if wunsch.isbn in bekannt:
-            ruecklagen.append(wunsch)
-        else:
-            verloren("Der Rücklage-Wunsch", wunsch.isbn)
-
     planung: list[Planungszeile] = []
     for zeile in alt.planung:
         if zeile.isbn in bekannt:
@@ -96,10 +91,12 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         else:
             verloren("Die Planungszeile", zeile.isbn)
 
-    # Fachbestätigungen bleiben auch dann stehen, wenn das Fach gerade kein
-    # Buch mehr hat: ihr Status wird ohnehin gegen den aktuellen Stand
-    # gerechnet und zeigt dann "veraltet" statt zu verschwinden.
-    bestaetigungen = tuple(alt.bestaetigungen)
+    ruecklagen: list[Ruecklage] = []
+    for wunsch in alt.ruecklagen:
+        if wunsch.isbn in bekannt:
+            ruecklagen.append(wunsch)
+        else:
+            verloren("Der Rücklage-Wunsch", wunsch.isbn)
 
     neu = Buchplanung(
         schuljahr=schnappschuss.schuljahr,
@@ -107,23 +104,21 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         stand=schnappschuss.stand,
         buecher=schnappschuss.buecher,
         preise=tuple(preise),
-        ruecklagen=tuple(ruecklagen),
         planung=tuple(planung),
-        bestaetigungen=bestaetigungen,
+        ruecklagen=tuple(ruecklagen),
         warnungen=tuple(warnungen),
     )
     return _mit_hinweis_auf_offene_preise(neu, titel)
 
 
 def _mit_hinweis_auf_offene_preise(stand: Buchplanung, titel: dict[str, str]) -> Buchplanung:
-    """Ergänzt eine Warnung, wenn neu hinzugekommene Bücher ungeprüft sind.
+    """Ergänzt eine Warnung, wenn Bücher ohne geprüften Preis in der Datei stehen.
 
     Kein neuer Zustand, nur ein Satz: die Preisprüfung eines neu eingeführten
     Buchs ist genau der Schritt, der nach einer Fachkonferenz vergessen wird.
     """
     geprueft = {eintrag.isbn for eintrag in stand.preise if eintrag.preis is not None}
-    offen = [buch for buch in stand.buecher
-             if buch.im_aktuellen_jahr and buch.isbn not in geprueft]
+    offen = [buch for buch in stand.buecher if buch.isbn not in geprueft]
     if not offen:
         return stand
     namen = ", ".join(sorted(titel.get(buch.isbn, buch.isbn) for buch in offen)[:5])
@@ -156,6 +151,18 @@ def _geprueftes_buch(stand: Buchplanung, isbn: str) -> Buch:
             "„Aus IServ aktualisieren“."
         )
     return buch
+
+
+def _geprueftes_fach(stand: Buchplanung, buch: Buch, fach: str) -> None:
+    """Gehört das Buch zu diesem Fach - heute oder laut Planung oder Rücklage?"""
+    erlaubt = set(buch.faecher or (OHNE_FACH,))
+    erlaubt |= {zeile.fach for zeile in stand.planung if zeile.isbn == buch.isbn}
+    erlaubt |= {eintrag.fach for eintrag in stand.ruecklagen if eintrag.isbn == buch.isbn}
+    if fach not in erlaubt:
+        raise UngueltigeEingabe(
+            f"„{buch.titel}“ gehört nicht zum Fach „{fach}“. Möglich sind: "
+            + ", ".join(sorted(erlaubt)) + "."
+        )
 
 
 def setze_preis(
@@ -209,68 +216,92 @@ def _vorhandene_bemerkung(stand: Buchplanung, isbn: str) -> str:
     return eintrag.bemerkung if eintrag else ""
 
 
-def setze_fachbestaetigung(
-    stand: Buchplanung, *, fach: str, kuerzel: str, datum: date | None, bemerkung: str = "",
-) -> Buchplanung:
-    """Hält fest, dass die Fachkonferenzleitung die Liste dieses Fachs freigibt.
-
-    Mitgeschrieben wird der Stand, der bestätigt wurde - die ISBNs des Fachs
-    im laufenden Schuljahr. Ändert sich die Liste danach, wird daraus
-    gerechnet, **was** sich geändert hat.
-    """
-    if fach not in stand.faecher:
-        raise UngueltigeEingabe(f"„{fach}“ kommt in dieser Datei als Fach nicht vor.")
-    if not kuerzel.strip():
-        neuer = None
-    else:
-        isbns = tuple(sorted(buch.isbn for buch in stand.buecher_je_fach(fach)
-                             if buch.im_aktuellen_jahr))
-        neuer = Fachbestaetigung(fach=fach, kuerzel=kuerzel.strip(), datum=datum,
-                                 bemerkung=bemerkung.strip(), bestaetigte_isbns=isbns)
-    return _ersetzt(
-        stand,
-        bestaetigungen=_ersetze(stand.bestaetigungen, lambda e: e.fach == fach, neuer),
-    )
-
-
 def setze_planung(
-    stand: Buchplanung, *, isbn: str, jahrgang: int, eingefuehrt_ab: str = "",
-    ausgemustert_nach: str = "", beschluss: str = "", bemerkung: str = "",
+    stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, eingefuehrt_ab: str = "",
+    ausgemustert_nach: str = "", kuerzel: str = "", datum: date | None = None,
+    bemerkung: str = "",
 ) -> Buchplanung:
-    """Trägt für **ein** Buch in **einem** Jahrgang die beiden Schuljahre ein.
+    """Trägt für **ein** Buch in **einem** Fach und Jahrgang die Zeile ein.
 
     Der Jahrgang muss nicht der eines heutigen Vorkommens sein: "wird ab
     2028/29 auch in Jahrgang 9 eingeführt" ist genau der Fall, für den es
     diese Zeile gibt. Ist alles leer, verschwindet die Zeile wieder.
+
+    Die Ausmusterung gilt nur für **leihbare** Bücher: ein Buch, das die
+    Familien selbst kaufen, liegt nicht im Bestand der Schule und wird dort
+    auch nicht ausgemustert. Ohne diese Prüfung stünde in der Spalte ein
+    Schuljahr, aus dem niemand eine Handlung ableiten könnte.
     """
-    _geprueftes_buch(stand, isbn)
+    buch = _geprueftes_buch(stand, isbn)
+    _geprueftes_fach(stand, buch, fach)
     if not _JAHRGANG_VON <= jahrgang <= _JAHRGANG_BIS:
         raise UngueltigeEingabe(
             f"„{jahrgang}“ ist kein Jahrgang. Erwartet wird eine Zahl zwischen "
             f"{_JAHRGANG_VON} und {_JAHRGANG_BIS}."
         )
     ab, nach = eingefuehrt_ab.strip(), ausgemustert_nach.strip()
-    for feld, wert in (("eingeführt ab", ab), ("ausgemustert nach", nach)):
+    for feld, wert in (("Einführung", ab), ("Ausmusterung nach Schuljahr", nach)):
         if wert:
             try:
                 schuljahr_zahl(wert)
             except UngueltigesSchuljahr as exc:
                 raise UngueltigeEingabe(f"Feld „{feld}“: {exc}") from exc
+    if nach and not buch.leihbar:
+        raise UngueltigeEingabe(
+            f"„{buch.titel}“ ist kein Leihbuch und wird deshalb nicht ausgemustert - "
+            "die Familien kaufen es selbst. Die Ausmusterung bleibt leer."
+        )
     if ab and nach and schuljahr_zahl(nach) < schuljahr_zahl(ab):
         raise UngueltigeEingabe(
             f"Das Buch kann nicht nach {nach} ausgemustert werden, wenn es erst "
             f"ab {ab} eingeführt wird."
         )
 
-    zeile = Planungszeile(isbn=isbn, jahrgang=jahrgang, eingefuehrt_ab=ab,
-                          ausgemustert_nach=nach, beschluss=beschluss.strip(),
+    zeile = Planungszeile(isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=ab,
+                          ausgemustert_nach=nach, kuerzel=kuerzel.strip(), datum=datum,
                           bemerkung=bemerkung.strip())
     neuer = None if zeile.leer else zeile
     return _ersetzt(
         stand,
-        planung=_ersetze(stand.planung,
-                         lambda e: e.isbn == isbn and e.jahrgang == jahrgang, neuer),
+        planung=_ersetze(
+            stand.planung,
+            lambda e: e.isbn == isbn and e.fach == fach and e.jahrgang == jahrgang,
+            neuer,
+        ),
     )
+
+
+def bestaetige_fach(
+    stand: Buchplanung, *, fach: str, kuerzel: str, datum: date | None,
+) -> tuple[Buchplanung, int]:
+    """Setzt Kürzel und Datum in **alle** Zeilen eines Fachs.
+
+    Die Fachkonferenzleitung gibt ihre Liste als Ganzes frei - dieselbe
+    Sammelgeste wie :func:`setze_preise_des_verlags` beim Verlag. Bestätigt
+    wird aber je Zeile, und genau deshalb braucht es keinen zweiten Zustand
+    "bestätigter Stand": kommt später ein Buch dazu, ist seine Zeile leer, und
+    das Fach ist wieder nur teilweise bestätigt.
+
+    Ein leeres Kürzel nimmt die Bestätigung des ganzen Fachs zurück.
+    """
+    if fach not in stand.faecher:
+        raise UngueltigeEingabe(f"„{fach}“ kommt in dieser Datei als Fach nicht vor.")
+    neu = stand
+    geaendert = 0
+    for buch in stand.buecher_je_fach(fach):
+        for eigenes, jahrgang in stand.zeilen_des_buchs(buch):
+            if eigenes != fach:
+                continue
+            vorher = stand.planungszeile(buch.isbn, fach, jahrgang)
+            neu = setze_planung(
+                neu, isbn=buch.isbn, fach=fach, jahrgang=jahrgang,
+                eingefuehrt_ab=vorher.eingefuehrt_ab if vorher else "",
+                ausgemustert_nach=vorher.ausgemustert_nach if vorher else "",
+                kuerzel=kuerzel, datum=datum,
+                bemerkung=vorher.bemerkung if vorher else "",
+            )
+            geaendert += 1
+    return neu, geaendert
 
 
 def setze_ruecklage(
@@ -279,14 +310,7 @@ def setze_ruecklage(
 ) -> Buchplanung:
     """Hält fest, wie viele Exemplare eine Fachschaft behalten möchte."""
     buch = _geprueftes_buch(stand, isbn)
-    erlaubt = set(buch.faecher or (OHNE_FACH,)) | {
-        eintrag.fach for eintrag in stand.ruecklagen if eintrag.isbn == isbn
-    }
-    if fach not in erlaubt:
-        raise UngueltigeEingabe(
-            f"„{buch.titel}“ gehört nicht zum Fach „{fach}“. Möglich sind: "
-            + ", ".join(sorted(erlaubt)) + "."
-        )
+    _geprueftes_fach(stand, buch, fach)
     if anzahl is not None and not 0 <= anzahl <= 2000:
         raise UngueltigeEingabe(
             f"„{anzahl}“ ist keine sinnvolle Anzahl. Erwartet wird 0 bis 2000."

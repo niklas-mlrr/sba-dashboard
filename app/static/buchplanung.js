@@ -3,14 +3,16 @@
 // Dieselbe Regel wie in app.js und mehrjahresbaende.js: so dumm wie möglich.
 // Das Skript rechnet keinen Status aus und entscheidet nicht, ob ein Preis
 // stimmt; es schickt die Eingabe an den Server und trägt ein, was zurückkommt.
-// Welche Status es gibt, steht in buchplanung/core/modelle.py - hier steht
+// Welche Status es gibt, steht in buecherlisten/planung/modelle.py - hier steht
 // nirgends eine Liste davon.
 //
 //   1. Aktualisieren: beide Schuljahre aus IServ holen und die Datei anlegen.
 //      Danach wird die Seite neu geladen - sie zeigt dann überall den Stand.
 //   2. Preis prüfen: je Buch (Verlags-Ansicht) oder als ganze Verlagsliste.
-//   3. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht).
-//   4. Planung: Einführung und Ausmusterung je Jahrgang, im Aufklapper.
+//   3. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht),
+//      die Kürzel und Datum in alle Zeilen dieses Fachs schreibt.
+//   4. Planung: Einführung, Ausmusterung und Bestätigung je Fach und Jahrgang,
+//      im Aufklapper.
 //   5. Rücklage: wie viele Exemplare die Fachschaft behalten möchte.
 //
 // Antwortet der Server mit 409, hat jemand anderes die Datei angefasst; dann
@@ -142,8 +144,9 @@
       sende("/api/buchplanung/fach", {
         fach: knopf.dataset.fach, kuerzel: werte.kuerzel || "",
         datum: werte.datum || null,
-      }, () => werte.kuerzel ? "Die Bücherliste wurde bestätigt."
-                             : "Die Bestätigung wurde zurückgenommen.");
+      }, (daten) => werte.kuerzel
+          ? daten.bestaetigt + " Zeile(n) dieses Fachs bestätigt."
+          : "Die Bestätigung wurde zurückgenommen.");
       return;
     }
 
@@ -175,10 +178,12 @@
     }
     sende("/api/buchplanung/planung", {
       isbn: details.dataset.isbn,
+      fach: details.dataset.fach,
       jahrgang: Number(jahrgang),
       eingefuehrt_ab: werte.eingefuehrt_ab || "",
       ausgemustert_nach: werte.ausgemustert_nach || "",
-      beschluss: werte.beschluss || "",
+      kuerzel: werte.kuerzel || "",
+      datum: werte.datum || null,
     }, () => "Die Planung wurde gespeichert.");
   });
 })();

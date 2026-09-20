@@ -13,11 +13,11 @@ Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
 geprüft. Ebenfalls seit 2026-09-19 lässt sich der **Arbeitsstand der
 Bücherlisten speichern** — Preisprüfung, Freigabe durch die
-Fachkonferenzleitungen, Einführung und Ausmusterung je Jahrgang sowie
+Fachkonferenzleitungen, Einführung und Ausmusterung je Fach und Jahrgang sowie
 Rücklagen für die Fachschaften. Er liegt als Exceldatei je Schuljahr neben der
-Bestandsmappe (`buchplanung/`,
+Bestandsmappe (`buecherlisten/planung/`,
 [`docs/architektur.md`](docs/architektur.md#die-buchplanung-preise-prüfen-listen-freigeben-einführung-und-ausmusterung),
-Regeln in [`buchplanung/README.md`](buchplanung/README.md)); eingetragen wird in
+Regeln in [`buecherlisten/planung/README.md`](buecherlisten/planung/README.md)); eingetragen wird in
 den Bücherlisten-Seiten selbst. Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
 die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
 welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher
@@ -53,7 +53,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `POST /api/buchplanung/preis` | Geprüfter Preis eines Buchs: `{schuljahr, isbn, preis, kuerzel, datum, mtime}` → 200/400/409/423/503 |
 | `POST /api/buchplanung/preise` | Eine ganze Verlagsliste: `{schuljahr, verlag, kuerzel, datum, mtime}` |
 | `POST /api/buchplanung/fach` | Freigabe der Fachkonferenzleitung: `{schuljahr, fach, kuerzel, datum, mtime}` |
-| `POST /api/buchplanung/planung` | Einführung/Ausmusterung: `{schuljahr, isbn, jahrgang, eingefuehrt_ab, ausgemustert_nach, mtime}` |
+| `POST /api/buchplanung/planung` | Einführung/Ausmusterung je Fach und Jahrgang: `{schuljahr, isbn, fach, jahrgang, eingefuehrt_ab, ausgemustert_nach, kuerzel, datum, mtime}` |
 | `POST /api/buchplanung/ruecklage` | Rücklage einer Fachschaft: `{schuljahr, isbn, fach, anzahl, status, mtime}` |
 | `GET /api/mehrjahresbaende` | dieselbe Übersicht als JSON |
 | `POST /api/mehrjahresbaende/erzeugen` | Aus zwei Schuljahren neu rechnen und die Datei schreiben: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |
@@ -109,7 +109,8 @@ Pakete liegen jetzt hier:
 ```
 app/                Weboberfläche: FastAPI, Templates, Programmfenster
 bestand/            Excel-Kern (core/) + das Bestands-CLI
-buecherlisten/      Bücherlisten-Kern (core/), trg_web.py + das Listen-CLI
+buecherlisten/      Bücherlisten-Kern (core/), die Buchplanung (planung/),
+                    trg_web.py + das Listen-CLI
 mehrjahresbaende/   Mehrjahresbände-Kern (core/) + das Übersichts-CLI
 tests/              Tests der Weboberfläche
 tests/bibliothek/   Tests der drei Bibliothekspakete

@@ -9,6 +9,7 @@ lesend** (GET) abfragen und daraus Dateien erzeugen:
 | `bestand/` | `update_bestand_auto.py` | Kommandozeilen-Schale um `core/`: trägt Bestands-/Anmeldezahlen in die Excel-Liste ein |
 | `buecherlisten/core/` | Bibliothek | Bücherdaten gruppieren und als PDF setzen — das, was auch das Dashboard druckt |
 | `buecherlisten/` | `generate_booklists.py` | erzeugt die Bücherlisten-PDFs je Fach, Verlag oder Jahrgang (`--view`) |
+| `buecherlisten/planung/` | Bibliothek | der Arbeitsstand der Bücherlisten (Preisprüfung, Freigaben, Einführung/Ausmusterung, Rücklagen) als `.xlsx` je Schuljahr — siehe `buecherlisten/planung/README.md` |
 | `buecherlisten/trg_web.py` | Bibliothek | die drei TRG-Website-Scraper (Fachkonferenzleitungen, Fächer, Kollegium) — netzlos testbar, siehe `tests/bibliothek/test_trg_web.py` |
 | `mehrjahresbaende/core/` | Bibliothek | zwei Schuljahre vergleichen und die Übersicht als `.xlsx` schreiben — siehe `mehrjahresbaende/README.md` |
 | `mehrjahresbaende/` | `erzeuge_mehrjahresbaende.py` | erzeugt die Mehrjahresbände-Übersicht ohne Weboberfläche (`--trocken` zeigt nur) |
@@ -17,7 +18,9 @@ Es wird **nie** nach IServ geschrieben.
 
 Die Weboberfläche in `app/` benutzt `bestand.core` für jeden Abruf und jedes
 Speichern (`app/refresh.py`, `app/excel.py`, `app/rows.py`) und
-`buecherlisten.core` für den Druck der Listen (`app/api/buecherliste.py`) und
+`buecherlisten.core` für den Druck der Listen (`app/api/buecherliste.py`),
+`buecherlisten.planung` für den Arbeitsstand der Bücherlisten
+(`app/buchplanung.py`) und
 `mehrjahresbaende.core` für den gleichnamigen Reiter
 (`app/mehrjahresbaende.py`). Die drei CLIs sind der zweite Nutzer derselben
 Pakete: sie laufen ohne die Weboberfläche, direkt von der Kommandozeile.

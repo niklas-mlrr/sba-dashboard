@@ -161,6 +161,16 @@ def sammle_je_isbn(listen: Jahrgangslisten) -> dict[str, dict]:
     return {isbn: eintrag for (_, isbn), eintrag in _sammle(listen, lambda sd: [""]).items()}
 
 
+def sammle_je_fach_und_isbn(listen: Jahrgangslisten) -> dict[tuple[str, str], dict]:
+    """Wie :func:`collect_entries`, nur über bereits geholte Jahrgangslisten.
+
+    Die Planung braucht je (Fach, Jahrgang) eine Zeile und holt dieselben
+    Listen schon für :func:`sammle_je_isbn`. Ein zweiter Abruf wäre ein Dutzend
+    HTTP-Anfragen für Daten, die bereits im Speicher liegen.
+    """
+    return _sammle(listen, _faecher_von)
+
+
 def collect_entries(client: BuecherlistenClient, schoolyear_id: str) -> dict[tuple[str, str], dict]:
     """Alle Bücherlisten-Items eines Schuljahrs, gruppiert nach (Fach, ISBN).
 
@@ -171,7 +181,7 @@ def collect_entries(client: BuecherlistenClient, schoolyear_id: str) -> dict[tup
     Vorkommen abweichen, verifiziert 2026-08-18), sondern anhand der
     Bücherlisten-Jahrgänge, in denen das Item tatsächlich erscheint.
     """
-    return _sammle(hole_jahrgangslisten(client, schoolyear_id), _faecher_von)
+    return sammle_je_fach_und_isbn(hole_jahrgangslisten(client, schoolyear_id))
 
 
 def _zeile(isbn: str, e: dict, sort_key: tuple) -> dict:

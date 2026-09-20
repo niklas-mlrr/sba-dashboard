@@ -19,8 +19,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from buchplanung.core import (
+from buecherlisten.planung import (
     Buchplanung,
+    fach_bestaetigung,
     fach_status,
     planungs_status,
     preis_status,
@@ -58,10 +59,9 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
             "verlag": buch.verlag,
             "faecher": list(buch.faecher),
             "jahrgaenge": list(buch.jahrgaenge),
-            "jahrgaenge_vorjahr": list(buch.jahrgaenge_vorjahr),
-            "jahrgaenge_aktuell": list(buch.jahrgaenge_aktuell),
             "leihbar": buch.leihbar,
             "neupreis": buch.neupreis,
+            "leihgebuehr": buch.leihgebuehr,
             "preis_status": status,
             "preis_hinweis": hinweis,
             "geprueft": None if pruefung is None else {
@@ -72,17 +72,17 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
             },
             "planung": [
                 {
+                    "fach": fach,
                     "jahrgang": jahrgang,
                     "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
                     "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
-                    "beschluss": zeile.beschluss if zeile else "",
+                    "kuerzel": zeile.kuerzel if zeile else "",
+                    "datum": zeile.datum.isoformat() if zeile and zeile.datum else None,
                     "bemerkung": zeile.bemerkung if zeile else "",
-                    "herkunft": stand.herkunft(buch, jahrgang),
                     "status": planungs_status(zeile, stand.schuljahr),
                 }
-                for jahrgang in stand.jahrgaenge
-                if jahrgang in buch.jahrgaenge or stand.planungszeile(buch.isbn, jahrgang)
-                for zeile in (stand.planungszeile(buch.isbn, jahrgang),)
+                for fach, jahrgang in stand.zeilen_des_buchs(buch)
+                for zeile in (stand.planungszeile(buch.isbn, fach, jahrgang),)
             ],
             "ruecklagen": [
                 {
@@ -99,15 +99,14 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
 
     faecher = []
     for fach in stand.faecher:
-        eintrag = stand.bestaetigung(fach)
-        status, hinweis = fach_status(fach, stand.buecher_je_fach(fach), eintrag)
+        status, hinweis = fach_status(stand, fach)
+        kuerzel, datum = fach_bestaetigung(stand, fach)
         faecher.append({
             "fach": fach,
             "status": status,
             "hinweis": hinweis,
-            "kuerzel": eintrag.kuerzel if eintrag else "",
-            "datum": eintrag.datum.isoformat() if eintrag and eintrag.datum else None,
-            "bemerkung": eintrag.bemerkung if eintrag else "",
+            "kuerzel": kuerzel,
+            "datum": datum.isoformat() if datum else None,
         })
 
     return {
@@ -194,22 +193,23 @@ def api_preise(request: Request, anfrage: VerlagspreisAnfrage) -> JSONResponse:
 @router.post("/api/buchplanung/fach")
 def api_fach(request: Request, anfrage: FachbestaetigungAnfrage) -> JSONResponse:
     """Die Freigabe einer Fach-Bücherliste durch die Fachkonferenzleitung."""
-    stand = domaene.schreibe_fachbestaetigung(
+    stand, anzahl = domaene.schreibe_fachbestaetigung(
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, fach=anfrage.fach, kuerzel=anfrage.kuerzel,
-        datum=anfrage.datum, bemerkung=anfrage.bemerkung, mtime=anfrage.mtime,
+        datum=anfrage.datum, mtime=anfrage.mtime,
     )
-    return _antwort(stand)
+    return _antwort(stand, bestaetigt=anzahl)
 
 
 @router.post("/api/buchplanung/planung")
 def api_planung(request: Request, anfrage: PlanungsAnfrage) -> JSONResponse:
-    """Einführung und Ausmusterung eines Buchs in einem Jahrgang."""
+    """Eine Zeile der Planung: ein Buch in einem Fach und einem Jahrgang."""
     stand = domaene.schreibe_planung(
         aktuelle_einstellungen(request),
-        schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, jahrgang=anfrage.jahrgang,
-        eingefuehrt_ab=anfrage.eingefuehrt_ab, ausgemustert_nach=anfrage.ausgemustert_nach,
-        beschluss=anfrage.beschluss, bemerkung=anfrage.bemerkung, mtime=anfrage.mtime,
+        schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
+        jahrgang=anfrage.jahrgang, eingefuehrt_ab=anfrage.eingefuehrt_ab,
+        ausgemustert_nach=anfrage.ausgemustert_nach, kuerzel=anfrage.kuerzel,
+        datum=anfrage.datum, bemerkung=anfrage.bemerkung, mtime=anfrage.mtime,
     )
     return _antwort(stand)
 

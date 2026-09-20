@@ -1,9 +1,9 @@
 """Die Buchplanung von der Seite der Anwendung aus.
 
-Die Regeln und die Dateistruktur stehen in ``buchplanung/core/`` - das Paket
-liegt neben ``bestand/``, ``buecherlisten/`` und ``mehrjahresbaende/`` und weiß
-nichts von HTTP, von Einstellungen und von Sperren. Dieses Modul verbindet
-beides:
+Die Regeln und die Dateistruktur stehen in ``buecherlisten/planung/`` - das
+Paket weiß nichts von HTTP, von Einstellungen und von Sperren, und es liegt
+unter ``buecherlisten/``, weil die Buchplanung keinen eigenen Reiter hat:
+eingetragen wird in den Bücherlisten-Seiten. Dieses Modul verbindet beides:
 
 * **Wo die Datei liegt** - im Ordner der Bestandsmappe, je Schuljahr eine
   eigene (``app/settings.py``, ``buchplanung_pfad``).
@@ -29,25 +29,25 @@ from datetime import date
 from math import isfinite
 from pathlib import Path
 
-from buchplanung.core import (
+from buecherlisten.core.daten import UnbekanntesSchuljahr
+from buecherlisten.planung import (
     Buchplanung,
     MappeUnlesbar,
     UnbekanntesBuch,
     UngueltigeEingabe,
+    bestaetige_fach,
     lade_schnappschuss,
     lies_datei,
     lies_mappe,
     neue_mappe,
     schreibe_mappe,
-    setze_fachbestaetigung,
     setze_planung,
     setze_preis,
     setze_preise_des_verlags,
     setze_ruecklage,
     zusammenfuehren,
 )
-from buchplanung.core.laden import AusleiheClient
-from buecherlisten.core.daten import UnbekanntesSchuljahr
+from buecherlisten.planung.laden import AusleiheClient
 
 from .excel import (
     Dateizustand,
@@ -211,23 +211,29 @@ def schreibe_preise_des_verlags(
 
 def schreibe_fachbestaetigung(
     einstellungen: Einstellungen, *, schuljahr: str, fach: str, kuerzel: str,
-    datum: date | None, bemerkung: str = "", mtime: float,
-) -> Stand:
-    """Hält die Freigabe einer Fach-Bücherliste fest, samt bestätigtem Stand."""
-    return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_fachbestaetigung(
-        stand, fach=fach, kuerzel=kuerzel, datum=datum, bemerkung=bemerkung,
-    ))
+    datum: date | None, mtime: float,
+) -> tuple[Stand, int]:
+    """Setzt Kürzel und Datum der Fachkonferenzleitung in alle Zeilen des Fachs."""
+    gezaehlt = 0
+
+    def aenderung(stand: Buchplanung) -> Buchplanung:
+        nonlocal gezaehlt
+        neu, gezaehlt = bestaetige_fach(stand, fach=fach, kuerzel=kuerzel, datum=datum)
+        return neu
+
+    return _aendere(einstellungen, schuljahr, mtime, aenderung), gezaehlt
 
 
 def schreibe_planung(
-    einstellungen: Einstellungen, *, schuljahr: str, isbn: str, jahrgang: int,
-    eingefuehrt_ab: str = "", ausgemustert_nach: str = "", beschluss: str = "",
-    bemerkung: str = "", mtime: float,
+    einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
+    eingefuehrt_ab: str = "", ausgemustert_nach: str = "", kuerzel: str = "",
+    datum: date | None = None, bemerkung: str = "", mtime: float,
 ) -> Stand:
-    """Trägt Einführung und Ausmusterung eines Buchs in **einem** Jahrgang ein."""
+    """Trägt die Zeile eines Buchs in **einem** Fach und Jahrgang ein."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_planung(
-        stand, isbn=isbn, jahrgang=jahrgang, eingefuehrt_ab=eingefuehrt_ab,
-        ausgemustert_nach=ausgemustert_nach, beschluss=beschluss, bemerkung=bemerkung,
+        stand, isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=eingefuehrt_ab,
+        ausgemustert_nach=ausgemustert_nach, kuerzel=kuerzel, datum=datum,
+        bemerkung=bemerkung,
     ))
 
 

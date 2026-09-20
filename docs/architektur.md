@@ -412,7 +412,7 @@ Beauftragte prüft die Preise gegen die Verlagslisten, die Fachkonferenzleitunge
 geben ihre Fächer frei, dabei werden Bücher eingeführt und ausgemustert, und
 Fachschaften bitten darum, Exemplare zurückzulegen. IServ hält nichts davon
 fest. Die Regeln stehen vollständig in
-[`buchplanung/README.md`](../buchplanung/README.md); hier stehen die vier
+[`buecherlisten/planung/README.md`](../buecherlisten/planung/README.md); hier stehen die vier
 Entscheidungen dahinter.
 
 **Eine Exceldatei je Schuljahr, nicht eine Datenbank.** Derselbe Grund wie bei
@@ -433,19 +433,35 @@ getrennt (`schuljahr` für die Anzeige, `kennung` als Schlüssel), und die
 Testfakes geben ihnen **verschiedene** Werte — ein Fake, in dem beide gleich
 sind, hätte den Fehler mitgetragen.
 
-**Dieselben Bücher stehen dreimal — einmal je Arbeitsschritt.** Verlag für die
-Preisprüfung (jedes Buch hat genau einen), Fach für Freigabe und Rücklage (ein
-Buch kann zu mehreren gehören), Jahrgang für Einführung und Ausmusterung. Wer
-die Datei ohne das Dashboard öffnet, findet drei Listen, die drei Personen
-entsprechen, statt eines Rohdatenblatts mit Anhangstabellen. Widerspruchsfrei
-bleibt das durch **eine** Regel: aus jedem Blatt wird nur seine eigene
+**Ein Bücher-Blatt, zwei Schlüsseltabellen daneben.** `Buchreihen` trägt jeden
+Titel **einmal**, mit der Preisprüfung; `Fächer & Jahrgang` hat eine Zeile je
+(ISBN, Fach, Jahrgang) mit Einführung, Ausmusterung und der Bestätigung der
+Fachkonferenzleitung; `Rücklage` eine Zeile je (ISBN, Fach). Dazu `Info` mit
+Schuljahr, Stand und Legende. Bis 2026-09-20 standen die Bücher dreimal in der
+Mappe, einmal je Achse (Verlag, Fach, Jahrgang), dazu ein eigenes Blatt für die
+Fachbestätigung — dieselben Titel an drei Stellen, und wer die Datei öffnete,
+musste erst herausfinden, welche Liste er vor sich hatte. Widerspruchsfrei
+bleibt die Mappe durch **eine** Regel: aus jedem Blatt wird nur seine eigene
 Eintragungs-Spalte zurückgelesen, alles andere wird bei jedem Schreiben neu
-gesetzt. Dieselbe Regel wie beim Mehrjahresbände-Blatt, nur auf fünf Blätter
-angewandt.
+gesetzt. Dieselbe Regel wie beim Mehrjahresbände-Blatt.
+
+**Bestätigt wird je Zeile, nicht je Fach.** Kürzel und Datum der
+Fachkonferenzleitung stehen in der Zeile, die sie bestätigen. Der Knopf „Liste
+bestätigen" setzt sie in alle Zeilen des Fachs — eine Sammelgeste wie
+„Preise bestätigen" beim Verlag. Vorher gab es dafür ein eigenes Blatt, das
+den bestätigten Stand als ISBN-Liste mitführte, um „veraltet" erkennen zu
+können. Das entfällt: ein neu dazugekommenes Buch bringt eine Zeile ohne
+Kürzel mit, und das Fach fällt von allein auf „teilweise" zurück.
+
+**In der Datei steht das laufende Schuljahr und aus dem Vorjahr, was leihbar
+war.** Ein Kaufbuch, das aus der Bücherliste verschwindet, liegt in keinem
+Regal der Schule — es gibt daran nichts auszumustern und nichts
+zurückzulegen. Aus demselben Grund nimmt die Spalte `Ausmusterung nach
+Schuljahr` nur bei leihbaren Büchern einen Wert an.
 
 **Kein Status wird gespeichert, jeder wird gerechnet.** „bestätigt",
-„abweichend", „veraltet", „läuft aus" folgen aus den eingetragenen Werten
-(`buchplanung/core/modelle.py`). Ein gespeicherter Status könnte den Werten
+„abweichend", „teilweise", „läuft aus" folgen aus den eingetragenen Werten
+(`buecherlisten/planung/modelle.py`). Ein gespeicherter Status könnte den Werten
 widersprechen, aus denen er stammt, und niemand wüsste, welcher recht hat. Zwei
 Anforderungen fallen daraus von selbst: ein neu eingeführtes Buch hat keinen
 geprüften Preis und steht damit auf „offen" — niemand muss daran denken, nach
@@ -456,10 +472,10 @@ und nicht nur ein Haken.
 **Der Abgleich führt zusammen, er überschreibt nicht.** Anders als bei den
 Mehrjahresbänden: dort ist die Datei die gerechnete Ausgabe eines Vergleichs,
 hier ist sie der Arbeitsstand von vier Personen. Aus IServ kommen Titel,
-Verlag, Fächer, Jahrgänge und Preise; alles von Hand Eingetragene bleibt,
-solange sein Schlüssel existiert. Was wegfällt — ein Buch, das in beiden
-Schuljahren nicht mehr vorkommt —, fällt **mit einer Warnung** weg, die im
-Blatt `Info` landet.
+Verlag, die (Fach, Jahrgang)-Paare und die Preise; alles von Hand Eingetragene
+bleibt, solange sein Schlüssel existiert. Was wegfällt — ein Buch, das im
+laufenden Schuljahr nicht mehr vorkommt und auch im Vorjahr nicht leihbar war
+—, fällt **mit einer Warnung** weg, die im Blatt `Info` landet.
 
 Eingetragen wird in den Bücherlisten-Seiten selbst (Verlag: Preise; Fach:
 Freigabe, Einführung, Ausmusterung, Rücklage), nicht auf einem eigenen Reiter —

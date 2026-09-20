@@ -13,15 +13,16 @@ from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
-from buchplanung.core import (
+from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
+from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
+from buecherlisten.planung import (
     FACH_BESTAETIGT,
     RUECKLAGE_STATUS,
+    fach_bestaetigung,
     fach_status,
     planungs_status,
     preis_status,
 )
-from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
-from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 
 from .. import buchplanung as planungsdomaene
 from ..buecherlisten import (
@@ -87,12 +88,12 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
     oder ist sie unlesbar, zeigt die Seite die Bücher und einen Hinweis.
 
     Die Status werden nicht mitgeliefert, sondern hier gerechnet - an genau der
-    Stelle, an der auch die API sie rechnet (``buchplanung/core/modelle.py``).
+    Stelle, an der auch die API sie rechnet (``buecherlisten/planung/modelle.py``).
     """
     leer: dict[str, Any] = {
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "ruecklage_status": list(RUECKLAGE_STATUS),
-        "preis_je_isbn": {}, "fach_je_name": {}, "planung_je_isbn": {},
+        "preis_je_isbn": {}, "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {},
     }
     try:
@@ -104,7 +105,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
 
     planung = stand.planung
     preise: dict[str, dict[str, Any]] = {}
-    zeilen: dict[str, list[dict[str, Any]]] = {}
+    zeilen: dict[str, dict[str, list[dict[str, Any]]]] = {}
     ruecklagen: dict[str, dict[str, Any]] = {}
     for buch in planung.buecher:
         pruefung = planung.pruefung(buch.isbn)
@@ -115,17 +116,21 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
             "kuerzel": pruefung.kuerzel if pruefung else "",
             "datum": pruefung.datum if pruefung else None,
         }
-        zeilen[buch.isbn] = [
-            {"jahrgang": jahrgang,
-             "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
-             "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
-             "beschluss": zeile.beschluss if zeile else "",
-             "herkunft": planung.herkunft(buch, jahrgang),
-             "status": planungs_status(zeile, planung.schuljahr)}
-            for jahrgang in planung.jahrgaenge
-            if jahrgang in buch.jahrgaenge or planung.planungszeile(buch.isbn, jahrgang)
-            for zeile in (planung.planungszeile(buch.isbn, jahrgang),)
-        ]
+        # Je Fach eigene Zeilen: die Fach-Ansicht zeigt nur, was ihr Fach
+        # angeht, und die Fachkonferenzleitung bestätigt nur ihre eigenen.
+        je_fach: dict[str, list[dict[str, Any]]] = {}
+        for fach, jahrgang in planung.zeilen_des_buchs(buch):
+            zeile = planung.planungszeile(buch.isbn, fach, jahrgang)
+            je_fach.setdefault(fach, []).append({
+                "jahrgang": jahrgang,
+                "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
+                "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
+                "kuerzel": zeile.kuerzel if zeile else "",
+                "datum": zeile.datum if zeile else None,
+                "bemerkung": zeile.bemerkung if zeile else "",
+                "status": planungs_status(zeile, planung.schuljahr),
+            })
+        zeilen[buch.isbn] = je_fach
     for wunsch in planung.ruecklagen:
         ruecklagen.setdefault(wunsch.isbn, {})[wunsch.fach] = {
             "anzahl": wunsch.anzahl, "status": wunsch.status,
@@ -135,12 +140,10 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
 
     faecher: dict[str, dict[str, Any]] = {}
     for fach in planung.faecher:
-        freigabe = planung.bestaetigung(fach)
-        status, hinweis = fach_status(fach, planung.buecher_je_fach(fach), freigabe)
+        status, hinweis = fach_status(planung, fach)
+        kuerzel, datum = fach_bestaetigung(planung, fach)
         faecher[fach] = {
-            "status": status, "hinweis": hinweis,
-            "kuerzel": freigabe.kuerzel if freigabe else "",
-            "datum": freigabe.datum if freigabe else None,
+            "status": status, "hinweis": hinweis, "kuerzel": kuerzel, "datum": datum,
         }
 
     return {
@@ -151,7 +154,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "ruecklage_status": list(RUECKLAGE_STATUS),
         "preis_je_isbn": preise,
         "fach_je_name": faecher,
-        "planung_je_isbn": zeilen,
+        "planung_je_isbn_und_fach": zeilen,
         "ruecklage_je_isbn": ruecklagen,
     }
 

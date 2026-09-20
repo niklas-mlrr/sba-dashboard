@@ -30,17 +30,19 @@ from conftest import TEST_BASIS_URL
 DEUTSCH = "9783060000005"
 TERRA = "9783121000562"
 ALT = "9783120000009"
+KAUF = "9783140000000"
 
-# Schuljahr -> Jahrgang -> (ISBN, Titel, Fächer, Verlag, Preis)
-_BUECHER: dict[str, dict[int, list[tuple[str, str, list[str], str, float]]]] = {
+# Schuljahr -> Jahrgang -> (ISBN, Titel, Fächer, Verlag, Preis, leihbar)
+_BUECHER: dict[str, dict[int, list[tuple[str, str, list[str], str, float, bool]]]] = {
     "2025/2026": {
-        5: [(DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5),
-            (TERRA, "Terra 5/6", ["Erdkunde", "Politik"], "Klett", 25.0)],
-        9: [(ALT, "Chemie heute 9", ["Chemie"], "Westermann", 30.0)],
+        5: [(DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True),
+            (TERRA, "Terra 5/6", ["Erdkunde", "Politik"], "Klett", 25.0, True)],
+        9: [(ALT, "Chemie heute 9", ["Chemie"], "Westermann", 30.0, True)],
     },
     "2026/2027": {
-        5: [(DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5)],
-        6: [(TERRA, "Terra 5/6", ["Erdkunde", "Politik"], "Klett", 25.0)],
+        5: [(DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True),
+            (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)],
+        6: [(TERRA, "Terra 5/6", ["Erdkunde", "Politik"], "Klett", 25.0, True)],
     },
 }
 
@@ -63,10 +65,10 @@ class _Schuljahre:
 
     def get_booklist(self, schoolyear_id: str, booklist_id: int) -> dict:
         items = [
-            {"borrowable": True, "series": isbn,
+            {"borrowable": leihbar, "series": isbn,
              "series_data": {"isbn": isbn, "title": titel, "subjectsFlat": faecher,
                              "publisher": verlag, "price": preis, "fee": 5.0}}
-            for isbn, titel, faecher, verlag, preis in
+            for isbn, titel, faecher, verlag, preis, leihbar in
             _BUECHER[schoolyear_id][booklist_id - 100]
         ]
         return {"sections": [{"options": [{"items": items}]}]}
@@ -151,12 +153,13 @@ def test_abgleich_schreibt_die_datei_je_schuljahr(
     assert planung["schuljahr"] == "2026/2027"
     assert planung["vorjahr"] == "2025/2026"
     je_isbn = {buch["isbn"]: buch for buch in planung["buecher"]}
-    assert je_isbn[DEUTSCH]["jahrgaenge_aktuell"] == [5]
-    # Nur im Vorjahr: ausgemustert, steht aber weiter in der Datei.
-    assert je_isbn[ALT]["jahrgaenge_aktuell"] == []
-    assert je_isbn[ALT]["jahrgaenge_vorjahr"] == [9]
+    assert je_isbn[DEUTSCH]["jahrgaenge"] == [5]
+    # Nur im Vorjahr, aber leihbar: steht weiter in der Datei - dafür gibt es
+    # die Ausmusterung und die Rücklage.
+    assert je_isbn[ALT]["jahrgaenge"] == [9]
     # Ein Buch mit zwei Fächern steht in beiden.
-    assert {f["fach"] for f in planung["faecher"]} == {"Chemie", "Deutsch", "Erdkunde", "Politik"}
+    assert {f["fach"] for f in planung["faecher"]} == {
+        "Chemie", "Deutsch", "Erdkunde", "Latein", "Politik"}
 
 
 def test_lesen_ohne_datei_meldet_keinen_stand(seiten: TestClient) -> None:
@@ -233,9 +236,10 @@ def test_fachbestaetigung_haelt_kuerzel_und_datum_fest(
     fach = next(f for f in antwort.json()["planung"]["faecher"] if f["fach"] == "Deutsch")
     assert fach["status"] == "bestätigt"
     assert (fach["kuerzel"], fach["datum"]) == ("ABC", "2026-09-03")
+    assert antwort.json()["bestaetigt"] == 1
 
 
-def test_fachbestaetigung_veraltet_wenn_ein_buch_dazukommt(
+def test_ein_neues_buch_macht_das_fach_wieder_unbestaetigt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     bestaetigt = seiten.post("/api/buchplanung/fach", json={
@@ -244,7 +248,7 @@ def test_fachbestaetigung_veraltet_wenn_ein_buch_dazukommt(
     }).json()
 
     _BUECHER["2026/2027"][5].append(
-        ("9783060000012", "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0))
+        ("9783060000012", "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0, True))
     try:
         antwort = seiten.post("/api/buchplanung/abgleich", json={})
     finally:
@@ -253,8 +257,8 @@ def test_fachbestaetigung_veraltet_wenn_ein_buch_dazukommt(
     assert antwort.status_code == 200, antwort.text
     assert bestaetigt["mtime"] != antwort.json()["mtime"]
     fach = next(f for f in antwort.json()["planung"]["faecher"] if f["fach"] == "Deutsch")
-    assert fach["status"] == "veraltet"
-    assert "hinzugekommen: Deutschbuch 6" in fach["hinweis"]
+    assert fach["status"] == "teilweise"
+    assert "Deutschbuch 6 (Jg. 5)" in fach["hinweis"]
     # Das Kürzel bleibt lesbar stehen - man soll sehen, wer zuletzt bestätigt hat.
     assert fach["kuerzel"] == "ABC"
 
@@ -267,7 +271,7 @@ def test_planungsstatus_wird_gegen_die_kennung_gerechnet(
 ) -> None:
     """Mit dem Anzeigenamen als Schuljahr stünde hier immer „im Einsatz"."""
     antwort = seiten.post("/api/buchplanung/planung", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "jahrgang": 5,
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 5,
         "ausgemustert_nach": "2025/2026", "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
@@ -279,23 +283,35 @@ def test_einfuehrung_in_einen_kuenftigen_jahrgang(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     antwort = seiten.post("/api/buchplanung/planung", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "jahrgang": 7,
-        "eingefuehrt_ab": "2028/2029", "beschluss": "FK 12.05.2026",
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "eingefuehrt_ab": "2028/2029", "bemerkung": "FK 12.05.2026",
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
     buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
     zeile = next(z for z in buch["planung"] if z["jahrgang"] == 7)
+    assert zeile["fach"] == "Deutsch"
     assert zeile["eingefuehrt_ab"] == "2028/2029"
     assert zeile["status"] == "geplant"
-    assert zeile["herkunft"] == "nur Planung"
+    assert zeile["bemerkung"] == "FK 12.05.2026"
+
+
+def test_ein_kaufbuch_wird_nicht_ausgemustert(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    antwort = seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": KAUF, "fach": "Latein", "jahrgang": 7,
+        "ausgemustert_nach": "2026/2027", "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert "kein Leihbuch" in antwort.json()["fehler"]
 
 
 def test_ausmusterung_mit_ruecklage_fuer_die_fachschaft(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     stand = seiten.post("/api/buchplanung/planung", json={
-        "schuljahr": "2026/2027", "isbn": ALT, "jahrgang": 9,
+        "schuljahr": "2026/2027", "isbn": ALT, "fach": "Chemie", "jahrgang": 9,
         "ausgemustert_nach": "2025/2026", "mtime": abgeglichen["mtime"],
     }).json()
 
@@ -327,7 +343,7 @@ def test_schuljahr_ohne_schraegstrich_wird_abgelehnt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     antwort = seiten.post("/api/buchplanung/planung", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "jahrgang": 7,
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
         "eingefuehrt_ab": "2028", "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 400
@@ -418,14 +434,14 @@ def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(
     assert "label-success" in seiten.get("/buecherliste/fach/Deutsch").text
 
     _BUECHER["2026/2027"][5].append(
-        ("9783060000012", "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0))
+        ("9783060000012", "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0, True))
     try:
         seiten.post("/api/buchplanung/abgleich", json={})
         text = seiten.get("/buecherliste/fach/Deutsch").text
     finally:
         _BUECHER["2026/2027"][5].pop()
-    assert "veraltet" in text
-    assert "hinzugekommen: Deutschbuch 6" in text
+    assert "teilweise" in text
+    assert "Deutschbuch 6 (Jg. 5)" in text
 
 
 def test_uebersicht_zeigt_den_fortschritt_der_preispruefung(

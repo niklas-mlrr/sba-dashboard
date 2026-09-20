@@ -1,10 +1,21 @@
 """Zwei Schuljahre aus IServ holen und zu einer Buchliste zusammenlegen.
 
 Rein lesend (nur GET). Gebraucht werden das laufende Schuljahr und sein
-Vorjahr: erst ihr Unterschied zeigt, was neu eingeführt und was ausgemustert
-wurde, und genau für ausgemusterte Bücher wird eine Rücklage beantragt.
+Vorjahr: erst ihr Unterschied zeigt, was ausgemustert wurde, und genau für
+ausgemusterte Bücher wird eine Rücklage beantragt.
 
-Die Bücherlisten selbst holt ``buecherlisten.core.daten`` - dasselbe Paket, das
+**Welche Bücher in die Datei kommen** (Entscheidung 2026-09-20):
+
+* aus dem laufenden Schuljahr **alle**,
+* aus dem Vorjahr nur die **leihbaren**.
+
+Ein nicht-leihbares Buch kauft die Familie selbst. Ist es aus der Bücherliste
+verschwunden, gibt es daran nichts mehr zu planen: die Schule hat kein Exemplar
+im Bestand, das ausgemustert oder für eine Fachschaft zurückgelegt werden
+könnte. Ein leihbares Buch des Vorjahres liegt dagegen im Regal, und genau
+darum steht es weiter in der Datei.
+
+Die Bücherlisten selbst holt ``buecherlisten.core.daten`` - dasselbe Modul, das
 auch die Bücherlisten-Seiten und die PDF-Erzeugung speist. Ein zweiter Abruf
 mit eigener Auswertung wäre eine zweite Stelle, an der sich IServ-Feldnamen
 ändern können.
@@ -14,14 +25,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from buecherlisten.core.daten import (
+from ..core.daten import (
     OHNE_VERLAG,
     SchuljahreClient,
     hole_jahrgangslisten,
+    sammle_je_fach_und_isbn,
     sammle_je_isbn,
     vorjahr_kennung,
 )
-
 from .modelle import Buch
 
 # Was von ``ausleihe.AusleiheClient`` hier gebraucht wird: die Schuljahre, und
@@ -39,8 +50,9 @@ class Schnappschuss:
     (``"Schuljahr 26/27"``). Beides kommt aus demselben Objekt und sieht
     ähnlich aus, ist aber nicht dasselbe: die Kennung adressiert das Schuljahr
     in IServ, steht im Dateinamen und wird mit anderen Schuljahren verglichen
-    (``eingeführt ab``, ``ausgemustert nach``). Der Name ist nur Beschriftung -
-    und könnte morgen "SJ 2026/27" heißen, ohne dass sich etwas ändert.
+    (``Einführung``, ``Ausmusterung nach Schuljahr``). Der Name ist nur
+    Beschriftung - und könnte morgen "SJ 2026/27" heißen, ohne dass sich etwas
+    ändert.
     """
 
     schuljahr: str
@@ -60,6 +72,21 @@ def _kennung_und_name(client: AusleiheClient, kennung: str | None) -> tuple[str,
     return kennung, str(aktuell.get("name") or kennung)
 
 
+def _jahr(
+    client: AusleiheClient, kennung: str,
+) -> tuple[dict[str, dict], dict[str, set[tuple[str, int]]]]:
+    """Ein Schuljahr einmal holen und zweimal auswerten.
+
+    Zurück kommen die Bücher je ISBN und, je ISBN, die (Fach, Jahrgang)-Paare,
+    in denen das Buch in diesem Schuljahr vorkommt.
+    """
+    listen = hole_jahrgangslisten(client, kennung)
+    paare: dict[str, set[tuple[str, int]]] = {}
+    for (fach, isbn), eintrag in sammle_je_fach_und_isbn(listen).items():
+        paare.setdefault(isbn, set()).update((fach, jahrgang) for jahrgang in eintrag["grades"])
+    return sammle_je_isbn(listen), paare
+
+
 def lade_schnappschuss(
     client: AusleiheClient,
     *,
@@ -77,11 +104,11 @@ def lade_schnappschuss(
     warnungen: list[str] = []
 
     vorjahr_id = vorjahr or vorjahr_kennung(kennung)
-    aktuelle = sammle_je_isbn(hole_jahrgangslisten(client, kennung))
+    aktuelle, aktuelle_paare = _jahr(client, kennung)
     try:
-        alte = sammle_je_isbn(hole_jahrgangslisten(client, vorjahr_id))
+        alte, alte_paare = _jahr(client, vorjahr_id)
     except Exception as exc:  # noqa: BLE001 - jedes Scheitern heißt hier dasselbe
-        alte = {}
+        alte, alte_paare = {}, {}
         warnungen.append(
             f"Das Vorjahr {vorjahr_id} ließ sich nicht laden ({exc}); "
             "ausgemusterte Bücher des Vorjahres fehlen deshalb in dieser Datei."
@@ -93,14 +120,21 @@ def lade_schnappschuss(
         frueher = alte.get(isbn)
         quelle = jetzt or frueher
         assert quelle is not None  # eine der beiden Seiten hat die ISBN geliefert
+        leihbar = bool(quelle.get("borrowable"))
+        if jetzt is None and not leihbar:
+            # Aus dem Vorjahr verschwunden und nie im Bestand der Schule: dazu
+            # gibt es nichts zu planen.
+            continue
+        kombinationen = set(aktuelle_paare.get(isbn, ()))
+        if leihbar:
+            kombinationen |= set(alte_paare.get(isbn, ()))
         buecher.append(Buch(
             isbn=isbn,
             titel=str(quelle.get("title") or "?"),
             verlag=str(quelle.get("publisher") or "") or OHNE_VERLAG,
-            faecher=tuple(quelle.get("subjects") or ()),
-            jahrgaenge_vorjahr=tuple(sorted(frueher["grades"])) if frueher else (),
-            jahrgaenge_aktuell=tuple(sorted(jetzt["grades"])) if jetzt else (),
-            leihbar=bool(quelle.get("borrowable")),
+            kombinationen=tuple(sorted(kombinationen,
+                                       key=lambda paar: (paar[0].casefold(), paar[1]))),
+            leihbar=leihbar,
             neupreis=_preis(quelle.get("price")),
             leihgebuehr=_preis(quelle.get("fee")),
         ))

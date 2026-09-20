@@ -158,28 +158,31 @@ class VerlagspreisAnfrage(_BuchplanungAnfrage):
 class FachbestaetigungAnfrage(_BuchplanungAnfrage):
     """``POST /api/buchplanung/fach`` - die Freigabe durch die Fachkonferenzleitung.
 
-    ``kuerzel`` darf leer sein: das nimmt die Bestätigung zurück.
+    Bestätigt wird je Zeile (Buch, Fach, Jahrgang); diese Anfrage setzt Kürzel
+    und Datum in alle Zeilen des Fachs. ``kuerzel`` darf leer sein: das nimmt
+    die Bestätigung des ganzen Fachs zurück.
     """
 
     fach: NichtLeer
     kuerzel: str = ""
     datum: date | None = None
-    bemerkung: str = ""
 
 
 class PlanungsAnfrage(_BuchplanungAnfrage):
-    """``POST /api/buchplanung/planung`` - Einführung und Ausmusterung.
+    """``POST /api/buchplanung/planung`` - eine Zeile (Buch, Fach, Jahrgang).
 
     Der Jahrgang muss kein heutiges Vorkommen des Buchs sein: „wird ab 2028/29
     auch in Jahrgang 9 eingeführt" ist der Fall, für den es diese Zeile gibt.
-    Sind alle vier Textfelder leer, verschwindet die Zeile wieder.
+    Sind alle Felder leer, verschwindet die Zeile wieder.
     """
 
     isbn: NichtLeer
+    fach: NichtLeer
     jahrgang: int
     eingefuehrt_ab: str = ""
     ausgemustert_nach: str = ""
-    beschluss: str = ""
+    kuerzel: str = ""
+    datum: date | None = None
     bemerkung: str = ""
 
 

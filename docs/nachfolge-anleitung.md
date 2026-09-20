@@ -257,25 +257,31 @@ prüfen.
 Öffnen Sie ein Fach. Oben stehen Kürzel, Datum und **„Liste bestätigen"** — die
 Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch.
 
-Kommt danach ein Buch hinzu oder fällt eines weg, wechselt der Status auf
-**„veraltet"**, und darunter steht, welche Titel es betrifft. Kürzel und Datum
-der letzten Freigabe bleiben lesbar stehen.
+Der Knopf setzt Kürzel und Datum in jede Zeile dieses Fachs. Kommt danach ein
+Buch hinzu, hat es noch kein Kürzel: der Status wechselt auf **„teilweise"**,
+und darunter steht, welche Titel noch fehlen. Kürzel und Datum der letzten
+Freigabe bleiben lesbar stehen.
 
 Im Druckmenü wählt **„nicht bestätigte"** genau die Fächer aus, deren Freigabe
-noch fehlt oder veraltet ist.
+noch fehlt oder unvollständig ist.
 
 ### Schritt 3: Einführung, Ausmusterung, Rücklage (ebenfalls Ansicht „Fach")
 
 Hinter jedem Buch steht **„Planung…"**. Ein Klick klappt darunter zwei Dinge
 auf:
 
-**Links: je Jahrgang zwei Felder.** „eingeführt ab" und „ausgemustert nach",
-jeweils ein Schuljahr in der Schreibweise `2028/2029`. Das ist bewusst je
-Jahrgang einzeln: Wird ein Mehrjahresband gestaffelt eingeführt — erst Jg. 7,
-ein Jahr später Jg. 8 —, tragen Sie beides getrennt ein. In der letzten Zeile
-lässt sich ein **weiterer Jahrgang** eintragen, auch einer, der das Buch heute
-noch gar nicht hat. Gespeichert wird, sobald Sie ein Feld verlassen. Ins Feld
-**Beschluss** gehört, worauf die Entscheidung beruht, z. B. `FK 12.05.2026`.
+**Links: je Jahrgang eine Zeile.** „Einführung" und „Ausmusterung nach
+Schuljahr", jeweils ein Schuljahr in der Schreibweise `2028/2029`, dazu Kürzel
+und Datum der Bestätigung für genau diese Zeile. Das ist bewusst je Jahrgang
+einzeln: Wird ein Mehrjahresband gestaffelt eingeführt — erst Jg. 7, ein Jahr
+später Jg. 8 —, tragen Sie beides getrennt ein. Gezeigt werden nur die Zeilen
+**dieses Fachs**; gehört das Buch auch zu einem anderen, hat jenes seine
+eigenen. In der letzten Zeile lässt sich ein **weiterer Jahrgang** eintragen,
+auch einer, der das Buch heute noch gar nicht hat. Gespeichert wird, sobald Sie
+ein Feld verlassen.
+
+Die Ausmusterung gibt es nur bei **Leihbüchern**: was die Familien selbst
+kaufen, liegt in keinem Regal der Schule, und das Feld ist dort gesperrt.
 
 **Rechts: die Rücklage.** Wie viele Exemplare die Fachschaft behalten möchte,
 statt sie wegzuwerfen, dazu ein Stand (gewünscht / zugesagt / zurückgelegt) und
@@ -283,11 +289,20 @@ eine Bemerkung. Dann **„Rücklage speichern"**.
 
 ### Was in der Datei steht
 
-Fünf Blätter: **Preise je Verlag**, **Bücher je Fach**, **Bücher je Jahrgang**,
-**Fachbestätigung** und **Info**. Dieselben Bücher stehen also mehrfach — einmal
-je Arbeitsschritt. Wenn Sie direkt in Excel arbeiten wollen: Es werden nur die
-**hell hinterlegten** Spalten gelesen. Alles andere schreibt das Programm bei
-jedem „Aus IServ aktualisieren" neu; Änderungen daran gehen verloren.
+Vier Blätter:
+
+* **Buchreihen** — jeder Titel einmal, mit Fach, Jahrgang, Preisen und der
+  Preisprüfung. Drin sind alle Bücher des laufenden Schuljahres und aus dem
+  Vorjahr die leihbaren; nur die liegen noch im Bestand der Schule.
+* **Fächer & Jahrgang** — eine Zeile je Buch, Fach und Jahrgang, mit
+  Einführung, Ausmusterung und der Bestätigung der Fachkonferenzleitung. Den
+  Titel schlagen Sie auf „Buchreihen" nach; hier steht nur die ISBN.
+* **Rücklage** — eine Zeile je Buch und Fach, mit Anzahl und Stand.
+* **Info** — Schuljahr, Vorjahr, Stand und die Legende aller Status.
+
+Wenn Sie direkt in Excel arbeiten wollen: Es werden nur die **hell
+hinterlegten** Spalten gelesen. Alles andere schreibt das Programm bei jedem
+„Aus IServ aktualisieren" neu; Änderungen daran gehen verloren.
 
 ---
 

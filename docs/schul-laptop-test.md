@@ -263,15 +263,16 @@ nichts zu sichern.
 |---|---------|----------|
 | G5-1 | Angemeldet „Bücherlisten → Fach" öffnen | Hinweis „Für das Schuljahr … ist noch nichts gespeichert", Knopf „Aus IServ aktualisieren" |
 | G5-2 | „Aus IServ aktualisieren" | Dauer? Danach liegt die Datei im Ordner der Bestandsmappe |
-| G5-3 | Die Datei in Excel öffnen | Fünf Blätter; die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
-| G5-4 | Blatt „Bücher je Jahrgang" durchsehen | Enthält auch Bücher **nur** des Vorjahres (Spalte Herkunft) — das sind die ausgemusterten |
+| G5-3 | Die Datei in Excel öffnen | Vier Blätter („Buchreihen", „Fächer & Jahrgang", „Rücklage", „Info"); die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
+| G5-4 | Blatt „Buchreihen" durchsehen | Jeder Titel genau einmal; enthält auch **leihbare** Bücher, die es nur im Vorjahr gab — das sind die ausgemusterten. Kaufbücher des Vorjahres fehlen |
 | G5-5 | Verlags-Ansicht: Kürzel eintragen, „Preise bestätigen" | Alle Zeilen des Verlags auf „bestätigt"; in der Übersicht „x von x geprüft" |
 | G5-6 | Denselben Verlag in IServ um einen Cent ändern, dann „Aus IServ aktualisieren" | Die geänderte Zeile steht auf „abweichend", die übrigen bleiben „bestätigt" |
-| G5-7 | Fach-Ansicht: Kürzel + Datum, „Liste bestätigen" | Status „bestätigt"; im Blatt „Fachbestätigung" stehen Kürzel, Datum und die ISBNs |
-| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „veraltet", darunter „hinzugekommen: …"; das neue Buch steht beim Preis auf „offen" |
-| G5-9 | „Planung…" bei einem Buch: Ausmusterung eintragen | Status der Zeile wechselt; in Excel steht das Schuljahr in „ausgemustert nach" |
-| G5-10 | „Planung…": weiterer Jahrgang mit „eingeführt ab" | Neue Zeile im Blatt „Bücher je Jahrgang", Herkunft „nur Planung", Status „geplant" |
-| G5-11 | Rücklage mit Anzahl und Bemerkung speichern | Steht im Blatt „Bücher je Fach" beim richtigen Fach |
+| G5-7 | Fach-Ansicht: Kürzel + Datum, „Liste bestätigen" | Status „bestätigt"; auf „Fächer & Jahrgang" tragen alle Zeilen dieses Fachs Kürzel und Datum |
+| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „teilweise", darunter „Noch ohne Kürzel: …"; das neue Buch steht beim Preis auf „offen" |
+| G5-9 | „Planung…" bei einem Leihbuch: Ausmusterung eintragen | Status der Zeile wechselt; in Excel steht das Schuljahr in „Ausmusterung nach Schuljahr" |
+| G5-9b | „Planung…" bei einem **Kaufbuch** | Das Feld „Ausmusterung nach Schuljahr" ist gesperrt |
+| G5-10 | „Planung…": weiterer Jahrgang mit „Einführung" | Neue Zeile auf „Fächer & Jahrgang" mit diesem Fach, Status „geplant" |
+| G5-11 | Rücklage mit Anzahl und Bemerkung speichern | Steht im Blatt „Rücklage" beim richtigen Fach |
 | G5-12 | Datei in Excel offen lassen und etwas eintragen | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |
 | G5-13 | Druckmenü der Fach-Übersicht: „nicht bestätigte" | Hakt genau die Fächer ohne Freigabe an und springt auf „Individuell"; die PDF-URL nennt sie |
 

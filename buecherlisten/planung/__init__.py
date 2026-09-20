@@ -1,13 +1,25 @@
-"""Der Kern der Buchplanung - ohne HTTP, ohne Einstellungen, ohne Sperren.
+"""Buchplanung: Preisprüfung, Fachbestätigung, Einführung und Ausmusterung.
 
-Wie ``bestand/core`` und ``mehrjahresbaende/core``: hier stehen die Begriffe,
-die Dateistruktur und die Regeln. Das Dashboard (``app/buchplanung.py``) ist
-eine dünne Schale darum, die Schloss, ``mtime`` und Sicherung beisteuert.
+Die Bücherlisten stehen in IServ, aber der Weg zu ihnen ist Arbeit über ein
+ganzes Schuljahr: Preise prüfen, Listen von den Fachkonferenzen bestätigen
+lassen, Neueinführungen und Ausmusterungen festhalten, Exemplare für die
+Fachschaften zurücklegen. Dieses Paket hält diesen Weg in **einer Exceldatei**
+je Schuljahr fest - lesbar auch dann, wenn das Dashboard gerade nicht läuft.
+
+Es liegt unter ``buecherlisten/``, weil es keine eigene Seite hat: eingetragen
+wird in den Bücherlisten-Seiten selbst, und die Daten kommen aus
+``buecherlisten.core.daten``. Hier steht der Kern - keine HTTP-Schicht, keine
+Einstellungen, keine Sperren; das ist ``app/buchplanung.py``.
+
+Aufbau: :mod:`~buecherlisten.planung.modelle` die Begriffe und die gerechneten
+Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
+:mod:`~buecherlisten.planung.laden` die beiden Schuljahre aus IServ,
+:mod:`~buecherlisten.planung.abgleich` das Zusammenführen und die Eintragungen.
 """
 from .abgleich import (
     UnbekanntesBuch,
     UngueltigeEingabe,
-    setze_fachbestaetigung,
+    bestaetige_fach,
     setze_planung,
     setze_preis,
     setze_preise_des_verlags,
@@ -25,13 +37,10 @@ from .mappe import (
     schreibe_mappe,
 )
 from .modelle import (
-    AKTUELL,
-    BEIDE,
     FACH_BESTAETIGT,
     FACH_OFFEN,
-    FACH_VERALTET,
+    FACH_TEILWEISE,
     LEGENDE,
-    NUR_PLANUNG,
     OHNE_FACH,
     OHNE_VERLAG,
     PLANUNG_AUSGEMUSTERT,
@@ -42,14 +51,13 @@ from .modelle import (
     PREIS_BESTAETIGT,
     PREIS_OFFEN,
     RUECKLAGE_STATUS,
-    VORJAHR,
     Buch,
     Buchplanung,
-    Fachbestaetigung,
     Planungszeile,
     Preispruefung,
     Ruecklage,
     UngueltigesSchuljahr,
+    fach_bestaetigung,
     fach_status,
     planungs_status,
     preis_status,
@@ -57,14 +65,11 @@ from .modelle import (
 )
 
 __all__ = [
-    "AKTUELL",
-    "BEIDE",
     "BLAETTER",
     "FACH_BESTAETIGT",
     "FACH_OFFEN",
-    "FACH_VERALTET",
+    "FACH_TEILWEISE",
     "LEGENDE",
-    "NUR_PLANUNG",
     "OHNE_FACH",
     "OHNE_VERLAG",
     "PLANUNG_AUSGEMUSTERT",
@@ -75,11 +80,9 @@ __all__ = [
     "PREIS_BESTAETIGT",
     "PREIS_OFFEN",
     "RUECKLAGE_STATUS",
-    "VORJAHR",
     "AusleiheClient",
     "Buch",
     "Buchplanung",
-    "Fachbestaetigung",
     "MappeUnlesbar",
     "Planungszeile",
     "Preispruefung",
@@ -88,6 +91,8 @@ __all__ = [
     "UnbekanntesBuch",
     "UngueltigeEingabe",
     "UngueltigesSchuljahr",
+    "bestaetige_fach",
+    "fach_bestaetigung",
     "fach_status",
     "lade_schnappschuss",
     "lies_datei",
@@ -98,7 +103,6 @@ __all__ = [
     "schreibe_datei",
     "schreibe_mappe",
     "schuljahr_zahl",
-    "setze_fachbestaetigung",
     "setze_planung",
     "setze_preis",
     "setze_preise_des_verlags",

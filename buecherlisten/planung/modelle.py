@@ -1,21 +1,20 @@
 """Die Begriffe der Buchplanung - ohne Netz, ohne Excel, ohne HTTP.
 
-Drei Dinge werden über ein Schuljahr hinweg festgehalten, und jedes gehört
-einer anderen Person:
+Drei Dinge werden über ein Schuljahr hinweg festgehalten, und jedes hat seinen
+eigenen Schlüssel - genau den seines Blatts in der Arbeitsmappe:
 
 * **Preisprüfung** - der Beauftragte für die Schulbuchausleihe vergleicht die
   Preise in IServ mit den Verlagslisten. Schlüssel ist die ISBN; jedes Buch hat
-  genau einen Verlag.
+  genau einen Verlag und genau eine Zeile auf dem Blatt ``Buchreihen``.
+* **Planung und Bestätigung** - ab bzw. bis wann ein Buch in **einem Fach und
+  einem Jahrgang** geführt wird, und wer das bestätigt hat. Schlüssel ist
+  (ISBN, Fach, Jahrgang). Eine gestaffelte Einführung eines Mehrjahresbands
+  (Jg. 7 ab 2027/28, Jg. 8 ab 2028/29) sind damit zwei Zeilen statt einer
+  Bemerkung im Freitext, und die Fachkonferenzleitung bestätigt ihre eigenen
+  Zeilen, nicht die eines anderen Fachs.
 * **Rücklage** - eine Fachschaft möchte von einem Buch Exemplare behalten,
   statt sie wegzuwerfen. Schlüssel ist (ISBN, Fach): ein Buch kann zu mehreren
   Fächern gehören, und der Wunsch gehört der Fachschaft.
-* **Planung** - ab bzw. bis wann ein Buch in einem Jahrgang geführt wird.
-  Schlüssel ist (ISBN, Jahrgang), mit **zwei** Schuljahresangaben. Eine
-  gestaffelte Einführung eines Mehrjahresbands (Jg. 7 ab 2027/28, Jg. 8 ab
-  2028/29) sind damit zwei Zeilen statt einer Bemerkung im Freitext.
-
-Dazu die **Fachbestätigung**: die Fachkonferenzleitung bestätigt die Liste
-ihres Fachs als Ganzes, mit Kürzel und Datum.
 
 Was hier **nicht** steht, ist ein Feld ``status``. Jeder Status wird aus den
 eingetragenen Werten gerechnet (:func:`preis_status`, :func:`fach_status`,
@@ -29,27 +28,22 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-# ── Herkunft einer Zeile ─────────────────────────────────────────────────────
-
-VORJAHR = "Vorjahr"
-AKTUELL = "aktuell"
-BEIDE = "beide"
-# Eine Zeile, die es nur gibt, weil jemand für dieses Buch und diesen Jahrgang
-# etwas geplant hat: die Einführung in einen Jahrgang, der das Buch heute noch
-# gar nicht führt. Ohne diesen Wert hätte die Planung keinen Platz in der Datei.
-NUR_PLANUNG = "nur Planung"
-
 # ── Status der Preisprüfung ──────────────────────────────────────────────────
 
 PREIS_OFFEN = "offen"
 PREIS_BESTAETIGT = "bestätigt"
 PREIS_ABWEICHEND = "abweichend"
 
-# ── Status der Fachbestätigung ───────────────────────────────────────────────
+# ── Status eines Fachs ───────────────────────────────────────────────────────
+#
+# Bestätigt wird je Zeile (Buch, Fach, Jahrgang); der Status des ganzen Fachs
+# ist die Zusammenfassung seiner Zeilen. Ein Fach kann deshalb nicht
+# "veralten": kommt ein Buch dazu, bringt es eine Zeile ohne Kürzel mit, und
+# das Fach fällt von allein auf "teilweise" zurück.
 
 FACH_OFFEN = "offen"
+FACH_TEILWEISE = "teilweise"
 FACH_BESTAETIGT = "bestätigt"
-FACH_VERALTET = "veraltet"
 
 # ── Status einer Planungszeile ───────────────────────────────────────────────
 
@@ -80,13 +74,13 @@ LEGENDE: tuple[tuple[str, str], ...] = (
     (PREIS_BESTAETIGT, "geprüfter Preis stimmt mit dem Preis in IServ überein"),
     (PREIS_ABWEICHEND,
      "der geprüfte Preis weicht vom Preis in IServ ab - in IServ nachziehen"),
-    (FACH_BESTAETIGT, "die Fachkonferenzleitung hat die Liste dieses Fachs bestätigt"),
-    (FACH_VERALTET,
-     "die Liste hat sich nach der Bestätigung geändert - erneut bestätigen"),
-    (PLANUNG_GEPLANT, "wird in diesem Jahrgang erst in einem späteren Schuljahr eingeführt"),
-    (PLANUNG_IM_EINSATZ, "wird in diesem Jahrgang geführt"),
-    (PLANUNG_LAEUFT_AUS, "wird in diesem Jahrgang nach dem angegebenen Schuljahr ausgemustert"),
-    (PLANUNG_AUSGEMUSTERT, "ist in diesem Jahrgang bereits ausgemustert"),
+    (FACH_TEILWEISE,
+     "einige Zeilen dieses Fachs tragen noch kein Kürzel der Fachkonferenzleitung"),
+    (FACH_BESTAETIGT, "die Fachkonferenzleitung hat alle Zeilen dieses Fachs bestätigt"),
+    (PLANUNG_GEPLANT, "wird hier erst in einem späteren Schuljahr eingeführt"),
+    (PLANUNG_IM_EINSATZ, "wird hier geführt"),
+    (PLANUNG_LAEUFT_AUS, "wird nach dem angegebenen Schuljahr ausgemustert"),
+    (PLANUNG_AUSGEMUSTERT, "ist hier bereits ausgemustert"),
     (RUECKLAGE_GEWUENSCHT, "die Fachschaft hat Exemplare zum Zurücklegen erbeten"),
     (RUECKLAGE_ZUGESAGT, "die Rücklage ist zugesagt, aber noch nicht erfolgt"),
     (RUECKLAGE_ZURUECKGELEGT, "die Exemplare liegen bei der Fachschaft"),
@@ -105,8 +99,8 @@ def schuljahr_zahl(kennung: str) -> int:
     """``"2026/2027"`` → ``2026``. Für den Vergleich zweier Schuljahre.
 
     Wirft :class:`UngueltigesSchuljahr`, statt stillschweigend 0 zu liefern:
-    ein Tippfehler in der Spalte "eingeführt ab" darf nicht dazu führen, dass
-    ein Buch als längst eingeführt gilt.
+    ein Tippfehler in der Spalte "Einführung" darf nicht dazu führen, dass ein
+    Buch als längst eingeführt gilt.
     """
     treffer = _JAHRESPAAR.match(kennung or "")
     if treffer is None:
@@ -122,35 +116,30 @@ def schuljahr_zahl(kennung: str) -> int:
 
 @dataclass(frozen=True)
 class Buch:
-    """Ein Titel, wie ihn die Bücherlisten zweier Schuljahre zeigen.
+    """Ein Titel, wie ihn die Bücherlisten zeigen - eine Zeile auf ``Buchreihen``.
 
-    ``jahrgaenge_vorjahr`` und ``jahrgaenge_aktuell`` stehen getrennt, weil
-    genau ihr Unterschied die Ausmusterung bzw. die Neueinführung ist.
+    ``kombinationen`` sind die (Fach, Jahrgang)-Paare, in denen das Buch
+    tatsächlich vorkommt, und **nicht** das Kreuzprodukt aus Fächern und
+    Jahrgängen: ein Band, der in Jahrgang 7 zum Fach Mathematik und in
+    Jahrgang 8 zum Fach Informatik gehört, hat zwei Paare, nicht vier. Genau
+    diese Paare sind die Zeilen des Blatts ``Fächer & Jahrgang``.
     """
 
     isbn: str
     titel: str
     verlag: str
-    faecher: tuple[str, ...] = ()
-    jahrgaenge_vorjahr: tuple[int, ...] = ()
-    jahrgaenge_aktuell: tuple[int, ...] = ()
+    kombinationen: tuple[tuple[str, int], ...] = ()
     leihbar: bool = False
     neupreis: float | None = None
     leihgebuehr: float | None = None
 
     @property
+    def faecher(self) -> tuple[str, ...]:
+        return tuple(sorted({fach for fach, _ in self.kombinationen}, key=str.casefold))
+
+    @property
     def jahrgaenge(self) -> tuple[int, ...]:
-        return tuple(sorted(set(self.jahrgaenge_vorjahr) | set(self.jahrgaenge_aktuell)))
-
-    @property
-    def herkunft(self) -> str:
-        if self.jahrgaenge_vorjahr and self.jahrgaenge_aktuell:
-            return BEIDE
-        return VORJAHR if self.jahrgaenge_vorjahr else AKTUELL
-
-    @property
-    def im_aktuellen_jahr(self) -> bool:
-        return bool(self.jahrgaenge_aktuell)
+        return tuple(sorted({jahrgang for _, jahrgang in self.kombinationen}))
 
     @property
     def fach_anzeige(self) -> str:
@@ -159,6 +148,10 @@ class Buch:
     @property
     def jahrgang_anzeige(self) -> str:
         return ", ".join(str(jahrgang) for jahrgang in self.jahrgaenge)
+
+    def jahrgaenge_im_fach(self, fach: str) -> tuple[int, ...]:
+        return tuple(sorted(jahrgang for eigenes, jahrgang in self.kombinationen
+                            if eigenes == fach))
 
 
 # ── Was von Hand eingetragen wird ────────────────────────────────────────────
@@ -184,6 +177,36 @@ class Preispruefung:
 
 
 @dataclass(frozen=True)
+class Planungszeile:
+    """Ein Buch in **einem** Fach und **einem** Jahrgang.
+
+    ``kuerzel`` und ``datum`` sind die Bestätigung der Fachkonferenzleitung für
+    genau diese Zeile. Bis 2026-09-20 stand die Bestätigung je Fach auf einem
+    eigenen Blatt und führte den bestätigten Stand als ISBN-Liste mit; seither
+    ist sie dort, wo das Bestätigte steht, und eine neu dazugekommene Zeile ist
+    von allein unbestätigt.
+    """
+
+    isbn: str
+    fach: str
+    jahrgang: int
+    eingefuehrt_ab: str = ""
+    ausgemustert_nach: str = ""
+    kuerzel: str = ""
+    datum: date | None = None
+    bemerkung: str = ""
+
+    @property
+    def leer(self) -> bool:
+        return not any((self.eingefuehrt_ab, self.ausgemustert_nach,
+                        self.kuerzel, self.bemerkung)) and self.datum is None
+
+    @property
+    def bestaetigt(self) -> bool:
+        return bool(self.kuerzel)
+
+
+@dataclass(frozen=True)
 class Ruecklage:
     """Der Wunsch einer Fachschaft, Exemplare zu behalten."""
 
@@ -200,43 +223,6 @@ class Ruecklage:
         return self.anzahl is None and not self.status and not self.bemerkung
 
 
-@dataclass(frozen=True)
-class Planungszeile:
-    """Ab bzw. bis wann ein Buch in **einem** Jahrgang geführt wird."""
-
-    isbn: str
-    jahrgang: int
-    eingefuehrt_ab: str = ""
-    ausgemustert_nach: str = ""
-    beschluss: str = ""
-    bemerkung: str = ""
-
-    @property
-    def leer(self) -> bool:
-        return not any((self.eingefuehrt_ab, self.ausgemustert_nach,
-                        self.beschluss, self.bemerkung))
-
-
-@dataclass(frozen=True)
-class Fachbestaetigung:
-    """Die Freigabe einer Fach-Bücherliste durch die Fachkonferenzleitung.
-
-    ``bestaetigte_isbns`` ist der Stand, der bestätigt wurde - ausgeschrieben
-    und nicht als Prüfsumme, damit auch ohne das Dashboard nachvollziehbar
-    bleibt, *was* bestätigt wurde.
-    """
-
-    fach: str
-    kuerzel: str = ""
-    datum: date | None = None
-    bemerkung: str = ""
-    bestaetigte_isbns: tuple[str, ...] = ()
-
-    @property
-    def leer(self) -> bool:
-        return not self.kuerzel and not self.bemerkung and not self.bestaetigte_isbns
-
-
 # ── Der ganze Stand ──────────────────────────────────────────────────────────
 
 
@@ -249,9 +235,8 @@ class Buchplanung:
     stand: date | None = None
     buecher: tuple[Buch, ...] = ()
     preise: tuple[Preispruefung, ...] = ()
-    ruecklagen: tuple[Ruecklage, ...] = ()
     planung: tuple[Planungszeile, ...] = ()
-    bestaetigungen: tuple[Fachbestaetigung, ...] = ()
+    ruecklagen: tuple[Ruecklage, ...] = ()
     warnungen: tuple[str, ...] = field(default_factory=tuple)
 
     # ── Nachschlagen ────────────────────────────────────────────────────────
@@ -262,23 +247,21 @@ class Buchplanung:
     def pruefung(self, isbn: str) -> Preispruefung | None:
         return next((p for p in self.preise if p.isbn == isbn), None)
 
+    def planungszeile(self, isbn: str, fach: str, jahrgang: int) -> Planungszeile | None:
+        return next((z for z in self.planung if z.isbn == isbn
+                     and z.fach == fach and z.jahrgang == jahrgang), None)
+
+    def planung_des_fachs(self, fach: str) -> tuple[Planungszeile, ...]:
+        return tuple(z for z in self.planung if z.fach == fach)
+
     def ruecklage(self, isbn: str, fach: str) -> Ruecklage | None:
         return next((r for r in self.ruecklagen if r.isbn == isbn and r.fach == fach), None)
 
-    def planungszeile(self, isbn: str, jahrgang: int) -> Planungszeile | None:
-        return next((z for z in self.planung
-                     if z.isbn == isbn and z.jahrgang == jahrgang), None)
-
-    def bestaetigung(self, fach: str) -> Fachbestaetigung | None:
-        return next((b for b in self.bestaetigungen if b.fach == fach), None)
-
-    # ── Die drei Achsen ─────────────────────────────────────────────────────
+    # ── Die Achsen ──────────────────────────────────────────────────────────
 
     @property
     def verlage(self) -> tuple[str, ...]:
-        """Die Verlage des **aktuellen** Schuljahrs; nur deren Preise werden geprüft."""
-        return tuple(sorted({b.verlag or OHNE_VERLAG for b in self.buecher
-                             if b.im_aktuellen_jahr}, key=str.casefold))
+        return tuple(sorted({b.verlag or OHNE_VERLAG for b in self.buecher}, key=str.casefold))
 
     @property
     def faecher(self) -> tuple[str, ...]:
@@ -289,7 +272,9 @@ class Buchplanung:
         Fachschaft trotzdem in der Datei bleiben, statt still wegzufallen.
         """
         aus_buechern = {fach for b in self.buecher for fach in (b.faecher or (OHNE_FACH,))}
-        return tuple(sorted(aus_buechern | {r.fach for r in self.ruecklagen}, key=str.casefold))
+        aus_planung = {z.fach for z in self.planung}
+        return tuple(sorted(aus_buechern | aus_planung | {r.fach for r in self.ruecklagen},
+                            key=str.casefold))
 
     @property
     def jahrgaenge(self) -> tuple[int, ...]:
@@ -303,28 +288,31 @@ class Buchplanung:
         return tuple(sorted(aus_buechern | {z.jahrgang for z in self.planung}))
 
     def buecher_je_verlag(self, verlag: str) -> tuple[Buch, ...]:
-        return tuple(b for b in self.buecher
-                     if b.im_aktuellen_jahr and (b.verlag or OHNE_VERLAG) == verlag)
+        return tuple(b for b in self.buecher if (b.verlag or OHNE_VERLAG) == verlag)
 
     def buecher_je_fach(self, fach: str) -> tuple[Buch, ...]:
         return tuple(b for b in self.buecher
                      if fach in (b.faecher or (OHNE_FACH,))
-                     or self.ruecklage(b.isbn, fach) is not None)
+                     or self.ruecklage(b.isbn, fach) is not None
+                     or any(z.isbn == b.isbn and z.fach == fach for z in self.planung))
 
     def buecher_je_jahrgang(self, jahrgang: int) -> tuple[Buch, ...]:
         return tuple(b for b in self.buecher
                      if jahrgang in b.jahrgaenge
-                     or self.planungszeile(b.isbn, jahrgang) is not None)
+                     or any(z.isbn == b.isbn and z.jahrgang == jahrgang for z in self.planung))
 
-    def herkunft(self, buch: Buch, jahrgang: int) -> str:
-        """Woher die Zeile (Buch, Jahrgang) des Jahrgangsblatts stammt."""
-        im_vorjahr = jahrgang in buch.jahrgaenge_vorjahr
-        im_jetzt = jahrgang in buch.jahrgaenge_aktuell
-        if im_vorjahr and im_jetzt:
-            return BEIDE
-        if im_vorjahr:
-            return VORJAHR
-        return AKTUELL if im_jetzt else NUR_PLANUNG
+    def zeilen_des_buchs(self, buch: Buch) -> tuple[tuple[str, int], ...]:
+        """Die (Fach, Jahrgang)-Paare eines Buchs: aus IServ **und** aus der Planung.
+
+        Die zweite Hälfte ist der Grund, aus dem es diese Funktion gibt: „wird
+        ab 2028/29 auch in Jahrgang 9 eingeführt" ist eine Zeile, die noch in
+        keiner Bücherliste steht.
+        """
+        aus_planung = {(z.fach, z.jahrgang) for z in self.planung if z.isbn == buch.isbn}
+        paare = set(buch.kombinationen) | aus_planung
+        if not paare:
+            return ()
+        return tuple(sorted(paare, key=lambda paar: (paar[0].casefold(), paar[1])))
 
 
 # ── Die gerechneten Status ───────────────────────────────────────────────────
@@ -362,28 +350,51 @@ def _euro(wert: float | None) -> str:
 
 
 def fach_status(
-    fach: str, buecher: tuple[Buch, ...], bestaetigung: Fachbestaetigung | None,
+    stand: Buchplanung, fach: str,
 ) -> tuple[str, str]:
-    """(Status, Klartext) der Fachbestätigung.
+    """(Status, Klartext) der Freigabe eines Fachs, aus seinen Zeilen gerechnet.
 
-    Verglichen wird gegen die Bücher des **aktuellen** Schuljahrs: bestätigt
-    wird die Liste, die gedruckt und ausgegeben wird, nicht die des Vorjahres.
+    Gezählt werden die Zeilen, die dieses Fach heute hat - jede von ihnen ist
+    ein Buch in einem Jahrgang. ``bestätigt`` heißt: jede trägt ein Kürzel.
+    Kommt ein Buch dazu, ist seine Zeile unbestätigt, und das Fach fällt von
+    allein zurück; einen Zustand "veraltet" braucht es dafür nicht.
     """
-    aktuell = {b.isbn for b in buecher if b.im_aktuellen_jahr}
-    if bestaetigung is None or not bestaetigung.kuerzel:
-        return FACH_OFFEN, "Noch nicht von der Fachkonferenzleitung bestätigt."
-    bestaetigt = set(bestaetigung.bestaetigte_isbns)
-    if bestaetigt == aktuell:
+    offen: list[str] = []
+    gesamt = 0
+    for buch in stand.buecher_je_fach(fach):
+        for eigenes, jahrgang in stand.zeilen_des_buchs(buch):
+            if eigenes != fach:
+                continue
+            gesamt += 1
+            zeile = stand.planungszeile(buch.isbn, fach, jahrgang)
+            if zeile is None or not zeile.bestaetigt:
+                offen.append(f"{buch.titel} (Jg. {jahrgang})")
+    if gesamt == 0:
+        return FACH_OFFEN, "Zu diesem Fach steht kein Buch in der Datei."
+    if not offen:
         return FACH_BESTAETIGT, ""
-    titel = {b.isbn: b.titel for b in buecher}
-    neu = sorted(titel.get(isbn, isbn) for isbn in aktuell - bestaetigt)
-    entfallen = sorted(titel.get(isbn, isbn) for isbn in bestaetigt - aktuell)
-    teile = []
-    if neu:
-        teile.append("hinzugekommen: " + ", ".join(neu))
-    if entfallen:
-        teile.append("entfallen: " + ", ".join(entfallen))
-    return FACH_VERALTET, "Seit der Bestätigung geändert - " + "; ".join(teile) + "."
+    if len(offen) == gesamt:
+        return FACH_OFFEN, "Noch nicht von der Fachkonferenzleitung bestätigt."
+    namen = ", ".join(sorted(offen)[:5])
+    mehr = "" if len(offen) <= 5 else f" und {len(offen) - 5} weitere"
+    return FACH_TEILWEISE, f"Noch ohne Kürzel: {namen}{mehr}."
+
+
+def fach_bestaetigung(stand: Buchplanung, fach: str) -> tuple[str, date | None]:
+    """Kürzel und Datum des Fachs, sofern seine bestätigten Zeilen darin einig sind.
+
+    Bestätigt wird je Zeile, angezeigt wird das Feld einmal über der Liste.
+    Tragen die Zeilen verschiedene Kürzel - zwei Fachkonferenzen, zwei Termine -,
+    kommt nichts zurück: ein herausgegriffenes davon wäre eine Behauptung über
+    die anderen.
+    """
+    zeilen = [zeile for zeile in stand.planung_des_fachs(fach) if zeile.bestaetigt]
+    kuerzel = {zeile.kuerzel for zeile in zeilen}
+    daten = {zeile.datum for zeile in zeilen}
+    return (
+        next(iter(kuerzel)) if len(kuerzel) == 1 else "",
+        next(iter(daten)) if len(daten) == 1 else None,
+    )
 
 
 def planungs_status(zeile: Planungszeile | None, schuljahr: str) -> str:

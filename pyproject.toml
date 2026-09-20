@@ -158,6 +158,7 @@ files = [
     "buecherlisten/trg_web.py",
     "buecherlisten/core/daten.py",
     "buecherlisten/core/erzeugen.py",
+    "buecherlisten/planung",
     "mehrjahresbaende",
 ]
 python_version = "3.10"

@@ -10,14 +10,14 @@ Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
 
 ## Die Buchplanung (2026-09-19) — gebaut
 
-Neu sind das Paket `buchplanung/`, die sieben Routen unter `/api/buchplanung`
+Neu sind das Paket `buecherlisten/planung/`, die sieben Routen unter `/api/buchplanung`
 und die Bedienelemente in den Bücherlisten-Seiten: in der Verlags-Ansicht die
 Preisprüfung (je Buch und als ganze Liste), in der Fach-Ansicht die Freigabe
 durch die Fachkonferenzleitung sowie je Buch ein Aufklapper für Einführung,
 Ausmusterung und Rücklage. Gespeichert wird in einer Exceldatei je Schuljahr
 neben der Bestandsmappe. Was dabei entschieden wurde, steht in
 [`architektur.md`](architektur.md#die-buchplanung-preise-prüfen-listen-freigeben-einführung-und-ausmusterung),
-die Regeln in [`../buchplanung/README.md`](../buchplanung/README.md).
+die Regeln in [`../buecherlisten/planung/README.md`](../buecherlisten/planung/README.md).
 
 Damit sind zwei Platzhalter erledigt: die **Status-Spalte** der Bücherlisten
 zeigt jetzt die Preisprüfung bzw. die Freigabe, und **„nicht bestätigte"** im
@@ -30,7 +30,7 @@ Abgleich mit anderen Schreibweisen findet nicht statt.
 
 **Offen: eine Preisquelle.** Geprüft wird von Hand; warum kein automatischer
 Abruf per ISBN eingebaut ist (VLB nur mit kostenpflichtigem Abo, DNB-SRU ohne
-aktuelle Preise), steht in [`../buchplanung/README.md`](../buchplanung/README.md).
+aktuelle Preise), steht in [`../buecherlisten/planung/README.md`](../buecherlisten/planung/README.md).
 Am ehesten ließe sich später ein Import der Verlags-Preislisten einhängen.
 
 ## Der Reiter „Mehrjahresbände" (2026-09-19) — gebaut, zwei Punkte offen
