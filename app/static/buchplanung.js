@@ -32,11 +32,29 @@
   const menue = document.getElementById("planungsmenue");
   const leerzeile = document.getElementById("planung-leerzeile");
 
+  // Gemeldet wird dort, wo gearbeitet wird: steht das Menü offen, im Menü -
+  // die Seite dahinter ist abgedunkelt, und eine Meldung dort bliebe
+  // ungelesen. Sonst über der Tabelle, wie bei den Knöpfen der Kopfzeile.
+  function menuemeldung() {
+    return menue && menue.open ? menue.querySelector("[data-planung-meldung]") : null;
+  }
+
   function zeige(text, art) {
-    if (!meldung) return;
-    meldung.textContent = text;
-    meldung.className = "hinweis meldung" + (art ? " " + art : "");
-    meldung.hidden = !text;
+    const ziel = menuemeldung() || meldung;
+    // Die jeweils andere Stelle leeren, sonst stünde dort noch der Satz von
+    // vorhin - im Menü sichtbar, auf der Seite nach dem Schließen.
+    for (const andere of [meldung, menuemeldung()]) {
+      if (andere && andere !== ziel) {
+        andere.textContent = "";
+        andere.hidden = true;
+      }
+    }
+    if (!ziel) return;
+    ziel.textContent = text;
+    // Nur die Fehlerklasse umschalten: welche Grundklassen die Stelle trägt,
+    // sagt die Vorlage, nicht dieses Skript.
+    ziel.classList.toggle("fehlerhaft", art === "fehlerhaft");
+    ziel.hidden = !text;
   }
 
   function mtime() {

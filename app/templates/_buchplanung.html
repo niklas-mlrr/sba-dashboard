@@ -248,7 +248,14 @@
     </div>
     {% endif %}
   </div>
+  {#
+    Die Meldung steht im Menü, nicht auf der Seite dahinter: was das Speichern
+    von hier aus meldet, gehört dorthin, wo gespeichert wurde - hinter dem
+    Dialog wäre es vom Abdunkeln verdeckt. Links neben den Knöpfen, damit es
+    dort auftaucht, wo gerade hingesehen wird.
+  #}
   <div class="modal-footer">
+    <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
     <button type="button" class="btn btn-default" data-planung="abbrechen">Abbrechen</button>
     <button type="button" class="btn btn-primary" data-planung="speichern">Speichern</button>
   </div>

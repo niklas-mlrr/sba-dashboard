@@ -182,6 +182,13 @@ body {
   font-size: .9rem;
 }
 .hinweis.warnung { background: var(--warnung-grund); border-color: var(--warnung-rand); }
+/* Ein fehlgeschlagenes Speichern. Die Skripte setzten diese Klasse schon, die
+   Regel dazu fehlte - die Meldung stand grau zwischen den übrigen Hinweisen. */
+.hinweis.fehlerhaft {
+  background: var(--bedarf-grund);
+  border-color: var(--bedarf-rand);
+  color: var(--bedarf);
+}
 
 .leiste {
   display: flex;
@@ -896,6 +903,27 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 }
 
 .planung-anfuegen { margin: 1.2rem 0 .4rem; }
+
+/* Die Fußzeile des Planungsmenüs trägt links die Meldung und rechts die beiden
+   Knöpfe. Nur hier: die Fußzeile des Druckmenüs hat nichts links stehen und
+   bleibt bei ihrem schlichten `text-align: right`. */
+/* `justify-content`, weil die Meldung meistens gar nicht da ist: ohne sie
+   rutschten die Knöpfe sonst an den linken Rand. */
+#planungsmenue .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .8rem;
+}
+/* Den Abstand der Knöpfe regelt hier `gap`, nicht mehr der Rand des zweiten. */
+#planungsmenue .modal-footer .btn + .btn { margin-left: 0; }
+.planung-menue-meldung {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+  font-size: .875rem;
+}
 
 /* Rücklage: Exemplare und Stand in einer Zeile, die Bemerkung darunter über
    die ganze Breite - sie ist meist ein Satz, kein Wort. */

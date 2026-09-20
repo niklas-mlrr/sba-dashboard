@@ -647,6 +647,9 @@ def test_fachseite_bietet_freigabe_und_planungsmenue(
     assert 'data-planung="jahrgang-anfuegen"' in text        # "+ Jahrgang"
     assert 'data-planung="speichern"' in text
     assert 'data-planung="abbrechen"' in text
+    # Gemeldet wird im Menü, nicht auf der Seite dahinter - die ist beim
+    # offenen Dialog abgedunkelt.
+    assert "data-planung-meldung" in text
     assert 'data-planung-feld="eingefuehrt_ab"' in text
     assert 'data-planung-feld="ausgemustert_nach"' in text
     assert 'data-planung-feld="bemerkung"' in text
