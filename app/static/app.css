@@ -811,17 +811,30 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-tabelle th,
 .planung-tabelle td { padding: .25rem .4rem; text-align: left; font-weight: 400; }
 .planung-tabelle th {
+  /* `thead th` weiter oben heftet jede Kopfzeile 49 Zeilen unter die
+     Reiterleiste fest - gedacht für die langen Tabellen der Seite. Im Dialog
+     gibt es keine Reiterleiste, und die Kopfzeile legte sich dort über die
+     ersten Zeilen. Diese Tabelle ist kurz und rollt nicht; sie steht still. */
+  position: static;
   color: var(--text-leise);
   font-size: .8rem;
   line-height: 1.2;
   vertical-align: bottom;
   white-space: nowrap;
+  /* Ebenfalls von `thead th`: die Tabelle im Dialog ist nicht sortierbar, also
+     ist sie auch nicht anklickbar, und sie braucht keine Trennlinie. */
+  cursor: auto;
+  background: none;
+  border-bottom: none;
 }
 .planung-tabelle td { vertical-align: top; }
 .planung-tabelle th:first-child,
 .planung-tabelle td:first-child { padding-left: 0; }
 .planung-tabelle th:last-child,
 .planung-tabelle td:last-child { padding-right: 0; }
+/* `tbody tr:hover` der Seite hebt Zeilen hervor, die sich anklicken lassen.
+   Hier lässt sich nichts anklicken - nur die Felder darin. */
+.planung-tabelle tbody tr:hover { background: none; }
 
 /* Ein Schuljahr ist "JJJJ/JJJJ" - neun Zeichen. `ch` ist die Breite der Null,
    und `tabular-nums` macht alle Ziffern gleich breit; damit ist das Feld so
@@ -850,7 +863,14 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   min-width: 7rem;
   overflow: hidden;
   resize: none;
-  line-height: 1.35;
+  line-height: 1.4;
+  /* Eingeklappt genau **eine** Zeile hoch, gerechnet aus derselben Zeilenhöhe
+     plus Innenabstand und Rand (`box-sizing: border-box` gilt global). Über
+     `rows="1"` allein ging das nicht auf: der Browser rundet die Höhe eines
+     Textfeldes anders als eine Zeilenbox, und von der zweiten Zeile blieben
+     die Spitzen der Buchstaben stehen. Aufgeklappt setzt
+     static/buchplanung.js die Höhe und überschreibt diese hier. */
+  height: calc(1.4em + .5rem + 2px);
 }
 .planung-bemerkung-rahmen { position: relative; display: block; }
 .planung-bemerkung-rahmen.hat-mehr::after {

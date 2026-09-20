@@ -133,9 +133,13 @@
   // steht (die Klasse setzt das CSS um). Beim Anklicken wächst sie nach unten,
   // damit man den ganzen Text liest; beim Verlassen klappt sie wieder ein.
   // Ohne das wäre eine lange Bemerkung von einer kurzen nicht zu unterscheiden.
+  // `scrollHeight` ist Inhalt samt Innenabstand, aber ohne Rand; `offsetHeight
+  // - clientHeight` ist genau dieser Rand. Ohne ihn bliebe das Feld zwei Pixel
+  // zu kurz, und die letzte Zeile ließe sich um zwei Pixel scrollen.
   function passeHoeheAn(feld) {
     feld.style.height = "auto";
-    feld.style.height = feld.scrollHeight + "px";
+    const rand = feld.offsetHeight - feld.clientHeight;
+    feld.style.height = feld.scrollHeight + rand + "px";
   }
 
   function klappeEin(feld) {
