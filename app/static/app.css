@@ -907,6 +907,29 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 /* Die Fußzeile des Planungsmenüs trägt links die Meldung und rechts die beiden
    Knöpfe. Nur hier: die Fußzeile des Druckmenüs hat nichts links stehen und
    bleibt bei ihrem schlichten `text-align: right`. */
+/* Ein Buch mit vielen Jahrgängen macht das Menü höher als den Bildschirm.
+   `.iserv-modal` trägt `overflow: visible` - das braucht das Druckmenü für
+   seine aufklappende Fächerauswahl -, und ohne Begrenzung liefen Meldung und
+   Knöpfe unten aus dem Rahmen heraus. Hier bleiben Kopf und Fußzeile stehen,
+   und nur die Mitte rollt.
+
+   `[open]`, weil ein geschlossener <dialog> `display: none` trägt: ein
+   `display: flex` ohne diese Bedingung machte ihn dauerhaft sichtbar. Die
+   Prozentangabe rechnet gegen den Bildschirm, wie bei jedem Dialog in der
+   obersten Ebene - 30px Luft oben und unten, passend zum `margin` oben. */
+#planungsmenue[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100% - 60px);
+  overflow: hidden;
+}
+#planungsmenue .modal-header,
+#planungsmenue .modal-footer { flex: none; }
+/* `min-height: 0` hebt die Vorgabe `auto` auf: ohne sie schrumpft ein
+   Flex-Element nicht unter seinen Inhalt, und die Mitte würde die Fußzeile
+   trotz allem nach unten hinausdrücken, statt zu rollen. */
+#planungsmenue .modal-body { min-height: 0; overflow-y: auto; }
+
 /* `justify-content`, weil die Meldung meistens gar nicht da ist: ohne sie
    rutschten die Knöpfe sonst an den linken Rand. */
 #planungsmenue .modal-footer {
