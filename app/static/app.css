@@ -808,8 +808,16 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
    statt über den Rand hinauszustehen. */
 .planung-tabellenrahmen { max-width: 100%; overflow-x: auto; }
 .planung-tabelle { width: 100%; border-collapse: collapse; font-size: .875rem; }
+/* Alles steht mittig in seiner Zeile. Das fällt auf, sobald eine Bemerkung
+   aufklappt: mit `vertical-align: top` blieben die übrigen Felder oben kleben
+   und die Zeile liefe auseinander. */
 .planung-tabelle th,
-.planung-tabelle td { padding: .25rem .4rem; text-align: left; font-weight: 400; }
+.planung-tabelle td {
+  padding: .25rem .4rem;
+  text-align: left;
+  font-weight: 400;
+  vertical-align: middle;
+}
 .planung-tabelle th {
   /* `thead th` weiter oben heftet jede Kopfzeile 49 Zeilen unter die
      Reiterleiste fest - gedacht für die langen Tabellen der Seite. Im Dialog
@@ -819,7 +827,6 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   color: var(--text-leise);
   font-size: .8rem;
   line-height: 1.2;
-  vertical-align: bottom;
   white-space: nowrap;
   /* Ebenfalls von `thead th`: die Tabelle im Dialog ist nicht sortierbar, also
      ist sie auch nicht anklickbar, und sie braucht keine Trennlinie. */
@@ -827,7 +834,6 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   background: none;
   border-bottom: none;
 }
-.planung-tabelle td { vertical-align: top; }
 .planung-tabelle th:first-child,
 .planung-tabelle td:first-child { padding-left: 0; }
 .planung-tabelle th:last-child,
@@ -835,6 +841,11 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 /* `tbody tr:hover` der Seite hebt Zeilen hervor, die sich anklicken lassen.
    Hier lässt sich nichts anklicken - nur die Felder darin. */
 .planung-tabelle tbody tr:hover { background: none; }
+/* Ein Eingabefeld steht als `inline-block` auf der Grundlinie und säße damit
+   etwas tiefer als bloßer Text wie der Jahrgang daneben. */
+.planung-tabelle .planung-feld,
+.planung-tabelle .label,
+.planung-tabelle .knopf-klein { vertical-align: middle; }
 
 /* Ein Schuljahr ist "JJJJ/JJJJ" - neun Zeichen. `ch` ist die Breite der Null,
    und `tabular-nums` macht alle Ziffern gleich breit; damit ist das Feld so
