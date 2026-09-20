@@ -473,9 +473,14 @@ zurückzukommen.
 
 **In der Datei steht das laufende Schuljahr und aus dem Vorjahr, was leihbar
 war.** Ein Kaufbuch, das aus der Bücherliste verschwindet, liegt in keinem
-Regal der Schule — es gibt daran nichts auszumustern und nichts
-zurückzulegen. Aus demselben Grund nimmt die Spalte `Ausmusterung nach
-Schuljahr` nur bei leihbaren Büchern einen Wert an.
+Regal der Schule — es gibt daran nichts zurückzulegen. Dasselbe `leihbar`
+entscheidet deshalb auch, ob sich eine **Rücklage** eintragen lässt; bei einem
+Kaufbuch fehlt der Block im Menü, und der Server weist sie ab.
+
+Die **Ausmusterung** hängt seit 2026-09-20 nicht mehr daran. Vorher nahm die
+Spalte nur bei leihbaren Büchern einen Wert an — das verwechselte zwei Dinge:
+ausgemustert wird eine Bücherliste, nicht ein Bestand. Auch ein Kaufbuch steht
+bis zu einem Schuljahr auf der Liste und danach nicht mehr.
 
 **Kein Status wird gespeichert, jeder wird gerechnet.** „bestätigt",
 „abweichend", „teilweise", „läuft aus" folgen aus den eingetragenen Werten
@@ -519,6 +524,13 @@ Verlassen. Beides ist entfallen:
   der Darstellung in JavaScript wäre die Doppelung, die mit der Vorlage
   auseinanderläuft; ein `<tr hidden>` je Buch war es nicht, wurde aber von
   `static/sortieren.js` beim Sortieren von seiner Buchzeile getrennt.
+
+Im Menü wird der **Stand** einer Rücklage (`gewünscht`/`zugesagt`/
+`zurückgelegt`) nicht gesetzt: die Fachschaft äußert einen Wunsch, sie sagt ihn
+sich nicht selbst zu. Ein schon eingetragener Stand bleibt beim Speichern
+stehen. Gewünschte Rücklagen stehen in der Bücherliste in einer eigenen Spalte
+zwischen `Leihbar` und `Status` — und nur dann, wenn diese Liste überhaupt eine
+hat: eine Spalte aus lauter leeren Zellen ist der Normalfall und sagt nichts.
 
 Was geplant ist, steht danach in der **Jahrgang-Spalte** der Bücherliste:
 `7, 8 (ab 2028/2029)` bzw. `9 (bis 2029/2030)`. Unterscheiden sich die

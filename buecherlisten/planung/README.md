@@ -67,9 +67,18 @@ gilt aber nur für Leihbücher — ein Buch, das die Familien selbst kaufen, lie
 in keinem Regal der Schule. Verschwindet es aus der Bücherliste, gibt es daran
 nichts mehr zu planen.
 
-Aus demselben Grund nimmt die Spalte `Ausmusterung nach Schuljahr` nur bei
-`leihbar = ja` einen Wert an; bei einem Kaufbuch weist der Server die Eingabe
-mit einem Satz ab und die Oberfläche sperrt das Feld.
+Dasselbe `leihbar` entscheidet, ob sich eine **Rücklage** eintragen lässt: nur
+was die Schule verleiht oder im Vorjahr verliehen hat, hat sie im Regal und kann
+sie zurücklegen. Bei einem Kaufbuch fehlt der Block im Menü, und der Server
+weist eine Rücklage dazu mit einem Satz ab. Eine leere Eintragung bleibt
+erlaubt — sonst ließe sich ein Wunsch von vor dieser Regel nie wieder löschen.
+
+**Nicht** daran hängt die Ausmusterung. Bis 2026-09-20 nahm die Spalte
+`Ausmusterung nach Schuljahr` nur bei `leihbar = ja` einen Wert an; das
+verwechselte zwei Dinge. Ausgemustert wird eine **Bücherliste**, nicht ein
+Bestand: auch ein Kaufbuch steht bis zu einem Schuljahr auf der Liste und
+danach nicht mehr, und genau das hält die Spalte fest. Einführung und
+Ausmusterung gelten deshalb für jedes Buch.
 
 ## Die Planung: (ISBN, Fach, Jahrgang)
 

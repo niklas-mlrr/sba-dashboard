@@ -228,10 +228,14 @@ def setze_planung(
     2028/29 auch in Jahrgang 9 eingeführt" ist genau der Fall, für den es
     diese Zeile gibt. Ist alles leer, verschwindet die Zeile wieder.
 
-    Die Ausmusterung gilt nur für **leihbare** Bücher: ein Buch, das die
-    Familien selbst kaufen, liegt nicht im Bestand der Schule und wird dort
-    auch nicht ausgemustert. Ohne diese Prüfung stünde in der Spalte ein
-    Schuljahr, aus dem niemand eine Handlung ableiten könnte.
+    Einführung und Ausmusterung gelten für **jedes** Buch, auch für ein
+    Kaufbuch. Bis 2026-09-20 wies die Ausmusterung ein Kaufbuch ab - aus dem
+    Regal der Schule sei nichts zu entfernen. Das verwechselte zwei Dinge:
+    ausgemustert wird eine **Bücherliste**, nicht ein Bestand. Auch ein Buch,
+    das die Familien selbst kaufen, steht bis zu einem Schuljahr auf der Liste
+    und danach nicht mehr - und genau das hält diese Spalte fest. Was sich
+    wirklich auf den Bestand der Schule bezieht, ist die Rücklage
+    (:func:`setze_ruecklage`); dort gilt die Einschränkung weiter.
     """
     buch = _geprueftes_buch(stand, isbn)
     _geprueftes_fach(stand, buch, fach)
@@ -247,11 +251,6 @@ def setze_planung(
                 schuljahr_zahl(wert)
             except UngueltigesSchuljahr as exc:
                 raise UngueltigeEingabe(f"Feld „{feld}“: {exc}") from exc
-    if nach and not buch.leihbar:
-        raise UngueltigeEingabe(
-            f"„{buch.titel}“ ist kein Leihbuch und wird deshalb nicht ausgemustert - "
-            "die Familien kaufen es selbst. Die Ausmusterung bleibt leer."
-        )
     if ab and nach and schuljahr_zahl(nach) < schuljahr_zahl(ab):
         raise UngueltigeEingabe(
             f"Das Buch kann nicht nach {nach} ausgemustert werden, wenn es erst "
@@ -289,10 +288,16 @@ class Jahrgangseingabe:
 
 @dataclass(frozen=True)
 class Ruecklageneingabe:
-    """Der Rücklage-Block desselben Menüs."""
+    """Der Rücklage-Block desselben Menüs: wie viele Exemplare, und wozu.
+
+    Ohne ``status``: die Fachschaft äußert einen Wunsch, sie sagt ihn sich
+    nicht selbst zu. Der Stand einer Rücklage (``gewünscht`` → ``zugesagt`` →
+    ``zurückgelegt``) gehört dem, der die Bücher tatsächlich zurücklegt, und
+    wird in der Datei geführt, nicht im Menü gesetzt. Ein schon eingetragener
+    Stand bleibt beim Speichern deshalb stehen.
+    """
 
     anzahl: int | None = None
-    status: str = ""
     bemerkung: str = ""
 
 
@@ -358,7 +363,8 @@ def setze_buchplanung(
     if ruecklage is not None:
         vorher_r = stand.ruecklage(isbn, fach)
         neu = setze_ruecklage(
-            neu, isbn=isbn, fach=fach, anzahl=ruecklage.anzahl, status=ruecklage.status,
+            neu, isbn=isbn, fach=fach, anzahl=ruecklage.anzahl,
+            status=vorher_r.status if vorher_r else "",
             kuerzel=vorher_r.kuerzel if vorher_r else "",
             datum=vorher_r.datum if vorher_r else None,
             bemerkung=ruecklage.bemerkung,
@@ -403,9 +409,24 @@ def setze_ruecklage(
     stand: Buchplanung, *, isbn: str, fach: str, anzahl: int | None, status: str = "",
     kuerzel: str = "", datum: date | None = None, bemerkung: str = "",
 ) -> Buchplanung:
-    """Hält fest, wie viele Exemplare eine Fachschaft behalten möchte."""
+    """Hält fest, wie viele Exemplare eine Fachschaft behalten möchte.
+
+    Nur für Bücher, die die Schule verleiht oder im Vorjahr verliehen hat
+    (``buch.leihbar`` - der Schnappschuss trägt dort den Wert aus dem Jahr ein,
+    in dem das Buch zuletzt vorkam, siehe ``laden.py``). Ein Kaufbuch liegt in
+    keinem Regal der Schule; Exemplare davon zurückzulegen ist nichts, was die
+    Schule entscheiden könnte.
+
+    Eine **leere** Eintragung bleibt für jedes Buch erlaubt: sonst ließe sich
+    ein Wunsch, der vor dieser Regel eingetragen wurde, nie wieder löschen.
+    """
     buch = _geprueftes_buch(stand, isbn)
     _geprueftes_fach(stand, buch, fach)
+    if not buch.leihbar and (anzahl or status.strip() or bemerkung.strip()):
+        raise UngueltigeEingabe(
+            f"Für „{buch.titel}“ lässt sich nichts zurücklegen: die Schule verleiht "
+            "das Buch nicht und hat auch im Vorjahr keine Exemplare davon verliehen."
+        )
     if anzahl is not None and not 0 <= anzahl <= 2000:
         raise UngueltigeEingabe(
             f"„{anzahl}“ ist keine sinnvolle Anzahl. Erwartet wird 0 bis 2000."

@@ -432,14 +432,35 @@ def test_ausmusterung_vor_der_einfuehrung_wird_abgelehnt(stand):
                       eingefuehrt_ab="2027/2028", ausgemustert_nach="2026/2027")
 
 
-def test_ein_kaufbuch_wird_nicht_ausgemustert(stand):
-    with pytest.raises(UngueltigeEingabe, match="kein Leihbuch"):
-        setze_planung(stand, isbn=KAUF, fach="Latein", jahrgang=7,
-                      ausgemustert_nach="2026/2027")
-    # Die Einführung darf es trotzdem haben: eingeführt wird auch, was gekauft wird.
+def test_auch_ein_kaufbuch_wird_eingefuehrt_und_ausgemustert(stand):
+    """Ausgemustert wird die Bücherliste, nicht der Bestand der Schule.
+
+    Bis 2026-09-20 wies ``setze_planung`` die Ausmusterung eines Kaufbuchs ab.
+    Das verwechselte zwei Dinge: auch ein Buch, das die Familien selbst kaufen,
+    steht bis zu einem Schuljahr auf der Liste und danach nicht mehr.
+    """
     neu = setze_planung(stand, isbn=KAUF, fach="Latein", jahrgang=7,
-                        eingefuehrt_ab="2027/2028")
-    assert neu.planungszeile(KAUF, "Latein", 7).eingefuehrt_ab == "2027/2028"
+                        eingefuehrt_ab="2024/2025", ausgemustert_nach="2026/2027")
+    zeile = neu.planungszeile(KAUF, "Latein", 7)
+    assert (zeile.eingefuehrt_ab, zeile.ausgemustert_nach) == ("2024/2025", "2026/2027")
+    assert planungs_status(zeile, neu.schuljahr) == PLANUNG_LAEUFT_AUS
+
+
+def test_fuer_ein_kaufbuch_gibt_es_keine_ruecklage(stand):
+    """Was die Schule nie besessen hat, kann sie nicht zurücklegen."""
+    with pytest.raises(UngueltigeEingabe, match="lässt sich nichts zurücklegen"):
+        setze_ruecklage(stand, isbn=KAUF, fach="Latein", anzahl=3)
+
+
+def test_eine_leere_ruecklage_bleibt_auch_beim_kaufbuch_erlaubt(stand):
+    """Sonst ließe sich ein Wunsch von vor dieser Regel nie wieder löschen."""
+    assert setze_ruecklage(stand, isbn=KAUF, fach="Latein", anzahl=None) is not None
+
+
+def test_ein_ehemals_leihbares_buch_darf_eine_ruecklage_haben(stand):
+    """ALT kommt nur noch im Vorjahr vor - genau dafür gibt es die Rücklage."""
+    neu = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5)
+    assert neu.ruecklage(ALT, "Chemie").anzahl == 5
 
 
 def test_schuljahr_ohne_schraegstrich_wird_abgelehnt(stand):

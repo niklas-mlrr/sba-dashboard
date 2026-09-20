@@ -114,24 +114,38 @@
     const titel = menue.querySelector(".modal-title");
     if (titel) titel.id = "planungsmenue-titel";
     menue.showModal();
+    // Erst jetzt messen: in einem geschlossenen <dialog> hat nichts eine Höhe.
+    messeBemerkungen(menue);
   }
 
-  // Eine neue Leerzeile übernimmt die Sperre der Ausmusterung von den schon
-  // vorhandenen Zeilen: ob das Buch leihbar ist, weiß die Vorlage des Buchs,
-  // nicht die eine Leerzeile der Seite.
   function fuegeJahrgangAn(knopf) {
     const koerper = knopf.closest(".planung-block").querySelector("[data-planung-zeilen]");
     if (!koerper || !leerzeile) return;
-    const neu = leerzeile.content.cloneNode(true);
-    const gesperrt = koerper.querySelector(
-      '[data-planung-feld="ausgemustert_nach"][disabled]') !== null;
-    if (gesperrt) {
-      const feld = neu.querySelector('[data-planung-feld="ausgemustert_nach"]');
-      feld.disabled = true;
-      feld.title = "kein Leihbuch - wird nicht ausgemustert";
-    }
-    koerper.appendChild(neu);
-    koerper.lastElementChild.querySelector('[data-planung-feld="jahrgang"]').focus();
+    koerper.appendChild(leerzeile.content.cloneNode(true));
+    const zeile = koerper.lastElementChild;
+    messeBemerkungen(zeile);
+    zeile.querySelector('[data-planung-feld="jahrgang"]').focus();
+  }
+
+  // ── Die Bemerkung: eine Zeile hoch, beim Tippen so hoch wie ihr Text ──────
+  //
+  // Eingeklappt ist sie eine Zeile hoch und endet mit "…", wenn mehr darin
+  // steht (die Klasse setzt das CSS um). Beim Anklicken wächst sie nach unten,
+  // damit man den ganzen Text liest; beim Verlassen klappt sie wieder ein.
+  // Ohne das wäre eine lange Bemerkung von einer kurzen nicht zu unterscheiden.
+  function passeHoeheAn(feld) {
+    feld.style.height = "auto";
+    feld.style.height = feld.scrollHeight + "px";
+  }
+
+  function klappeEin(feld) {
+    feld.style.height = "";
+    const rahmen = feld.closest(".planung-bemerkung-rahmen");
+    if (rahmen) rahmen.classList.toggle("hat-mehr", feld.scrollHeight > feld.clientHeight + 1);
+  }
+
+  function messeBemerkungen(bereich) {
+    for (const feld of bereich.querySelectorAll(".planung-bemerkung")) klappeEin(feld);
   }
 
   // Gesperrte Felder liest felder() als leeren Text - genau richtig: ein
@@ -157,15 +171,17 @@
         bemerkung: werte.bemerkung || "",
       });
     }
-    const block = menue.querySelector(".planung-ruecklage").closest(".planung-block");
-    const werte = felder(block);
+    // Den Rücklage-Block gibt es nur bei leihbaren Büchern; fehlt er, wird
+    // auch nichts über Rücklagen behauptet (``ruecklage: null``).
+    const anzahlfeld = menue.querySelector(".planung-ruecklage");
+    const block = anzahlfeld ? anzahlfeld.closest(".planung-block") : null;
+    const werte = block ? felder(block) : {};
     sende("/api/buchplanung/buch", {
       isbn: menue.dataset.isbn,
       fach: menue.dataset.fach,
       zeilen: zeilen,
-      ruecklage: {
+      ruecklage: block === null ? null : {
         anzahl: werte.anzahl === "" ? null : Number(werte.anzahl),
-        status: werte.status || "",
         bemerkung: werte.bemerkung || "",
       },
     }, () => "Die Planung wurde gespeichert.");
@@ -231,6 +247,22 @@
           ? daten.bestaetigt + " Zeile(n) dieses Fachs bestätigt."
           : "Die Bestätigung wurde zurückgenommen.");
     }
+  });
+
+  // Die Bemerkung wächst beim Bearbeiten und klappt danach wieder ein.
+  // "focusin"/"focusout" statt focus/blur: die steigen auf und kommen deshalb
+  // auch an Feldern an, die erst später im Dialog stehen.
+  document.addEventListener("focusin", (ereignis) => {
+    if (ereignis.target.classList.contains("planung-bemerkung")) {
+      ereignis.target.closest(".planung-bemerkung-rahmen").classList.remove("hat-mehr");
+      passeHoeheAn(ereignis.target);
+    }
+  });
+  document.addEventListener("focusout", (ereignis) => {
+    if (ereignis.target.classList.contains("planung-bemerkung")) klappeEin(ereignis.target);
+  });
+  document.addEventListener("input", (ereignis) => {
+    if (ereignis.target.classList.contains("planung-bemerkung")) passeHoeheAn(ereignis.target);
   });
 
   // Die Zeile ist ein Knopf (role="button"), also öffnet sie auch mit der

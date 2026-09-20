@@ -223,8 +223,7 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
             for zeile in anfrage.zeilen
         ],
         ruecklage=None if anfrage.ruecklage is None else Ruecklageneingabe(
-            anzahl=anfrage.ruecklage.anzahl, status=anfrage.ruecklage.status,
-            bemerkung=anfrage.ruecklage.bemerkung,
+            anzahl=anfrage.ruecklage.anzahl, bemerkung=anfrage.ruecklage.bemerkung,
         ),
         mtime=anfrage.mtime,
     )

@@ -203,10 +203,15 @@ class JahrgangEingabe(BaseModel):
 
 
 class RuecklageEingabe(BaseModel):
-    """Der Rücklage-Block desselben Menüs."""
+    """Der Rücklage-Block desselben Menüs - ohne Stand.
+
+    Welchen Stand eine Rücklage hat (``gewünscht``/``zugesagt``/
+    ``zurückgelegt``), setzt nicht die Fachschaft im Menü, sondern wer die
+    Bücher zurücklegt; ein schon eingetragener Stand bleibt beim Speichern
+    stehen (``buecherlisten/planung/abgleich.py::setze_buchplanung``).
+    """
 
     anzahl: int | None = None
-    status: str = ""
     bemerkung: str = ""
 
 

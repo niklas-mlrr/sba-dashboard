@@ -17,7 +17,6 @@ from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from buecherlisten.planung import (
     FACH_BESTAETIGT,
-    RUECKLAGE_STATUS,
     fach_bestaetigung,
     fach_status,
     planungs_status,
@@ -92,7 +91,6 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
     """
     leer: dict[str, Any] = {
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
-        "ruecklage_status": list(RUECKLAGE_STATUS),
         "preis_je_isbn": {}, "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {},
     }
@@ -158,7 +156,6 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "mtime": stand.zustand.mtime,
         "fehler": None,
         "warnungen": list(planung.warnungen),
-        "ruecklage_status": list(RUECKLAGE_STATUS),
         "preis_je_isbn": preise,
         "fach_je_name": faecher,
         "planung_je_isbn_und_fach": zeilen,

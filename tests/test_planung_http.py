@@ -296,15 +296,44 @@ def test_einfuehrung_in_einen_kuenftigen_jahrgang(
     assert zeile["bemerkung"] == "FK 12.05.2026"
 
 
-def test_ein_kaufbuch_wird_nicht_ausgemustert(
+def test_auch_ein_kaufbuch_wird_ausgemustert(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
+    """Ausgemustert wird die Bücherliste, nicht der Bestand der Schule.
+
+    Bis 2026-09-20 wies der Server das ab. Auch ein Buch, das die Familien
+    selbst kaufen, steht bis zu einem Schuljahr auf der Liste und danach nicht
+    mehr - und genau das hält die Spalte fest.
+    """
     antwort = seiten.post("/api/buchplanung/planung", json={
         "schuljahr": "2026/2027", "isbn": KAUF, "fach": "Latein", "jahrgang": 7,
         "ausgemustert_nach": "2026/2027", "mtime": abgeglichen["mtime"],
     })
+    assert antwort.status_code == 200, antwort.text
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == KAUF)
+    assert next(z for z in buch["planung"] if z["jahrgang"] == 7)["status"] == "läuft aus"
+
+
+def test_fuer_ein_kaufbuch_gibt_es_keine_ruecklage(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Die Schule besitzt keine Exemplare davon - es ist nichts zurückzulegen."""
+    antwort = seiten.post("/api/buchplanung/ruecklage", json={
+        "schuljahr": "2026/2027", "isbn": KAUF, "fach": "Latein", "anzahl": 3,
+        "mtime": abgeglichen["mtime"],
+    })
     assert antwort.status_code == 400
-    assert "kein Leihbuch" in antwort.json()["fehler"]
+    assert "lässt sich nichts zurücklegen" in antwort.json()["fehler"]
+
+
+def test_das_menue_eines_kaufbuchs_zeigt_keinen_ruecklage_block(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Latein").text
+    vorlage = text.split('class="planung-vorlage"')[1].split("</template>")[0]
+    assert "Rücklage für die Fachschaft" not in vorlage
+    # Einführung und Ausmusterung stehen trotzdem offen.
+    assert 'data-planung-feld="ausgemustert_nach"' in vorlage
 
 
 def test_ausmusterung_mit_ruecklage_fuer_die_fachschaft(
@@ -505,6 +534,43 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     assert "6 (bis 2029/2030)" in seiten.get("/buecherliste/fach/Erdkunde").text
 
 
+def test_die_ruecklagen_spalte_erscheint_erst_mit_einer_ruecklage(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Eine Spalte aus lauter leeren Zellen sagt nichts - und ist der Normalfall."""
+    ohne = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert ">Rücklagen<" not in ohne
+
+    seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [], "ruecklage": {"anzahl": 12}, "mtime": abgeglichen["mtime"],
+    })
+    mit = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert ">Rücklagen<" in mit
+    # Zwischen "Leihbar" und "Status", und als Zahl sortierbar.
+    assert mit.index(">Leihbar<") < mit.index(">Rücklagen<") < mit.index(">Status<")
+    assert '<td data-wert="12">12</td>' in mit
+
+
+def test_der_stand_einer_ruecklage_bleibt_beim_speichern_stehen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Das Menü kennt den Stand nicht - also darf es ihn auch nicht überschreiben."""
+    stand = seiten.post("/api/buchplanung/ruecklage", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "anzahl": 8,
+        "status": "zugesagt", "mtime": abgeglichen["mtime"],
+    }).json()
+
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "zeilen": [],
+        "ruecklage": {"anzahl": 9, "bemerkung": "doch mehr"}, "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == TERRA)
+    wunsch = next(r for r in buch["ruecklagen"] if r["fach"] == "Erdkunde")
+    assert (wunsch["anzahl"], wunsch["status"]) == (9, "zugesagt")
+
+
 # ── Die Schreibkette ─────────────────────────────────────────────────────────
 
 
@@ -609,7 +675,8 @@ def test_jahrgang_eines_laufenden_buchs_traegt_nur_die_ausmusterung(
     assert 'type="hidden" data-planung-feld="jahrgang"' in zeile
     assert 'type="hidden" data-planung-feld="eingefuehrt_ab"' in zeile
     # Offen ist die Ausmusterung, und die Bemerkung zu dieser Zeile.
-    assert 'type="text" class="planung-feld" data-planung-feld="ausgemustert_nach"' in zeile
+    assert 'data-planung-feld="ausgemustert_nach"' in zeile
+    assert "disabled" not in zeile
     assert 'data-planung-feld="bemerkung"' in zeile
     # Ein laufender Jahrgang lässt sich nicht wegklicken.
     assert 'data-planung="jahrgang-entfernen"' not in zeile

@@ -49,6 +49,11 @@
   eine eigene Spalte dafür ginge nicht, weil jede Spaltenüberschrift der
   Bücherlisten ein ``data-sort`` trägt und sich eine Spalte aus lauter Knöpfen
   nicht sinnvoll sortieren ließe (tests/test_buecherlisten.py hält das fest).
+
+  Zu sehen ist das erst beim Überfahren mit der Maus: Hintergrund hell,
+  Mauszeiger als Hand (``tr.aufklappbar`` in static/app.css). Ein ständiges
+  Zeichen in der Zeile - ein Pfeil vorn, ein Zahnrad hinten - stand vorher da
+  und ist wieder weg: es steht in jeder Zeile, sagt aber immer dasselbe.
 #}
 {% macro buchtabelle(buecher, mit_jahrgang, gesamt=false, ohne="", fach=none) %}
 {#
@@ -56,6 +61,13 @@
   sie steht auf der Seite der Knopf "Aus IServ aktualisieren" und sonst nichts.
 #}
 {% set planbar = fach and planung.mtime is not none %}
+{#
+  Die Spalte "Rücklagen" steht zwischen "Leihbar" und "Status" - und nur dann,
+  wenn in dieser Tabelle überhaupt eine gewünscht ist. Ohne Rücklagen wäre sie
+  eine Spalte aus leeren Zellen, und das ist der Normalfall.
+#}
+{% set mit_ruecklagen = planung.mtime is not none
+   and bp.ruecklagen_vorhanden(planung, buecher, fach) | trim %}
 <div class="tabellenrahmen">
 <table class="iserv-tabelle sortierbar"{% if gesamt %} data-gesamt{% endif %}>
   <thead>
@@ -68,6 +80,7 @@
       <th data-sort="zahl">Neupreis</th>
       <th data-sort="zahl">Leihgebühr</th>
       <th data-sort="zahl">Leihbar</th>
+      {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
       <th data-sort="text">Status</th>
     </tr>
   </thead>
@@ -77,7 +90,7 @@
     <tr data-isbn="{{ buch.isbn }}"{% if planbar %} class="aufklappbar"
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
-      <td>{% if planbar %}<span class="aufklapper" aria-hidden="true">›</span>{% endif %}{{ buch.titel }}</td>
+      <td>{{ buch.titel }}</td>
       {% if mit_jahrgang %}{{ bp.jahrgangsspalte(planung, buch, fach) }}{% endif %}
       {% if ohne != "fach" %}<td>{{ buch.fach_anzeige }}</td>{% endif %}
       {% if ohne != "verlag" %}<td>{{ buch.verlag }}</td>{% endif %}
@@ -86,6 +99,8 @@
       <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ euro(buch.leihgebuehr) }}</td>
       <td data-wert="{{ 1 if buch.leihbar else 0 }}"><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
         {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
+      {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
+      <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
       <td class="preis-status"{% if preis and preis.hinweis %} title="{{ preis.hinweis }}"{% endif %}>
         {% if planung.mtime is none %}<span class="label label-status">offen</span>
         {% else %}{{ bp.statuslabel(preis.status if preis else "offen") }}

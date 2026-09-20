@@ -787,12 +787,12 @@ td.frisch {
 .knopf-klein:hover { border-color: var(--akzent); }
 
 /* Die Buchzeile als Knopf: in der Fach-Ansicht öffnet ein Klick darauf das
-   Planungsmenü. Der Pfeil sagt das vorher - ohne ihn wäre die Zeile ein
-   Knopf, den man nicht sieht. */
+   Planungsmenü. Zu sehen ist das beim Überfahren - heller Hintergrund und
+   Hand-Zeiger. Ein ständiges Zeichen in der Zeile stand vorher da und ist
+   wieder weg: es steht in jeder Zeile und sagt immer dasselbe. */
 tr.aufklappbar { cursor: pointer; }
 tr.aufklappbar:hover > td { background: var(--warnung-grund); }
 tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset: -2px; }
-.aufklapper { margin-right: .4rem; color: #777; }
 
 /* Das Planungsmenü selbst. Breiter als das Druckmenü, weil seine Tabelle fünf
    Spalten trägt; die 600 px des Druckmenüs reichen dafür nicht. */
@@ -803,18 +803,71 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   border-top: 1px solid #e5e5e5;
 }
 .planung-block h4 { margin: 0 0 .5rem; font-size: .95rem; }
+
+/* Der Rahmen hält die Tabelle im Dialog: passt sie nicht, rollt sie waagerecht,
+   statt über den Rand hinauszustehen. */
+.planung-tabellenrahmen { max-width: 100%; overflow-x: auto; }
 .planung-tabelle { width: 100%; border-collapse: collapse; font-size: .875rem; }
 .planung-tabelle th,
-.planung-tabelle td { padding: .2rem .5rem; text-align: left; font-weight: 400; }
-.planung-tabelle th { color: var(--text-leise); font-size: .8rem; }
+.planung-tabelle td { padding: .25rem .4rem; text-align: left; font-weight: 400; }
+.planung-tabelle th {
+  color: var(--text-leise);
+  font-size: .8rem;
+  line-height: 1.2;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.planung-tabelle td { vertical-align: top; }
 .planung-tabelle th:first-child,
 .planung-tabelle td:first-child { padding-left: 0; }
-.planung-feld-weit { width: 100%; min-width: 8rem; }
-.planung-zeilenende { white-space: nowrap; }
+.planung-tabelle th:last-child,
+.planung-tabelle td:last-child { padding-right: 0; }
 
-/* Rücklage: Exemplare und Stand nebeneinander, die Bemerkung darunter über
+/* Ein Schuljahr ist "JJJJ/JJJJ" - neun Zeichen. `ch` ist die Breite der Null,
+   und `tabular-nums` macht alle Ziffern gleich breit; damit ist das Feld so
+   lang wie seine längstmögliche Eingabe und nicht länger. Die Zugabe ist der
+   eigene Innenabstand und Rand: `box-sizing: border-box` gilt global, `width`
+   wäre sonst die Außenkante und der Text bekäme zu wenig Platz. */
+.planung-feld-schuljahr {
+  width: calc(9ch + .8rem + 2px);
+  min-width: calc(9ch + .8rem + 2px);
+  font-variant-numeric: tabular-nums;
+}
+/* Beim Jahrgang kommt das Drehfeld des Browsers dazu. */
+.planung-feld-jahrgang { width: calc(2ch + 2.4rem); min-width: calc(2ch + 2.4rem); }
+.planung-feld-anzahl { width: calc(4ch + 2.4rem); }
+.planung-spalte-jahrgang { white-space: nowrap; }
+.planung-spalte-bemerkung { width: 100%; }
+.planung-zeilenende { white-space: nowrap; text-align: right; }
+
+/* Die Bemerkung: eingeklappt eine Zeile, beim Anklicken so hoch, wie ihr Text
+   braucht (static/buchplanung.js setzt die Höhe). Passt der Text nicht in die
+   eine Zeile, endet sie mit "…" - sonst sähe eine lange Bemerkung aus wie eine
+   kurze. */
+.planung-bemerkung {
+  display: block;
+  width: 100%;
+  min-width: 7rem;
+  overflow: hidden;
+  resize: none;
+  line-height: 1.35;
+}
+.planung-bemerkung-rahmen { position: relative; display: block; }
+.planung-bemerkung-rahmen.hat-mehr::after {
+  content: "…";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  padding: 0 .3rem 0 .6rem;
+  color: var(--text-leise);
+  background: linear-gradient(to right, transparent, var(--flaeche) 45%);
+  pointer-events: none;
+}
+
+.planung-anfuegen { margin: 1.2rem 0 .4rem; }
+
+/* Rücklage: Exemplare und Stand in einer Zeile, die Bemerkung darunter über
    die ganze Breite - sie ist meist ein Satz, kein Wort. */
-.planung-ruecklage { display: flex; flex-wrap: wrap; gap: 1rem; }
-.planung-ruecklage label { font-size: .875rem; }
+.planung-ruecklage { display: flex; align-items: center; gap: .5rem; font-size: .875rem; }
 .planung-bemerkungszeile { display: block; margin-top: .6rem; font-size: .875rem; }
-.planung-bemerkungszeile .planung-feld { display: block; width: 100%; margin-top: .2rem; }
+.planung-bemerkungszeile .planung-bemerkung-rahmen { margin-top: .2rem; }
