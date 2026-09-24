@@ -2,7 +2,7 @@
 
 Die Datei ist der **Rückfall**: fällt das Dashboard aus - etwa nach einem
 IServ-Update -, liegt der Stand weiter auf dem Gruppenlaufwerk und ist ohne
-dieses Programm lesbar. Sie hat fünf Blätter, und jedes trägt genau einen
+dieses Programm lesbar. Sie hat vier Blätter, und jedes trägt genau einen
 Schlüssel:
 
 ======================  ==========================  =========================
@@ -13,13 +13,8 @@ Blatt                   Schlüssel                   eintragbar
                                                     Kürzel, Datum, Bemerkung
 ``Rücklage``            (ISBN, Fach)                Anzahl, Kürzel, Datum,
                                                     Status, Bemerkung
-``Korrekturen``         ISBN in IServ               ISBN, Titel, Verlag,
-                                                    Neupreis, Leihpreis
 ``Info``                -                           nichts
 ======================  ==========================  =========================
-
-``Korrekturen`` kam am 2026-09-24 dazu; eine ältere Datei ohne das Blatt bleibt
-lesbar und bekommt es beim nächsten Schreiben.
 
 Bis 2026-09-20 standen die Bücher dreimal in der Mappe, einmal je Achse
 (Verlag, Fach, Jahrgang), dazu ein eigenes Blatt für die Fachbestätigung. Die
@@ -34,7 +29,14 @@ Unverändert gilt die Regel, die die Mappe widerspruchsfrei hält:
     alles andere wird bei jedem Schreiben neu gesetzt.
 
 Wer also auf ``Buchreihen`` einen Titel überschreibt, ändert nichts - beim
-nächsten Schreiben steht dort wieder, was IServ sagt. Dieselbe Regel liegt
+nächsten Abgleich steht dort wieder, was IServ sagt. Die eine Ausnahme sind
+**Korrekturen** aus dem Planungsmenü (seit 2026-09-24): eine korrigierte Zelle
+bei Titel, Verlag, Neupreis oder Leihpreis ist hell hinterlegt und trägt den
+IServ-Wert als Kommentar („in IServ: 22,50 €“). Der Kommentar ist die
+Markierung - eine Zelle mit ihm behält beim Abgleich ihren Wert, eine ohne ihn
+bekommt den aus IServ. Ein eigenes Blatt dafür gab es nur für einen Tag; seit
+die ISBN im Menü nicht mehr änderbar ist, hat jede Korrektur ihre Zeile
+schon. Dieselbe Regel liegt
 schon ``mehrjahresbaende/core/mappe.py`` zugrunde, das sein Blatt ebenfalls
 immer vollständig neu schreibt, statt einzelne Zellen zu flicken.
 
@@ -51,6 +53,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -63,7 +66,6 @@ from .modelle import (
     OHNE_VERLAG,
     Buch,
     Buchbemerkung,
-    Buchkorrektur,
     Buchplanung,
     Planungszeile,
     Ruecklage,
@@ -72,24 +74,20 @@ from .modelle import (
 BLATT_BUECHER = "Buchreihen"
 BLATT_FACH_JAHRGANG = "Fächer & Jahrgang"
 BLATT_RUECKLAGE = "Rücklage"
-BLATT_KORREKTUREN = "Korrekturen"
 BLATT_INFO = "Info"
 
 BLAETTER: tuple[str, ...] = (
-    BLATT_BUECHER, BLATT_FACH_JAHRGANG, BLATT_RUECKLAGE, BLATT_KORREKTUREN, BLATT_INFO,
+    BLATT_BUECHER, BLATT_FACH_JAHRGANG, BLATT_RUECKLAGE, BLATT_INFO,
 )
-
-# Blätter, die eine ältere Datei noch nicht hat. Beim Lesen fehlt dann nur,
-# was darauf stünde; beim nächsten Schreiben werden sie angelegt.
-_SPAETER_DAZU: frozenset[str] = frozenset({BLATT_KORREKTUREN})
-
-SPALTE_ISBN_ISERV = "ISBN in IServ"
 
 # Die Blätter des Aufbaus bis 2026-09-20. Sie werden beim Schreiben entfernt:
 # eine Mappe, in der dieselben Bücher zusätzlich in einer alten Fassung stehen,
 # ist schlimmer als eine ohne sie - man sähe ihr nicht an, welche gilt.
+# "Korrekturen" gab es nur am 2026-09-24 für wenige Stunden; die Korrekturen
+# stehen seither auf "Buchreihen" selbst.
 _ALTE_BLAETTER: tuple[str, ...] = (
     "Preise je Verlag", "Bücher je Fach", "Bücher je Jahrgang", "Fachbestätigung",
+    "Korrekturen",
 )
 
 
@@ -144,17 +142,6 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Status", 16, True),
         ("Bemerkung", 30, True),
     ),
-    # Nur die Bücher, an denen etwas korrigiert ist. Eine leere Zelle heißt:
-    # gilt wie in IServ. Die IServ-Werte selbst stehen hier nicht - die Datei
-    # kennt nur den Stand nach der Korrektur (auf "Buchreihen").
-    BLATT_KORREKTUREN: (
-        (SPALTE_ISBN_ISERV, 18, False),
-        ("ISBN", 18, True),
-        ("Titel", 36, True),
-        ("Verlag", 24, True),
-        ("Neupreis", 12, True),
-        ("Leihpreis", 12, True),
-    ),
 }
 
 # Aus der Mehrjahresbände-Mappe übernommen, damit die drei Dateien der
@@ -176,6 +163,19 @@ _EUROSPALTEN = ("Neupreis", "Leihpreis")
 
 _JA = "ja"
 _NEIN = "nein"
+
+# Korrekturen auf "Buchreihen": die Zelle trägt den korrigierten Wert, hell
+# hinterlegt, und als Kommentar den Wert aus IServ. An diesem Kommentar
+# erkennt der nächste Abgleich die Korrektur - eine Zelle ohne ihn wird aus
+# IServ neu gesetzt. Feld (``Buch``) -> Spalte.
+_KORRIGIERBAR: dict[str, str] = {
+    "titel": "Titel", "verlag": "Verlag", "neupreis": "Neupreis", "leihgebuehr": "Leihpreis",
+}
+_PREISFELDER = frozenset({"neupreis", "leihgebuehr"})
+_ISERV_MARKE = "in IServ:"
+_OHNE_WERT = "–"
+_KOMMENTARE = "_kommentare"
+_KOMMENTAR_VON = "Dashboard"
 
 
 # ── Kleine Umwandlungen ──────────────────────────────────────────────────────
@@ -240,16 +240,46 @@ def _kopf(ws: Worksheet) -> dict[str, int]:
 
 
 def _zeilen(ws: Worksheet) -> list[dict[str, object]]:
-    """Alle Datenzeilen als {Überschrift: Wert}; leere Zeilen fallen weg."""
+    """Alle Datenzeilen als {Überschrift: Wert}; leere Zeilen fallen weg.
+
+    Unter ``_KOMMENTARE`` stehen zusätzlich die Kommentare der Zeile
+    ({Überschrift: Text}) - auf ``Buchreihen`` tragen sie die IServ-Werte
+    korrigierter Zellen.
+    """
     kopf = _kopf(ws)
     if not kopf:
         return []
     heraus: list[dict[str, object]] = []
     for nummer in range(2, (ws.max_row or 1) + 1):
-        werte = {name: ws.cell(nummer, spalte).value for name, spalte in kopf.items()}
+        werte: dict[str, object] = {
+            name: ws.cell(nummer, spalte).value for name, spalte in kopf.items()}
         if any(_text(wert) for wert in werte.values()):
+            werte[_KOMMENTARE] = {
+                name: zelle.comment.text for name, spalte in kopf.items()
+                for zelle in (ws.cell(nummer, spalte),) if zelle.comment is not None
+            }
             heraus.append(werte)
     return heraus
+
+
+def _iserv_aus_kommentar(text: str, preis: bool) -> object:
+    """``"in IServ: 22,50 €"`` -> 22.5. Excel setzt beim Bearbeiten den Namen
+    davor; gelesen wird deshalb ab dem letzten „in IServ:“."""
+    rest = text.rsplit(_ISERV_MARKE, 1)[-1].strip()
+    if rest in ("", _OHNE_WERT):
+        return None if preis else ""
+    return _zahl(rest) if preis else rest
+
+
+def _korrekturen(zeile: dict[str, object]) -> tuple[tuple[str, object], ...]:
+    """Die korrigierten Felder einer Zeile auf ``Buchreihen``, mit ihrem IServ-Wert."""
+    kommentare = zeile.get(_KOMMENTARE) or {}
+    assert isinstance(kommentare, dict)
+    return tuple(
+        (feld, _iserv_aus_kommentar(kommentare[spalte], feld in _PREISFELDER))
+        for feld, spalte in _KORRIGIERBAR.items()
+        if _ISERV_MARKE in str(kommentare.get(spalte) or "")
+    )
 
 
 def lies_mappe(wb: Workbook) -> Buchplanung:
@@ -265,8 +295,7 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     ``in der Bücherliste`` mit "ja" führen: das Blatt trägt auch die bloß
     geplanten Jahrgänge, und die stehen gerade **nicht** in einer Liste.
     """
-    fehlend = [name for name in BLAETTER
-               if name not in wb.sheetnames and name not in _SPAETER_DAZU]
+    fehlend = [name for name in BLAETTER if name not in wb.sheetnames]
     if fehlend:
         raise MappeUnlesbar(
             "Der Datei fehlen die Blätter: " + ", ".join(fehlend) + "."
@@ -312,6 +341,7 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             leihbar=_text(zeile.get("leihbar")).casefold() == _JA,
             neupreis=_zahl(zeile.get("Neupreis")),
             leihgebuehr=_zahl(zeile.get("Leihpreis")),
+            iserv=_korrekturen(zeile),
         )
         for zeile in buch_roh
         for isbn in (_text(zeile.get("ISBN")),) if isbn
@@ -342,31 +372,10 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
         ) if not eintrag.leer
     )
 
-    korrekturen_roh = (_zeilen(wb[BLATT_KORREKTUREN])
-                       if BLATT_KORREKTUREN in wb.sheetnames else [])
-
-    def text_oder_nichts(roh: object) -> str | None:
-        return _text(roh) or None
-
-    korrekturen = tuple(
-        eintrag for eintrag in (
-            Buchkorrektur(
-                isbn_iserv=_text(zeile.get(SPALTE_ISBN_ISERV)),
-                isbn=text_oder_nichts(zeile.get("ISBN")),
-                titel=text_oder_nichts(zeile.get("Titel")),
-                verlag=text_oder_nichts(zeile.get("Verlag")),
-                neupreis=_zahl(zeile.get("Neupreis")),
-                leihgebuehr=_zahl(zeile.get("Leihpreis")),
-            )
-            for zeile in korrekturen_roh if _text(zeile.get(SPALTE_ISBN_ISERV))
-        ) if not eintrag.leer
-    )
-
     schuljahr, vorjahr, stand = _lies_info(wb)
     return Buchplanung(
         schuljahr=schuljahr, vorjahr=vorjahr, stand=stand, buecher=buecher,
         bemerkungen=bemerkungen, planung=tuple(planung), ruecklagen=ruecklagen,
-        korrekturen=korrekturen,
     )
 
 
@@ -419,13 +428,18 @@ def _schreibe_kopf(ws: Worksheet, blatt: str) -> None:
 
 
 def _schreibe_zeile(ws: Worksheet, blatt: str, nummer: int, werte: dict[str, object]) -> None:
+    kommentare = werte.get(_KOMMENTARE) or {}
+    assert isinstance(kommentare, dict)
     for spalte, (name, _, eintragbar) in enumerate(_SPALTEN[blatt], start=1):
         wert = werte.get(name)
         zelle = ws.cell(nummer, spalte)
         zelle.value = wert if wert != "" else None
         zelle.font = _SCHRIFT
         zelle.border = _RAHMEN
-        zelle.fill = _EINTRAG_FUELLUNG if eintragbar else _LEER
+        # Eine korrigierte Zelle ist hell wie eine eintragbare - sie ist es auch.
+        zelle.fill = _EINTRAG_FUELLUNG if eintragbar or name in kommentare else _LEER
+        zelle.comment = (Comment(str(kommentare[name]), _KOMMENTAR_VON)
+                         if name in kommentare else None)
         zelle.alignment = _LINKS
         if isinstance(wert, date):
             zelle.number_format = _DATUMSFORMAT
@@ -458,8 +472,21 @@ def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "Leihpreis": buch.leihgebuehr,
             "leihbar": _JA if buch.leihbar else _NEIN,
             "Bemerkung": eintrag.bemerkung if eintrag else "",
+            _KOMMENTARE: {
+                _KORRIGIERBAR[feld]: _iserv_kommentar(original, feld in _PREISFELDER)
+                for feld, original in buch.iserv if feld in _KORRIGIERBAR
+            },
         })
     return zeilen
+
+
+def _iserv_kommentar(original: object, preis: bool) -> str:
+    """Der Kommentar an einer korrigierten Zelle: was IServ dort nennt."""
+    if original is None or original == "":
+        return f"{_ISERV_MARKE} {_OHNE_WERT}"
+    if preis and isinstance(original, (int, float)):
+        return f"{_ISERV_MARKE} {original:.2f} €".replace(".", ",")
+    return f"{_ISERV_MARKE} {original}"
 
 
 def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
@@ -512,21 +539,6 @@ def _ruecklagenzeilen(stand: Buchplanung) -> list[dict[str, object]]:
     return zeilen
 
 
-def _korrekturzeilen(stand: Buchplanung) -> list[dict[str, object]]:
-    """Nur die Bücher mit einer Korrektur - wie bei der Rücklage die Liste der Einträge."""
-    return [
-        {
-            SPALTE_ISBN_ISERV: eintrag.isbn_iserv,
-            "ISBN": eintrag.isbn or "",
-            "Titel": eintrag.titel or "",
-            "Verlag": eintrag.verlag or "",
-            "Neupreis": eintrag.neupreis,
-            "Leihpreis": eintrag.leihgebuehr,
-        }
-        for eintrag in sorted(stand.korrekturen, key=lambda k: k.isbn_iserv)
-    ]
-
-
 def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     _leeren(ws)
     ws.column_dimensions["A"].width = 24
@@ -551,12 +563,13 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
                           "anderen schreibt das Dashboard bei jedem Abgleich neu.")
     zeile(7, "Bücher", "Aus dem laufenden Schuljahr alle, aus dem Vorjahr die "
                        "leihbaren - nur die liegen im Bestand der Schule.")
-    zeile(8, "Korrekturen", "Angaben aus IServ, die hier korrigiert sind; sie gelten in "
-                            "allen Bücherlisten des Dashboards. IServ selbst bleibt unverändert.")
-    zeile(10, "Legende", "", fett=True)
+    zeile(8, "Korrekturen", "Auf „Buchreihen“ im Planungsmenü korrigierte Titel, Verlage "
+                            "und Preise: hell hinterlegt, der Wert aus IServ steht im "
+                            "Kommentar. IServ selbst bleibt unverändert.")
+    zeile(9, "Legende", "", fett=True)
     for versatz, (marke, text) in enumerate(LEGENDE):
-        zeile(11 + versatz, marke, text)
-    naechste = 11 + len(LEGENDE) + 1
+        zeile(10 + versatz, marke, text)
+    naechste = 10 + len(LEGENDE) + 1
     for versatz, warnung in enumerate(stand.warnungen):
         zeile(naechste + versatz, "Hinweis" if versatz == 0 else "", warnung)
 
@@ -574,7 +587,6 @@ def schreibe_mappe(wb: Workbook, stand: Buchplanung) -> None:
     _schreibe_blatt(wb[BLATT_BUECHER], BLATT_BUECHER, _buchzeilen(stand))
     _schreibe_blatt(wb[BLATT_FACH_JAHRGANG], BLATT_FACH_JAHRGANG, _planungszeilen(stand))
     _schreibe_blatt(wb[BLATT_RUECKLAGE], BLATT_RUECKLAGE, _ruecklagenzeilen(stand))
-    _schreibe_blatt(wb[BLATT_KORREKTUREN], BLATT_KORREKTUREN, _korrekturzeilen(stand))
     _schreibe_info(wb[BLATT_INFO], stand)
     for name in _ALTE_BLAETTER:
         if name in wb.sheetnames:

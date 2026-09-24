@@ -32,17 +32,19 @@ bestätigt - weder in der Verlags-Ansicht noch in der Mappe (Spalten „geprüft
 Preis", „Kürzel" und „Datum" auf `Buchreihen` entfallen; „Bemerkung" bleibt).
 Der Preis gilt, wie er in IServ steht.
 
-**Neu am 2026-09-24: die Buchreihe im Planungsmenü.** ISBN, Titel, Verlag,
-Neupreis und Leihgebühr lassen sich im Menü eines Buchs korrigieren; die
-Korrektur steht auf dem Blatt `Korrekturen` und gilt in allen Bücherlisten und
-im PDF. IServ selbst bleibt unverändert.
+**Neu am 2026-09-24: die Buchreihe im Planungsmenü.** Titel, Verlag,
+Neupreis und Leihgebühr lassen sich im Menü eines Buchs korrigieren; die ISBN
+steht dort nur zum Lesen (grau hinterlegt). Die Korrektur steht auf
+`Buchreihen` (Zelle hell, IServ-Wert als Kommentar) und gilt in allen
+Bücherlisten und im PDF. IServ selbst bleibt unverändert.
 
 **Offen: Korrekturen ins nächste Schuljahr mitnehmen.** Die Datei gilt je
 Schuljahr. Legt der erste Abgleich eines neuen Schuljahrs seine Datei an,
 fehlen darin die Korrekturen des Vorjahrs, und das Buch steht wieder so da, wie
-IServ es führt. Naheliegend wäre, beim Anlegen das Blatt `Korrekturen` aus der
-Datei des Vorjahrs zu übernehmen. Ebenfalls offen: das Kommandozeilen-Skript
-`buecherlisten/generate_booklists.py` kennt die Korrekturen nicht.
+IServ es führt. Naheliegend wäre, beim Anlegen die korrigierten Zellen von
+„Buchreihen“ aus der Datei des Vorjahrs zu übernehmen. Ebenfalls offen: das
+Kommandozeilen-Skript `buecherlisten/generate_booklists.py` kennt die
+Korrekturen nicht.
 
 ## Der Reiter „Mehrjahresbände" (2026-09-19) — gebaut, zwei Punkte offen
 

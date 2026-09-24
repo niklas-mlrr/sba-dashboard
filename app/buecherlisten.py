@@ -66,25 +66,14 @@ class Buch:
     leihgebuehr: float | None
     leihbar: bool
     jahrgaenge: tuple[int, ...]
-    # Ist an der Buchreihe etwas korrigiert (Buchplanung, Blatt "Korrekturen"),
-    # stehen oben die korrigierten Werte, hier die ISBN in IServ und die
-    # IServ-Werte der korrigierten Felder. Das Planungsmenü zeigt sie als
-    # „in IServ: …“ und schickt sie beim Speichern mit.
-    isbn_iserv: str = ""
+    # Ist an der Buchreihe etwas korrigiert (Buchplanung, Blatt "Buchreihen"),
+    # stehen oben die korrigierten Werte und hier die IServ-Werte der
+    # korrigierten Felder. Das Planungsmenü zeigt sie als „in IServ: …“.
     iserv: tuple[tuple[str, Any], ...] = ()
 
     @property
     def isbn_anzeige(self) -> str:
         return isbnlib.mask(self.isbn) or self.isbn
-
-    @property
-    def iserv_werte(self) -> dict[str, Any]:
-        """Alle fünf Felder, wie IServ sie nennt - für das Planungsmenü."""
-        return {
-            "isbn": self.isbn_iserv or self.isbn, "titel": self.titel,
-            "verlag": self.verlag, "neupreis": self.neupreis,
-            "leihgebuehr": self.leihgebuehr, **dict(self.iserv),
-        }
 
     @property
     def fach_anzeige(self) -> str:
@@ -247,25 +236,20 @@ def _liste(kopf: dict, detail: dict, heute: date,
 
 
 # Feldname in IServ -> Feldname hier.
-_FELDER = {"isbn": "isbn", "title": "titel", "publisher": "verlag",
-           "price": "neupreis", "fee": "leihgebuehr"}
+_FELDER = {"title": "titel", "publisher": "verlag", "price": "neupreis", "fee": "leihgebuehr"}
 
 
 def _buch(item: dict, jahrgang: int | None, korrekturen: Korrekturen | None = None) -> Buch | None:
     original = item.get("series_data") or {}
-    isbn_iserv = str(original.get("isbn") or item.get("series") or "")
-    korrigiert = korrigiere_eintrag(item, korrekturen)
-    daten = korrigiert.get("series_data") or {}
-    isbn = daten.get("isbn") or korrigiert.get("series")
+    daten = korrigiere_eintrag(item, korrekturen).get("series_data") or {}
+    isbn = daten.get("isbn") or item.get("series")
     if not isbn:
         return None
-    felder = (korrekturen or {}).get(isbn_iserv) or {}
     iserv = tuple(
-        (_FELDER[name], isbn_iserv if name == "isbn" else original.get(name))
-        for name in felder if name in _FELDER
+        (_FELDER[name], original.get(name))
+        for name in (korrekturen or {}).get(isbn) or {} if name in _FELDER
     )
     return Buch(
-        isbn_iserv=isbn_iserv,
         iserv=iserv,
         isbn=isbn,
         titel=daten.get("title") or "?",
@@ -310,7 +294,6 @@ def _gruppiere(buecher: list[Buch], schluessel: Any) -> tuple[Gruppe, ...]:
                 # Leihbar, sobald es in irgendeiner Liste leihbar ist.
                 leihbar=vorhanden.leihbar or buch.leihbar,
                 jahrgaenge=tuple(sorted(set(vorhanden.jahrgaenge) | set(buch.jahrgaenge))),
-                isbn_iserv=vorhanden.isbn_iserv,
                 iserv=vorhanden.iserv,
             )
     return tuple(

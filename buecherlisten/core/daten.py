@@ -78,9 +78,10 @@ OHNE_VERLAG = "(ohne Verlag)"
 Jahrgangslisten = list[tuple[int, int, dict]]
 
 
-# Korrekturen an Buchreihen: IServ-ISBN -> {IServ-Feldname: Wert}. Die Felder
-# heißen wie in ``series_data`` (``isbn``, ``title``, ``publisher``, ``price``,
-# ``fee``), damit dieses Modul nichts von der Buchplanung wissen muss, die sie
+# Korrekturen an Buchreihen: ISBN -> {IServ-Feldname: Wert}. Die Felder
+# heißen wie in ``series_data`` (``title``, ``publisher``, ``price``, ``fee``;
+# die ISBN ist der Schlüssel und wird nicht korrigiert), damit dieses Modul
+# nichts von der Buchplanung wissen muss, die sie
 # festhält (``buecherlisten/planung/``).
 Korrekturen = Mapping[str, Mapping[str, Any]]
 
@@ -89,8 +90,8 @@ def wende_korrekturen_an(detail: dict, korrekturen: Korrekturen | None) -> dict:
     """Ein Bücherlisten-Detail aus IServ, mit den korrigierten Angaben der Buchreihen.
 
     Die **eine** Stelle, an der Korrekturen wirken: alles, was danach aus den
-    Listen gelesen wird - Seiten, PDF, Abgleich -, sieht nur noch die
-    korrigierten Werte, auch beim Gruppieren nach Verlag oder ISBN. Das
+    Listen gelesen wird - Seiten und PDF -, sieht nur noch die
+    korrigierten Werte, auch beim Gruppieren nach Verlag. Das
     Original bleibt unverändert; zurück kommt eine Kopie, sobald es etwas zu
     ändern gibt.
     """
@@ -114,10 +115,7 @@ def korrigiere_eintrag(item: dict, korrekturen: Korrekturen | None) -> dict:
     felder = korrekturen.get(isbn) if korrekturen and isbn else None
     if not felder:
         return item
-    neu = {**item, "series_data": {**sd, **felder}}
-    if "isbn" in felder:
-        neu["series"] = felder["isbn"]
-    return neu
+    return {**item, "series_data": {**sd, **felder}}
 
 
 def hole_jahrgangslisten(

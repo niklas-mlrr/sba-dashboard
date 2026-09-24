@@ -27,11 +27,10 @@ alles andere darunter.
 ## Die Datei: ein Bücher-Blatt, zwei Tabellen daneben
 
 | Blatt | Schlüssel | eintragbar |
-|-------|-----------|------------|
+| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis als Korrektur (mit Kommentar) |
 | `Buchreihen` | ISBN | Bemerkung |
 | `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung (dazu `in der Bücherliste`, gesetzt) |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
-| `Korrekturen` | ISBN in IServ | ISBN, Titel, Verlag, Neupreis, Leihpreis |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
 Jeder Titel steht **einmal**, auf `Buchreihen`, mit Fach und Jahrgang als
@@ -181,29 +180,33 @@ ist die Spalte `Bemerkung` je Buch.
 
 ## Korrekturen an den Angaben aus IServ
 
-Seit 2026-09-24 lassen sich ISBN, Titel, Verlag, Neupreis und Leihgebühr eines
+Seit 2026-09-24 lassen sich Titel, Verlag, Neupreis und Leihgebühr eines
 Buchs im Planungsmenü korrigieren, im Block „Buchreihe“ vor Einführung und
 Ausmusterung. Der Block ist dem IServ-Dialog „Buchreihe bearbeiten“
-nachgebaut. **Gespeichert wird in dieser Datei, nicht in IServ**: das
+nachgebaut. Die ISBN steht dort nur zum Lesen, grau hinterlegt: sie ist der
+Schlüssel des Buchs. **Gespeichert wird in dieser Datei, nicht in IServ**: das
 Dashboard bleibt dort nur-lesend.
 
-* **Schlüssel ist die ISBN in IServ.** Nur sie kommt bei jedem Abgleich
-  wieder, und an ihr wird die Korrektur beim nächsten Abruf wiedergefunden.
-  Eine leere Zelle auf `Korrekturen` heißt: gilt wie in IServ. Auf dem Blatt
-  stehen nur Bücher, an denen etwas korrigiert ist.
+* **Die Korrektur steht in der Zeile des Buchs.** Auf `Buchreihen` trägt die
+  Zelle den korrigierten Wert, hell hinterlegt, und als Kommentar den Wert aus
+  IServ („in IServ: 22,50 €“). Ein eigenes Blatt dafür gab es nur am
+  2026-09-24 für einige Stunden; seit die ISBN nicht mehr änderbar ist, hat
+  jede Korrektur ihre Zeile schon.
+* **Der Kommentar ist die Markierung.** Eine Zelle mit ihm behält beim
+  Abgleich ihren Wert, und der Kommentar bekommt den frischen IServ-Wert.
+  Nennt IServ inzwischen selbst den korrigierten Wert, fällt die Korrektur
+  weg. Eine Zelle **ohne** Kommentar bekommt den Wert aus IServ - so bleibt
+  eine Preisänderung in IServ nicht an einem alten Wert hängen. Wer in Excel
+  eine solche Zelle überschreibt, verliert die Änderung beim nächsten
+  Abgleich; korrigiert wird im Planungsmenü.
 * **Die Korrektur wirkt überall.** `wende_korrekturen_an` in
   `../core/daten.py` legt sie auf die Rohdaten jeder Bücherliste, bevor sie
-  ausgewertet werden. Seiten, PDF und Abgleich sehen damit dieselben Werte,
-  auch beim Gruppieren nach Verlag.
-* **Eine geänderte ISBN zieht den Schlüssel um.** Bemerkung, Planungszeilen
-  und Rücklagen hängen danach an der neuen ISBN (`setze_buchreihe`). Der
-  Abgleich lädt IServ schon mit den Korrekturen und findet sie deshalb unter
-  der neuen ISBN wieder. Eine ISBN, die schon einem anderen Buch gehört, wird
-  abgewiesen. Eine neue ISBN wird wie in IServ geprüft und als ISBN-13
-  geführt.
-* **Zurück auf IServ.** Die Datei kennt nur den korrigierten Stand. Das Menü
-  schickt deshalb die IServ-Werte mit (`iserv`); stimmt ein Feld wieder mit
-  IServ überein, fällt seine Korrektur weg. Ein leerer Preis heißt ebenfalls
+  ausgewertet werden. Seiten und PDF sehen damit dieselben Werte wie die
+  Datei, auch beim Gruppieren nach Verlag.
+* **Zurück auf IServ.** Die Datei kennt zu jedem korrigierten Feld den
+  IServ-Wert (`Buch.iserv`), zu jedem anderen ist der heutige Wert der aus
+  IServ. `setze_buchreihe` entscheidet daran: gleicht die Eingabe dem
+  IServ-Wert, fällt die Korrektur weg. Ein leerer Preis heißt ebenfalls
   „wie in IServ“.
 
 Fächer und Jahrgänge, die IServ im selben Dialog führt, lassen sich hier nicht

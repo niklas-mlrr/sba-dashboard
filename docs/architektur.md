@@ -542,17 +542,18 @@ Jahrgängen (`data-wert`).
 **Korrekturen an der Buchreihe (2026-09-24).** Vor Einführung und Ausmusterung
 steht im Menü der Block „Buchreihe“ (ISBN, Titel, Verlag, Neupreis,
 Leihgebühr), nachgebaut nach dem IServ-Dialog „Buchreihe bearbeiten“.
-Gespeichert wird auf dem Blatt `Korrekturen` der Buchplanungs-Datei, **nicht**
-in IServ: ein Schreibzugriff dort wäre der erste des Dashboards und stünde
-gegen die Nur-GET-Regel der Ausleihe-API. Damit die Korrektur trotzdem überall
-gilt, gibt es genau **eine** Stelle, an der sie wirkt:
-`buecherlisten/core/daten.py::wende_korrekturen_an` bzw. `korrigiere_eintrag`
-legen sie auf die Rohdaten jeder Bücherliste, bevor irgendetwas sie auswertet.
-Die Seiten (`app/buecherlisten.py`), das PDF (`lade_buecherdaten`) und der
-Abgleich (`lade_schnappschuss`) sehen damit dieselben Werte. Schlüssel ist die
-ISBN in IServ; eine geänderte ISBN zieht Planung, Rücklage und Bemerkung um
-(`setze_buchreihe`), und weil der Abgleich schon korrigiert lädt, findet er sie
-unter der neuen ISBN wieder. Die Verlagsvorschläge im Feld „Verlag“ filtern auf
+Gespeichert wird in der Buchplanungs-Datei, **nicht** in IServ: ein
+Schreibzugriff dort wäre der erste des Dashboards und stünde gegen die
+Nur-GET-Regel der Ausleihe-API. Die ISBN ist der Schlüssel und im Menü nur zu
+lesen (grau, `readonly`). Deshalb braucht die Korrektur kein eigenes Blatt: sie
+steht auf `Buchreihen` in der Zeile des Buchs, die Zelle hell hinterlegt, der
+IServ-Wert als Kommentar. Der Kommentar ist die Markierung, an der der
+Abgleich eine Korrektur von einem veralteten IServ-Wert unterscheidet
+(`abgleich.py::_mit_korrekturen`). Auf Seiten und PDF wirkt sie an **einer**
+Stelle: `buecherlisten/core/daten.py::wende_korrekturen_an` bzw.
+`korrigiere_eintrag` legen sie auf die Rohdaten jeder Bücherliste, bevor
+irgendetwas sie auswertet - auch das Gruppieren nach Verlag. Die
+Verlagsvorschläge im Feld „Verlag“ filtern auf
 „beginnt mit“ und sind ein eigenes kleines Typeahead: `<datalist>` filtert in
 Chrome auf „enthält“ und lässt sich nicht wie IServ gestalten.
 

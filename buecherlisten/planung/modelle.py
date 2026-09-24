@@ -61,6 +61,13 @@ RUECKLAGE_STATUS: tuple[str, ...] = (
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
 
+# Die Felder einer Buchreihe, die sich im Planungsmenü korrigieren lassen -
+# Name hier -> Name in IServ (``series_data``). Die ISBN gehört nicht dazu:
+# sie ist der Schlüssel des Buchs und steht im Menü nur zum Lesen.
+ISERV_FELD: dict[str, str] = {
+    "titel": "title", "verlag": "publisher", "neupreis": "price", "leihgebuehr": "fee",
+}
+
 # Die Legende, die im Blatt "Info" steht: Status → was er bedeutet. Sie steht
 # in der Datei, weil die Datei ohne das Dashboard lesbar sein soll.
 LEGENDE: tuple[tuple[str, str], ...] = (
@@ -125,6 +132,17 @@ class Buch:
     # Paare, die nur im Vorjahr vorkamen. Kein Dateiinhalt: der Abgleich macht
     # daraus Planungszeilen mit "Ausmusterung nach" = Vorjahr.
     ausgemustert: tuple[tuple[str, int], ...] = ()
+    # Die im Planungsmenü korrigierten Felder, je Feld mit dem Wert, den IServ
+    # nennt: (("titel", "Deutschbuch 5"), ("neupreis", 22.5)). ``titel``,
+    # ``verlag``, ``neupreis`` und ``leihgebuehr`` oben tragen dann den
+    # korrigierten Wert. In der Datei steht der IServ-Wert als Kommentar an
+    # der Zelle - so erkennt der nächste Abgleich die Korrektur wieder.
+    iserv: tuple[tuple[str, object], ...] = ()
+
+    @property
+    def korrigiert(self) -> dict[str, object]:
+        """Korrigiertes Feld -> Wert in IServ."""
+        return dict(self.iserv)
 
     @property
     def faecher(self) -> tuple[str, ...]:
@@ -160,37 +178,6 @@ class Buchbemerkung:
     @property
     def leer(self) -> bool:
         return not self.bemerkung
-
-
-@dataclass(frozen=True)
-class Buchkorrektur:
-    """Was an den Angaben einer Buchreihe aus IServ korrigiert wird.
-
-    Schlüssel ist die ISBN **in IServ**, nicht die korrigierte: nur sie kommt
-    bei jedem Abgleich wieder, und an ihr wird die Korrektur beim nächsten
-    Abruf wiedergefunden. Jedes Feld ist ``None``, solange es so gilt, wie es
-    in IServ steht. In IServ selbst wird nichts geändert - das Dashboard
-    bleibt dort nur-lesend.
-
-    Ist ``isbn`` gesetzt, führt die Datei das Buch unter dieser ISBN: Planung,
-    Rücklage und Bemerkung hängen an ihr (:func:`~.abgleich.setze_buchreihe`).
-    """
-
-    isbn_iserv: str
-    isbn: str | None = None
-    titel: str | None = None
-    verlag: str | None = None
-    neupreis: float | None = None
-    leihgebuehr: float | None = None
-
-    @property
-    def leer(self) -> bool:
-        return all(wert is None for wert in (self.isbn, self.titel, self.verlag,
-                                             self.neupreis, self.leihgebuehr))
-
-    @property
-    def wirksame_isbn(self) -> str:
-        return self.isbn or self.isbn_iserv
 
 
 @dataclass(frozen=True)
@@ -254,7 +241,6 @@ class Buchplanung:
     bemerkungen: tuple[Buchbemerkung, ...] = ()
     planung: tuple[Planungszeile, ...] = ()
     ruecklagen: tuple[Ruecklage, ...] = ()
-    korrekturen: tuple[Buchkorrektur, ...] = ()
     warnungen: tuple[str, ...] = field(default_factory=tuple)
 
     # ── Nachschlagen ────────────────────────────────────────────────────────
@@ -262,28 +248,16 @@ class Buchplanung:
     def buch(self, isbn: str) -> Buch | None:
         return next((b for b in self.buecher if b.isbn == isbn), None)
 
-    def korrektur(self, isbn_iserv: str) -> Buchkorrektur | None:
-        return next((k for k in self.korrekturen if k.isbn_iserv == isbn_iserv), None)
-
-    def iserv_isbn(self, isbn: str) -> str:
-        """Die ISBN, unter der IServ das Buch führt, das die Datei unter ``isbn`` führt."""
-        return next((k.isbn_iserv for k in self.korrekturen if k.wirksame_isbn == isbn), isbn)
-
     def korrekturen_fuer_iserv(self) -> dict[str, dict[str, object]]:
-        """Die Korrekturen in den Feldnamen von IServ (``series_data``).
+        """Die korrigierten Felder je ISBN, in den Feldnamen von IServ (``series_data``).
 
         So nimmt sie ``buecherlisten.core.daten.wende_korrekturen_an`` entgegen:
         der Kern der Bücherlisten kennt diese Datei nicht und soll es auch nicht.
         """
-        heraus: dict[str, dict[str, object]] = {}
-        for k in self.korrekturen:
-            felder: dict[str, object] = {name: wert for name, wert in (
-                ("isbn", k.isbn), ("title", k.titel), ("publisher", k.verlag),
-                ("price", k.neupreis), ("fee", k.leihgebuehr),
-            ) if wert is not None}
-            if felder:
-                heraus[k.isbn_iserv] = felder
-        return heraus
+        return {
+            buch.isbn: {ISERV_FELD[feld]: getattr(buch, feld) for feld in buch.korrigiert}
+            for buch in self.buecher if buch.korrigiert
+        }
 
     def bemerkung(self, isbn: str) -> Buchbemerkung | None:
         return next((b for b in self.bemerkungen if b.isbn == isbn), None)

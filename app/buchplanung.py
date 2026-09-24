@@ -114,19 +114,8 @@ def gleiche_ab(
     Fassung, sondern das Nachziehen des Stands aus IServ. Das Schloss schützt
     trotzdem vor gleichzeitigem Schreiben.
     """
-    # Die Korrekturen der bisherigen Datei wirken schon beim Laden aus IServ:
-    # ohne sie käme ein Buch mit korrigierter ISBN unter der alten zurück, und
-    # alles daran Eingetragene fände seinen Schlüssel nicht mehr.
-    kennung = schuljahr or str(client.schoolyears.get_current()["id"])
     try:
-        bisherige = lies(einstellungen, kennung)
-    except MappeUnlesbar:
-        bisherige = None  # wird unten ohnehin von vorn geschrieben
-    try:
-        schnappschuss = lade_schnappschuss(
-            client, schuljahr=schuljahr, vorjahr=vorjahr,
-            korrekturen=bisherige.planung.korrekturen_fuer_iserv() if bisherige else None,
-        )
+        schnappschuss = lade_schnappschuss(client, schuljahr=schuljahr, vorjahr=vorjahr)
     except UnbekanntesSchuljahr as exc:
         raise UngueltigeAenderung(str(exc)) from exc
 
@@ -228,26 +217,19 @@ def schreibe_planung(
 def schreibe_buchplanung(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str,
     zeilen: Sequence[Jahrgangseingabe], ruecklage: Ruecklageneingabe | None = None,
-    buchreihe: Buchreiheneingabe | None = None, iserv: Buchreiheneingabe | None = None,
+    buchreihe: Buchreiheneingabe | None = None,
     mtime: float,
 ) -> Stand:
     """Alles, was das Planungsmenü eines Buchs einträgt - in **einem** Schreibvorgang.
 
     Das Menü kennt nur Speichern und Abbrechen; ein halb geschriebener Stand
     wäre genau das, was die Sperre und der ``mtime``-Vergleich sonst verhindern.
-
-    Die Buchreihe zuerst: ändert sich die ISBN, hängen Planung und Rücklage
-    danach an der neuen, und unter der wird der Rest eingetragen.
     """
     def aenderung(stand: Buchplanung) -> Buchplanung:
-        wirksam = isbn
         if buchreihe is not None:
-            isbn_iserv = stand.iserv_isbn(isbn)
-            stand = setze_buchreihe(stand, isbn=isbn, eingabe=buchreihe, iserv=iserv)
-            korrektur = stand.korrektur(isbn_iserv)
-            wirksam = korrektur.wirksame_isbn if korrektur else isbn_iserv
+            stand = setze_buchreihe(stand, isbn=isbn, eingabe=buchreihe)
         return setze_buchplanung(
-            stand, isbn=wirksam, fach=fach, zeilen=zeilen, ruecklage=ruecklage,
+            stand, isbn=isbn, fach=fach, zeilen=zeilen, ruecklage=ruecklage,
         )
 
     return _aendere(einstellungen, schuljahr, mtime, aenderung)

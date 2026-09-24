@@ -175,6 +175,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
             "titel": altes.titel, "verlag": altes.verlag, "isbn": altes.isbn,
             "isbn_anzeige": format_isbn(altes.isbn), "leihbar": altes.leihbar,
             "neupreis": altes.neupreis, "leihgebuehr": altes.leihgebuehr,
+            "iserv": altes.iserv,
             "jahrgaenge": [],
         })
         eintrag["jahrgaenge"].append(zeile.jahrgang)

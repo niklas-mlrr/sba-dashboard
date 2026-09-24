@@ -11,7 +11,7 @@
 //   2. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht),
 //      die Kürzel und Datum in alle Zeilen dieses Fachs schreibt.
 //   3. Das Planungsmenü: ein Klick auf eine Buchzeile öffnet den Dialog mit
-//      der Buchreihe (ISBN, Titel, Verlag, Preise - korrigiert wird nur in
+//      der Buchreihe (Titel, Verlag, Preise - korrigiert wird nur in
 //      der Datei, nicht in IServ), Einführung, Ausmusterung und Rücklage
 //      dieses Buchs in diesem Fach.
 //      Gespeichert wird alles auf einmal - ein Menü, ein Knopf, eine Anfrage
@@ -203,15 +203,14 @@
         anzahl: werte.anzahl === "" ? null : Number(werte.anzahl),
         bemerkung: werte.bemerkung || "",
       },
-      buchreihe: reihe ? reihe.eingabe : null,
-      iserv: reihe ? reihe.iserv : null,
+      buchreihe: reihe,
     }, () => "Die Planung wurde gespeichert.");
   }
 
-  // Der Block „Buchreihe“: die fünf Felder so, wie sie dastehen, und die
-  // Werte, die IServ dazu nennt (``data-iserv``). Ob sich etwas geändert hat
-  // und ob eine Korrektur wieder auf IServ zurückfällt, entscheidet der
-  // Server. Hier wird nur geprüft, was IServ im selben Dialog als Pflichtfeld
+  // Der Block „Buchreihe“: Titel, Verlag und Preise so, wie sie dastehen - die
+  // ISBN steht nur zum Lesen da und geht nicht mit. Ob etwas davon eine
+  // Korrektur ist, entscheidet der Server; er kennt die IServ-Werte aus der
+  // Datei. Hier wird nur geprüft, was IServ im selben Dialog als Pflichtfeld
   // führt. ``undefined`` heißt: nicht speichern, die Meldung steht schon da.
   function buchreihe() {
     const bereich = menue.querySelector("[data-buchreihe]");
@@ -228,26 +227,16 @@
       }
       werte[feld.dataset.buchreiheFeld] = feld.value.trim();
     }
-    for (const [name, text] of [["isbn", "die ISBN"], ["titel", "den Titel"],
-                                ["verlag", "den Verlag"]]) {
+    for (const [name, text] of [["titel", "den Titel"], ["verlag", "den Verlag"]]) {
       if (!werte[name]) {
         zeige("Bitte " + text + " eintragen.", "fehlerhaft");
         return undefined;
       }
     }
     const preis = (text) => (text === "" ? null : Number(text));
-    let iserv = null;
-    try {
-      iserv = bereich.dataset.iserv ? JSON.parse(bereich.dataset.iserv) : null;
-    } catch (fehler) {
-      iserv = null;
-    }
     return {
-      eingabe: {
-        isbn: werte.isbn, titel: werte.titel, verlag: werte.verlag,
-        neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
-      },
-      iserv: iserv,
+      titel: werte.titel, verlag: werte.verlag,
+      neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
     };
   }
 

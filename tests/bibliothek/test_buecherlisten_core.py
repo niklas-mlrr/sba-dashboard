@@ -167,11 +167,11 @@ def test_korrekturen_aendern_die_rohdaten_aus_iserv_nicht():
 
     detail = {"sections": [{"options": [{"items": [
         {"series": "111", "series_data": {"isbn": "111", "title": "Alt"}}]}]}]}
-    neu = wende_korrekturen_an(detail, {"111": {"isbn": "222", "title": "Neu"}})
+    neu = wende_korrekturen_an(detail, {"111": {"title": "Neu"}})
 
     (item,) = neu["sections"][0]["options"][0]["items"]
-    assert item["series"] == "222"
-    assert item["series_data"] == {"isbn": "222", "title": "Neu"}
+    assert item["series"] == "111"
+    assert item["series_data"] == {"isbn": "111", "title": "Neu"}
     assert detail["sections"][0]["options"][0]["items"][0]["series_data"]["title"] == "Alt"
 
 

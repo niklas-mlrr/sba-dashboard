@@ -683,6 +683,9 @@ td.frisch {
   box-shadow: inset 0 1px 1px rgb(0 0 0 / .075), 0 0 8px rgb(102 175 233 / .6);
 }
 .iserv-modal .form-control:disabled { background-color: #eee; cursor: not-allowed; }
+/* Wie Bootstrap: ein Feld nur zum Lesen ist grau hinterlegt, bleibt aber
+   markier- und kopierbar (die ISBN im Block "Buchreihe"). */
+.iserv-modal .form-control[readonly] { background-color: #eee; opacity: 1; }
 .iserv-modal .eingabezeile { display: flex; align-items: center; gap: 8px; }
 .iserv-modal .eingabezeile + .eingabezeile { margin-top: 5px; }
 .iserv-modal .eingabezeile .form-control { flex: 0 1 190px; min-width: 0; }

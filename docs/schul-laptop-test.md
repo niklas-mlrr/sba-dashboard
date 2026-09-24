@@ -263,7 +263,7 @@ nichts zu sichern.
 |---|---------|----------|
 | G5-1 | Angemeldet „Bücherlisten → Fach" öffnen | Hinweis „Für das Schuljahr … ist noch nichts gespeichert", Knopf „Aus IServ aktualisieren" |
 | G5-2 | „Aus IServ aktualisieren" | Dauer? Danach liegt die Datei im Ordner der Bestandsmappe |
-| G5-3 | Die Datei in Excel öffnen | Fünf Blätter („Buchreihen", „Fächer & Jahrgang", „Rücklage", „Korrekturen", „Info"); die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
+| G5-3 | Die Datei in Excel öffnen | Vier Blätter („Buchreihen", „Fächer & Jahrgang", „Rücklage", „Info"); die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
 | G5-4 | Blatt „Buchreihen" durchsehen | Jeder Titel genau einmal; enthält auch **leihbare** Bücher, die es nur im Vorjahr gab — das sind die ausgemusterten. Kaufbücher des Vorjahres fehlen |
 | G5-7 | Fach-Ansicht: Kürzel + Datum, „Liste bestätigen" | Status „bestätigt"; auf „Fächer & Jahrgang" tragen alle Zeilen dieses Fachs Kürzel und Datum |
 | G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „teilweise", darunter „Noch ohne Kürzel: …" |
@@ -271,9 +271,9 @@ nichts zu sichern.
 | G5-9b | „Planung…" bei einem **Kaufbuch** | Das Feld „Ausmusterung nach Schuljahr" ist gesperrt |
 | G5-10 | „Planung…": weiterer Jahrgang mit „Einführung" | Neue Zeile auf „Fächer & Jahrgang" mit diesem Fach, Status „geplant" |
 | G5-11 | Rücklage mit Anzahl und Bemerkung speichern | Steht im Blatt „Rücklage" beim richtigen Fach |
-| G5-11a | Menü eines Buchs: Block „Buchreihe" steht vor „Einführung und Ausmusterung", Titel und Neupreis ändern, speichern | Neuer Titel/Preis in Fach-, Verlags- und Jahrgangsansicht und im PDF; im Menü darunter „in IServ: …"; Zeile auf „Korrekturen". In IServ unverändert |
+| G5-11a | Menü eines Buchs: Block „Buchreihe" steht vor „Einführung und Ausmusterung", Titel und Neupreis ändern, speichern | Neuer Titel/Preis in Fach-, Verlags- und Jahrgangsansicht und im PDF; im Menü darunter „in IServ: …"; auf „Buchreihen" die Zelle hell mit Kommentar „in IServ: …"; nach „Aus IServ aktualisieren" bleibt die Korrektur. In IServ unverändert |
 | G5-11b | Im Feld „Verlag" einen Buchstaben tippen | Darunter alle Verlage, die damit anfangen; Klick oder ↑/↓ + Enter übernimmt; Esc schließt nur die Liste; ein neuer Verlag lässt sich frei eintippen |
-| G5-11c | ISBN auf eine andere gültige ändern, speichern, „Aus IServ aktualisieren" | Buch steht unter der neuen ISBN, Planung und Rücklage sind mitgezogen und bleiben nach dem Abgleich; ungültige ISBN → „Bitte eine gültige ISBN eingeben." |
+| G5-11c | Ins Feld „ISBN" klicken und tippen | Grau hinterlegt, nicht änderbar; markieren und kopieren geht |
 | G5-12 | Datei in Excel offen lassen und etwas eintragen | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |
 | G5-13 | Druckmenü der Fach-Übersicht: „nicht bestätigte" | Hakt genau die Fächer ohne Freigabe an und springt auf „Individuell"; die PDF-URL nennt sie |
 

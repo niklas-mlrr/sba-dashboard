@@ -190,12 +190,11 @@
   dahinter. Fächer und Jahrgänge, die IServ dort ebenfalls führt, fehlen:
   sie kommen aus den Bücherlisten, nicht aus der Buchreihe.
 
-  Gespeichert wird in der Buchplanungs-Datei, nicht in IServ (Blatt
-  "Korrekturen"). ``buch.iserv`` nennt die IServ-Werte der korrigierten Felder;
-  sie stehen klein darunter, und ``data-iserv`` schickt alle fünf beim
-  Speichern mit - nur so erkennt der Server, dass eine Korrektur wieder
-  zurückgenommen wurde. Bei einem Buch, das nur noch im Vorjahr stand, kennt
-  die Seite IServ nicht; dann fehlt beides.
+  Gespeichert wird in der Buchplanungs-Datei, nicht in IServ: auf "Buchreihen"
+  steht der korrigierte Wert, der aus IServ als Kommentar an der Zelle.
+  ``buch.iserv`` nennt die IServ-Werte der korrigierten Felder; sie stehen
+  klein darunter. Ob eine Eingabe eine Korrektur ist, entscheidet der Server
+  (``setze_buchreihe``) - er kennt die IServ-Werte aus der Datei.
 #}
 {% macro preisfeld(wert) -%}
 {%- if wert is not none %}{{ "%.2f"|format(wert) }}{% endif -%}
@@ -210,14 +209,15 @@
 
 {% macro buchreihe(buch) %}
 {% set iserv = dict(buch.iserv or ()) %}
-<div class="planung-block buchreihe-form" data-buchreihe
-  {% if buch.iserv_werte %}data-iserv='{{ buch.iserv_werte | tojson }}'{% endif %}>
+<div class="planung-block buchreihe-form" data-buchreihe>
   <h4>Buchreihe</h4>
   <div class="form-group">
     <label class="control-label">ISBN</label>
+    {# Nur zum Lesen (Entscheidung 2026-09-24): die ISBN ist der Schlüssel des
+       Buchs und wird im Menü nicht geändert. ``readonly`` statt ``disabled``,
+       damit sie sich markieren und kopieren lässt. Mitgeschickt wird sie nicht. #}
     <input class="form-control" data-buchreihe-feld="isbn" value="{{ buch.isbn_anzeige }}"
-      required aria-label="ISBN" autocomplete="off" spellcheck="false">
-    {{ in_iserv(iserv, "isbn") }}
+      readonly aria-readonly="true" aria-label="ISBN" autocomplete="off" spellcheck="false">
   </div>
   <div class="form-group">
     <label class="control-label">Titel</label>
