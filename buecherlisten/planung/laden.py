@@ -126,8 +126,10 @@ def lade_schnappschuss(
             # gibt es nichts zu planen.
             continue
         kombinationen = set(aktuelle_paare.get(isbn, ()))
+        ausgemustert: set[tuple[str, int]] = set()
         if leihbar:
-            kombinationen |= set(alte_paare.get(isbn, ()))
+            ausgemustert = set(alte_paare.get(isbn, ())) - kombinationen
+            kombinationen |= ausgemustert
         buecher.append(Buch(
             isbn=isbn,
             titel=str(quelle.get("title") or "?"),
@@ -137,6 +139,8 @@ def lade_schnappschuss(
             leihbar=leihbar,
             neupreis=_preis(quelle.get("price")),
             leihgebuehr=_preis(quelle.get("fee")),
+            ausgemustert=tuple(sorted(ausgemustert,
+                                      key=lambda paar: (paar[0].casefold(), paar[1]))),
         ))
 
     return Schnappschuss(

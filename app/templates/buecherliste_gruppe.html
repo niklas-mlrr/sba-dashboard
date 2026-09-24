@@ -139,7 +139,38 @@
   {{ buchtabelle(gruppe.buecher, true, ohne=ansicht,
                  fach=gruppe.name if ansicht == "fach" else none) }}
 {% endif %}
-{% if ansicht == "fach" and planung.mtime is not none %}{{ bp.planungsmenue() }}{% endif %}
+{% if ansicht == "fach" and planung.mtime is not none %}
+{% set ausgemustert = planung.ausmusterungen_je_fach.get(gruppe.name, []) %}
+<h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
+{% if ausgemustert %}
+<div class="tabellenrahmen">
+<table class="iserv-tabelle sortierbar" id="ausmusterungen">
+  <thead>
+    <tr>
+      <th data-sort="text">Titel</th>
+      <th data-sort="text">Jahrgang</th>
+      <th data-sort="text">Verlag</th>
+      <th data-sort="text">ISBN</th>
+      <th data-sort="text">Ausgemustert nach</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in ausgemustert %}
+    <tr>
+      <td>{{ e.titel }}</td>
+      <td>{{ e.jahrgang }}</td>
+      <td>{{ e.verlag }}</td>
+      <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
+      <td>{{ planung.vorjahr }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="hinweis">Keine Ausmusterungen zum Schuljahr {{ planung.schuljahr }}.</p>
+{% endif %}
+{{ bp.planungsmenue() }}{% endif %}
 {% if druckbar %}
 {% with druck_ansicht = ansicht, druck_gruppen = none,
         druck_gruppe = ("Jahrgang " ~ liste.jahrgang) if liste else gruppe.name %}

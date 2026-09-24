@@ -71,6 +71,12 @@ sie zurücklegen. Bei einem Kaufbuch fehlt der Block im Menü, und der Server
 weist eine Rücklage dazu mit einem Satz ab. Eine leere Eintragung bleibt
 erlaubt — sonst ließe sich ein Wunsch von vor dieser Regel nie wieder löschen.
 
+Jedes (Fach, Jahrgang)-Paar, in dem ein leihbares Buch im Vorjahr stand und
+heuer nicht mehr, bekommt beim Abgleich auf `Fächer & Jahrgang` die
+`Ausmusterung nach Schuljahr` = Kennung des Vorjahres. Ein von Hand
+eingetragener Wert bleibt. Die Fach-Seite listet diese Zeilen unter der
+Bücherliste in der Tabelle „Ausmusterungen zu diesem Schuljahr“.
+
 **Nicht** daran hängt die Ausmusterung. Bis 2026-09-20 nahm die Spalte
 `Ausmusterung nach Schuljahr` nur bei `leihbar = ja` einen Wert an; das
 verwechselte zwei Dinge. Ausgemustert wird eine **Bücherliste**, nicht ein

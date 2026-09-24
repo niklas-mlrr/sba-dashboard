@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
-from buecherlisten.core.daten import Ansicht, lade_buecherdaten, waehle_gruppen
+from buecherlisten.core.daten import Ansicht, format_isbn, lade_buecherdaten, waehle_gruppen
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from buecherlisten.planung import (
     FACH_BESTAETIGT,
@@ -91,7 +91,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
     leer: dict[str, Any] = {
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
-        "ruecklage_je_isbn": {},
+        "ruecklage_je_isbn": {}, "ausmusterungen_je_fach": {}, "vorjahr": "",
     }
     try:
         stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
@@ -133,6 +133,19 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
             "bemerkung": wunsch.bemerkung,
         }
 
+    # Was mit dem Vorjahr endete: in diesem Schuljahr nicht mehr auf der Liste.
+    ausmusterungen: dict[str, list[dict[str, Any]]] = {}
+    for zeile in planung.planung:
+        buch = planung.buch(zeile.isbn)
+        if buch is None or not planung.vorjahr or zeile.ausgemustert_nach != planung.vorjahr:
+            continue
+        ausmusterungen.setdefault(zeile.fach, []).append({
+            "titel": buch.titel, "verlag": buch.verlag, "isbn": buch.isbn,
+            "isbn_anzeige": format_isbn(buch.isbn), "jahrgang": zeile.jahrgang,
+        })
+    for eintraege in ausmusterungen.values():
+        eintraege.sort(key=lambda e: (e["titel"].casefold(), e["jahrgang"]))
+
     faecher: dict[str, dict[str, Any]] = {}
     for fach in planung.faecher:
         status, hinweis = fach_status(planung, fach)
@@ -149,6 +162,8 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "fach_je_name": faecher,
         "planung_je_isbn_und_fach": zeilen,
         "ruecklage_je_isbn": ruecklagen,
+        "ausmusterungen_je_fach": ausmusterungen,
+        "vorjahr": planung.vorjahr,
     }
 
 

@@ -684,3 +684,35 @@ def test_kaputte_datei_macht_die_buecherliste_nicht_unbrauchbar(
     assert antwort.status_code == 200
     assert "Deutschbuch 5" in antwort.text
     assert "nicht lesbar" in antwort.text
+
+
+def test_vorjahresbuch_steht_mit_dem_vorjahr_als_ausmusterung_in_der_datei(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """ALT stand nur 2025/2026 in Chemie/Jg. 9: der Abgleich trägt die Ausmusterung ein."""
+    buch = next(b for b in abgeglichen["planung"]["buecher"] if b["isbn"] == ALT)
+    zeile = next(z for z in buch["planung"] if z["jahrgang"] == 9)
+    assert zeile["ausgemustert_nach"] == "2025/2026"
+
+
+def test_fach_seite_listet_die_ausmusterungen_nur_im_eigenen_fach(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Terra stand 2025/2026 in Erdkunde und Politik, Jg. 5; heuer nur noch in Jg. 6."""
+    erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert "Ausmusterungen zu diesem Schuljahr" in erdkunde
+    assert "Terra 5/6" in erdkunde.split("Ausmusterungen zu diesem Schuljahr")[1]
+    latein = seiten.get("/buecherliste/fach/Latein").text
+    assert "Keine Ausmusterungen" in latein
+
+
+def test_handeingetragene_ausmusterung_bleibt_beim_naechsten_abgleich(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": ALT, "fach": "Chemie", "jahrgang": 9,
+        "ausgemustert_nach": "2024/2025", "mtime": abgeglichen["mtime"],
+    })
+    neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
+    buch = next(b for b in neu["planung"]["buecher"] if b["isbn"] == ALT)
+    assert next(z for z in buch["planung"] if z["jahrgang"] == 9)["ausgemustert_nach"] == "2024/2025"

@@ -122,6 +122,9 @@ class Buch:
     leihbar: bool = False
     neupreis: float | None = None
     leihgebuehr: float | None = None
+    # Paare, die nur im Vorjahr vorkamen. Kein Dateiinhalt: der Abgleich macht
+    # daraus Planungszeilen mit "Ausmusterung nach" = Vorjahr.
+    ausgemustert: tuple[tuple[str, int], ...] = ()
 
     @property
     def faecher(self) -> tuple[str, ...]:

@@ -91,6 +91,19 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         else:
             verloren("Die Planungszeile", zeile.isbn)
 
+    # Was im Vorjahr in einer Liste stand und heuer nicht mehr, ist nach dem
+    # Vorjahr ausgemustert. Ein von Hand eingetragener Wert bleibt.
+    for buch in schnappschuss.buecher:
+        for fach, jahrgang in buch.ausgemustert:
+            bisher = next((i for i, z in enumerate(planung)
+                           if (z.isbn, z.fach, z.jahrgang) == (buch.isbn, fach, jahrgang)), None)
+            if bisher is None:
+                planung.append(Planungszeile(isbn=buch.isbn, fach=fach, jahrgang=jahrgang,
+                                             ausgemustert_nach=schnappschuss.vorjahr))
+            elif not planung[bisher].ausgemustert_nach:
+                planung[bisher] = replace(planung[bisher],
+                                          ausgemustert_nach=schnappschuss.vorjahr)
+
     ruecklagen: list[Ruecklage] = []
     for wunsch in alt.ruecklagen:
         if wunsch.isbn in bekannt:
