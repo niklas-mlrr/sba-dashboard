@@ -173,7 +173,7 @@
 {% else %}
 <p class="hinweis">Keine Ausmusterungen zum Schuljahr {{ planung.schuljahr }}.</p>
 {% endif %}
-{{ bp.planungsmenue() }}{% endif %}
+{{ bp.planungsmenue(verlage) }}{% endif %}
 {% if druckbar %}
 {% with druck_ansicht = ansicht, druck_gruppen = none,
         druck_gruppe = ("Jahrgang " ~ liste.jahrgang) if liste else gruppe.name %}

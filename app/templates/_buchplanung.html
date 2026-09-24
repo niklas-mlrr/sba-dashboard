@@ -183,6 +183,74 @@
 </tr>
 {% endmacro %}
 
+{#
+  Der Block "Buchreihe" - ISBN, Titel, Verlag, Neupreis, Leihgebühr. Aufbau
+  nach dem IServ-Dialog "Buchreihe bearbeiten" (partials/stock/
+  modal_series_edit.html): Beschriftung über dem Feld, die Preise mit "€"
+  dahinter. Fächer und Jahrgänge, die IServ dort ebenfalls führt, fehlen:
+  sie kommen aus den Bücherlisten, nicht aus der Buchreihe.
+
+  Gespeichert wird in der Buchplanungs-Datei, nicht in IServ (Blatt
+  "Korrekturen"). ``buch.iserv`` nennt die IServ-Werte der korrigierten Felder;
+  sie stehen klein darunter, und ``data-iserv`` schickt alle fünf beim
+  Speichern mit - nur so erkennt der Server, dass eine Korrektur wieder
+  zurückgenommen wurde. Bei einem Buch, das nur noch im Vorjahr stand, kennt
+  die Seite IServ nicht; dann fehlt beides.
+#}
+{% macro preisfeld(wert) -%}
+{%- if wert is not none %}{{ "%.2f"|format(wert) }}{% endif -%}
+{%- endmacro %}
+
+{% macro in_iserv(iserv, feld, preis=false) -%}
+{%- if feld in iserv -%}
+{%- set wert = iserv[feld] -%}
+<span class="buchreihe-iserv">in IServ: {% if wert is none or wert == "" %}–{% elif preis %}{{ preisfeld(wert) | replace(".", ",") }}&nbsp;€{% else %}{{ wert }}{% endif %}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro buchreihe(buch) %}
+{% set iserv = dict(buch.iserv or ()) %}
+<div class="planung-block buchreihe-form" data-buchreihe
+  {% if buch.iserv_werte %}data-iserv='{{ buch.iserv_werte | tojson }}'{% endif %}>
+  <h4>Buchreihe</h4>
+  <div class="form-group">
+    <label class="control-label">ISBN</label>
+    <input class="form-control" data-buchreihe-feld="isbn" value="{{ buch.isbn_anzeige }}"
+      required aria-label="ISBN" autocomplete="off" spellcheck="false">
+    {{ in_iserv(iserv, "isbn") }}
+  </div>
+  <div class="form-group">
+    <label class="control-label">Titel</label>
+    <input class="form-control" data-buchreihe-feld="titel" value="{{ buch.titel }}"
+      required aria-label="Titel" autocomplete="off">
+    {{ in_iserv(iserv, "titel") }}
+  </div>
+  <div class="form-group">
+    <label class="control-label">Verlag</label>
+    <span class="typeahead"><input class="form-control" data-buchreihe-feld="verlag"
+      value="{{ buch.verlag }}" required aria-label="Verlag" autocomplete="off"
+      role="combobox" aria-autocomplete="list" aria-expanded="false"></span>
+    {{ in_iserv(iserv, "verlag") }}
+  </div>
+  <div class="form-group preiszeile">
+    <label class="control-label">Neupreis</label>
+    <div class="input-group"><input class="form-control text-right" type="number"
+      data-buchreihe-feld="neupreis" min="0" step="0.01" value="{{ preisfeld(buch.neupreis) }}"
+      aria-label="Neupreis"><div class="input-group-addon">€</div></div>
+  </div>
+  {{ in_iserv(iserv, "neupreis", preis=true) }}
+  <div class="form-group preiszeile">
+    <label class="control-label">Leihgebühr</label>
+    <div class="input-group"><input class="form-control text-right" type="number"
+      data-buchreihe-feld="leihgebuehr" min="0" step="0.01" value="{{ preisfeld(buch.leihgebuehr) }}"
+      aria-label="Leihgebühr"><div class="input-group-addon">€</div></div>
+  </div>
+  {{ in_iserv(iserv, "leihgebuehr", preis=true) }}
+  <p class="small help-block">Die Korrektur gilt im Dashboard - in den Bücherlisten, im
+    PDF und in der Planungsdatei. In IServ selbst ändert sich nichts.</p>
+</div>
+{% endmacro %}
+
 {% macro planungsvorlage(planung, buch, fach) %}
 {% set zeilen = planung.planung_je_isbn_und_fach.get(buch.isbn, {}).get(fach, []) %}
 {% set ruecklage = planung.ruecklage_je_isbn.get(buch.isbn, {}).get(fach) %}
@@ -191,6 +259,7 @@
     <h3 class="modal-title">{{ buch.titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
   </div>
   <div class="modal-body">
+    {{ buchreihe(buch) }}
     <div class="planung-block">
       <h4>Einführung und Ausmusterung</h4>
       {#
@@ -262,7 +331,13 @@
   leihbar ist, weiß erst das Skript beim Anfügen (es übernimmt es aus der
   Tabelle, in die es die Zeile hängt).
 #}
-{% macro planungsmenue() %}
+{#
+  Die Verlage, die das Feld "Verlag" beim Tippen vorschlägt: alle, die in
+  dieser oder der vorigen Bücherliste vorkommen, samt korrigierter. Einmal je
+  Seite, als JSON - das Skript filtert sie, der Server wählt sie aus.
+#}
+{% macro planungsmenue(verlage=()) %}
+<script type="application/json" id="planung-verlage">{{ verlage | list | tojson }}</script>
 <template id="planung-leerzeile">
   <tr data-planung-zeile>
     <td class="planung-spalte-jahrgang"><input type="number"

@@ -22,7 +22,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
+from math import isfinite
 from typing import Any, TypeVar
+
+import isbnlib
 
 from .laden import Schnappschuss
 from .modelle import (
@@ -31,6 +34,7 @@ from .modelle import (
     RUECKLAGE_STATUS,
     Buch,
     Buchbemerkung,
+    Buchkorrektur,
     Buchplanung,
     Planungszeile,
     Ruecklage,
@@ -111,6 +115,15 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         else:
             verloren("Der Rücklage-Wunsch", wunsch.isbn)
 
+    # Der Schnappschuss ist mit diesen Korrekturen geladen (``laden.py``); ein
+    # korrigiertes Buch steht darin also unter seiner wirksamen ISBN.
+    korrekturen: list[Buchkorrektur] = []
+    for korrektur in alt.korrekturen:
+        if korrektur.wirksame_isbn in bekannt:
+            korrekturen.append(korrektur)
+        else:
+            verloren("Die Korrektur", korrektur.isbn_iserv)
+
     neu = Buchplanung(
         schuljahr=schnappschuss.schuljahr,
         vorjahr=schnappschuss.vorjahr,
@@ -119,6 +132,7 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         bemerkungen=tuple(bemerkungen),
         planung=tuple(planung),
         ruecklagen=tuple(ruecklagen),
+        korrekturen=tuple(korrekturen),
         warnungen=tuple(warnungen),
     )
     return neu
@@ -315,6 +329,166 @@ def setze_buchplanung(
             bemerkung=ruecklage.bemerkung,
         )
     return neu
+
+
+@dataclass(frozen=True)
+class Buchreiheneingabe:
+    """Der Block „Buchreihe“ des Planungsmenüs - die Felder aus IServ.
+
+    Dieselbe Form trägt auch die Werte, die IServ selbst nennt (``iserv`` in
+    :func:`setze_buchreihe`): nur mit ihnen lässt sich erkennen, dass eine
+    Korrektur wieder auf den IServ-Stand zurückgesetzt wurde. Die Datei kennt
+    sie nicht - sie hält nur den korrigierten Stand fest.
+
+    Ein leerer Preis heißt: gilt wie in IServ.
+    """
+
+    isbn: str
+    titel: str
+    verlag: str
+    neupreis: float | None = None
+    leihgebuehr: float | None = None
+
+
+# Ein Preis, den es für ein Schulbuch geben kann. Geprüft wird wie beim
+# Jahrgang nur gegen Tippfehler.
+_PREIS_BIS = 10_000.0
+
+
+def normalisiere_isbn(roh: str) -> str:
+    """Eine eingegebene ISBN als ISBN-13 ohne Bindestriche - so wie IServ sie führt.
+
+    IServ prüft die ISBN im selben Dialog und schreibt sie als ISBN-13; eine
+    ISBN-10 wird deshalb umgerechnet. Wirft :class:`UngueltigeEingabe` mit dem
+    Satz, den IServ dazu zeigt.
+    """
+    kanonisch = isbnlib.canonical(roh or "")
+    if isbnlib.is_isbn10(kanonisch):
+        kanonisch = isbnlib.to_isbn13(kanonisch)
+    if not isbnlib.is_isbn13(kanonisch):
+        raise UngueltigeEingabe("Bitte eine gültige ISBN eingeben.")
+    return str(kanonisch)
+
+
+def _gleicher_preis(a: float | None, b: float | None) -> bool:
+    if a is None or b is None:
+        return a is b
+    return round(a, 2) == round(b, 2)
+
+
+def setze_buchreihe(
+    stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe,
+    iserv: Buchreiheneingabe | None = None,
+) -> Buchplanung:
+    """Korrigiert ISBN, Titel, Verlag und Preise eines Buchs - in der Datei, nicht in IServ.
+
+    ``isbn`` ist die ISBN, unter der die Datei das Buch **heute** führt. Die
+    Korrektur selbst hängt an der ISBN in IServ (:class:`Buchkorrektur`), denn
+    nur die kommt bei jedem Abgleich wieder.
+
+    Je Feld gilt: unverändert gegenüber dem heutigen Stand heißt, die
+    bisherige Korrektur (oder ihr Fehlen) bleibt. Geändert auf den Wert, den
+    IServ nennt (``iserv``), heißt: die Korrektur fällt weg. Sonst gilt der
+    neue Wert. Ein leerer Preis setzt auf IServ zurück.
+
+    Eine geänderte ISBN **zieht den Schlüssel um**: Bemerkung, Planungszeilen
+    und Rücklagen hängen danach an der neuen ISBN. Gehört die neue ISBN schon
+    einem anderen Buch der Datei, wird abgewiesen - zwei Bücher unter einer
+    ISBN wären danach nicht mehr auseinanderzuhalten.
+    """
+    buch = _geprueftes_buch(stand, isbn)
+    isbn_iserv = stand.iserv_isbn(isbn)
+    bisher = stand.korrektur(isbn_iserv) or Buchkorrektur(isbn_iserv=isbn_iserv)
+
+    titel, verlag = eingabe.titel.strip(), eingabe.verlag.strip()
+    if not titel:
+        raise UngueltigeEingabe("Bitte einen Titel eintragen.")
+    if not verlag:
+        raise UngueltigeEingabe("Bitte einen Verlag eintragen.")
+    for name, betrag in (("Neupreis", eingabe.neupreis), ("Leihgebühr", eingabe.leihgebuehr)):
+        if betrag is not None and not (isfinite(betrag) and 0 <= betrag <= _PREIS_BIS):
+            raise UngueltigeEingabe(
+                f"„{betrag}“ ist kein gültiger {name}. Erwartet wird ein Betrag "
+                f"zwischen 0 und {_PREIS_BIS:.0f} €."
+            )
+
+    # Eine unveränderte ISBN wird nicht geprüft, und die aus IServ auch nicht:
+    # auch eine, die IServ falsch führt, soll weder das Speichern der übrigen
+    # Felder verhindern noch den Weg zurück zu IServ.
+    eingegeben = isbnlib.canonical(eingabe.isbn or "")
+    if eingegeben == isbnlib.canonical(isbn):
+        neue_isbn = isbn
+    elif eingegeben == isbnlib.canonical(isbn_iserv):
+        neue_isbn = isbn_iserv
+    else:
+        neue_isbn = normalisiere_isbn(eingabe.isbn)
+    anderes = stand.buch(neue_isbn) if neue_isbn != isbn else None
+    if anderes is not None:
+        raise UngueltigeEingabe(
+            f"Unter der ISBN {neue_isbn} steht schon „{anderes.titel}“. "
+            "Jede ISBN darf nur zu einem Buch gehören."
+        )
+
+    def text(neu: str, heute: str, korrigiert: str | None, original: str | None) -> str | None:
+        if neu == heute:
+            return korrigiert
+        if original is not None and neu == original:
+            return None
+        return neu
+
+    def preis(neu: float | None, heute: float | None, korrigiert: float | None,
+              original: float | None) -> float | None:
+        if neu is None:
+            return None
+        if _gleicher_preis(neu, heute):
+            return korrigiert
+        if iserv is not None and _gleicher_preis(neu, original):
+            return None
+        return round(neu, 2)
+
+    korrektur = Buchkorrektur(
+        isbn_iserv=isbn_iserv,
+        isbn=None if neue_isbn == isbn_iserv else (
+            bisher.isbn if neue_isbn == isbn else neue_isbn),
+        titel=text(titel, buch.titel, bisher.titel, iserv.titel if iserv else None),
+        verlag=text(verlag, buch.verlag, bisher.verlag, iserv.verlag if iserv else None),
+        neupreis=preis(eingabe.neupreis, buch.neupreis, bisher.neupreis,
+                       iserv.neupreis if iserv else None),
+        leihgebuehr=preis(eingabe.leihgebuehr, buch.leihgebuehr, bisher.leihgebuehr,
+                          iserv.leihgebuehr if iserv else None),
+    )
+
+    # Der wirksame Stand des Buchs, bis der nächste Abgleich ihn aus IServ und
+    # den Korrekturen neu aufbaut. Ein zurückgesetzter Preis nimmt den Wert aus
+    # IServ an - soweit das Menü ihn kennt, sonst den bisherigen.
+    def wirksam(korrigiert: float | None, original: float | None,
+                heute: float | None, war_korrigiert: bool) -> float | None:
+        if korrigiert is not None:
+            return korrigiert
+        if iserv is not None:
+            return original
+        return None if war_korrigiert else heute
+
+    neues_buch = replace(
+        buch, isbn=neue_isbn, titel=titel, verlag=verlag,
+        neupreis=wirksam(korrektur.neupreis, iserv.neupreis if iserv else None,
+                         buch.neupreis, bisher.neupreis is not None),
+        leihgebuehr=wirksam(korrektur.leihgebuehr, iserv.leihgebuehr if iserv else None,
+                            buch.leihgebuehr, bisher.leihgebuehr is not None),
+    )
+
+    return _ersetzt(
+        stand,
+        buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
+        bemerkungen=tuple(replace(e, isbn=neue_isbn) if e.isbn == isbn else e
+                          for e in stand.bemerkungen),
+        planung=tuple(replace(z, isbn=neue_isbn) if z.isbn == isbn else z
+                      for z in stand.planung),
+        ruecklagen=tuple(replace(r, isbn=neue_isbn) if r.isbn == isbn else r
+                         for r in stand.ruecklagen),
+        korrekturen=_ersetze(stand.korrekturen, lambda k: k.isbn_iserv == isbn_iserv,
+                             None if korrektur.leer else korrektur),
+    )
 
 
 def bestaetige_fach(

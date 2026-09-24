@@ -18,6 +18,7 @@ Was diese Datei festhält, sind die Zusagen der Schreibkette: ohne gültige
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -731,3 +732,95 @@ def test_handeingetragene_ausmusterung_bleibt_beim_naechsten_abgleich(
     neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
     buch = next(b for b in neu["planung"]["buecher"] if b["isbn"] == ALT)
     assert next(z for z in buch["planung"] if z["jahrgang"] == 9)["ausgemustert_nach"] == "2024/2025"
+
+
+# ── Buchreihe: ISBN, Titel, Verlag, Preise im Menü korrigieren ───────────────
+
+NEU = "9783161484100"
+
+
+def _buchreihe(isbn: str, titel: str, verlag: str, neupreis: float | None = 22.5,
+               leihgebuehr: float | None = 5.0) -> dict:
+    return {"isbn": isbn, "titel": titel, "verlag": verlag,
+            "neupreis": neupreis, "leihgebuehr": leihgebuehr}
+
+
+def _korrigiere_deutsch(seiten: TestClient, mtime: float, **felder) -> dict:
+    eingabe = {**_buchreihe(DEUTSCH, "Deutschbuch 5", "Cornelsen"), **felder}
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5}],
+        "buchreihe": eingabe,
+        "iserv": _buchreihe(DEUTSCH, "Deutschbuch 5", "Cornelsen"),
+        "mtime": mtime,
+    })
+    assert antwort.status_code == 200, antwort.text
+    return antwort.json()
+
+
+def test_das_menue_zeigt_die_buchreihe_vor_der_planung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
+    # Erst die Buchreihe, dann Einführung/Ausmusterung, dann die Rücklage.
+    assert vorlage.index("data-buchreihe") < vorlage.index("Einführung und Ausmusterung") \
+        < vorlage.index("Rücklage für")
+    for feld in ("isbn", "titel", "verlag", "neupreis", "leihgebuehr"):
+        assert f'data-buchreihe-feld="{feld}"' in vorlage
+    assert 'value="978-3-06-000000-5"' in vorlage or f'value="{DEUTSCH}"' in vorlage
+    assert 'value="22.50"' in vorlage
+    # Die Verlage für die Vorschläge, einmal je Seite.
+    verlage = text.split('id="planung-verlage">')[1].split("</script>")[0]
+    assert json.loads(verlage) == ["Cornelsen", "Klett", "Langenscheidt", "Westermann"]
+
+
+def test_korrigierte_buchreihe_steht_in_allen_bucherlisten(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _korrigiere_deutsch(seiten, abgeglichen["mtime"],
+                                titel="Deutschbuch 5 NRW", verlag="Cornelsen Schulverlage",
+                                neupreis=24.0)
+    buch = next(b for b in stand["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert buch["titel"] == "Deutschbuch 5 NRW"
+    assert set(buch["korrigiert"]) == {"titel", "verlag", "neupreis"}
+
+    fach = seiten.get("/buecherliste/fach/Deutsch").text
+    assert "Deutschbuch 5 NRW" in fach
+    assert "24,00" in fach
+    # Das Menü nennt, was IServ sagt - und schickt es beim Speichern mit.
+    assert "in IServ: Deutschbuch 5" in fach
+    assert "data-iserv='" in fach
+
+    verlag = seiten.get("/buecherliste/verlag").text
+    assert "Cornelsen Schulverlage" in verlag
+    assert seiten.get("/buecherliste/verlag/Cornelsen Schulverlage").status_code == 200
+
+
+def test_neue_isbn_zieht_die_planung_mit_um_und_uebersteht_den_abgleich(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _korrigiere_deutsch(seiten, abgeglichen["mtime"], isbn="978-3-16-148410-0")
+    assert _zeilen(stand, NEU, "Deutsch")
+    assert not any(b["isbn"] == DEUTSCH for b in stand["planung"]["buecher"])
+
+    fach = seiten.get("/buecherliste/fach/Deutsch").text
+    assert f'data-isbn="{NEU}"' in fach
+    assert f'data-isbn="{DEUTSCH}"' not in fach
+
+    neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
+    buch = next(b for b in neu["planung"]["buecher"] if b["isbn"] == NEU)
+    assert buch["isbn_iserv"] == DEUTSCH
+    assert not neu["planung"]["warnungen"]
+
+
+def test_ungueltige_isbn_wird_mit_einem_satz_abgewiesen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "zeilen": [],
+        "buchreihe": _buchreihe("123", "Deutschbuch 5", "Cornelsen"),
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert antwort.json()["fehler"] == "Bitte eine gültige ISBN eingeben."

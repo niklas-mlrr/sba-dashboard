@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 
 from buecherlisten.planung import (
     Buchplanung,
+    Buchreiheneingabe,
     Jahrgangseingabe,
     Ruecklageneingabe,
     fach_bestaetigung,
@@ -32,6 +33,7 @@ from .. import buchplanung as domaene
 from ..modelle import (
     AbgleichAnfrage,
     BuchplanungsAnfrage,
+    BuchreiheEingabe,
     FachbestaetigungAnfrage,
     PlanungsAnfrage,
     RuecklageAnfrage,
@@ -52,8 +54,15 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
     buecher = []
     for buch in stand.buecher:
         bemerkung = stand.bemerkung(buch.isbn)
+        korrektur = stand.korrektur(stand.iserv_isbn(buch.isbn))
         buecher.append({
             "isbn": buch.isbn,
+            "isbn_iserv": stand.iserv_isbn(buch.isbn),
+            "korrigiert": [name for name, wert in (
+                ("isbn", korrektur.isbn), ("titel", korrektur.titel),
+                ("verlag", korrektur.verlag), ("neupreis", korrektur.neupreis),
+                ("leihgebuehr", korrektur.leihgebuehr),
+            ) if wert is not None] if korrektur else [],
             "titel": buch.titel,
             "verlag": buch.verlag,
             "faecher": list(buch.faecher),
@@ -191,9 +200,20 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
         ruecklage=None if anfrage.ruecklage is None else Ruecklageneingabe(
             anzahl=anfrage.ruecklage.anzahl, bemerkung=anfrage.ruecklage.bemerkung,
         ),
+        buchreihe=_buchreihe(anfrage.buchreihe),
+        iserv=_buchreihe(anfrage.iserv),
         mtime=anfrage.mtime,
     )
     return _antwort(stand)
+
+
+def _buchreihe(eingabe: BuchreiheEingabe | None) -> Buchreiheneingabe | None:
+    if eingabe is None:
+        return None
+    return Buchreiheneingabe(
+        isbn=eingabe.isbn, titel=eingabe.titel, verlag=eingabe.verlag,
+        neupreis=eingabe.neupreis, leihgebuehr=eingabe.leihgebuehr,
+    )
 
 
 @router.post("/api/buchplanung/planung")

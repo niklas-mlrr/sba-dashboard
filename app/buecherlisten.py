@@ -26,11 +26,14 @@ sollen den Stand in IServ zeigen, nicht den des letzten Abrufs.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Protocol
 
 import isbnlib
+
+from buecherlisten.core.daten import Korrekturen, korrigiere_eintrag
 
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
@@ -63,10 +66,25 @@ class Buch:
     leihgebuehr: float | None
     leihbar: bool
     jahrgaenge: tuple[int, ...]
+    # Ist an der Buchreihe etwas korrigiert (Buchplanung, Blatt "Korrekturen"),
+    # stehen oben die korrigierten Werte, hier die ISBN in IServ und die
+    # IServ-Werte der korrigierten Felder. Das Planungsmenü zeigt sie als
+    # „in IServ: …“ und schickt sie beim Speichern mit.
+    isbn_iserv: str = ""
+    iserv: tuple[tuple[str, Any], ...] = ()
 
     @property
     def isbn_anzeige(self) -> str:
         return isbnlib.mask(self.isbn) or self.isbn
+
+    @property
+    def iserv_werte(self) -> dict[str, Any]:
+        """Alle fünf Felder, wie IServ sie nennt - für das Planungsmenü."""
+        return {
+            "isbn": self.isbn_iserv or self.isbn, "titel": self.titel,
+            "verlag": self.verlag, "neupreis": self.neupreis,
+            "leihgebuehr": self.leihgebuehr, **dict(self.iserv),
+        }
 
     @property
     def fach_anzeige(self) -> str:
@@ -158,15 +176,24 @@ class Buecherlisten:
 
 # ── Laden ────────────────────────────────────────────────────────────────────
 
-def lade_buecherlisten(client: BuecherlistenClient, *, heute: date | None = None) -> Buecherlisten:
-    """Alle Listen des aktuellen Schuljahrs samt Büchern, sortiert nach Jahrgang."""
+def lade_buecherlisten(
+    client: BuecherlistenClient, *, heute: date | None = None,
+    korrekturen: Callable[[str], Korrekturen | None] | None = None,
+) -> Buecherlisten:
+    """Alle Listen des aktuellen Schuljahrs samt Büchern, sortiert nach Jahrgang.
+
+    ``korrekturen`` liefert zur Kennung des Schuljahrs die korrigierten
+    Angaben der Buchreihen (aus der Buchplanung). Eine Funktion statt der
+    Werte, weil erst hier feststeht, welches Schuljahr das laufende ist.
+    """
     heute = heute or date.today()
     schuljahr = client.schoolyears.get_current()
     schuljahr_id = schuljahr["id"]
+    korrigiert = korrekturen(str(schuljahr_id)) if korrekturen else None
     listen = []
     for kopf in client.schoolyears.get_booklists(schuljahr_id):
         detail = client.schoolyears.get_booklist(schuljahr_id, kopf["id"])
-        listen.append(_liste(kopf, detail, heute))
+        listen.append(_liste(kopf, detail, heute, korrigiert))
     listen.sort(key=lambda liste: (liste.jahrgang is None, liste.jahrgang or 0, liste.titel))
     return Buecherlisten(schuljahr=schuljahr.get("name") or schuljahr_id,
                          listen=tuple(listen), kennung=str(schuljahr_id))
@@ -181,7 +208,8 @@ def _datum(roh: Any) -> date | None:
         return None
 
 
-def _liste(kopf: dict, detail: dict, heute: date) -> Liste:
+def _liste(kopf: dict, detail: dict, heute: date,
+           korrekturen: Korrekturen | None = None) -> Liste:
     jahrgang = kopf.get("grade")
     beginn = _datum(kopf.get("e_begin") or kopf.get("enrollment_begin"))
     ende = _datum(kopf.get("e_end") or kopf.get("enrollment_end"))
@@ -192,7 +220,7 @@ def _liste(kopf: dict, detail: dict, heute: date) -> Liste:
     for abschnitt in sorted(detail.get("sections") or [], key=lambda s: s.get("position") or 0):
         optionen = []
         for option in abschnitt.get("options") or []:
-            buecher = [_buch(item, jahrgang) for item in option.get("items") or []]
+            buecher = [_buch(item, jahrgang, korrekturen) for item in option.get("items") or []]
             optionen.append(Option(
                 titel=option.get("title") or "",
                 buecher=tuple(b for b in buecher if b is not None),
@@ -218,12 +246,27 @@ def _liste(kopf: dict, detail: dict, heute: date) -> Liste:
     )
 
 
-def _buch(item: dict, jahrgang: int | None) -> Buch | None:
-    daten = item.get("series_data") or {}
-    isbn = daten.get("isbn") or item.get("series")
+# Feldname in IServ -> Feldname hier.
+_FELDER = {"isbn": "isbn", "title": "titel", "publisher": "verlag",
+           "price": "neupreis", "fee": "leihgebuehr"}
+
+
+def _buch(item: dict, jahrgang: int | None, korrekturen: Korrekturen | None = None) -> Buch | None:
+    original = item.get("series_data") or {}
+    isbn_iserv = str(original.get("isbn") or item.get("series") or "")
+    korrigiert = korrigiere_eintrag(item, korrekturen)
+    daten = korrigiert.get("series_data") or {}
+    isbn = daten.get("isbn") or korrigiert.get("series")
     if not isbn:
         return None
+    felder = (korrekturen or {}).get(isbn_iserv) or {}
+    iserv = tuple(
+        (_FELDER[name], isbn_iserv if name == "isbn" else original.get(name))
+        for name in felder if name in _FELDER
+    )
     return Buch(
+        isbn_iserv=isbn_iserv,
+        iserv=iserv,
         isbn=isbn,
         titel=daten.get("title") or "?",
         faecher=tuple(daten.get("subjectsFlat") or ()),
@@ -267,6 +310,8 @@ def _gruppiere(buecher: list[Buch], schluessel: Any) -> tuple[Gruppe, ...]:
                 # Leihbar, sobald es in irgendeiner Liste leihbar ist.
                 leihbar=vorhanden.leihbar or buch.leihbar,
                 jahrgaenge=tuple(sorted(set(vorhanden.jahrgaenge) | set(buch.jahrgaenge))),
+                isbn_iserv=vorhanden.isbn_iserv,
+                iserv=vorhanden.iserv,
             )
     return tuple(
         Gruppe(

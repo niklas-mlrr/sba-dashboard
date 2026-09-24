@@ -11,7 +11,9 @@
 //   2. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht),
 //      die Kürzel und Datum in alle Zeilen dieses Fachs schreibt.
 //   3. Das Planungsmenü: ein Klick auf eine Buchzeile öffnet den Dialog mit
-//      Einführung, Ausmusterung und Rücklage dieses Buchs in diesem Fach.
+//      der Buchreihe (ISBN, Titel, Verlag, Preise - korrigiert wird nur in
+//      der Datei, nicht in IServ), Einführung, Ausmusterung und Rücklage
+//      dieses Buchs in diesem Fach.
 //      Gespeichert wird alles auf einmal - ein Menü, ein Knopf, eine Anfrage
 //      (POST /api/buchplanung/buch). Abbrechen verwirft.
 //
@@ -191,6 +193,8 @@
     const anzahlfeld = menue.querySelector(".planung-ruecklage");
     const block = anzahlfeld ? anzahlfeld.closest(".planung-block") : null;
     const werte = block ? felder(block) : {};
+    const reihe = buchreihe();
+    if (reihe === undefined) return;
     sende("/api/buchplanung/buch", {
       isbn: menue.dataset.isbn,
       fach: menue.dataset.fach,
@@ -199,8 +203,159 @@
         anzahl: werte.anzahl === "" ? null : Number(werte.anzahl),
         bemerkung: werte.bemerkung || "",
       },
+      buchreihe: reihe ? reihe.eingabe : null,
+      iserv: reihe ? reihe.iserv : null,
     }, () => "Die Planung wurde gespeichert.");
   }
+
+  // Der Block „Buchreihe“: die fünf Felder so, wie sie dastehen, und die
+  // Werte, die IServ dazu nennt (``data-iserv``). Ob sich etwas geändert hat
+  // und ob eine Korrektur wieder auf IServ zurückfällt, entscheidet der
+  // Server. Hier wird nur geprüft, was IServ im selben Dialog als Pflichtfeld
+  // führt. ``undefined`` heißt: nicht speichern, die Meldung steht schon da.
+  function buchreihe() {
+    const bereich = menue.querySelector("[data-buchreihe]");
+    if (!bereich) return null;
+    const werte = {};
+    for (const feld of bereich.querySelectorAll("[data-buchreihe-feld]")) {
+      // Ein Zahlenfeld mit unlesbarer Eingabe meldet sich als leer - und leer
+      // hieße beim Preis "wie in IServ". Das darf nicht still passieren.
+      if (feld.validity && feld.validity.badInput) {
+        zeige("Bitte einen gültigen Betrag eintragen (" +
+              feld.getAttribute("aria-label") + ").", "fehlerhaft");
+        feld.focus();
+        return undefined;
+      }
+      werte[feld.dataset.buchreiheFeld] = feld.value.trim();
+    }
+    for (const [name, text] of [["isbn", "die ISBN"], ["titel", "den Titel"],
+                                ["verlag", "den Verlag"]]) {
+      if (!werte[name]) {
+        zeige("Bitte " + text + " eintragen.", "fehlerhaft");
+        return undefined;
+      }
+    }
+    const preis = (text) => (text === "" ? null : Number(text));
+    let iserv = null;
+    try {
+      iserv = bereich.dataset.iserv ? JSON.parse(bereich.dataset.iserv) : null;
+    } catch (fehler) {
+      iserv = null;
+    }
+    return {
+      eingabe: {
+        isbn: werte.isbn, titel: werte.titel, verlag: werte.verlag,
+        neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
+      },
+      iserv: iserv,
+    };
+  }
+
+  // ── Der Verlag: Vorschläge beim Tippen ────────────────────────────────────
+  //
+  // Wie das Typeahead in IServ: ab dem ersten Buchstaben stehen unter dem Feld
+  // alle bekannten Verlage, die mit der Eingabe **anfangen**. Ein Klick (oder
+  // ↑/↓ und Enter) übernimmt einen; ein Verlag, den es noch nicht gibt, wird
+  // einfach eingetippt. Kein <datalist>: Chrome sucht dort nach "enthält"
+  // statt "beginnt mit", und die Liste lässt sich nicht wie IServ gestalten.
+  const verlage = (() => {
+    const quelle = document.getElementById("planung-verlage");
+    try {
+      return quelle ? JSON.parse(quelle.textContent) : [];
+    } catch (fehler) {
+      return [];
+    }
+  })();
+
+  function istVerlagsfeld(ziel) {
+    return ziel instanceof HTMLInputElement && ziel.dataset.buchreiheFeld === "verlag";
+  }
+
+  function vorschlagsliste(feld) {
+    return feld.parentElement.querySelector(".tt-menu");
+  }
+
+  function schliesseVorschlaege(feld) {
+    const liste = vorschlagsliste(feld);
+    if (liste) liste.remove();
+    feld.setAttribute("aria-expanded", "false");
+  }
+
+  function zeigeVorschlaege(feld) {
+    const eingabe = feld.value.trim().toLocaleLowerCase("de");
+    const treffer = eingabe
+      ? verlage.filter((name) => name.toLocaleLowerCase("de").startsWith(eingabe))
+      : [];
+    schliesseVorschlaege(feld);
+    if (!treffer.length) return;
+    const liste = document.createElement("div");
+    liste.className = "tt-menu";
+    liste.setAttribute("role", "listbox");
+    for (const name of treffer) {
+      const eintrag = document.createElement("div");
+      eintrag.className = "tt-suggestion";
+      eintrag.setAttribute("role", "option");
+      eintrag.dataset.wert = name;
+      // Der getippte Anfang fett, wie in IServ.
+      const anfang = document.createElement("strong");
+      anfang.textContent = name.slice(0, eingabe.length);
+      eintrag.append(anfang, name.slice(eingabe.length));
+      liste.appendChild(eintrag);
+    }
+    feld.parentElement.appendChild(liste);
+    feld.setAttribute("aria-expanded", "true");
+  }
+
+  function uebernimm(feld, eintrag) {
+    feld.value = eintrag.dataset.wert;
+    schliesseVorschlaege(feld);
+    feld.focus();
+  }
+
+  document.addEventListener("input", (ereignis) => {
+    if (istVerlagsfeld(ereignis.target)) zeigeVorschlaege(ereignis.target);
+  });
+
+  // mousedown statt click: sonst verliert das Feld zuerst den Fokus, die
+  // Liste schließt sich (focusout unten), und der Klick ginge ins Leere.
+  document.addEventListener("mousedown", (ereignis) => {
+    const eintrag = ereignis.target.closest && ereignis.target.closest(".tt-suggestion");
+    if (!eintrag) return;
+    ereignis.preventDefault();
+    const feld = eintrag.closest(".typeahead").querySelector("[data-buchreihe-feld]");
+    uebernimm(feld, eintrag);
+  });
+
+  document.addEventListener("focusout", (ereignis) => {
+    if (istVerlagsfeld(ereignis.target)) schliesseVorschlaege(ereignis.target);
+  });
+
+  document.addEventListener("keydown", (ereignis) => {
+    const feld = ereignis.target;
+    if (!istVerlagsfeld(feld)) return;
+    const liste = vorschlagsliste(feld);
+    if (!liste) {
+      if (ereignis.key === "ArrowDown") zeigeVorschlaege(feld);
+      return;
+    }
+    const eintraege = [...liste.querySelectorAll(".tt-suggestion")];
+    const jetzt = eintraege.findIndex((e) => e.classList.contains("tt-cursor"));
+    if (ereignis.key === "ArrowDown" || ereignis.key === "ArrowUp") {
+      ereignis.preventDefault();
+      const schritt = ereignis.key === "ArrowDown" ? 1 : -1;
+      const naechster = (jetzt + schritt + eintraege.length) % eintraege.length;
+      eintraege.forEach((e, i) => e.classList.toggle("tt-cursor", i === naechster));
+      eintraege[naechster].scrollIntoView({ block: "nearest" });
+    } else if (ereignis.key === "Enter" && jetzt >= 0) {
+      ereignis.preventDefault();
+      uebernimm(feld, eintraege[jetzt]);
+    } else if (ereignis.key === "Escape") {
+      // Nur die Liste schließen, nicht das ganze Menü.
+      ereignis.preventDefault();
+      ereignis.stopPropagation();
+      schliesseVorschlaege(feld);
+    }
+  });
 
   // ── Die Knöpfe ────────────────────────────────────────────────────────────
 

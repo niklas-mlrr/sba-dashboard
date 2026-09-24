@@ -811,6 +811,81 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 }
 .planung-block h4 { margin: 0 0 .5rem; font-size: .95rem; }
 
+/* Der Block "Buchreihe": nachgebaut nach dem IServ-Dialog "Buchreihe
+   bearbeiten" (partials/stock/modal_series_edit.html). Dort steht die
+   Beschriftung über dem Feld - anders als im Druckmenü, dessen `.form-group`
+   Beschriftung und Feld nebeneinanderstellt. Nur Neupreis und Leihgebühr
+   stehen wie in IServ in einer Zeile: Beschriftung links (8/12), rechts das
+   Feld mit "€" dahinter (4/12). */
+.iserv-modal .buchreihe-form .form-group { display: block; position: relative; }
+.iserv-modal .buchreihe-form .control-label {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 5px;
+  padding-top: 0;
+  text-align: left;
+}
+.iserv-modal .buchreihe-form .form-control { display: block; width: 100%; }
+.iserv-modal .buchreihe-form .preiszeile { display: flex; align-items: center; }
+.iserv-modal .buchreihe-form .preiszeile .control-label { flex: 0 0 66.66666667%; margin: 0; }
+.iserv-modal .buchreihe-form .preiszeile .input-group { flex: 0 0 33.33333333%; }
+.iserv-modal .input-group { display: flex; }
+.iserv-modal .input-group .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.iserv-modal .input-group-addon {
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  color: #555;
+  background-color: #eee;
+  border: 1px solid #ccc;
+  border-left: 0;
+  border-radius: 0 4px 4px 0;
+}
+.iserv-modal .text-right { text-align: right; }
+/* Was IServ zu einem korrigierten Feld sagt - klein und grau darunter. */
+.iserv-modal .buchreihe-iserv { display: block; margin-top: 3px; color: #737373; font-size: 85%; }
+.iserv-modal .preiszeile + .buchreihe-iserv { margin-top: -10px; margin-bottom: 15px; text-align: right; }
+
+/* Der Verlag schlägt beim Tippen die Verlage vor, die mit der Eingabe
+   anfangen - die Liste sieht aus wie das twitter-typeahead in IServ
+   (.tt-menu / .tt-suggestion). */
+.iserv-modal .typeahead { position: relative; display: block; }
+.iserv-modal .tt-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 2px 0 0;
+  padding: 5px 0;
+  font-size: 14px;
+  text-align: left;
+  background-color: #fff;
+  border: 1px solid rgb(0 0 0 / .15);
+  border-radius: 4px;
+  box-shadow: 0 6px 12px rgb(0 0 0 / .175);
+}
+.iserv-modal .tt-suggestion {
+  display: block;
+  padding: 3px 20px;
+  line-height: 1.42857143;
+  color: #333;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.iserv-modal .tt-suggestion:hover,
+.iserv-modal .tt-suggestion.tt-cursor { color: #fff; background-color: #337ab7; }
+.iserv-modal .tt-suggestion strong { font-weight: 700; }
+
 /* Der Rahmen hält die Tabelle im Dialog: passt sie nicht, rollt sie waagerecht,
    statt über den Rand hinauszustehen. */
 .planung-tabellenrahmen { max-width: 100%; overflow-x: auto; }

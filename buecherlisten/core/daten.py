@@ -7,9 +7,10 @@ beim Import.
 """
 from __future__ import annotations
 
+import copy
 import re
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -77,12 +78,57 @@ OHNE_VERLAG = "(ohne Verlag)"
 Jahrgangslisten = list[tuple[int, int, dict]]
 
 
-def hole_jahrgangslisten(client: SchuljahreClient, schoolyear_id: str) -> Jahrgangslisten:
+# Korrekturen an Buchreihen: IServ-ISBN -> {IServ-Feldname: Wert}. Die Felder
+# heißen wie in ``series_data`` (``isbn``, ``title``, ``publisher``, ``price``,
+# ``fee``), damit dieses Modul nichts von der Buchplanung wissen muss, die sie
+# festhält (``buecherlisten/planung/``).
+Korrekturen = Mapping[str, Mapping[str, Any]]
+
+
+def wende_korrekturen_an(detail: dict, korrekturen: Korrekturen | None) -> dict:
+    """Ein Bücherlisten-Detail aus IServ, mit den korrigierten Angaben der Buchreihen.
+
+    Die **eine** Stelle, an der Korrekturen wirken: alles, was danach aus den
+    Listen gelesen wird - Seiten, PDF, Abgleich -, sieht nur noch die
+    korrigierten Werte, auch beim Gruppieren nach Verlag oder ISBN. Das
+    Original bleibt unverändert; zurück kommt eine Kopie, sobald es etwas zu
+    ändern gibt.
+    """
+    if not korrekturen:
+        return detail
+    kopie = copy.deepcopy(detail)
+    for section in kopie.get("sections") or []:
+        for option in section.get("options") or []:
+            option["items"] = [korrigiere_eintrag(item, korrekturen)
+                               for item in option.get("items") or []]
+    return kopie
+
+
+def korrigiere_eintrag(item: dict, korrekturen: Korrekturen | None) -> dict:
+    """Ein Eintrag einer Bücherliste mit den korrigierten Angaben seiner Buchreihe.
+
+    Ohne Korrektur kommt derselbe Eintrag zurück, sonst eine Kopie.
+    """
+    sd = item.get("series_data") or {}
+    isbn = sd.get("isbn") or item.get("series")
+    felder = korrekturen.get(isbn) if korrekturen and isbn else None
+    if not felder:
+        return item
+    neu = {**item, "series_data": {**sd, **felder}}
+    if "isbn" in felder:
+        neu["series"] = felder["isbn"]
+    return neu
+
+
+def hole_jahrgangslisten(
+    client: SchuljahreClient, schoolyear_id: str, korrekturen: Korrekturen | None = None,
+) -> Jahrgangslisten:
     """Alle Jahrgangs-Bücherlisten eines Schuljahrs, einmal geladen für alle Ansichten."""
     booklists = client.schoolyears.get_booklists(schoolyear_id)
     by_grade = {bl["grade"]: bl for bl in booklists if bl.get("grade") is not None}
     return [
-        (grade, by_grade[grade]["id"], client.schoolyears.get_booklist(schoolyear_id, by_grade[grade]["id"]))
+        (grade, by_grade[grade]["id"], wende_korrekturen_an(
+            client.schoolyears.get_booklist(schoolyear_id, by_grade[grade]["id"]), korrekturen))
         for grade in sorted(by_grade)
     ]
 
@@ -315,15 +361,24 @@ def hole_schulanschrift(client: BuecherlistenClient) -> tuple[str | None, str | 
     return name, ort
 
 
-def lade_buecherdaten(client: BuecherlistenClient, schuljahr: str | None = None) -> Buecherdaten:
-    """Lädt ein Schuljahr (Default: das laufende). ``NotFoundError`` fliegt durch."""
+def lade_buecherdaten(
+    client: BuecherlistenClient, schuljahr: str | None = None,
+    korrekturen: Callable[[str], Korrekturen | None] | None = None,
+) -> Buecherdaten:
+    """Lädt ein Schuljahr (Default: das laufende). ``NotFoundError`` fliegt durch.
+
+    ``korrekturen`` liefert zur Kennung des Schuljahrs die in der Buchplanung
+    korrigierten Angaben der Buchreihen (:func:`wende_korrekturen_an`) - eine
+    Funktion, weil ohne ``schuljahr`` erst hier feststeht, welches gilt.
+    """
     if schuljahr:
         name = client.schoolyears.get_by_id(schuljahr)["name"]
         schuljahr_id = schuljahr
     else:
         aktuell = client.schoolyears.get_current()
         schuljahr_id, name = aktuell["id"], aktuell.get("name") or aktuell["id"]
-    listen = hole_jahrgangslisten(client, schuljahr_id)
+    listen = hole_jahrgangslisten(
+        client, schuljahr_id, korrekturen(str(schuljahr_id)) if korrekturen else None)
     schule_name, schule_ort = hole_schulanschrift(client)
     return Buecherdaten(
         schuljahr_id=schuljahr_id,

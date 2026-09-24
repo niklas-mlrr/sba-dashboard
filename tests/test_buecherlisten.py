@@ -395,7 +395,7 @@ class _Erzeuger:
     def __init__(self) -> None:
         self.aufrufe: list[dict] = []
 
-    def lade(self, client):
+    def lade(self, client, korrekturen=None):
         from buecherlisten.core.daten import Buecherdaten
         leer = {"leih": [], "kauf": []}
         return Buecherdaten(

@@ -13,10 +13,17 @@ from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
-from buecherlisten.core.daten import Ansicht, format_isbn, lade_buecherdaten, waehle_gruppen
+from buecherlisten.core.daten import (
+    Ansicht,
+    Korrekturen,
+    format_isbn,
+    lade_buecherdaten,
+    waehle_gruppen,
+)
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from buecherlisten.planung import (
     FACH_BESTAETIGT,
+    OHNE_VERLAG,
     fach_bestaetigung,
     fach_status,
     planungs_status,
@@ -55,6 +62,22 @@ def _hinweis(request: Request, titel: str, meldung: str, status: int) -> Respons
                   {"titel": titel, "meldung": meldung, "ueberschrift": "Bücherliste"}, status)
 
 
+def _korrekturen(request: Request) -> Callable[[str], Korrekturen | None]:
+    """Die korrigierten Angaben der Buchreihen, je Schuljahr aus der Buchplanung.
+
+    Sie wirken auf jeder Bücherlisten-Seite und in jedem PDF. Fehlt die Datei
+    oder ist sie unlesbar, gilt IServ unverändert - eine kaputte Datei darf
+    die Bücherliste nicht abwürgen (wie in :func:`_planungskontext`).
+    """
+    def laden(schuljahr: str) -> Korrekturen | None:
+        try:
+            stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
+        except Exception:  # noqa: BLE001
+            return None
+        return stand.planung.korrekturen_fuer_iserv() if stand else None
+    return laden
+
+
 def _laden(request: Request) -> Buecherlisten | Response:
     try:
         client = request.app.state.anmeldung.client()
@@ -65,7 +88,7 @@ def _laden(request: Request) -> Buecherlisten | Response:
             "danach diese Seite neu laden.", 401,
         )
     try:
-        return lade_buecherlisten(client)
+        return lade_buecherlisten(client, korrekturen=_korrekturen(request))
     except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
         return _hinweis(
             request, "IServ nicht erreichbar",
@@ -92,6 +115,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {}, "ausmusterungen_je_fach": {}, "vorjahr": "",
+        "verlage": [],
     }
     try:
         stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
@@ -150,6 +174,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         eintrag = je_buch.setdefault(altes.isbn, {
             "titel": altes.titel, "verlag": altes.verlag, "isbn": altes.isbn,
             "isbn_anzeige": format_isbn(altes.isbn), "leihbar": altes.leihbar,
+            "neupreis": altes.neupreis, "leihgebuehr": altes.leihgebuehr,
             "jahrgaenge": [],
         })
         eintrag["jahrgaenge"].append(zeile.jahrgang)
@@ -179,6 +204,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "ruecklage_je_isbn": ruecklagen,
         "ausmusterungen_je_fach": ausgemustert,
         "vorjahr": planung.vorjahr,
+        "verlage": [v for v in planung.verlage if v != OHNE_VERLAG],
     }
 
 
@@ -251,7 +277,8 @@ async def _pdf(request: Request, ansicht: Ansicht,
         return _hinweis(request, "Nicht angemeldet",
                         f"{exc} Danach diese Seite neu laden.", 401)
     try:
-        daten = await run_in_threadpool(lade_buecherdaten, client)
+        daten = await run_in_threadpool(
+            lambda: lade_buecherdaten(client, korrekturen=_korrekturen(request)))
     except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
         return _hinweis(request, "IServ nicht erreichbar",
                         f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502)
@@ -350,10 +377,18 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     if isinstance(daten, Response):
         return daten
     ansicht_name, gruppierung = _ANSICHTEN[ansicht]
+    planung = _planungskontext(request, daten.kennung)
     werte: dict[str, Any] = {
-        "planung": _planungskontext(request, daten.kennung),
+        "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
+        # Die Vorschläge für das Feld "Verlag" im Planungsmenü: die der
+        # heutigen Listen und die der Datei (dort stehen auch die des Vorjahrs).
+        "verlage": sorted(
+            {g.name for g in gruppen_nach_verlag(daten) if g.name != OHNE_VERLAG}
+            | set(planung["verlage"]),
+            key=str.casefold,
+        ) if ansicht == "fach" else [],
     }
     if gruppierung is None:
         liste = daten.liste_fuer_jahrgang(int(name)) if name.isdigit() else None

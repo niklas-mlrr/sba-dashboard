@@ -2,7 +2,7 @@
 
 Die Datei ist der **Rückfall**: fällt das Dashboard aus - etwa nach einem
 IServ-Update -, liegt der Stand weiter auf dem Gruppenlaufwerk und ist ohne
-dieses Programm lesbar. Sie hat vier Blätter, und jedes trägt genau einen
+dieses Programm lesbar. Sie hat fünf Blätter, und jedes trägt genau einen
 Schlüssel:
 
 ======================  ==========================  =========================
@@ -13,8 +13,13 @@ Blatt                   Schlüssel                   eintragbar
                                                     Kürzel, Datum, Bemerkung
 ``Rücklage``            (ISBN, Fach)                Anzahl, Kürzel, Datum,
                                                     Status, Bemerkung
+``Korrekturen``         ISBN in IServ               ISBN, Titel, Verlag,
+                                                    Neupreis, Leihpreis
 ``Info``                -                           nichts
 ======================  ==========================  =========================
+
+``Korrekturen`` kam am 2026-09-24 dazu; eine ältere Datei ohne das Blatt bleibt
+lesbar und bekommt es beim nächsten Schreiben.
 
 Bis 2026-09-20 standen die Bücher dreimal in der Mappe, einmal je Achse
 (Verlag, Fach, Jahrgang), dazu ein eigenes Blatt für die Fachbestätigung. Die
@@ -58,6 +63,7 @@ from .modelle import (
     OHNE_VERLAG,
     Buch,
     Buchbemerkung,
+    Buchkorrektur,
     Buchplanung,
     Planungszeile,
     Ruecklage,
@@ -66,11 +72,18 @@ from .modelle import (
 BLATT_BUECHER = "Buchreihen"
 BLATT_FACH_JAHRGANG = "Fächer & Jahrgang"
 BLATT_RUECKLAGE = "Rücklage"
+BLATT_KORREKTUREN = "Korrekturen"
 BLATT_INFO = "Info"
 
 BLAETTER: tuple[str, ...] = (
-    BLATT_BUECHER, BLATT_FACH_JAHRGANG, BLATT_RUECKLAGE, BLATT_INFO,
+    BLATT_BUECHER, BLATT_FACH_JAHRGANG, BLATT_RUECKLAGE, BLATT_KORREKTUREN, BLATT_INFO,
 )
+
+# Blätter, die eine ältere Datei noch nicht hat. Beim Lesen fehlt dann nur,
+# was darauf stünde; beim nächsten Schreiben werden sie angelegt.
+_SPAETER_DAZU: frozenset[str] = frozenset({BLATT_KORREKTUREN})
+
+SPALTE_ISBN_ISERV = "ISBN in IServ"
 
 # Die Blätter des Aufbaus bis 2026-09-20. Sie werden beim Schreiben entfernt:
 # eine Mappe, in der dieselben Bücher zusätzlich in einer alten Fassung stehen,
@@ -130,6 +143,17 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Datum", 12, True),
         ("Status", 16, True),
         ("Bemerkung", 30, True),
+    ),
+    # Nur die Bücher, an denen etwas korrigiert ist. Eine leere Zelle heißt:
+    # gilt wie in IServ. Die IServ-Werte selbst stehen hier nicht - die Datei
+    # kennt nur den Stand nach der Korrektur (auf "Buchreihen").
+    BLATT_KORREKTUREN: (
+        (SPALTE_ISBN_ISERV, 18, False),
+        ("ISBN", 18, True),
+        ("Titel", 36, True),
+        ("Verlag", 24, True),
+        ("Neupreis", 12, True),
+        ("Leihpreis", 12, True),
     ),
 }
 
@@ -241,7 +265,8 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     ``in der Bücherliste`` mit "ja" führen: das Blatt trägt auch die bloß
     geplanten Jahrgänge, und die stehen gerade **nicht** in einer Liste.
     """
-    fehlend = [name for name in BLAETTER if name not in wb.sheetnames]
+    fehlend = [name for name in BLAETTER
+               if name not in wb.sheetnames and name not in _SPAETER_DAZU]
     if fehlend:
         raise MappeUnlesbar(
             "Der Datei fehlen die Blätter: " + ", ".join(fehlend) + "."
@@ -317,10 +342,31 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
         ) if not eintrag.leer
     )
 
+    korrekturen_roh = (_zeilen(wb[BLATT_KORREKTUREN])
+                       if BLATT_KORREKTUREN in wb.sheetnames else [])
+
+    def text_oder_nichts(roh: object) -> str | None:
+        return _text(roh) or None
+
+    korrekturen = tuple(
+        eintrag for eintrag in (
+            Buchkorrektur(
+                isbn_iserv=_text(zeile.get(SPALTE_ISBN_ISERV)),
+                isbn=text_oder_nichts(zeile.get("ISBN")),
+                titel=text_oder_nichts(zeile.get("Titel")),
+                verlag=text_oder_nichts(zeile.get("Verlag")),
+                neupreis=_zahl(zeile.get("Neupreis")),
+                leihgebuehr=_zahl(zeile.get("Leihpreis")),
+            )
+            for zeile in korrekturen_roh if _text(zeile.get(SPALTE_ISBN_ISERV))
+        ) if not eintrag.leer
+    )
+
     schuljahr, vorjahr, stand = _lies_info(wb)
     return Buchplanung(
         schuljahr=schuljahr, vorjahr=vorjahr, stand=stand, buecher=buecher,
         bemerkungen=bemerkungen, planung=tuple(planung), ruecklagen=ruecklagen,
+        korrekturen=korrekturen,
     )
 
 
@@ -466,6 +512,21 @@ def _ruecklagenzeilen(stand: Buchplanung) -> list[dict[str, object]]:
     return zeilen
 
 
+def _korrekturzeilen(stand: Buchplanung) -> list[dict[str, object]]:
+    """Nur die Bücher mit einer Korrektur - wie bei der Rücklage die Liste der Einträge."""
+    return [
+        {
+            SPALTE_ISBN_ISERV: eintrag.isbn_iserv,
+            "ISBN": eintrag.isbn or "",
+            "Titel": eintrag.titel or "",
+            "Verlag": eintrag.verlag or "",
+            "Neupreis": eintrag.neupreis,
+            "Leihpreis": eintrag.leihgebuehr,
+        }
+        for eintrag in sorted(stand.korrekturen, key=lambda k: k.isbn_iserv)
+    ]
+
+
 def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     _leeren(ws)
     ws.column_dimensions["A"].width = 24
@@ -490,10 +551,12 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
                           "anderen schreibt das Dashboard bei jedem Abgleich neu.")
     zeile(7, "Bücher", "Aus dem laufenden Schuljahr alle, aus dem Vorjahr die "
                        "leihbaren - nur die liegen im Bestand der Schule.")
-    zeile(9, "Legende", "", fett=True)
+    zeile(8, "Korrekturen", "Angaben aus IServ, die hier korrigiert sind; sie gelten in "
+                            "allen Bücherlisten des Dashboards. IServ selbst bleibt unverändert.")
+    zeile(10, "Legende", "", fett=True)
     for versatz, (marke, text) in enumerate(LEGENDE):
-        zeile(10 + versatz, marke, text)
-    naechste = 10 + len(LEGENDE) + 1
+        zeile(11 + versatz, marke, text)
+    naechste = 11 + len(LEGENDE) + 1
     for versatz, warnung in enumerate(stand.warnungen):
         zeile(naechste + versatz, "Hinweis" if versatz == 0 else "", warnung)
 
@@ -511,6 +574,7 @@ def schreibe_mappe(wb: Workbook, stand: Buchplanung) -> None:
     _schreibe_blatt(wb[BLATT_BUECHER], BLATT_BUECHER, _buchzeilen(stand))
     _schreibe_blatt(wb[BLATT_FACH_JAHRGANG], BLATT_FACH_JAHRGANG, _planungszeilen(stand))
     _schreibe_blatt(wb[BLATT_RUECKLAGE], BLATT_RUECKLAGE, _ruecklagenzeilen(stand))
+    _schreibe_blatt(wb[BLATT_KORREKTUREN], BLATT_KORREKTUREN, _korrekturzeilen(stand))
     _schreibe_info(wb[BLATT_INFO], stand)
     for name in _ALTE_BLAETTER:
         if name in wb.sheetnames:

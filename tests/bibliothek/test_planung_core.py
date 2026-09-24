@@ -23,7 +23,9 @@ from buecherlisten.planung import (
     PLANUNG_GEPLANT,
     PLANUNG_LAEUFT_AUS,
     Buch,
+    Buchkorrektur,
     Buchplanung,
+    Buchreiheneingabe,
     Jahrgangseingabe,
     Ruecklageneingabe,
     Schnappschuss,
@@ -36,6 +38,7 @@ from buecherlisten.planung import (
     planungs_status,
     schreibe_datei,
     setze_buchplanung,
+    setze_buchreihe,
     setze_planung,
     setze_ruecklage,
     wirkt_im_schuljahr,
@@ -216,7 +219,7 @@ def test_die_alten_blaetter_verschwinden(tmp_path, stand):
 
     from openpyxl import load_workbook
     assert load_workbook(str(pfad)).sheetnames == [
-        "Buchreihen", "Fächer & Jahrgang", "Rücklage", "Info",
+        "Buchreihen", "Fächer & Jahrgang", "Rücklage", "Korrekturen", "Info",
     ]
 
 
@@ -507,3 +510,143 @@ def test_fehlendes_vorjahr_bricht_den_abruf_nicht_ab():
                                        heute=date(2026, 9, 19))
     assert {b.isbn for b in schnappschuss.buecher} == {DEUTSCH}
     assert any("2019/2020" in warnung for warnung in schnappschuss.warnungen)
+
+
+# ── Korrekturen an der Buchreihe ─────────────────────────────────────────────
+
+NEU = "9783161484100"  # eine gültige ISBN-13, als ISBN-10: 3-16-148410-X
+
+
+def _reihe(buch: Buch, **felder) -> Buchreiheneingabe:
+    return Buchreiheneingabe(**{
+        "isbn": buch.isbn, "titel": buch.titel, "verlag": buch.verlag,
+        "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr, **felder,
+    })
+
+
+def test_titel_und_preis_werden_korrigiert(stand):
+    buch = stand.buch(DEUTSCH)
+    neu = setze_buchreihe(stand, isbn=DEUTSCH, iserv=_reihe(buch),
+                          eingabe=_reihe(buch, titel="Deutschbuch 5 (NRW)", neupreis=24.0))
+
+    korrektur = neu.korrektur(DEUTSCH)
+    assert korrektur == Buchkorrektur(isbn_iserv=DEUTSCH, titel="Deutschbuch 5 (NRW)",
+                                      neupreis=24.0)
+    assert neu.buch(DEUTSCH).titel == "Deutschbuch 5 (NRW)"
+    assert neu.buch(DEUTSCH).neupreis == 24.0
+    # Was nicht geändert wurde, bleibt ohne Korrektur.
+    assert korrektur.verlag is None and korrektur.leihgebuehr is None
+
+
+def test_zurueck_auf_den_iserv_wert_nimmt_die_korrektur_zurueck(stand):
+    buch = stand.buch(DEUTSCH)
+    iserv = _reihe(buch)
+    korrigiert = setze_buchreihe(stand, isbn=DEUTSCH, iserv=iserv,
+                                 eingabe=_reihe(buch, verlag="Cornelsen Verlag"))
+    assert korrigiert.korrektur(DEUTSCH).verlag == "Cornelsen Verlag"
+
+    zurueck = setze_buchreihe(korrigiert, isbn=DEUTSCH, iserv=iserv,
+                              eingabe=_reihe(buch, verlag="Cornelsen"))
+    assert zurueck.korrektur(DEUTSCH) is None
+    assert zurueck.buch(DEUTSCH).verlag == "Cornelsen"
+
+
+def test_ein_leerer_preis_gilt_wie_in_iserv(stand):
+    buch = stand.buch(DEUTSCH)
+    iserv = _reihe(buch)
+    korrigiert = setze_buchreihe(stand, isbn=DEUTSCH, iserv=iserv,
+                                 eingabe=_reihe(buch, leihgebuehr=7.0))
+    zurueck = setze_buchreihe(korrigiert, isbn=DEUTSCH, iserv=iserv,
+                              eingabe=_reihe(buch, leihgebuehr=None))
+    assert zurueck.korrektur(DEUTSCH) is None
+    assert zurueck.buch(DEUTSCH).leihgebuehr == 5.0
+
+
+@pytest.mark.parametrize("felder, teil", [
+    ({"isbn": "978-3-00-000000-1"}, "gültige ISBN"),
+    ({"titel": "  "}, "Titel"),
+    ({"verlag": ""}, "Verlag"),
+    ({"neupreis": -1.0}, "Neupreis"),
+])
+def test_ungueltige_buchreihe_wird_abgelehnt(stand, felder, teil):
+    buch = stand.buch(DEUTSCH)
+    with pytest.raises(UngueltigeEingabe, match=teil):
+        setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(buch, **felder))
+
+
+def test_eine_isbn_gehoert_nur_zu_einem_buch(stand):
+    buch = stand.buch(DEUTSCH)
+    with pytest.raises(UngueltigeEingabe, match="Terra 5/6"):
+        setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(buch, isbn=TERRA))
+
+
+def test_eine_neue_isbn_nimmt_alles_eingetragene_mit(stand):
+    stand = _mit_bemerkung(stand, ALT, "Einband lose")
+    stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5)
+    stand = setze_planung(stand, isbn=ALT, fach="Chemie", jahrgang=9,
+                          ausgemustert_nach="2025/2026")
+    buch = stand.buch(ALT)
+
+    # Als ISBN-10 mit Bindestrichen eingegeben - geführt wird sie als ISBN-13.
+    neu = setze_buchreihe(stand, isbn=ALT, eingabe=_reihe(buch, isbn="3-16-148410-X"))
+
+    assert neu.buch(ALT) is None
+    assert neu.buch(NEU).titel == "Chemie heute 9"
+    assert neu.korrektur(ALT).isbn == NEU
+    assert neu.iserv_isbn(NEU) == ALT
+    assert neu.bemerkung(NEU).bemerkung == "Einband lose"
+    assert neu.ruecklage(NEU, "Chemie").anzahl == 5
+    assert neu.planungszeile(NEU, "Chemie", 9).ausgemustert_nach == "2025/2026"
+    assert not any(e.isbn == ALT for e in neu.planung + neu.ruecklagen + neu.bemerkungen)
+
+
+def test_die_isbn_zurueck_auf_iserv_hebt_die_korrektur_auf(stand):
+    buch = stand.buch(ALT)
+    umgezogen = setze_buchreihe(stand, isbn=ALT, eingabe=_reihe(buch, isbn=NEU))
+    zurueck = setze_buchreihe(umgezogen, isbn=NEU,
+                              eingabe=_reihe(umgezogen.buch(NEU), isbn=ALT))
+    assert zurueck.korrektur(ALT) is None
+    assert zurueck.buch(ALT) is not None
+
+
+def test_korrekturen_stehen_in_der_datei(tmp_path, stand):
+    buch = stand.buch(ALT)
+    stand = setze_buchreihe(stand, isbn=ALT,
+                            eingabe=_reihe(buch, isbn=NEU, verlag="Westermann Schulbuch"))
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+
+    gelesen = lies_datei(pfad)
+    assert gelesen.korrekturen == (
+        Buchkorrektur(isbn_iserv=ALT, isbn=NEU, verlag="Westermann Schulbuch"),)
+    assert gelesen.buch(NEU).verlag == "Westermann Schulbuch"
+
+
+def test_eine_datei_ohne_blatt_korrekturen_bleibt_lesbar(tmp_path, stand):
+    from openpyxl import load_workbook
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    wb = load_workbook(str(pfad))
+    wb.remove(wb["Korrekturen"])
+    wb.save(str(pfad))
+
+    assert lies_datei(pfad).korrekturen == ()
+
+
+def test_der_abgleich_findet_die_korrigierte_isbn_wieder(stand):
+    """Ohne das hinge nach dem nächsten Abruf aus IServ nichts mehr an der neuen ISBN."""
+    stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5)
+    stand = setze_buchreihe(stand, isbn=ALT,
+                            eingabe=_reihe(stand.buch(ALT), isbn=NEU, titel="Chemie heute 9 neu"))
+
+    schnappschuss = lade_schnappschuss(_ZweiJahre(), heute=date(2026, 9, 24),
+                                       korrekturen=stand.korrekturen_fuer_iserv())
+    je_isbn = {buch.isbn: buch for buch in schnappschuss.buecher}
+    assert ALT not in je_isbn
+    assert je_isbn[NEU].titel == "Chemie heute 9 neu"
+
+    neu = zusammenfuehren(stand, schnappschuss)
+    assert neu.ruecklage(NEU, "Chemie").anzahl == 5
+    assert neu.korrektur(ALT).isbn == NEU
+    assert not neu.warnungen

@@ -31,6 +31,7 @@ alles andere darunter.
 | `Buchreihen` | ISBN | Bemerkung |
 | `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung (dazu `in der Bücherliste`, gesetzt) |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
+| `Korrekturen` | ISBN in IServ | ISBN, Titel, Verlag, Neupreis, Leihpreis |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
 Jeder Titel steht **einmal**, auf `Buchreihen`, mit Fach und Jahrgang als
@@ -177,6 +178,39 @@ Bis 2026-09-24 gab es auf `Buchreihen` die Spalten `geprüfter Preis`, `Kürzel`
 und `Datum` und in der Verlags-Ansicht die Knöpfe „prüfen" und „Preise
 bestätigen". Sie sind entfernt: der Preis gilt, wie er in IServ steht. Übrig
 ist die Spalte `Bemerkung` je Buch.
+
+## Korrekturen an den Angaben aus IServ
+
+Seit 2026-09-24 lassen sich ISBN, Titel, Verlag, Neupreis und Leihgebühr eines
+Buchs im Planungsmenü korrigieren, im Block „Buchreihe“ vor Einführung und
+Ausmusterung. Der Block ist dem IServ-Dialog „Buchreihe bearbeiten“
+nachgebaut. **Gespeichert wird in dieser Datei, nicht in IServ**: das
+Dashboard bleibt dort nur-lesend.
+
+* **Schlüssel ist die ISBN in IServ.** Nur sie kommt bei jedem Abgleich
+  wieder, und an ihr wird die Korrektur beim nächsten Abruf wiedergefunden.
+  Eine leere Zelle auf `Korrekturen` heißt: gilt wie in IServ. Auf dem Blatt
+  stehen nur Bücher, an denen etwas korrigiert ist.
+* **Die Korrektur wirkt überall.** `wende_korrekturen_an` in
+  `../core/daten.py` legt sie auf die Rohdaten jeder Bücherliste, bevor sie
+  ausgewertet werden. Seiten, PDF und Abgleich sehen damit dieselben Werte,
+  auch beim Gruppieren nach Verlag.
+* **Eine geänderte ISBN zieht den Schlüssel um.** Bemerkung, Planungszeilen
+  und Rücklagen hängen danach an der neuen ISBN (`setze_buchreihe`). Der
+  Abgleich lädt IServ schon mit den Korrekturen und findet sie deshalb unter
+  der neuen ISBN wieder. Eine ISBN, die schon einem anderen Buch gehört, wird
+  abgewiesen. Eine neue ISBN wird wie in IServ geprüft und als ISBN-13
+  geführt.
+* **Zurück auf IServ.** Die Datei kennt nur den korrigierten Stand. Das Menü
+  schickt deshalb die IServ-Werte mit (`iserv`); stimmt ein Feld wieder mit
+  IServ überein, fällt seine Korrektur weg. Ein leerer Preis heißt ebenfalls
+  „wie in IServ“.
+
+Fächer und Jahrgänge, die IServ im selben Dialog führt, lassen sich hier nicht
+ändern: sie kommen aus den Bücherlisten, nicht aus der Buchreihe.
+
+Die Datei gilt je Schuljahr. Eine neue Datei für das nächste Schuljahr bringt
+die Korrekturen des Vorjahrs **nicht** mit (`docs/roadmap.md`).
 
 ## Aufbau des Pakets
 

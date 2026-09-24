@@ -193,6 +193,20 @@ class RuecklageEingabe(BaseModel):
     bemerkung: str = ""
 
 
+class BuchreiheEingabe(BaseModel):
+    """Der Block „Buchreihe“ des Menüs - die Felder, wie IServ sie nennt.
+
+    Korrigiert wird nur in der Datei, nicht in IServ. Ein leerer Preis heißt:
+    gilt wie in IServ.
+    """
+
+    isbn: str = ""
+    titel: str = ""
+    verlag: str = ""
+    neupreis: float | None = None
+    leihgebuehr: float | None = None
+
+
 class BuchplanungsAnfrage(_BuchplanungAnfrage):
     """``POST /api/buchplanung/buch`` - das ganze Menü eines Buchs in einem Fach.
 
@@ -200,12 +214,18 @@ class BuchplanungsAnfrage(_BuchplanungAnfrage):
     der nicht mehr darin steht, wurde im Menü gelöscht und verschwindet aus der
     Datei. Eine Liste von Änderungen wäre hier falsch - das Menü zeigt den
     ganzen Stand, also schickt es ihn auch ganz zurück.
+
+    ``buchreihe`` ist der Stand des Blocks „Buchreihe“, ``iserv`` die Werte,
+    die IServ selbst dazu nennt - die Seite kennt sie, die Datei nicht. Nur mit
+    ihnen lässt sich erkennen, dass eine Korrektur zurückgenommen wurde.
     """
 
     isbn: NichtLeer
     fach: NichtLeer
     zeilen: list[JahrgangEingabe] = []
     ruecklage: RuecklageEingabe | None = None
+    buchreihe: BuchreiheEingabe | None = None
+    iserv: BuchreiheEingabe | None = None
 
 
 class RuecklageAnfrage(_BuchplanungAnfrage):

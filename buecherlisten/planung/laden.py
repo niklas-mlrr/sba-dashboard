@@ -27,6 +27,7 @@ from datetime import date
 
 from ..core.daten import (
     OHNE_VERLAG,
+    Korrekturen,
     SchuljahreClient,
     hole_jahrgangslisten,
     sammle_je_fach_und_isbn,
@@ -73,14 +74,14 @@ def _kennung_und_name(client: AusleiheClient, kennung: str | None) -> tuple[str,
 
 
 def _jahr(
-    client: AusleiheClient, kennung: str,
+    client: AusleiheClient, kennung: str, korrekturen: Korrekturen | None = None,
 ) -> tuple[dict[str, dict], dict[str, set[tuple[str, int]]]]:
     """Ein Schuljahr einmal holen und zweimal auswerten.
 
     Zurück kommen die Bücher je ISBN und, je ISBN, die (Fach, Jahrgang)-Paare,
     in denen das Buch in diesem Schuljahr vorkommt.
     """
-    listen = hole_jahrgangslisten(client, kennung)
+    listen = hole_jahrgangslisten(client, kennung, korrekturen)
     paare: dict[str, set[tuple[str, int]]] = {}
     for (fach, isbn), eintrag in sammle_je_fach_und_isbn(listen).items():
         paare.setdefault(isbn, set()).update((fach, jahrgang) for jahrgang in eintrag["grades"])
@@ -93,8 +94,14 @@ def lade_schnappschuss(
     schuljahr: str | None = None,
     vorjahr: str | None = None,
     heute: date | None = None,
+    korrekturen: Korrekturen | None = None,
 ) -> Schnappschuss:
     """Beide Schuljahre holen und je ISBN zu einem :class:`Buch` zusammenlegen.
+
+    ``korrekturen`` (aus der bisherigen Datei) wirken schon auf die Rohdaten
+    beider Jahre: der Schnappschuss führt ein Buch mit korrigierter ISBN unter
+    dieser, und alles daran Eingetragene findet beim Zusammenführen seinen
+    Schlüssel wieder.
 
     Fehlt das Vorjahr in IServ (erstes Schuljahr im System), ist das **kein**
     Fehler: der Schnappschuss enthält dann nur das laufende Jahr, und eine
@@ -104,9 +111,9 @@ def lade_schnappschuss(
     warnungen: list[str] = []
 
     vorjahr_id = vorjahr or vorjahr_kennung(kennung)
-    aktuelle, aktuelle_paare = _jahr(client, kennung)
+    aktuelle, aktuelle_paare = _jahr(client, kennung, korrekturen)
     try:
-        alte, alte_paare = _jahr(client, vorjahr_id)
+        alte, alte_paare = _jahr(client, vorjahr_id, korrekturen)
     except Exception as exc:  # noqa: BLE001 - jedes Scheitern heißt hier dasselbe
         alte, alte_paare = {}, {}
         warnungen.append(

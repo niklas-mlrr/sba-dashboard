@@ -539,6 +539,23 @@ gerade der Fall, für den es die Zeilen je Jahrgang gibt, und sie darf in der
 Anzeige nicht wieder verschwinden. Sortiert wird weiter nach den nackten
 Jahrgängen (`data-wert`).
 
+**Korrekturen an der Buchreihe (2026-09-24).** Vor Einführung und Ausmusterung
+steht im Menü der Block „Buchreihe“ (ISBN, Titel, Verlag, Neupreis,
+Leihgebühr), nachgebaut nach dem IServ-Dialog „Buchreihe bearbeiten“.
+Gespeichert wird auf dem Blatt `Korrekturen` der Buchplanungs-Datei, **nicht**
+in IServ: ein Schreibzugriff dort wäre der erste des Dashboards und stünde
+gegen die Nur-GET-Regel der Ausleihe-API. Damit die Korrektur trotzdem überall
+gilt, gibt es genau **eine** Stelle, an der sie wirkt:
+`buecherlisten/core/daten.py::wende_korrekturen_an` bzw. `korrigiere_eintrag`
+legen sie auf die Rohdaten jeder Bücherliste, bevor irgendetwas sie auswertet.
+Die Seiten (`app/buecherlisten.py`), das PDF (`lade_buecherdaten`) und der
+Abgleich (`lade_schnappschuss`) sehen damit dieselben Werte. Schlüssel ist die
+ISBN in IServ; eine geänderte ISBN zieht Planung, Rücklage und Bemerkung um
+(`setze_buchreihe`), und weil der Abgleich schon korrigiert lädt, findet er sie
+unter der neuen ISBN wieder. Die Verlagsvorschläge im Feld „Verlag“ filtern auf
+„beginnt mit“ und sind ein eigenes kleines Typeahead: `<datalist>` filtert in
+Chrome auf „enthält“ und lässt sich nicht wie IServ gestalten.
+
 ## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 
 `POST /api/anmeldung` prüft die Zugangsdaten **synchron** (`AusleiheClient(...)`,

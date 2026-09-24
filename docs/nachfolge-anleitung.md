@@ -270,9 +270,18 @@ kaufen, liegt in keinem Regal der Schule, und das Feld ist dort gesperrt.
 statt sie wegzuwerfen, dazu ein Stand (gewünscht / zugesagt / zurückgelegt) und
 eine Bemerkung. Dann **„Rücklage speichern"**.
 
+**Oben im Menü: die Buchreihe.** ISBN, Titel, Verlag, Neupreis und Leihgebühr,
+aufgebaut wie der Dialog „Buchreihe bearbeiten" in IServ. Stimmt dort etwas
+nicht, korrigieren Sie es hier. Die Korrektur gilt in allen Bücherlisten und
+PDFs des Programms; **in IServ ändert sich nichts**, dort müsste der Fehler
+gesondert behoben werden. Beim Verlag schlägt das Feld nach dem ersten
+Buchstaben die bekannten Verlage vor; ein neuer lässt sich einfach eintippen.
+Unter einem korrigierten Feld steht klein, was IServ dazu sagt. Wer den
+IServ-Wert wieder einträgt (oder einen Preis leert), nimmt die Korrektur zurück.
+
 ### Was in der Datei steht
 
-Vier Blätter:
+Fünf Blätter:
 
 * **Buchreihen** — jeder Titel einmal, mit Fach, Jahrgang und Preisen. Drin sind alle Bücher des laufenden Schuljahres und aus dem
   Vorjahr die leihbaren; nur die liegen noch im Bestand der Schule.
@@ -280,6 +289,9 @@ Vier Blätter:
   Einführung, Ausmusterung und der Bestätigung der Fachkonferenzleitung. Den
   Titel schlagen Sie auf „Buchreihen" nach; hier steht nur die ISBN.
 * **Rücklage** — eine Zeile je Buch und Fach, mit Anzahl und Stand.
+* **Korrekturen** — nur die Bücher, deren Angaben aus IServ hier korrigiert
+  sind, geführt unter ihrer ISBN in IServ. Eine leere Zelle heißt: gilt wie in
+  IServ.
 * **Info** — Schuljahr, Vorjahr, Stand und die Legende aller Status.
 
 Wenn Sie direkt in Excel arbeiten wollen: Es werden nur die **hell

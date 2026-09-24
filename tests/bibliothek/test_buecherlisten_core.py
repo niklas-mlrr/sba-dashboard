@@ -142,6 +142,39 @@ def test_mehrjahresband_steht_beim_verlag_einmal_mit_allen_klassen(daten):
     assert terra["klasse"] == "5, 6"
 
 
+def test_korrekturen_wirken_auf_titel_verlag_und_preis_im_pdf():
+    """Korrigiert wird in der Buchplanung; das PDF zeigt, was dort steht."""
+    from bestand.core.testing import ISBN_ERDKUNDE_56
+
+    gesehen: list[str] = []
+
+    def korrekturen(kennung: str) -> dict:
+        gesehen.append(kennung)
+        return {ISBN_ERDKUNDE_56: {"title": "Terra 5/6 NRW", "publisher": "Klett Verlag",
+                                   "price": 27.5}}
+
+    daten = lade_buecherdaten(FakeClient(), korrekturen=korrekturen)
+
+    assert gesehen == [daten.schuljahr_id]
+    assert "Klett Verlag" in daten.verlage
+    (terra,) = [z for z in daten.je_verlag["Klett Verlag"]["leih"]
+                if z["titel"] == "Terra 5/6 NRW"]
+    assert terra["neupreis"] == "27,50 €"
+
+
+def test_korrekturen_aendern_die_rohdaten_aus_iserv_nicht():
+    from buecherlisten.core.daten import wende_korrekturen_an
+
+    detail = {"sections": [{"options": [{"items": [
+        {"series": "111", "series_data": {"isbn": "111", "title": "Alt"}}]}]}]}
+    neu = wende_korrekturen_an(detail, {"111": {"isbn": "222", "title": "Neu"}})
+
+    (item,) = neu["sections"][0]["options"][0]["items"]
+    assert item["series"] == "222"
+    assert item["series_data"] == {"isbn": "222", "title": "Neu"}
+    assert detail["sections"][0]["options"][0]["items"][0]["series_data"]["title"] == "Alt"
+
+
 @pytest.mark.parametrize("ansicht, dateiname", [
     ("verlag", "Bücherliste Verlage 2026-2027.pdf"),
     ("jahrgang", "Bücherliste Jahrgänge 2026-2027.pdf"),
