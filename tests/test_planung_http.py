@@ -695,13 +695,13 @@ def test_vorjahresbuch_steht_mit_dem_vorjahr_als_ausmusterung_in_der_datei(
     assert zeile["ausgemustert_nach"] == "2025/2026"
 
 
-def test_fach_seite_listet_die_ausmusterungen_nur_im_eigenen_fach(
+def test_fach_seite_listet_nur_vollstaendig_ausgemusterte_buecher(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Terra stand 2025/2026 in Erdkunde und Politik, Jg. 5; heuer nur noch in Jg. 6."""
+    """Terra ist in Erdkunde nur in Jg. 5 ausgelaufen, Jg. 6 bleibt: nicht aufgeführt."""
     erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
     assert "Ausmusterungen zu diesem Schuljahr" in erdkunde
-    assert "Terra 5/6" in erdkunde.split("Ausmusterungen zu diesem Schuljahr")[1]
+    assert "Keine Ausmusterungen" in erdkunde
     latein = seiten.get("/buecherliste/fach/Latein").text
     assert "Keine Ausmusterungen" in latein
 

@@ -139,6 +139,12 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         buch = planung.buch(zeile.isbn)
         if buch is None or not planung.vorjahr or zeile.ausgemustert_nach != planung.vorjahr:
             continue
+        # Nur vollständig ausgemustert: in keinem Jahrgang dieses Fachs bleibt
+        # das Buch danach noch stehen.
+        if any((rest := planung.planungszeile(buch.isbn, fach, jg)) is None
+               or rest.ausgemustert_nach != planung.vorjahr
+               for fach, jg in planung.zeilen_des_buchs(buch) if fach == zeile.fach):
+            continue
         ausmusterungen.setdefault(zeile.fach, []).append({
             "titel": buch.titel, "verlag": buch.verlag, "isbn": buch.isbn,
             "isbn_anzeige": format_isbn(buch.isbn), "jahrgang": zeile.jahrgang,
