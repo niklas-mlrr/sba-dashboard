@@ -31,10 +31,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Wie oft und wie lange ``os.replace`` wiederholt wird, wenn Windows die
-# Zieldatei gerade als geoeffnet meldet; zusammen gut eine halbe Sekunde
-# (10+20+40+80+160+320 ms).
-_ERSETZ_VERSUCHE = 7
+# Zieldatei gerade als geoeffnet meldet; zusammen knapp zwei Sekunden
+# (10+20+40+80+160 ms, dann sechsmal 250 ms). Eine halbe Sekunde reichte auf dem
+# Windows-Runner der CI nicht immer, wenn mehrere Leser gleichzeitig zugriffen.
+_ERSETZ_VERSUCHE = 12
 _ERSETZ_WARTE_START = 0.01
+_ERSETZ_WARTE_MAX = 0.25
 
 
 def replace_with_retry(quelle: str, ziel: Path) -> None:
@@ -78,7 +80,7 @@ def replace_with_retry(quelle: str, ziel: Path) -> None:
             if versuch == _ERSETZ_VERSUCHE - 1:
                 raise
             time.sleep(warte)
-            warte *= 2
+            warte = min(warte * 2, _ERSETZ_WARTE_MAX)
 
 
 def atomic_save_workbook(
