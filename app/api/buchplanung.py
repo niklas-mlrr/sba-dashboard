@@ -26,7 +26,6 @@ from buecherlisten.planung import (
     fach_bestaetigung,
     fach_status,
     planungs_status,
-    preis_status,
 )
 
 from .. import buchplanung as domaene
@@ -35,9 +34,7 @@ from ..modelle import (
     BuchplanungsAnfrage,
     FachbestaetigungAnfrage,
     PlanungsAnfrage,
-    PreisAnfrage,
     RuecklageAnfrage,
-    VerlagspreisAnfrage,
 )
 from ..settings import EinstellungsFehler
 from .gemeinsam import aktuelle_einstellungen
@@ -49,13 +46,12 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
     """Der Stand als JSON - die Status gerechnet, nicht aus der Datei gelesen.
 
     Die Oberfläche bekommt genau das, was sie anzeigt, und rechnet selbst
-    nichts: welcher Preis als bestätigt gilt, entscheidet eine Stelle
+    nichts: welcher Status gilt, entscheidet eine Stelle
     (``buchplanung/core/modelle.py``), nicht zusätzlich noch ein Skript.
     """
     buecher = []
     for buch in stand.buecher:
-        status, hinweis = preis_status(buch, stand.pruefung(buch.isbn))
-        pruefung = stand.pruefung(buch.isbn)
+        bemerkung = stand.bemerkung(buch.isbn)
         buecher.append({
             "isbn": buch.isbn,
             "titel": buch.titel,
@@ -65,14 +61,7 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
             "leihbar": buch.leihbar,
             "neupreis": buch.neupreis,
             "leihgebuehr": buch.leihgebuehr,
-            "preis_status": status,
-            "preis_hinweis": hinweis,
-            "geprueft": None if pruefung is None else {
-                "preis": pruefung.preis,
-                "kuerzel": pruefung.kuerzel,
-                "datum": pruefung.datum.isoformat() if pruefung.datum else None,
-                "bemerkung": pruefung.bemerkung,
-            },
+            "bemerkung": bemerkung.bemerkung if bemerkung else "",
             "planung": [
                 {
                     "fach": fach,
@@ -168,29 +157,6 @@ async def api_abgleich(request: Request, anfrage: AbgleichAnfrage) -> JSONRespon
             status_code=502,
         )
     return _antwort(stand)
-
-
-@router.post("/api/buchplanung/preis")
-def api_preis(request: Request, anfrage: PreisAnfrage) -> JSONResponse:
-    """Der geprüfte Preis eines Buchs."""
-    stand = domaene.schreibe_preis(
-        aktuelle_einstellungen(request),
-        schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, preis=anfrage.preis,
-        kuerzel=anfrage.kuerzel, datum=anfrage.datum, bemerkung=anfrage.bemerkung,
-        mtime=anfrage.mtime,
-    )
-    return _antwort(stand)
-
-
-@router.post("/api/buchplanung/preise")
-def api_preise(request: Request, anfrage: VerlagspreisAnfrage) -> JSONResponse:
-    """Alle Preise eines Verlags auf einmal - der Knopf neben dem Drucker."""
-    stand, anzahl = domaene.schreibe_preise_des_verlags(
-        aktuelle_einstellungen(request),
-        schuljahr=anfrage.schuljahr, verlag=anfrage.verlag,
-        kuerzel=anfrage.kuerzel, datum=anfrage.datum, mtime=anfrage.mtime,
-    )
-    return _antwort(stand, bestaetigt=anzahl)
 
 
 @router.post("/api/buchplanung/fach")

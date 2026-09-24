@@ -253,7 +253,7 @@ beiseitelegen — „Erzeugen" überschreibt sie vollständig.
 | G4-7 | Eine Zelle über das Auswahlfeld ändern | Feld kurz hervorgehoben; in Excel steht der neue Wert, `backups/` hat eine Sicherung |
 | G4-8 | Dieselbe Datei in Excel offen lassen und erneut ändern | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |
 
-### G5. Buchplanung (Preise, Freigaben, Einführung/Ausmusterung)
+### G5. Buchplanung (Freigaben, Einführung/Ausmusterung)
 
 Schreibt in eine **dritte** Datei im Ordner der Bestandsmappe, je Schuljahr eine
 eigene (`Bücherlisten und Planung 2026-2027.xlsx`). Sie entsteht neu; es gibt
@@ -265,10 +265,8 @@ nichts zu sichern.
 | G5-2 | „Aus IServ aktualisieren" | Dauer? Danach liegt die Datei im Ordner der Bestandsmappe |
 | G5-3 | Die Datei in Excel öffnen | Vier Blätter („Buchreihen", „Fächer & Jahrgang", „Rücklage", „Info"); die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
 | G5-4 | Blatt „Buchreihen" durchsehen | Jeder Titel genau einmal; enthält auch **leihbare** Bücher, die es nur im Vorjahr gab — das sind die ausgemusterten. Kaufbücher des Vorjahres fehlen |
-| G5-5 | Verlags-Ansicht: Kürzel eintragen, „Preise bestätigen" | Alle Zeilen des Verlags auf „bestätigt"; in der Übersicht „x von x geprüft" |
-| G5-6 | Denselben Verlag in IServ um einen Cent ändern, dann „Aus IServ aktualisieren" | Die geänderte Zeile steht auf „abweichend", die übrigen bleiben „bestätigt" |
 | G5-7 | Fach-Ansicht: Kürzel + Datum, „Liste bestätigen" | Status „bestätigt"; auf „Fächer & Jahrgang" tragen alle Zeilen dieses Fachs Kürzel und Datum |
-| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „teilweise", darunter „Noch ohne Kürzel: …"; das neue Buch steht beim Preis auf „offen" |
+| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „teilweise", darunter „Noch ohne Kürzel: …" |
 | G5-9 | „Planung…" bei einem Leihbuch: Ausmusterung eintragen | Status der Zeile wechselt; in Excel steht das Schuljahr in „Ausmusterung nach Schuljahr" |
 | G5-9b | „Planung…" bei einem **Kaufbuch** | Das Feld „Ausmusterung nach Schuljahr" ist gesperrt |
 | G5-10 | „Planung…": weiterer Jahrgang mit „Einführung" | Neue Zeile auf „Fächer & Jahrgang" mit diesem Fach, Status „geplant" |

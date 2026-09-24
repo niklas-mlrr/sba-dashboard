@@ -177,51 +177,6 @@ def test_lesen_gibt_den_gespeicherten_stand_zurueck(
     assert antwort.json()["mtime"] == abgeglichen["mtime"]
 
 
-# ── Preisprüfung ─────────────────────────────────────────────────────────────
-
-
-def test_einzelner_preis_wird_bestaetigt(seiten: TestClient, abgeglichen: dict) -> None:
-    antwort = seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "preis": 22.5,
-        "kuerzel": "MLR", "datum": "2026-09-01", "mtime": abgeglichen["mtime"],
-    })
-    assert antwort.status_code == 200, antwort.text
-    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
-    assert buch["preis_status"] == "bestätigt"
-    assert buch["geprueft"]["kuerzel"] == "MLR"
-
-
-def test_abweichender_preis_faellt_auf(seiten: TestClient, abgeglichen: dict) -> None:
-    antwort = seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "preis": 19.9,
-        "kuerzel": "MLR", "mtime": abgeglichen["mtime"],
-    })
-    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
-    assert buch["preis_status"] == "abweichend"
-    assert "19,90" in buch["preis_hinweis"] and "22,50" in buch["preis_hinweis"]
-
-
-def test_ganze_verlagsliste_auf_einmal(seiten: TestClient, abgeglichen: dict) -> None:
-    antwort = seiten.post("/api/buchplanung/preise", json={
-        "schuljahr": "2026/2027", "verlag": "Klett", "kuerzel": "MLR",
-        "datum": "2026-09-05", "mtime": abgeglichen["mtime"],
-    })
-    assert antwort.status_code == 200, antwort.text
-    assert antwort.json()["bestaetigt"] == 1
-    je_isbn = {b["isbn"]: b for b in antwort.json()["planung"]["buecher"]}
-    assert je_isbn[TERRA]["preis_status"] == "bestätigt"
-    assert je_isbn[DEUTSCH]["preis_status"] == "offen"
-
-
-def test_unbekannter_verlag_wird_abgelehnt(seiten: TestClient, abgeglichen: dict) -> None:
-    antwort = seiten.post("/api/buchplanung/preise", json={
-        "schuljahr": "2026/2027", "verlag": "Gibt-es-nicht", "kuerzel": "MLR",
-        "mtime": abgeglichen["mtime"],
-    })
-    assert antwort.status_code == 400
-    assert "kommt in dieser Datei" in antwort.json()["fehler"]
-
-
 # ── Fachbestätigung ──────────────────────────────────────────────────────────
 
 
@@ -547,8 +502,8 @@ def test_die_ruecklagen_spalte_erscheint_erst_mit_einer_ruecklage(
     })
     mit = seiten.get("/buecherliste/fach/Erdkunde").text
     assert ">Rücklagen<" in mit
-    # Zwischen "Leihbar" und "Status", und als Zahl sortierbar.
-    assert mit.index(">Leihbar<") < mit.index(">Rücklagen<") < mit.index(">Status<")
+    # Hinter "Leihbar", und als Zahl sortierbar.
+    assert mit.index(">Leihbar<") < mit.index(">Rücklagen<")
     assert '<td data-wert="12">12</td>' in mit
 
 
@@ -577,39 +532,38 @@ def test_der_stand_einer_ruecklage_bleibt_beim_speichern_stehen(
 def test_veraltete_mtime_wird_mit_409_abgelehnt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "preis": 22.5,
-        "kuerzel": "MLR", "mtime": abgeglichen["mtime"],
+    seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "mtime": abgeglichen["mtime"],
     })
-    antwort = seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": TERRA, "preis": 25.0,
-        "kuerzel": "MLR", "mtime": abgeglichen["mtime"],
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Erdkunde", "kuerzel": "ABC",
+        "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 409
     assert "neu laden" in antwort.json()["fehler"]
 
 
 def test_eintragen_ohne_datei_meldet_den_fehlenden_abgleich(seiten: TestClient) -> None:
-    antwort = seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "preis": 22.5,
-        "kuerzel": "MLR", "mtime": 1.0,
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "mtime": 1.0,
     })
     assert antwort.status_code == 503
     assert "aktualisieren" in antwort.json()["fehler"]
 
 
 def test_unbekannte_isbn_wird_abgelehnt(seiten: TestClient, abgeglichen: dict) -> None:
-    antwort = seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": "9780000000000", "preis": 1.0,
-        "kuerzel": "MLR", "mtime": abgeglichen["mtime"],
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": "9780000000000", "fach": "Deutsch",
+        "zeilen": [], "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 400
     assert "kein Buch" in antwort.json()["fehler"]
 
 
 def test_fehlende_mtime_ist_ein_deutscher_satz(seiten: TestClient, abgeglichen: dict) -> None:
-    antwort = seiten.post("/api/buchplanung/preis", json={
-        "schuljahr": "2026/2027", "isbn": DEUTSCH, "preis": 22.5, "kuerzel": "MLR",
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
     })
     assert antwort.status_code == 400
     assert antwort.json()["fehler"] == "Es fehlt eine gültige Änderungszeit der geladenen Datei."
@@ -625,10 +579,11 @@ def test_ohne_datei_steht_der_knopf_zum_aktualisieren(seiten: TestClient) -> Non
     assert "ist noch nichts gespeichert" in text
 
 
-def test_verlagsseite_bietet_preispruefung(seiten: TestClient, abgeglichen: dict) -> None:
+def test_verlagsseite_bietet_keine_preispruefung(seiten: TestClient, abgeglichen: dict) -> None:
     text = seiten.get("/buecherliste/verlag/Klett").text
-    assert 'data-planung="preise"' in text          # ganze Liste, oben
-    assert 'data-planung="preis"' in text           # je Buch, in der Status-Spalte
+    assert 'data-planung="preise"' not in text
+    assert 'data-planung="preis"' not in text
+    assert ">Status<" not in text
     # Die Fach-Bedienelemente gehören nicht auf diese Seite.
     assert 'data-planung="fach"' not in text
     assert 'data-planung="aufklappen"' not in text
@@ -703,20 +658,6 @@ def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(
         _BUECHER["2026/2027"][5].pop()
     assert "teilweise" in text
     assert "Deutschbuch 6 (Jg. 5)" in text
-
-
-def test_uebersicht_zeigt_den_fortschritt_der_preispruefung(
-    seiten: TestClient, abgeglichen: dict,
-) -> None:
-    assert "von" in seiten.get("/buecherliste/verlag").text
-    seiten.post("/api/buchplanung/preise", json={
-        "schuljahr": "2026/2027", "verlag": "Klett", "kuerzel": "MLR",
-        "mtime": abgeglichen["mtime"],
-    })
-    text = seiten.get("/buecherliste/verlag").text
-    # Klett ist vollständig geprüft, Cornelsen noch nicht.
-    assert "label-success" in text
-    assert "0 von 1 geprüft" in text
 
 
 def test_druckmenue_kennt_die_nicht_bestaetigten_faecher(

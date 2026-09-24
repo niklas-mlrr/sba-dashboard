@@ -20,7 +20,6 @@ from buecherlisten.planung import (
     fach_bestaetigung,
     fach_status,
     planungs_status,
-    preis_status,
 )
 
 from .. import buchplanung as planungsdomaene
@@ -91,7 +90,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
     """
     leer: dict[str, Any] = {
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
-        "preis_je_isbn": {}, "fach_je_name": {}, "planung_je_isbn_und_fach": {},
+        "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {},
     }
     try:
@@ -102,18 +101,9 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         return leer
 
     planung = stand.planung
-    preise: dict[str, dict[str, Any]] = {}
     zeilen: dict[str, dict[str, list[dict[str, Any]]]] = {}
     ruecklagen: dict[str, dict[str, Any]] = {}
     for buch in planung.buecher:
-        pruefung = planung.pruefung(buch.isbn)
-        status, hinweis = preis_status(buch, pruefung)
-        preise[buch.isbn] = {
-            "status": status, "hinweis": hinweis,
-            "preis": pruefung.preis if pruefung else None,
-            "kuerzel": pruefung.kuerzel if pruefung else "",
-            "datum": pruefung.datum if pruefung else None,
-        }
         # Je Fach eigene Zeilen: die Fach-Ansicht zeigt nur, was ihr Fach
         # angeht, und die Fachkonferenzleitung bestätigt nur ihre eigenen.
         je_fach: dict[str, list[dict[str, Any]]] = {}
@@ -156,7 +146,6 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "mtime": stand.zustand.mtime,
         "fehler": None,
         "warnungen": list(planung.warnungen),
-        "preis_je_isbn": preise,
         "fach_je_name": faecher,
         "planung_je_isbn_und_fach": zeilen,
         "ruecklage_je_isbn": ruecklagen,

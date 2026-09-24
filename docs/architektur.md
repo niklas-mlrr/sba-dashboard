@@ -405,11 +405,10 @@ atomar ersetzen, Sicherung in `backups/` (siehe oben, „Der Schreibpfad"). Eine
 zweite, laxere Fassung für die zweite Datei wäre genau die Drift, gegen die die
 erste angetreten ist.
 
-## Die Buchplanung: Preise prüfen, Listen freigeben, Einführung und Ausmusterung
+## Die Buchplanung: Listen freigeben, Einführung und Ausmusterung
 
-Eine Bücherliste ist über ein Schuljahr hinweg ein Arbeitsablauf: der
-Beauftragte prüft die Preise gegen die Verlagslisten, die Fachkonferenzleitungen
-geben ihre Fächer frei, dabei werden Bücher eingeführt und ausgemustert, und
+Eine Bücherliste ist über ein Schuljahr hinweg ein Arbeitsablauf: die
+Fachkonferenzleitungen geben ihre Fächer frei, dabei werden Bücher eingeführt und ausgemustert, und
 Fachschaften bitten darum, Exemplare zurückzulegen. IServ hält nichts davon
 fest. Die Regeln stehen vollständig in
 [`buecherlisten/planung/README.md`](../buecherlisten/planung/README.md); hier stehen die vier
@@ -434,7 +433,7 @@ Testfakes geben ihnen **verschiedene** Werte — ein Fake, in dem beide gleich
 sind, hätte den Fehler mitgetragen.
 
 **Ein Bücher-Blatt, zwei Schlüsseltabellen daneben.** `Buchreihen` trägt jeden
-Titel **einmal**, mit der Preisprüfung; `Fächer & Jahrgang` hat eine Zeile je
+Titel **einmal**, mit einer Bemerkung je Buch; `Fächer & Jahrgang` hat eine Zeile je
 (ISBN, Fach, Jahrgang) mit Einführung, Ausmusterung und der Bestätigung der
 Fachkonferenzleitung; `Rücklage` eine Zeile je (ISBN, Fach). Dazu `Info` mit
 Schuljahr, Stand und Legende. Bis 2026-09-20 standen die Bücher dreimal in der
@@ -447,8 +446,7 @@ gesetzt. Dieselbe Regel wie beim Mehrjahresbände-Blatt.
 
 **Bestätigt wird je Zeile, nicht je Fach.** Kürzel und Datum der
 Fachkonferenzleitung stehen in der Zeile, die sie bestätigen. Der Knopf „Liste
-bestätigen" setzt sie in alle Zeilen des Fachs — eine Sammelgeste wie
-„Preise bestätigen" beim Verlag. Vorher gab es dafür ein eigenes Blatt, das
+bestätigen" setzt sie in alle Zeilen des Fachs — eine Sammelgeste. Vorher gab es dafür ein eigenes Blatt, das
 den bestätigten Stand als ISBN-Liste mitführte, um „veraltet" erkennen zu
 können. Das entfällt: ein neu dazugekommenes Buch bringt eine Zeile ohne
 Kürzel mit, und das Fach fällt von allein auf „teilweise" zurück.
@@ -483,14 +481,16 @@ ausgemustert wird eine Bücherliste, nicht ein Bestand. Auch ein Kaufbuch steht
 bis zu einem Schuljahr auf der Liste und danach nicht mehr.
 
 **Kein Status wird gespeichert, jeder wird gerechnet.** „bestätigt",
-„abweichend", „teilweise", „läuft aus" folgen aus den eingetragenen Werten
+„teilweise", „läuft aus" folgen aus den eingetragenen Werten
 (`buecherlisten/planung/modelle.py`). Ein gespeicherter Status könnte den Werten
-widersprechen, aus denen er stammt, und niemand wüsste, welcher recht hat. Zwei
-Anforderungen fallen daraus von selbst: ein neu eingeführtes Buch hat keinen
-geprüften Preis und steht damit auf „offen" — niemand muss daran denken, nach
-einer Fachkonferenz erneut prüfen zu lassen —, und ein in IServ geänderter
-Preis kippt die Zeile auf „abweichend". Deshalb wird der **Betrag** gespeichert
-und nicht nur ein Haken.
+widersprechen, aus denen er stammt, und niemand wüsste, welcher recht hat. Ein neu
+eingeführtes Buch bringt eine Zeile ohne Kürzel mit, und das Fach fällt von
+allein auf „teilweise" zurück.
+
+**Preise werden nicht bestätigt (seit 2026-09-24).** Die Preisprüfung — je Buch
+und je Verlagsliste, mit „geprüfter Preis", Kürzel und Datum auf `Buchreihen` —
+ist entfernt. Der Preis gilt, wie er in IServ steht; auf `Buchreihen` bleibt nur
+die Bemerkung je Buch.
 
 **Der Abgleich führt zusammen, er überschreibt nicht.** Anders als bei den
 Mehrjahresbänden: dort ist die Datei die gerechnete Ausgabe eines Vergleichs,
@@ -500,8 +500,8 @@ bleibt, solange sein Schlüssel existiert. Was wegfällt — ein Buch, das im
 laufenden Schuljahr nicht mehr vorkommt und auch im Vorjahr nicht leihbar war
 —, fällt **mit einer Warnung** weg, die im Blatt `Info` landet.
 
-Eingetragen wird in den Bücherlisten-Seiten selbst (Verlag: Preise; Fach:
-Freigabe, Einführung, Ausmusterung, Rücklage), nicht auf einem eigenen Reiter —
+Eingetragen wird in den Bücherlisten-Seiten selbst (Fach: Freigabe,
+Einführung, Ausmusterung, Rücklage), nicht auf einem eigenen Reiter —
 dort stehen die Bücher ohnehin. Der Schreibpfad ist wieder derselbe: Schloss,
 `mtime`-Vergleich, atomar ersetzen, Sicherung.
 

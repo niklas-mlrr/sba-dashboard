@@ -8,8 +8,7 @@ Schlüssel:
 ======================  ==========================  =========================
 Blatt                   Schlüssel                   eintragbar
 ======================  ==========================  =========================
-``Buchreihen``          ISBN                        geprüfter Preis, Kürzel,
-                                                    Datum, Bemerkung
+``Buchreihen``          ISBN                        Bemerkung
 ``Fächer & Jahrgang``   (ISBN, Fach, Jahrgang)      Einführung, Ausmusterung,
                                                     Kürzel, Datum, Bemerkung
 ``Rücklage``            (ISBN, Fach)                Anzahl, Kürzel, Datum,
@@ -58,9 +57,9 @@ from .modelle import (
     OHNE_FACH,
     OHNE_VERLAG,
     Buch,
+    Buchbemerkung,
     Buchplanung,
     Planungszeile,
-    Preispruefung,
     Ruecklage,
 )
 
@@ -90,7 +89,6 @@ class MappeUnlesbar(ValueError):
 # (Überschrift, Breite, eintragbar). "Eintragbar" färbt die Spalte hell ein und
 # ist zugleich die Liste dessen, was beim Lesen zurückkommt.
 
-SPALTE_PREIS = "geprüfter Preis"
 SPALTE_EINFUEHRUNG = "Einführung"
 SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
 # Steht dieses (Fach, Jahrgang) in einer Bücherliste aus IServ - oder ist es
@@ -111,9 +109,6 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Neupreis", 12, False),
         ("Leihpreis", 12, False),
         ("leihbar", 9, False),
-        (SPALTE_PREIS, 15, True),
-        ("Kürzel", 10, True),
-        ("Datum", 12, True),
         ("Bemerkung", 30, True),
     ),
     BLATT_FACH_JAHRGANG: (
@@ -153,7 +148,7 @@ _MITTE = Alignment(horizontal="center", vertical="center")
 
 _DATUMSFORMAT = "DD.MM.YYYY"
 _EUROFORMAT = '#,##0.00\\ "€"'
-_EUROSPALTEN = ("Neupreis", "Leihpreis", SPALTE_PREIS)
+_EUROSPALTEN = ("Neupreis", "Leihpreis")
 
 _JA = "ja"
 _NEIN = "nein"
@@ -297,13 +292,10 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
         for isbn in (_text(zeile.get("ISBN")),) if isbn
     )
 
-    preise = tuple(
+    bemerkungen = tuple(
         eintrag for eintrag in (
-            Preispruefung(
+            Buchbemerkung(
                 isbn=_text(zeile.get("ISBN")),
-                preis=_zahl(zeile.get(SPALTE_PREIS)),
-                kuerzel=_text(zeile.get("Kürzel")),
-                datum=_datum(zeile.get("Datum")),
                 bemerkung=_text(zeile.get("Bemerkung")),
             )
             for zeile in buch_roh if _text(zeile.get("ISBN"))
@@ -328,7 +320,7 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     schuljahr, vorjahr, stand = _lies_info(wb)
     return Buchplanung(
         schuljahr=schuljahr, vorjahr=vorjahr, stand=stand, buecher=buecher,
-        preise=preise, planung=tuple(planung), ruecklagen=ruecklagen,
+        bemerkungen=bemerkungen, planung=tuple(planung), ruecklagen=ruecklagen,
     )
 
 
@@ -409,7 +401,7 @@ def _nach_titel(stand: Buchplanung) -> list[Buch]:
 def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
     zeilen: list[dict[str, object]] = []
     for buch in _nach_titel(stand):
-        pruefung = stand.pruefung(buch.isbn)
+        eintrag = stand.bemerkung(buch.isbn)
         zeilen.append({
             "Titel": buch.titel,
             "Fach": buch.fach_anzeige,
@@ -419,10 +411,7 @@ def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "Neupreis": buch.neupreis,
             "Leihpreis": buch.leihgebuehr,
             "leihbar": _JA if buch.leihbar else _NEIN,
-            SPALTE_PREIS: pruefung.preis if pruefung else None,
-            "Kürzel": pruefung.kuerzel if pruefung else "",
-            "Datum": pruefung.datum if pruefung else None,
-            "Bemerkung": pruefung.bemerkung if pruefung else "",
+            "Bemerkung": eintrag.bemerkung if eintrag else "",
         })
     return zeilen
 
@@ -493,7 +482,7 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
         if isinstance(wert, date):
             rechts.number_format = _DATUMSFORMAT
 
-    zeile(1, "Schulbuchausleihe", "Bücherlisten, Preisprüfung und Planung", fett=True)
+    zeile(1, "Schulbuchausleihe", "Bücherlisten und Planung", fett=True)
     zeile(2, "Schuljahr", stand.schuljahr)
     zeile(3, "Vorjahr", stand.vorjahr)
     zeile(4, "Stand", stand.stand)

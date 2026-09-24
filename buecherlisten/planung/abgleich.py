@@ -5,7 +5,7 @@ Der Abgleich ist die Stelle, an der die beiden Wahrheiten aufeinandertreffen:
 
 * **IServ** sagt, welche Bücher es gibt, in welchen Fächern und Jahrgängen und
   zu welchem Preis. Das wird bei jedem Abgleich frisch übernommen.
-* **Die Datei** sagt, was geprüft, bestätigt, geplant und zurückgelegt wurde.
+* **Die Datei** sagt, was bemerkt, bestätigt, geplant und zurückgelegt wurde.
   Das überlebt jeden Abgleich.
 
 Was verlorengeht, geht nicht stillschweigend verloren: eine Eintragung zu einem
@@ -30,9 +30,9 @@ from .modelle import (
     RUECKLAGE_GEWUENSCHT,
     RUECKLAGE_STATUS,
     Buch,
+    Buchbemerkung,
     Buchplanung,
     Planungszeile,
-    Preispruefung,
     Ruecklage,
     UngueltigesSchuljahr,
     schuljahr_zahl,
@@ -59,7 +59,7 @@ class UngueltigeEingabe(ValueError):
 def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) -> Buchplanung:
     """Übernimmt die Bücher aus IServ und behält alles von Hand Eingetragene.
 
-    Der Schlüssel ist jeweils der seines Blatts: die ISBN bei der Preisprüfung,
+    Der Schlüssel ist jeweils der seines Blatts: die ISBN bei der Bemerkung,
     (ISBN, Fach, Jahrgang) bei der Planung, (ISBN, Fach) bei der Rücklage.
     Fällt die ISBN weg, fällt die Eintragung weg - mit einer Warnung, die in der
     Datei landet. Fach und Jahrgang einer Planungszeile werden **nicht** geprüft:
@@ -68,7 +68,6 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
     """
     alt = vorher or Buchplanung()
     bekannt = {buch.isbn for buch in schnappschuss.buecher}
-    titel = {buch.isbn: buch.titel for buch in schnappschuss.buecher}
     warnungen: list[str] = list(schnappschuss.warnungen)
 
     def verloren(was: str, isbn: str) -> None:
@@ -78,12 +77,12 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
             f"Vorjahr {schnappschuss.vorjahr} in einer Bücherliste."
         )
 
-    preise: list[Preispruefung] = []
-    for eintrag in alt.preise:
+    bemerkungen: list[Buchbemerkung] = []
+    for eintrag in alt.bemerkungen:
         if eintrag.isbn in bekannt:
-            preise.append(eintrag)
+            bemerkungen.append(eintrag)
         else:
-            verloren("Die Preisprüfung", eintrag.isbn)
+            verloren("Die Bemerkung", eintrag.isbn)
 
     planung: list[Planungszeile] = []
     for zeile in alt.planung:
@@ -104,28 +103,12 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         vorjahr=schnappschuss.vorjahr,
         stand=schnappschuss.stand,
         buecher=schnappschuss.buecher,
-        preise=tuple(preise),
+        bemerkungen=tuple(bemerkungen),
         planung=tuple(planung),
         ruecklagen=tuple(ruecklagen),
         warnungen=tuple(warnungen),
     )
-    return _mit_hinweis_auf_offene_preise(neu, titel)
-
-
-def _mit_hinweis_auf_offene_preise(stand: Buchplanung, titel: dict[str, str]) -> Buchplanung:
-    """Ergänzt eine Warnung, wenn Bücher ohne geprüften Preis in der Datei stehen.
-
-    Kein neuer Zustand, nur ein Satz: die Preisprüfung eines neu eingeführten
-    Buchs ist genau der Schritt, der nach einer Fachkonferenz vergessen wird.
-    """
-    geprueft = {eintrag.isbn for eintrag in stand.preise if eintrag.preis is not None}
-    offen = [buch for buch in stand.buecher if buch.isbn not in geprueft]
-    if not offen:
-        return stand
-    namen = ", ".join(sorted(titel.get(buch.isbn, buch.isbn) for buch in offen)[:5])
-    mehr = "" if len(offen) <= 5 else f" und {len(offen) - 5} weitere"
-    hinweis = f"{len(offen)} Buch/Bücher haben noch keinen geprüften Preis: {namen}{mehr}."
-    return replace(stand, warnungen=stand.warnungen + (hinweis,))
+    return neu
 
 
 # ── Einzelne Eintragungen ────────────────────────────────────────────────────
@@ -164,57 +147,6 @@ def _geprueftes_fach(stand: Buchplanung, buch: Buch, fach: str) -> None:
             f"„{buch.titel}“ gehört nicht zum Fach „{fach}“. Möglich sind: "
             + ", ".join(sorted(erlaubt)) + "."
         )
-
-
-def setze_preis(
-    stand: Buchplanung, *, isbn: str, preis: float | None, kuerzel: str,
-    datum: date | None, bemerkung: str = "",
-) -> Buchplanung:
-    """Trägt den gegen die Verlagsliste geprüften Preis eines Buchs ein.
-
-    ``preis=None`` löscht die Prüfung - das ist der Weg zurück auf "offen",
-    wenn jemand versehentlich bestätigt hat.
-    """
-    _geprueftes_buch(stand, isbn)
-    if preis is not None and (preis < 0 or preis > 1000):
-        raise UngueltigeEingabe(
-            f"„{preis}“ ist kein Buchpreis. Erwartet wird ein Betrag zwischen 0 und 1000 €."
-        )
-    neuer = None if preis is None and not kuerzel.strip() and not bemerkung.strip() else (
-        Preispruefung(isbn=isbn, preis=preis, kuerzel=kuerzel.strip(),
-                      datum=datum, bemerkung=bemerkung.strip())
-    )
-    return _ersetzt(stand, preise=_ersetze(stand.preise, lambda e: e.isbn == isbn, neuer))
-
-
-def setze_preise_des_verlags(
-    stand: Buchplanung, *, verlag: str, kuerzel: str, datum: date | None,
-) -> tuple[Buchplanung, int]:
-    """Bestätigt **alle** Preise eines Verlags zum Preis, der in IServ steht.
-
-    Das ist der Knopf neben dem Drucker in der Verlags-Ansicht: wer die
-    Verlagsliste einmal durchgegangen ist, soll nicht zwanzigmal klicken.
-    Gespeichert wird trotzdem je Buch der Betrag, nicht ein Sammelhaken -
-    sonst fiele eine spätere Preisänderung nicht mehr auf.
-    """
-    buecher = stand.buecher_je_verlag(verlag)
-    if not buecher:
-        raise UngueltigeEingabe(f"„{verlag}“ kommt in dieser Datei als Verlag nicht vor.")
-    neu = stand
-    geaendert = 0
-    for buch in buecher:
-        if buch.neupreis is None:
-            continue
-        neu = setze_preis(neu, isbn=buch.isbn, preis=buch.neupreis,
-                          kuerzel=kuerzel, datum=datum,
-                          bemerkung=_vorhandene_bemerkung(stand, buch.isbn))
-        geaendert += 1
-    return neu, geaendert
-
-
-def _vorhandene_bemerkung(stand: Buchplanung, isbn: str) -> str:
-    eintrag = stand.pruefung(isbn)
-    return eintrag.bemerkung if eintrag else ""
 
 
 def setze_planung(
@@ -377,8 +309,7 @@ def bestaetige_fach(
 ) -> tuple[Buchplanung, int]:
     """Setzt Kürzel und Datum in **alle** Zeilen eines Fachs.
 
-    Die Fachkonferenzleitung gibt ihre Liste als Ganzes frei - dieselbe
-    Sammelgeste wie :func:`setze_preise_des_verlags` beim Verlag. Bestätigt
+    Die Fachkonferenzleitung gibt ihre Liste als Ganzes frei. Bestätigt
     wird aber je Zeile, und genau deshalb braucht es keinen zweiten Zustand
     "bestätigter Stand": kommt später ein Buch dazu, ist seine Zeile leer, und
     das Fach ist wieder nur teilweise bestätigt.

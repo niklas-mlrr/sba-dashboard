@@ -190,7 +190,8 @@ def test_uebersichten_verlinken_ihre_gruppen(seiten: TestClient, ansicht: str, e
     antwort = seiten.get(f"/buecherliste/{ansicht}")
     assert antwort.status_code == 200
     assert f'href="{erwartet}"' in antwort.text
-    assert "label-status" in antwort.text
+    # Ein Status steht nur beim Fach: die Freigabe der Fachkonferenzleitung.
+    assert ("label-status" in antwort.text) == (ansicht == "fach")
     assert "Liste hinzufügen" not in antwort.text
 
 
@@ -198,8 +199,9 @@ def test_jahrgangsuebersicht_hat_die_iserv_spalten(seiten: TestClient):
     _anmelden(seiten)
     text = seiten.get("/buecherliste/jahrgang").text
     for spalte in ("Leihmodalität", "Festpreis", "Anmeldung", "Beginn", "Ende",
-                   "Zahlungsfrist", "Bankverbindung", "Status"):
+                   "Zahlungsfrist", "Bankverbindung"):
         assert f">{spalte}</th>" in text
+    assert ">Status</th>" not in text
     assert "Veröffentlicht" not in text
 
 

@@ -1,15 +1,13 @@
-# Buchplanung — Preise prüfen, Listen freigeben, Einführung und Ausmusterung
+# Buchplanung — Listen freigeben, Einführung und Ausmusterung
 
 Eine Bücherliste entsteht nicht an einem Tag. Über ein Schuljahr hinweg
-passieren vier Dinge, und jedes gehört jemand anderem:
+passieren drei Dinge, und jedes gehört jemand anderem:
 
-1. Der **Beauftragte für die Schulbuchausleihe** prüft die Preise gegen die
-   Verlagslisten — Buch für Buch oder eine ganze Verlagsliste auf einmal.
-2. Die **Fachkonferenzleitungen** prüfen die Liste ihres Fachs und geben sie
+1. Die **Fachkonferenzleitungen** prüfen die Liste ihres Fachs und geben sie
    mit Kürzel und Datum frei.
-3. Dabei werden Bücher **neu eingeführt** oder **ausgemustert**, bei
+2. Dabei werden Bücher **neu eingeführt** oder **ausgemustert**, bei
    Mehrjahresbänden gestaffelt über mehrere Schuljahre und Jahrgänge.
-4. Eine **Fachschaft** möchte von einem auslaufenden Buch Exemplare behalten,
+3. Eine **Fachschaft** möchte von einem auslaufenden Buch Exemplare behalten,
    statt sie wegzuwerfen.
 
 IServ hält nichts davon fest. Dieses Paket tut es — in **einer Exceldatei je
@@ -30,13 +28,13 @@ alles andere darunter.
 
 | Blatt | Schlüssel | eintragbar |
 |-------|-----------|------------|
-| `Buchreihen` | ISBN | geprüfter Preis, Kürzel, Datum, Bemerkung |
+| `Buchreihen` | ISBN | Bemerkung |
 | `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung (dazu `in der Bücherliste`, gesetzt) |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
 Jeder Titel steht **einmal**, auf `Buchreihen`, mit Fach und Jahrgang als
-Aufzählung, dem Preis aus IServ und der Preisprüfung daneben. Die beiden
+Aufzählung, und den Preisen aus IServ daneben. Die beiden
 anderen Blätter tragen nur ihren Schlüssel und das, was dazu eingetragen wird.
 
 Bis 2026-09-20 standen die Bücher dreimal in der Mappe, einmal je Achse
@@ -160,36 +158,20 @@ denen er stammt — und niemand wüsste, welcher von beiden recht hat.
 
 | Status | wann |
 |--------|------|
-| `offen` | zu diesem Buch ist kein geprüfter Preis eingetragen |
-| `bestätigt` | geprüfter Preis = Preis in IServ |
-| `abweichend` | geprüfter Preis ≠ Preis in IServ |
 | `bestätigt` (Fach) | jede Zeile des Fachs trägt ein Kürzel |
 | `teilweise` (Fach) | einzelne Zeilen sind noch ohne Kürzel — mit Angabe, welche |
 | `geplant` / `im Einsatz` / `läuft aus` / `ausgemustert` | aus den beiden Schuljahren der Zeile gegen das Schuljahr der Datei |
 
-Daraus fällt zweierlei von selbst:
+Ein **neu eingeführtes Buch** bringt eine Zeile ohne Kürzel mit; das Fach fällt
+damit von selbst auf `teilweise` zurück.
 
-* Ein **neu eingeführtes Buch** hat keinen geprüften Preis und steht damit
-  automatisch auf `offen`. Niemand muss daran denken, nach einer Fachkonferenz
-  die Preise erneut prüfen zu lassen.
-* Ändert IServ einen Preis nach der Prüfung, kippt die Zeile auf `abweichend`.
-  Deshalb wird der **Betrag** gespeichert und nicht nur ein Haken.
+## Preise werden nicht bestätigt
 
-## Warum die Preise nicht automatisch geprüft werden
-
-Geprüft, am 2026-09-19:
-
-* **VLB** (Verzeichnis lieferbarer Bücher) hat tagesaktuelle, an die
-  Buchpreisbindung gebundene Preise und eine REST-API — aber nur mit
-  kostenpflichtigem Abo, Mindestlaufzeit ein Jahr.
-* **DNB-SRU** ist kostenlos, liefert aber nur den Preis zum
-  Erscheinungszeitpunkt, oft gar keinen. Für „stimmt der Preis noch?" wertlos.
-* **Verlagsseiten abgreifen** bricht bei jedem Relaunch und ist über Jahre
-  nicht verlässlich.
-
-Deshalb bleibt die Prüfung eine menschliche Entscheidung. Eine Preisquelle
-ließe sich später einhängen, ohne das Datenmodell zu ändern — am ehesten als
-Import der Preislisten, die die Verlage ohnehin schicken.
+Bis 2026-09-24 gab es auf `Buchreihen` die Spalten `geprüfter Preis`, `Kürzel`
+und `Datum` und in der Verlags-Ansicht die Knöpfe „prüfen" und „Preise
+bestätigen". Sie sind entfernt: der Preis gilt, wie er in IServ steht. Übrig
+ist die Spalte `Bemerkung` je Buch. Eine ältere Datei mit den alten Spalten
+bleibt lesbar; beim nächsten Speichern fallen sie weg.
 
 ## Aufbau des Pakets
 

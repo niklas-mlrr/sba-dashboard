@@ -1,17 +1,16 @@
-// Die Buchplanung in den Bücherlisten-Seiten - vier Knöpfe und ein Menü.
+// Die Buchplanung in den Bücherlisten-Seiten - drei Knöpfe und ein Menü.
 //
 // Dieselbe Regel wie in app.js und mehrjahresbaende.js: so dumm wie möglich.
-// Das Skript rechnet keinen Status aus und entscheidet nicht, ob ein Preis
-// stimmt; es schickt die Eingabe an den Server und trägt ein, was zurückkommt.
+// Das Skript rechnet keinen Status aus und entscheidet nichts;
+// es schickt die Eingabe an den Server und trägt ein, was zurückkommt.
 // Welche Status es gibt, steht in buecherlisten/planung/modelle.py - hier steht
 // nirgends eine Liste davon.
 //
 //   1. Aktualisieren: beide Schuljahre aus IServ holen und die Datei anlegen.
 //      Danach wird die Seite neu geladen - sie zeigt dann überall den Stand.
-//   2. Preis prüfen: je Buch (Verlags-Ansicht) oder als ganze Verlagsliste.
-//   3. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht),
+//   2. Liste bestätigen: die Freigabe der Fachkonferenzleitung (Fach-Ansicht),
 //      die Kürzel und Datum in alle Zeilen dieses Fachs schreibt.
-//   4. Das Planungsmenü: ein Klick auf eine Buchzeile öffnet den Dialog mit
+//   3. Das Planungsmenü: ein Klick auf eine Buchzeile öffnet den Dialog mit
 //      Einführung, Ausmusterung und Rücklage dieses Buchs in diesem Fach.
 //      Gespeichert wird alles auf einmal - ein Menü, ein Knopf, eine Anfrage
 //      (POST /api/buchplanung/buch). Abbrechen verwirft.
@@ -110,12 +109,6 @@
       werte[feld.dataset.planungFeld] = feld.value.trim();
     }
     return werte;
-  }
-
-  function zahl(text) {
-    if (!text) return null;
-    const wert = Number(text.replace(",", "."));
-    return Number.isFinite(wert) ? wert : null;
   }
 
   // ── Das Planungsmenü ──────────────────────────────────────────────────────
@@ -236,29 +229,6 @@
     }
 
     const kopf = knopf.closest(".planung-formular");
-
-    if (art === "preise") {
-      const werte = kopf ? felder(kopf) : {};
-      if (!werte.kuerzel) {
-        zeige("Bitte das Kürzel eintragen, mit dem bestätigt wird.", "fehlerhaft");
-        return;
-      }
-      sende("/api/buchplanung/preise", {
-        verlag: knopf.dataset.verlag, kuerzel: werte.kuerzel, datum: werte.datum || null,
-      }, (daten) => daten.bestaetigt + " Preis(e) als geprüft eingetragen.");
-      return;
-    }
-
-    if (art === "preis") {
-      const eingabe = document.querySelector('.planung-formular [data-planung-feld="kuerzel"]');
-      sende("/api/buchplanung/preis", {
-        isbn: knopf.dataset.isbn,
-        preis: zahl(knopf.dataset.preis),
-        kuerzel: eingabe ? eingabe.value.trim() : "",
-        datum: null,
-      }, () => "Der Preis wurde als geprüft eingetragen.");
-      return;
-    }
 
     if (art === "fach") {
       const werte = kopf ? felder(kopf) : {};

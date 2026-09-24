@@ -2,14 +2,15 @@
 
 Die beiden Fragen, an denen diese Datei hängt:
 
-1. **Überlebt Eingetragenes den Abgleich?** Eine Preisprüfung, eine Rücklage
+1. **Überlebt Eingetragenes den Abgleich?** Eine Bemerkung, eine Rücklage
    und eine Planungszeile müssen einen Abruf aus IServ überstehen - sonst wäre
    die Datei nach dem ersten „Aktualisieren" leer.
-2. **Fällt auf, wenn sich etwas ändert?** Ein geänderter Preis muss die
-   Prüfung kippen, ein neues Buch das Fach aus seiner Bestätigung werfen.
+2. **Fällt auf, wenn sich etwas ändert?** Ein neues Buch muss das Fach aus
+   seiner Bestätigung werfen.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -21,9 +22,6 @@ from buecherlisten.planung import (
     PLANUNG_AUSGEMUSTERT,
     PLANUNG_GEPLANT,
     PLANUNG_LAEUFT_AUS,
-    PREIS_ABWEICHEND,
-    PREIS_BESTAETIGT,
-    PREIS_OFFEN,
     Buch,
     Buchplanung,
     Jahrgangseingabe,
@@ -36,17 +34,14 @@ from buecherlisten.planung import (
     lade_schnappschuss,
     lies_datei,
     planungs_status,
-    preis_status,
     schreibe_datei,
     setze_buchplanung,
     setze_planung,
-    setze_preis,
-    setze_preise_des_verlags,
     setze_ruecklage,
     wirkt_im_schuljahr,
     zusammenfuehren,
 )
-from buecherlisten.planung.modelle import Planungszeile
+from buecherlisten.planung.modelle import Buchbemerkung, Planungszeile
 
 DEUTSCH = "9783060000005"
 TERRA = "9783121000562"
@@ -89,12 +84,15 @@ def stand() -> Buchplanung:
     return zusammenfuehren(None, _schnappschuss())
 
 
+def _mit_bemerkung(stand, isbn, text):
+    return replace(stand, bemerkungen=stand.bemerkungen + (Buchbemerkung(isbn, text),))
+
+
 # ── Der Aufbau der Datei ─────────────────────────────────────────────────────
 
 
 def test_die_achsen_gruppieren_wie_erwartet(stand):
-    # Jedes Buch hat genau einen Verlag, und jedes Buch der Datei bekommt einen
-    # geprüften Preis - auch das ausgemusterte.
+    # Jedes Buch hat genau einen Verlag.
     assert stand.verlage == ("Cornelsen", "Klett", "Langenscheidt", "Westermann")
     # Ein Buch mit zwei Fächern steht in beiden.
     assert stand.faecher == ("Chemie", "Deutsch", "Erdkunde", "Latein", "Politik")
@@ -107,8 +105,7 @@ def test_die_achsen_gruppieren_wie_erwartet(stand):
 
 
 def test_schreiben_und_lesen_ergibt_denselben_stand(tmp_path, stand):
-    stand = setze_preis(stand, isbn=DEUTSCH, preis=22.5, kuerzel="MLR",
-                        datum=date(2026, 9, 1))
+    stand = _mit_bemerkung(stand, DEUTSCH, "Preis beim Verlag erfragt")
     stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5,
                             kuerzel="FK", datum=date(2026, 9, 2),
                             bemerkung="für die Sammlung")
@@ -126,8 +123,7 @@ def test_schreiben_und_lesen_ergibt_denselben_stand(tmp_path, stand):
     assert gelesen.stand == date(2026, 9, 19)
     assert {b.isbn for b in gelesen.buecher} == {DEUTSCH, TERRA, ALT, KAUF}
 
-    pruefung = gelesen.pruefung(DEUTSCH)
-    assert (pruefung.preis, pruefung.kuerzel, pruefung.datum) == (22.5, "MLR", date(2026, 9, 1))
+    assert gelesen.bemerkung(DEUTSCH).bemerkung == "Preis beim Verlag erfragt"
     ruecklage = gelesen.ruecklage(ALT, "Chemie")
     assert (ruecklage.anzahl, ruecklage.bemerkung) == (5, "für die Sammlung")
     zeile = gelesen.planungszeile(ALT, "Chemie", 9)
@@ -149,7 +145,7 @@ def test_buecher_kommen_mit_ihren_kombinationen_zurueck(tmp_path, stand):
     assert terra.leihgebuehr == 5.0
 
     # Jedes Buch steht auf "Buchreihen" - auch das nur im Vorjahr geführte und
-    # das Kaufbuch; die Preisprüfung gilt für beide.
+    # das Kaufbuch.
     assert gelesen.buch(ALT).neupreis == 30.0
     assert gelesen.buch(KAUF).leihbar is False
     assert gelesen.buch(ALT).leihbar is True
@@ -228,7 +224,7 @@ def test_die_alten_blaetter_verschwinden(tmp_path, stand):
 
 
 def test_eintragungen_ueberleben_den_abgleich(stand):
-    stand = setze_preis(stand, isbn=DEUTSCH, preis=22.5, kuerzel="MLR", datum=date(2026, 9, 1))
+    stand = _mit_bemerkung(stand, DEUTSCH, "Preis beim Verlag erfragt")
     stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5)
     stand = setze_planung(stand, isbn=TERRA, fach="Erdkunde", jahrgang=7,
                           eingefuehrt_ab="2027/2028")
@@ -236,19 +232,19 @@ def test_eintragungen_ueberleben_den_abgleich(stand):
 
     neu = zusammenfuehren(stand, _schnappschuss())
 
-    assert neu.pruefung(DEUTSCH).preis == 22.5
+    assert neu.bemerkung(DEUTSCH).bemerkung == "Preis beim Verlag erfragt"
     assert neu.ruecklage(ALT, "Chemie").anzahl == 5
     assert neu.planungszeile(TERRA, "Erdkunde", 7).eingefuehrt_ab == "2027/2028"
     assert neu.planungszeile(DEUTSCH, "Deutsch", 5).kuerzel == "ABC"
 
 
 def test_verschwundenes_buch_wird_verworfen_aber_gemeldet(stand):
-    stand = setze_preis(stand, isbn=ALT, preis=30.0, kuerzel="MLR", datum=None)
+    stand = _mit_bemerkung(stand, ALT, "läuft aus")
     ohne_alt = tuple(b for b in _buecher() if b.isbn != ALT)
 
     neu = zusammenfuehren(stand, _schnappschuss(ohne_alt))
 
-    assert neu.pruefung(ALT) is None
+    assert neu.bemerkung(ALT) is None
     assert any(ALT in warnung for warnung in neu.warnungen)
 
 
@@ -258,43 +254,6 @@ def test_fehlendes_vorjahr_ist_kein_fehler_sondern_eine_warnung(stand):
 
 
 # ── Die gerechneten Status ───────────────────────────────────────────────────
-
-
-def test_preisstatus_kippt_wenn_iserv_den_preis_aendert(stand):
-    stand = setze_preis(stand, isbn=DEUTSCH, preis=22.5, kuerzel="MLR", datum=None)
-    buch = stand.buch(DEUTSCH)
-    assert preis_status(buch, stand.pruefung(DEUTSCH))[0] == PREIS_BESTAETIGT
-
-    teurer = tuple(
-        b if b.isbn != DEUTSCH else Buch(**{**b.__dict__, "neupreis": 24.9})
-        for b in _buecher()
-    )
-    neu = zusammenfuehren(stand, _schnappschuss(teurer))
-    status, hinweis = preis_status(neu.buch(DEUTSCH), neu.pruefung(DEUTSCH))
-    assert status == PREIS_ABWEICHEND
-    assert "22,50" in hinweis and "24,90" in hinweis
-
-
-def test_neues_buch_steht_von_allein_auf_offen(stand):
-    stand = setze_preise_des_verlags(stand, verlag="Cornelsen", kuerzel="MLR", datum=None)[0]
-    zusaetzlich = _buecher() + (
-        Buch(isbn="9783060000012", titel="Deutschbuch 6", verlag="Cornelsen",
-             kombinationen=(("Deutsch", 6),), leihbar=True, neupreis=23.0),
-    )
-    neu = zusammenfuehren(stand, _schnappschuss(zusaetzlich))
-
-    assert preis_status(neu.buch(DEUTSCH), neu.pruefung(DEUTSCH))[0] == PREIS_BESTAETIGT
-    assert preis_status(neu.buch("9783060000012"), neu.pruefung("9783060000012"))[0] == PREIS_OFFEN
-    assert any("geprüften Preis" in warnung for warnung in neu.warnungen)
-
-
-def test_ganze_verlagsliste_auf_einmal(stand):
-    neu, anzahl = setze_preise_des_verlags(stand, verlag="Westermann", kuerzel="MLR",
-                                           datum=date(2026, 9, 5))
-    assert anzahl == 1
-    assert neu.pruefung(ALT).preis == 30.0
-    assert neu.pruefung(ALT).kuerzel == "MLR"
-    assert neu.pruefung(DEUTSCH) is None
 
 
 def test_ein_neues_buch_wirft_das_fach_aus_seiner_bestaetigung(stand):
@@ -423,7 +382,8 @@ def test_das_menue_weist_ein_fremdes_fach_ab(stand):
 
 def test_unbekannte_isbn_wird_abgelehnt(stand):
     with pytest.raises(UnbekanntesBuch):
-        setze_preis(stand, isbn="9780000000000", preis=1.0, kuerzel="MLR", datum=None)
+        setze_planung(stand, isbn="9780000000000", fach="Deutsch", jahrgang=5,
+                      eingefuehrt_ab="2027/2028")
 
 
 def test_ausmusterung_vor_der_einfuehrung_wird_abgelehnt(stand):

@@ -1,8 +1,8 @@
-"""Buchplanung: Preisprüfung, Fachbestätigung, Einführung und Ausmusterung.
+"""Buchplanung: Fachbestätigung, Einführung und Ausmusterung.
 
 Die Bücherlisten stehen in IServ, aber der Weg zu ihnen ist Arbeit über ein
-ganzes Schuljahr: Preise prüfen, Listen von den Fachkonferenzen bestätigen
-lassen, Neueinführungen und Ausmusterungen festhalten, Exemplare für die
+ganzes Schuljahr: Listen von den Fachkonferenzen bestätigen lassen,
+Neueinführungen und Ausmusterungen festhalten, Exemplare für die
 Fachschaften zurücklegen. Dieses Paket hält diesen Weg in **einer Exceldatei**
 je Schuljahr fest - lesbar auch dann, wenn das Dashboard gerade nicht läuft.
 
@@ -24,8 +24,6 @@ from .abgleich import (
     bestaetige_fach,
     setze_buchplanung,
     setze_planung,
-    setze_preis,
-    setze_preise_des_verlags,
     setze_ruecklage,
     zusammenfuehren,
 )
@@ -50,20 +48,16 @@ from .modelle import (
     PLANUNG_GEPLANT,
     PLANUNG_IM_EINSATZ,
     PLANUNG_LAEUFT_AUS,
-    PREIS_ABWEICHEND,
-    PREIS_BESTAETIGT,
-    PREIS_OFFEN,
     RUECKLAGE_STATUS,
     Buch,
+    Buchbemerkung,
     Buchplanung,
     Planungszeile,
-    Preispruefung,
     Ruecklage,
     UngueltigesSchuljahr,
     fach_bestaetigung,
     fach_status,
     planungs_status,
-    preis_status,
     schuljahr_zahl,
     wirkt_im_schuljahr,
 )
@@ -80,9 +74,6 @@ __all__ = [
     "PLANUNG_GEPLANT",
     "PLANUNG_IM_EINSATZ",
     "PLANUNG_LAEUFT_AUS",
-    "PREIS_ABWEICHEND",
-    "PREIS_BESTAETIGT",
-    "PREIS_OFFEN",
     "RUECKLAGE_STATUS",
     "AusleiheClient",
     "Buch",
@@ -90,7 +81,7 @@ __all__ = [
     "Jahrgangseingabe",
     "MappeUnlesbar",
     "Planungszeile",
-    "Preispruefung",
+    "Buchbemerkung",
     "Ruecklage",
     "Ruecklageneingabe",
     "Schnappschuss",
@@ -105,14 +96,11 @@ __all__ = [
     "lies_mappe",
     "neue_mappe",
     "planungs_status",
-    "preis_status",
     "schreibe_datei",
     "schreibe_mappe",
     "schuljahr_zahl",
     "setze_buchplanung",
     "setze_planung",
-    "setze_preis",
-    "setze_preise_des_verlags",
     "setze_ruecklage",
     "wirkt_im_schuljahr",
     "zusammenfuehren",

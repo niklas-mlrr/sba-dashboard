@@ -10,17 +10,16 @@ Testlauf auf dem Schul-Laptop. Er blockiert die Inbetriebnahme.
 
 ## Die Buchplanung (2026-09-19) — gebaut
 
-Neu sind das Paket `buecherlisten/planung/`, die sieben Routen unter `/api/buchplanung`
-und die Bedienelemente in den Bücherlisten-Seiten: in der Verlags-Ansicht die
-Preisprüfung (je Buch und als ganze Liste), in der Fach-Ansicht die Freigabe
+Neu sind das Paket `buecherlisten/planung/`, die fünf Routen unter `/api/buchplanung`
+und die Bedienelemente in den Bücherlisten-Seiten: in der Fach-Ansicht die Freigabe
 durch die Fachkonferenzleitung sowie je Buch ein Aufklapper für Einführung,
 Ausmusterung und Rücklage. Gespeichert wird in einer Exceldatei je Schuljahr
 neben der Bestandsmappe. Was dabei entschieden wurde, steht in
-[`architektur.md`](architektur.md#die-buchplanung-preise-prüfen-listen-freigeben-einführung-und-ausmusterung),
+[`architektur.md`](architektur.md#die-buchplanung-listen-freigeben-einführung-und-ausmusterung),
 die Regeln in [`../buecherlisten/planung/README.md`](../buecherlisten/planung/README.md).
 
 Damit sind zwei Platzhalter erledigt: die **Status-Spalte** der Bücherlisten
-zeigt jetzt die Preisprüfung bzw. die Freigabe, und **„nicht bestätigte"** im
+zeigt jetzt die Freigabe (nur beim Fach), und **„nicht bestätigte"** im
 Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
 **„veränderte"** — dafür fehlt weiterhin die Festlegung, was als Änderung zählt.
 
@@ -28,10 +27,10 @@ Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
 unkritischer: die Buchplanung übernimmt die IServ-Fachnamen unverändert, ein
 Abgleich mit anderen Schreibweisen findet nicht statt.
 
-**Offen: eine Preisquelle.** Geprüft wird von Hand; warum kein automatischer
-Abruf per ISBN eingebaut ist (VLB nur mit kostenpflichtigem Abo, DNB-SRU ohne
-aktuelle Preise), steht in [`../buecherlisten/planung/README.md`](../buecherlisten/planung/README.md).
-Am ehesten ließe sich später ein Import der Verlags-Preislisten einhängen.
+**Entfernt am 2026-09-24: die Preisprüfung.** Preise werden nicht mehr
+bestätigt - weder in der Verlags-Ansicht noch in der Mappe (Spalten „geprüfter
+Preis", „Kürzel" und „Datum" auf `Buchreihen` entfallen; „Bemerkung" bleibt).
+Der Preis gilt, wie er in IServ steht.
 
 ## Der Reiter „Mehrjahresbände" (2026-09-19) — gebaut, zwei Punkte offen
 

@@ -133,28 +133,6 @@ class _BuchplanungAnfrage(BaseModel):
     mtime: float
 
 
-class PreisAnfrage(_BuchplanungAnfrage):
-    """``POST /api/buchplanung/preis`` - der geprüfte Preis eines Buchs.
-
-    ``preis = None`` ist kein fehlendes Feld, sondern der Weg zurück auf
-    „offen": so wird eine versehentliche Bestätigung zurückgenommen.
-    """
-
-    isbn: NichtLeer
-    preis: float | None = None
-    kuerzel: str = ""
-    datum: date | None = None
-    bemerkung: str = ""
-
-
-class VerlagspreisAnfrage(_BuchplanungAnfrage):
-    """``POST /api/buchplanung/preise`` - eine ganze Verlagsliste auf einmal."""
-
-    verlag: NichtLeer
-    kuerzel: NichtLeer
-    datum: date | None = None
-
-
 class FachbestaetigungAnfrage(_BuchplanungAnfrage):
     """``POST /api/buchplanung/fach`` - die Freigabe durch die Fachkonferenzleitung.
 

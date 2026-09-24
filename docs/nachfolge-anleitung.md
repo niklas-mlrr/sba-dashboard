@@ -219,11 +219,11 @@ Fach mit mehreren Büchern; die Legende nennt dann die Titel einzeln.
 
 ---
 
-## 7. Bücherlisten: Preise prüfen, Listen bestätigen, Bücher ein- und ausmustern
+## 7. Bücherlisten: Listen bestätigen, Bücher ein- und ausmustern
 
 Oben in der Leiste steht **„Bücherlisten"** mit den drei Ansichten Verlag, Fach
 und Jahrgang. Sie zeigen immer den Stand aus IServ. Was darüber hinaus über ein
-Schuljahr hinweg entschieden wird — geprüfte Preise, Freigaben der
+Schuljahr hinweg entschieden wird — Freigaben der
 Fachkonferenzen, Einführungen, Ausmusterungen, Rücklagen — speichert das
 Programm in einer eigenen Exceldatei je Schuljahr, im selben Ordner wie die
 Bestandsliste (`Bücherlisten und Planung 2026-2027.xlsx`). Wer nur nachsehen
@@ -235,24 +235,7 @@ drückt man ihn wieder, wenn sich in IServ etwas geändert hat. Er überschreibt
 dabei **nichts** von dem, was Sie eingetragen haben — nur Titel, Verlage,
 Jahrgänge und Preise kommen frisch aus IServ.
 
-### Schritt 1: die Preise (Ansicht „Verlag")
-
-Öffnen Sie einen Verlag. In der Spalte **Status** steht zu jedem Buch, ob sein
-Preis schon gegen die Verlagsliste geprüft wurde.
-
-- **Ein einzelnes Buch:** Kürzel oben eintragen, dann in der Zeile auf
-  **„prüfen"** klicken.
-- **Die ganze Verlagsliste:** Kürzel und Datum oben eintragen, dann
-  **„Preise bestätigen"**.
-
-Gespeichert wird dabei der **Betrag**, nicht nur ein Haken. Ändert jemand den
-Preis später in IServ, springt die Zeile auf **„abweichend"** — dann stimmt die
-Bücherliste nicht mehr mit dem überein, was geprüft wurde, und der Preis gehört
-in IServ korrigiert. Ein **neu hinzugekommenes Buch** steht automatisch wieder
-auf „offen"; Sie müssen nicht daran denken, nach einer Fachkonferenz erneut zu
-prüfen.
-
-### Schritt 2: die Fachkonferenzen (Ansicht „Fach")
+### Schritt 1: die Fachkonferenzen (Ansicht „Fach")
 
 Öffnen Sie ein Fach. Oben stehen Kürzel, Datum und **„Liste bestätigen"** — die
 Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch.
@@ -265,7 +248,7 @@ Freigabe bleiben lesbar stehen.
 Im Druckmenü wählt **„nicht bestätigte"** genau die Fächer aus, deren Freigabe
 noch fehlt oder unvollständig ist.
 
-### Schritt 3: Einführung, Ausmusterung, Rücklage (ebenfalls Ansicht „Fach")
+### Schritt 2: Einführung, Ausmusterung, Rücklage (ebenfalls Ansicht „Fach")
 
 Hinter jedem Buch steht **„Planung…"**. Ein Klick klappt darunter zwei Dinge
 auf:
@@ -291,8 +274,7 @@ eine Bemerkung. Dann **„Rücklage speichern"**.
 
 Vier Blätter:
 
-* **Buchreihen** — jeder Titel einmal, mit Fach, Jahrgang, Preisen und der
-  Preisprüfung. Drin sind alle Bücher des laufenden Schuljahres und aus dem
+* **Buchreihen** — jeder Titel einmal, mit Fach, Jahrgang und Preisen. Drin sind alle Bücher des laufenden Schuljahres und aus dem
   Vorjahr die leihbaren; nur die liegen noch im Bestand der Schule.
 * **Fächer & Jahrgang** — eine Zeile je Buch, Fach und Jahrgang, mit
   Einführung, Ausmusterung und der Bestätigung der Fachkonferenzleitung. Den

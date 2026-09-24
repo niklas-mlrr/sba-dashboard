@@ -3,9 +3,9 @@
 Drei Dinge werden über ein Schuljahr hinweg festgehalten, und jedes hat seinen
 eigenen Schlüssel - genau den seines Blatts in der Arbeitsmappe:
 
-* **Preisprüfung** - der Beauftragte für die Schulbuchausleihe vergleicht die
-  Preise in IServ mit den Verlagslisten. Schlüssel ist die ISBN; jedes Buch hat
-  genau einen Verlag und genau eine Zeile auf dem Blatt ``Buchreihen``.
+* **Bemerkung zum Buch** - ein Freitext je Buch. Schlüssel ist die ISBN; jedes
+  Buch hat genau eine Zeile auf dem Blatt ``Buchreihen``. Preise werden hier
+  nicht bestätigt: der Preis gilt, wie er in IServ steht.
 * **Planung und Bestätigung** - ab bzw. bis wann ein Buch in **einem Fach und
   einem Jahrgang** geführt wird, und wer das bestätigt hat. Schlüssel ist
   (ISBN, Fach, Jahrgang). Eine gestaffelte Einführung eines Mehrjahresbands
@@ -17,7 +17,7 @@ eigenen Schlüssel - genau den seines Blatts in der Arbeitsmappe:
   Fächern gehören, und der Wunsch gehört der Fachschaft.
 
 Was hier **nicht** steht, ist ein Feld ``status``. Jeder Status wird aus den
-eingetragenen Werten gerechnet (:func:`preis_status`, :func:`fach_status`,
+eingetragenen Werten gerechnet (:func:`fach_status`,
 :func:`planungs_status`). Ein gespeicherter Status könnte den Werten
 widersprechen, aus denen er stammt - und niemand wüsste, welcher der beiden
 recht hat.
@@ -27,12 +27,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import date
-
-# ── Status der Preisprüfung ──────────────────────────────────────────────────
-
-PREIS_OFFEN = "offen"
-PREIS_BESTAETIGT = "bestätigt"
-PREIS_ABWEICHEND = "abweichend"
 
 # ── Status eines Fachs ───────────────────────────────────────────────────────
 #
@@ -70,10 +64,6 @@ OHNE_VERLAG = "(ohne Verlag)"
 # Die Legende, die im Blatt "Info" steht: Status → was er bedeutet. Sie steht
 # in der Datei, weil die Datei ohne das Dashboard lesbar sein soll.
 LEGENDE: tuple[tuple[str, str], ...] = (
-    (PREIS_OFFEN, "Preis noch nicht gegen die Verlagsliste geprüft"),
-    (PREIS_BESTAETIGT, "geprüfter Preis stimmt mit dem Preis in IServ überein"),
-    (PREIS_ABWEICHEND,
-     "der geprüfte Preis weicht vom Preis in IServ ab - in IServ nachziehen"),
     (FACH_TEILWEISE,
      "einige Zeilen dieses Fachs tragen noch kein Kürzel der Fachkonferenzleitung"),
     (FACH_BESTAETIGT, "die Fachkonferenzleitung hat alle Zeilen dieses Fachs bestätigt"),
@@ -158,22 +148,15 @@ class Buch:
 
 
 @dataclass(frozen=True)
-class Preispruefung:
-    """Der gegen die Verlagsliste geprüfte Preis eines Buchs.
-
-    Gespeichert wird der **Betrag**, nicht nur ein Haken: nur so fällt auf,
-    wenn sich der Preis in IServ danach ändert.
-    """
+class Buchbemerkung:
+    """Der Freitext zu einem Buch - die Spalte ``Bemerkung`` auf ``Buchreihen``."""
 
     isbn: str
-    preis: float | None = None
-    kuerzel: str = ""
-    datum: date | None = None
     bemerkung: str = ""
 
     @property
     def leer(self) -> bool:
-        return self.preis is None and not self.kuerzel and not self.bemerkung
+        return not self.bemerkung
 
 
 @dataclass(frozen=True)
@@ -234,7 +217,7 @@ class Buchplanung:
     vorjahr: str = ""
     stand: date | None = None
     buecher: tuple[Buch, ...] = ()
-    preise: tuple[Preispruefung, ...] = ()
+    bemerkungen: tuple[Buchbemerkung, ...] = ()
     planung: tuple[Planungszeile, ...] = ()
     ruecklagen: tuple[Ruecklage, ...] = ()
     warnungen: tuple[str, ...] = field(default_factory=tuple)
@@ -244,8 +227,8 @@ class Buchplanung:
     def buch(self, isbn: str) -> Buch | None:
         return next((b for b in self.buecher if b.isbn == isbn), None)
 
-    def pruefung(self, isbn: str) -> Preispruefung | None:
-        return next((p for p in self.preise if p.isbn == isbn), None)
+    def bemerkung(self, isbn: str) -> Buchbemerkung | None:
+        return next((b for b in self.bemerkungen if b.isbn == isbn), None)
 
     def planungszeile(self, isbn: str, fach: str, jahrgang: int) -> Planungszeile | None:
         return next((z for z in self.planung if z.isbn == isbn
@@ -316,37 +299,6 @@ class Buchplanung:
 
 
 # ── Die gerechneten Status ───────────────────────────────────────────────────
-
-
-def _betraege_gleich(einer: float | None, anderer: float | None) -> bool:
-    """Zwei Preise auf den Cent genau vergleichen - Fließkomma sonst nirgends."""
-    if einer is None or anderer is None:
-        return einer is None and anderer is None
-    return round(float(einer), 2) == round(float(anderer), 2)
-
-
-def preis_status(buch: Buch, pruefung: Preispruefung | None) -> tuple[str, str]:
-    """(Status, Klartext) der Preisprüfung eines Buchs.
-
-    Ohne geprüften Preis ist der Status ``offen`` - auch für ein Buch, das
-    erst nach der letzten Prüfrunde dazugekommen ist. Genau das ist die
-    Antwort auf "bei Neueinführungen müssen die Preise erneut geprüft werden":
-    niemand muss daran denken, das neue Buch steht von allein auf offen.
-    """
-    if pruefung is None or pruefung.preis is None:
-        return PREIS_OFFEN, "Noch nicht gegen die Verlagsliste geprüft."
-    if _betraege_gleich(pruefung.preis, buch.neupreis):
-        return PREIS_BESTAETIGT, ""
-    return PREIS_ABWEICHEND, (
-        f"Geprüft wurden {_euro(pruefung.preis)}, in IServ stehen "
-        f"{_euro(buch.neupreis)}."
-    )
-
-
-def _euro(wert: float | None) -> str:
-    if wert is None:
-        return "kein Preis"
-    return f"{wert:.2f}".replace(".", ",") + " €"
 
 
 def fach_status(

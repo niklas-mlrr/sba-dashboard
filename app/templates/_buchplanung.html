@@ -5,9 +5,8 @@
   Reiter (Entscheidung 2026-09-19). Deshalb liegt hier nur, was beide Ansichten
   brauchen, und die beiden Ansichten rufen daraus das auf, was zu ihnen gehört:
 
-  * Verlag - der Beauftragte prüft die Preise, einzeln oder als ganze Liste.
-  * Fach   - die Fachkonferenzleitung bestätigt die Liste als Ganzes, und je
-             Buch werden Einführung, Ausmusterung und Rücklage eingetragen.
+  * Fach - die Fachkonferenzleitung bestätigt die Liste als Ganzes, und je
+           Buch werden Einführung, Ausmusterung und Rücklage eingetragen.
 
   Ohne gespeicherten Stand (``planung.mtime is none``) steht statt allem der
   Knopf „Aus IServ aktualisieren": vorher gibt es keine Datei, in die etwas
@@ -15,7 +14,7 @@
 #}
 
 {% macro statuslabel(status) -%}
-{%- set klasse = {"bestätigt": "label-success", "abweichend": "label-danger",
+{%- set klasse = {"bestätigt": "label-success",
                   "teilweise": "label-warning", "offen": "label-status",
                   "geplant": "label-info", "läuft aus": "label-warning",
                   "ausgemustert": "label-default", "im Einsatz": "label-success"}.get(status, "label-status") -%}
@@ -25,14 +24,6 @@
 {% macro kopfknoepfe(planung, ansicht, gruppe) %}
 {% if planung.mtime is none %}
 <button type="button" class="btn btn-default" data-planung="abgleich">Aus IServ aktualisieren</button>
-{% elif gruppe and ansicht == "verlag" %}
-<span class="planung-formular">
-  <input type="text" class="planung-feld" data-planung-feld="kuerzel" maxlength="10"
-    placeholder="Kürzel" aria-label="Kürzel der Preisprüfung">
-  <input type="date" class="planung-feld" data-planung-feld="datum" aria-label="Datum der Preisprüfung">
-  <button type="button" class="btn btn-default" data-planung="preise" data-verlag="{{ gruppe }}"
-    title="Alle Preise dieser Verlagsliste als geprüft eintragen">Preise bestätigen</button>
-</span>
 {% elif gruppe and ansicht == "fach" %}
 <span class="planung-formular">
   {% set stand = planung.fach_je_name.get(gruppe) %}

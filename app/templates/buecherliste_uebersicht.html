@@ -21,10 +21,9 @@
   table.table, Bezeichnung als Link, Status als Label. Ohne "Liste
   hinzufügen" und ohne "Bücherlisten übernehmen" - das Dashboard liest nur.
 
-  Die Status-Spalte zeigt seit 2026-09-19 den gespeicherten Stand: beim Fach
-  die Freigabe durch die Fachkonferenzleitung, bei Verlag und Jahrgang, wie
-  viele Preise schon geprüft sind. Bestätigt wird nur je Fach - die
-  Fachkonferenz entscheidet über ihre Bücher, nicht über einen Jahrgang.
+  Die Status-Spalte gibt es nur beim Fach: die Freigabe durch die
+  Fachkonferenzleitung. Bestätigt wird nur je Fach - die Fachkonferenz
+  entscheidet über ihre Bücher, nicht über einen Jahrgang.
 
   Sortierbar über static/sortieren.js: data-sort an jeder Überschrift,
   data-wert an Zellen, deren Anzeige nicht selbst der Schlüssel ist.
@@ -44,7 +43,6 @@
       <th data-sort="text">Ende</th>
       <th data-sort="text">Zahlungsfrist</th>
       <th data-sort="text">Bankverbindung</th>
-      <th data-sort="text">Status</th>
     </tr>
   </thead>
   <tbody>
@@ -59,19 +57,6 @@
       <td data-wert="{{ liste.ende.isoformat() if liste.ende else '' }}"><b>{{ liste.ende.strftime("%d.%m.%y") if liste.ende else "" }}</b></td>
       <td data-wert="{{ liste.zahlungsfrist.isoformat() if liste.zahlungsfrist else '' }}"><b>{{ liste.zahlungsfrist.strftime("%d.%m.%y") if liste.zahlungsfrist else "" }}</b></td>
       <td>{{ liste.bank }}</td>
-      <td>
-        {% if planung.mtime is none %}<span class="label label-status">offen</span>
-        {% else %}
-          {% set zaehler = namespace(geprueft=0, gesamt=0) %}
-          {% for buch in liste.alle_buecher %}
-            {% set preis = planung.preis_je_isbn.get(buch.isbn) %}
-            {% set zaehler.gesamt = zaehler.gesamt + 1 %}
-            {% if preis and preis.status == "bestätigt" %}{% set zaehler.geprueft = zaehler.geprueft + 1 %}{% endif %}
-          {% endfor %}
-          {% if zaehler.gesamt and zaehler.geprueft == zaehler.gesamt %}{{ bp.statuslabel("bestätigt") }}
-          {% else %}<span class="label label-status">{{ zaehler.geprueft }} von {{ zaehler.gesamt }} geprüft</span>{% endif %}
-        {% endif %}
-      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -79,28 +64,20 @@
   <thead>
     <tr>
       <th data-sort="text">Bezeichnung</th>
-      <th data-sort="text">Status</th>
+      {% if ansicht == "fach" %}<th data-sort="text">Status</th>{% endif %}
     </tr>
   </thead>
   <tbody>
     {% for gruppe in gruppen %}
     <tr>
       <td><a href="/buecherliste/{{ ansicht }}/{{ gruppe.name|urlencode }}">{{ gruppe.name }}</a></td>
-      <td>
+      {% if ansicht == "fach" %}<td>
         {% if planung.mtime is none %}<span class="label label-status">offen</span>
-        {% elif ansicht == "fach" %}
+        {% else %}
           {% set stand = planung.fach_je_name.get(gruppe.name) %}
           {{ bp.statuslabel(stand.status if stand else "offen") }}
-        {% else %}
-          {% set zaehler = namespace(geprueft=0) %}
-          {% for buch in gruppe.buecher %}
-            {% set preis = planung.preis_je_isbn.get(buch.isbn) %}
-            {% if preis and preis.status == "bestätigt" %}{% set zaehler.geprueft = zaehler.geprueft + 1 %}{% endif %}
-          {% endfor %}
-          {% if zaehler.geprueft == gruppe.buecher|length %}{{ bp.statuslabel("bestätigt") }}
-          {% else %}<span class="label label-status">{{ zaehler.geprueft }} von {{ gruppe.buecher|length }} geprüft</span>{% endif %}
         {% endif %}
-      </td>
+      </td>{% endif %}
     </tr>
     {% endfor %}
   </tbody>

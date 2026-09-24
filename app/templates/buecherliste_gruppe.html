@@ -9,8 +9,8 @@
   stehen fertig im HTML; static/paketansicht.js blendet um, und
   static/sortieren.js überträgt die bisherige Sortierung (siehe dort).
 
-  Die Knöpfe der Buchplanung stehen links vom Drucker: erst prüfen und
-  bestätigen, dann drucken - in der Reihenfolge des Arbeitsablaufs.
+  Die Knöpfe der Buchplanung stehen links vom Drucker: erst bestätigen,
+  dann drucken - in der Reihenfolge des Arbeitsablaufs.
 #}
 {% block kopfaktionen %}{{ bp.kopfknoepfe(planung, ansicht, gruppe.name if gruppe else none) }}{% if druckbar %}
 <button type="button" class="btn btn-default" id="druck-oeffnen" title="Drucken" aria-label="Drucken"><span
@@ -40,9 +40,8 @@
   Weg bleibt, was schon in der Überschrift steht: auf einer Fach-Seite die
   Spalte Fach, auf einer Verlags-Seite die Spalte Verlag (``ohne``).
 
-  Die Status-Spalte zeigt die Preisprüfung: sie ist das, was an einem
-  einzelnen Buch offen sein kann. Die Freigabe durch die Fachkonferenz gilt
-  der Liste als Ganzes und steht deshalb oben, nicht je Zeile.
+  Die Freigabe durch die Fachkonferenz gilt der Liste als Ganzes und steht
+  deshalb oben, nicht je Zeile.
 
   In der Fach-Ansicht öffnet ein Klick auf die Zeile das Planungsmenü dieses
   Buchs (Einführung, Ausmusterung, Rücklage). Die Zeile selbst ist der Knopf:
@@ -62,7 +61,7 @@
 #}
 {% set planbar = fach and planung.mtime is not none %}
 {#
-  Die Spalte "Rücklagen" steht zwischen "Leihbar" und "Status" - und nur dann,
+  Die Spalte "Rücklagen" steht hinter "Leihbar" - und nur dann,
   wenn in dieser Tabelle überhaupt eine gewünscht ist. Ohne Rücklagen wäre sie
   eine Spalte aus leeren Zellen, und das ist der Normalfall.
 #}
@@ -81,12 +80,10 @@
       <th data-sort="zahl">Leihgebühr</th>
       <th data-sort="zahl">Leihbar</th>
       {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
-      <th data-sort="text">Status</th>
     </tr>
   </thead>
   <tbody>
     {% for buch in buecher %}
-    {% set preis = planung.preis_je_isbn.get(buch.isbn) %}
     <tr data-isbn="{{ buch.isbn }}"{% if planbar %} class="aufklappbar"
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
@@ -101,15 +98,6 @@
         {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
-      <td class="preis-status"{% if preis and preis.hinweis %} title="{{ preis.hinweis }}"{% endif %}>
-        {% if planung.mtime is none %}<span class="label label-status">offen</span>
-        {% else %}{{ bp.statuslabel(preis.status if preis else "offen") }}
-        {% if ansicht == "verlag" %}
-        <button type="button" class="knopf-klein" data-planung="preis" data-isbn="{{ buch.isbn }}"
-          data-preis="{{ buch.neupreis if buch.neupreis is not none else '' }}"
-          title="Diesen Preis als gegen die Verlagsliste geprüft eintragen">prüfen</button>
-        {% endif %}{% endif %}
-      </td>
     </tr>
     {% endfor %}
   </tbody>

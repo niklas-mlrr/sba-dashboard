@@ -45,8 +45,6 @@ from buecherlisten.planung import (
     schreibe_mappe,
     setze_buchplanung,
     setze_planung,
-    setze_preis,
-    setze_preise_des_verlags,
     setze_ruecklage,
     zusammenfuehren,
 )
@@ -184,32 +182,6 @@ def _aendere(
         schreibe_mappe(wb, nachher)
         speichere_mappe(wb, pfad, backups_behalten=einstellungen.backups_behalten)
     return Stand(planung=nachher, pfad=pfad, zustand=Dateizustand.von(pfad))
-
-
-def schreibe_preis(
-    einstellungen: Einstellungen, *, schuljahr: str, isbn: str, preis: float | None,
-    kuerzel: str, datum: date | None, bemerkung: str = "", mtime: float,
-) -> Stand:
-    """Trägt den gegen die Verlagsliste geprüften Preis **eines** Buchs ein."""
-    return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_preis(
-        stand, isbn=isbn, preis=preis, kuerzel=kuerzel, datum=datum, bemerkung=bemerkung,
-    ))
-
-
-def schreibe_preise_des_verlags(
-    einstellungen: Einstellungen, *, schuljahr: str, verlag: str, kuerzel: str,
-    datum: date | None, mtime: float,
-) -> tuple[Stand, int]:
-    """Bestätigt die ganze Verlagsliste auf einmal - der Knopf neben dem Drucker."""
-    gezaehlt = 0
-
-    def aenderung(stand: Buchplanung) -> Buchplanung:
-        nonlocal gezaehlt
-        neu, gezaehlt = setze_preise_des_verlags(
-            stand, verlag=verlag, kuerzel=kuerzel, datum=datum)
-        return neu
-
-    return _aendere(einstellungen, schuljahr, mtime, aenderung), gezaehlt
 
 
 def schreibe_fachbestaetigung(
