@@ -134,23 +134,32 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         }
 
     # Was mit dem Vorjahr endete: in diesem Schuljahr nicht mehr auf der Liste.
-    ausmusterungen: dict[str, list[dict[str, Any]]] = {}
+    ausmusterungen: dict[str, dict[str, dict[str, Any]]] = {}
     for zeile in planung.planung:
-        buch = planung.buch(zeile.isbn)
-        if buch is None or not planung.vorjahr or zeile.ausgemustert_nach != planung.vorjahr:
+        altes = planung.buch(zeile.isbn)
+        if altes is None or not planung.vorjahr \
+                or zeile.ausgemustert_nach != planung.vorjahr:
             continue
         # Nur vollständig ausgemustert: in keinem Jahrgang dieses Fachs bleibt
         # das Buch danach noch stehen.
-        if any((rest := planung.planungszeile(buch.isbn, fach, jg)) is None
+        if any((rest := planung.planungszeile(altes.isbn, fach, jg)) is None
                or rest.ausgemustert_nach != planung.vorjahr
-               for fach, jg in planung.zeilen_des_buchs(buch) if fach == zeile.fach):
+               for fach, jg in planung.zeilen_des_buchs(altes) if fach == zeile.fach):
             continue
-        ausmusterungen.setdefault(zeile.fach, []).append({
-            "titel": buch.titel, "verlag": buch.verlag, "isbn": buch.isbn,
-            "isbn_anzeige": format_isbn(buch.isbn), "jahrgang": zeile.jahrgang,
+        je_buch = ausmusterungen.setdefault(zeile.fach, {})
+        eintrag = je_buch.setdefault(altes.isbn, {
+            "titel": altes.titel, "verlag": altes.verlag, "isbn": altes.isbn,
+            "isbn_anzeige": format_isbn(altes.isbn), "leihbar": altes.leihbar,
+            "jahrgaenge": [],
         })
-    for eintraege in ausmusterungen.values():
-        eintraege.sort(key=lambda e: (e["titel"].casefold(), e["jahrgang"]))
+        eintrag["jahrgaenge"].append(zeile.jahrgang)
+    ausgemustert: dict[str, list[dict[str, Any]]] = {
+        fach: sorted(je_buch.values(), key=lambda e: e["titel"].casefold())
+        for fach, je_buch in ausmusterungen.items()
+    }
+    for eintraege in ausgemustert.values():
+        for eintrag in eintraege:
+            eintrag["jahrgaenge"].sort()
 
     faecher: dict[str, dict[str, Any]] = {}
     for fach in planung.faecher:
@@ -168,7 +177,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "fach_je_name": faecher,
         "planung_je_isbn_und_fach": zeilen,
         "ruecklage_je_isbn": ruecklagen,
-        "ausmusterungen_je_fach": ausmusterungen,
+        "ausmusterungen_je_fach": ausgemustert,
         "vorjahr": planung.vorjahr,
     }
 

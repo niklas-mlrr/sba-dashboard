@@ -706,6 +706,21 @@ def test_fach_seite_listet_nur_vollstaendig_ausgemusterte_buecher(
     assert "Keine Ausmusterungen" in latein
 
 
+def test_ausgemustertes_buch_laesst_sich_wie_die_anderen_planen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Läuft Terra auch in Jg. 6 mit dem Vorjahr aus, steht es klickbar in der Tabelle."""
+    seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "jahrgang": 6,
+        "ausgemustert_nach": "2025/2026", "mtime": abgeglichen["mtime"],
+    })
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    tabelle = text.split('id="ausmusterungen"')[1]
+    assert 'data-planung="aufklappen"' in tabelle
+    assert f'<template class="planung-vorlage" data-isbn="{TERRA}" data-fach="Erdkunde">' in text
+    assert 'data-planung-feld="anzahl"' in text.split("planung-vorlage")[-1]
+
+
 def test_handeingetragene_ausmusterung_bleibt_beim_naechsten_abgleich(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:

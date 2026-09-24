@@ -156,9 +156,11 @@
   </thead>
   <tbody>
     {% for e in ausgemustert %}
-    <tr>
+    <tr data-isbn="{{ e.isbn }}" class="aufklappbar" data-planung="aufklappen"
+      data-fach="{{ gruppe.name }}" role="button" tabindex="0"
+      title="Einführung, Ausmusterung und Rücklage">
       <td>{{ e.titel }}</td>
-      <td>{{ e.jahrgang }}</td>
+      <td data-wert="{{ e.jahrgaenge | join(', ') }}">{{ e.jahrgaenge | join(", ") }}</td>
       <td>{{ e.verlag }}</td>
       <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
       <td>{{ planung.vorjahr }}</td>
@@ -166,6 +168,7 @@
     {% endfor %}
   </tbody>
 </table>
+{% for e in ausgemustert %}{{ bp.planungsvorlage(planung, e, gruppe.name) }}{% endfor %}
 </div>
 {% else %}
 <p class="hinweis">Keine Ausmusterungen zum Schuljahr {{ planung.schuljahr }}.</p>
