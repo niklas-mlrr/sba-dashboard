@@ -170,8 +170,7 @@ damit von selbst auf `teilweise` zurück.
 Bis 2026-09-24 gab es auf `Buchreihen` die Spalten `geprüfter Preis`, `Kürzel`
 und `Datum` und in der Verlags-Ansicht die Knöpfe „prüfen" und „Preise
 bestätigen". Sie sind entfernt: der Preis gilt, wie er in IServ steht. Übrig
-ist die Spalte `Bemerkung` je Buch. Eine ältere Datei mit den alten Spalten
-bleibt lesbar; beim nächsten Speichern fallen sie weg.
+ist die Spalte `Bemerkung` je Buch.
 
 ## Aufbau des Pakets
 
