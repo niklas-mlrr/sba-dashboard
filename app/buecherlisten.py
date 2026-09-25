@@ -56,6 +56,15 @@ from buecherlisten.planung import Buch as PlanBuch
 
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
+
+# Die drei Arten einer Abweichung - zugleich die CSS-Klassen der Markierung.
+AENDERUNG = "aenderung"        # ein anderer Wert (Titel, Verlag, Preis, leihbar)
+EINFUEHRUNG = "einfuehrung"    # laut Datei in Fach/Jahrgang, in IServ noch nicht
+AUSMUSTERUNG = "ausmusterung"  # in IServ noch in Fach/Jahrgang, laut Datei nicht mehr
+_EINFUEHRUNG_TEXT = "Einführung, fehlt in IServ"
+_AUSMUSTERUNG_TEXT = "Ausmusterung, in IServ noch"
+
+Paar = tuple[str, int]
 # So heißt der Pflichtbereich einer Liste in der API; IServ zeigt ihn als "Grundpaket".
 _GRUNDBEREICH = "default"
 
@@ -95,17 +104,62 @@ class Buch:
     # Der Vergleich mit IServ, gerechnet für die Gruppe, in der die Zeile
     # steht. ``herkunft``: ``beide``; ``nur_excel`` - laut Datei gehört das Buch
     # in diese Gruppe, in IServ nicht; ``nur_iserv`` - umgekehrt. ``iserv``
-    # trägt dann die abweichenden Werte aus IServ, ``paare_hier`` die
-    # abweichenden (Fach, Jahrgang)-Paare dieser Gruppe und ``paare_sonst``
-    # die übrigen, jeweils als Satz.
+    # trägt dann die abweichenden Werte aus IServ (gelb). ``neu`` sind die
+    # (Fach, Jahrgang)-Paare dieser Gruppe, die nur die Datei führt - eine
+    # Einführung (blau) -, ``weg`` die, die nur IServ noch führt - eine
+    # Ausmusterung (rot). ``paare_sonst`` nennt die der übrigen Gruppen als
+    # (Art, Satz). ``reihe`` ist ``neu`` bzw. ``weg``, wenn die ganze Buchreihe
+    # eingeführt (in keiner IServ-Liste) oder ausgemustert (laut Datei in
+    # keiner Liste mehr) wird; dann ist die ganze Zeile hinterlegt.
     herkunft: str = BEIDE
-    paare_hier: tuple[str, ...] = ()
-    paare_sonst: tuple[str, ...] = ()
+    neu: tuple[Paar, ...] = ()
+    weg: tuple[Paar, ...] = ()
+    paare_sonst: tuple[tuple[str, str], ...] = ()
+    reihe: str = ""
 
     @property
     def abweichend(self) -> bool:
-        return (self.herkunft != BEIDE or bool(self.iserv)
-                or bool(self.paare_hier) or bool(self.paare_sonst))
+        return (self.herkunft != BEIDE or bool(self.iserv) or bool(self.neu)
+                or bool(self.weg) or bool(self.paare_sonst))
+
+    @property
+    def art(self) -> str:
+        """Die Farbe des Strichs vorn: Ausmusterung vor Einführung vor Änderung."""
+        if self.herkunft == NUR_ISERV or self.weg:
+            return AUSMUSTERUNG
+        if self.herkunft == NUR_EXCEL or self.neu:
+            return EINFUEHRUNG
+        return AENDERUNG if self.iserv else ""
+
+    def _nur_iserv(self, werte: set) -> frozenset:
+        # Eine Zeile „nur in IServ“ zeigt die IServ-Werte: alle sind ausgemustert.
+        return frozenset(werte - (set() if self.herkunft == NUR_ISERV
+                                  else set(self.jahrgaenge) | set(self.faecher)))
+
+    @property
+    def neu_jahrgaenge(self) -> frozenset[int]:
+        return frozenset(jahrgang for _, jahrgang in self.neu)
+
+    @property
+    def weg_jahrgaenge(self) -> frozenset[int]:
+        """Die Jahrgänge, die nur IServ noch führt - sie stehen zusätzlich in der Zeile."""
+        return self._nur_iserv({jahrgang for _, jahrgang in self.weg})
+
+    @property
+    def neu_faecher(self) -> frozenset[str]:
+        return frozenset(fach for fach, _ in self.neu)
+
+    @property
+    def weg_faecher(self) -> frozenset[str]:
+        return self._nur_iserv({fach for fach, _ in self.weg})
+
+    @property
+    def neu_text(self) -> str:
+        return f"{_EINFUEHRUNG_TEXT}: {_paare_text(self.neu)}" if self.neu else ""
+
+    @property
+    def weg_text(self) -> str:
+        return f"{_AUSMUSTERUNG_TEXT}: {_paare_text(self.weg)}" if self.weg else ""
 
     @property
     def isbn_anzeige(self) -> str:
@@ -360,8 +414,6 @@ def finde_gruppe(gruppen: tuple[Gruppe, ...], name: str) -> Gruppe | None:
 
 # ── Die Datei als Soll, IServ als Vergleich ──────────────────────────────────
 
-Paar = tuple[str, int]
-
 
 def iserv_je_isbn(daten: Buecherlisten) -> dict[str, IservBuch]:
     """Die Bücher der IServ-Listen je ISBN, mit allen (Fach, Jahrgang)-Paaren.
@@ -434,22 +486,10 @@ def _paare_text(paare: tuple[Paar, ...] | list[Paar]) -> str:
                      for fach, jgs in je_fach.items())
 
 
-def _paarsaetze(abweichung: Abweichung | None,
-                hier: Callable[[Paar], bool]) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Die abweichenden Paare als Sätze: (die dieser Gruppe, die übrigen)."""
-    if abweichung is None or abweichung.art != BEIDE:
-        return (), ()
-    innen: list[str] = []
-    aussen: list[str] = []
-    for text, paare in (("in IServ zusätzlich", abweichung.nur_in_iserv),
-                        ("fehlt in IServ", abweichung.fehlt_in_iserv)):
-        drin = [paar for paar in paare if hier(paar)]
-        draussen = [paar for paar in paare if not hier(paar)]
-        if drin:
-            innen.append(f"{text}: {_paare_text(drin)}")
-        if draussen:
-            aussen.append(f"{text}: {_paare_text(draussen)}")
-    return tuple(innen), tuple(aussen)
+def _reihe(abweichung: Abweichung | None) -> str:
+    if abweichung is None:
+        return ""
+    return {NUR_EXCEL: "neu", NUR_ISERV: "weg"}.get(abweichung.art, "")
 
 
 def _aus_datei(v: Vergleich, buch: PlanBuch, paare: tuple[Paar, ...] | frozenset[Paar],
@@ -457,7 +497,17 @@ def _aus_datei(v: Vergleich, buch: PlanBuch, paare: tuple[Paar, ...] | frozenset
                jahrgaenge: tuple[int, ...] | None = None) -> Buch:
     """Eine Zeile mit den Werten der Datei und dem Vergleich dazu."""
     abweichung = v.ergebnis.get(buch.isbn)
-    innen, aussen = _paarsaetze(abweichung, hier)
+    neu = abweichung.fehlt_in_iserv if abweichung else ()
+    weg = abweichung.nur_in_iserv if abweichung else ()
+    sonst: list[tuple[str, str]] = []
+    # Bei einer ganz neuen oder ganz ausgemusterten Reihe sagt die hinterlegte
+    # Zeile schon alles; die übrigen Gruppen werden dann nicht aufgezählt.
+    if abweichung is not None and abweichung.art == BEIDE:
+        for art, text, alle in ((EINFUEHRUNG, _EINFUEHRUNG_TEXT, neu),
+                                (AUSMUSTERUNG, _AUSMUSTERUNG_TEXT, weg)):
+            draussen = [paar for paar in alle if not hier(paar)]
+            if draussen:
+                sonst.append((art, f"{text}: {_paare_text(draussen)}"))
     return Buch(
         isbn=buch.isbn, titel=buch.titel,
         faecher=tuple(sorted({fach for fach, _ in paare}, key=str.casefold)),
@@ -466,18 +516,22 @@ def _aus_datei(v: Vergleich, buch: PlanBuch, paare: tuple[Paar, ...] | frozenset
         jahrgaenge=jahrgaenge if jahrgaenge is not None
         else tuple(sorted({jahrgang for _, jahrgang in paare})),
         iserv=abweichung.felder if abweichung and abweichung.art == BEIDE else (),
-        von_hand=buch.von_hand, herkunft=herkunft, paare_hier=innen, paare_sonst=aussen,
+        von_hand=buch.von_hand, herkunft=herkunft,
+        neu=tuple(paar for paar in neu if hier(paar)),
+        weg=tuple(paar for paar in weg if hier(paar)),
+        paare_sonst=tuple(sonst), reihe=_reihe(abweichung),
     )
 
 
-def _aus_iserv(ist: IservBuch, paare: tuple[Paar, ...] | frozenset[Paar]) -> Buch:
+def _aus_iserv(v: Vergleich, ist: IservBuch, paare: tuple[Paar, ...] | frozenset[Paar]) -> Buch:
     """Eine Zeile, die nur IServ in dieser Gruppe führt - mit den Werten aus IServ."""
+    paare = tuple(sorted(paare, key=lambda paar: (paar[0].casefold(), paar[1])))
     return Buch(
         isbn=ist.isbn, titel=ist.titel,
         faecher=tuple(sorted({fach for fach, _ in paare}, key=str.casefold)),
         verlag=ist.verlag, neupreis=ist.neupreis, leihgebuehr=ist.leihgebuehr,
         leihbar=ist.leihbar, jahrgaenge=tuple(sorted({jahrgang for _, jahrgang in paare})),
-        herkunft=NUR_ISERV,
+        herkunft=NUR_ISERV, weg=paare, reihe=_reihe(v.ergebnis.get(ist.isbn)),
     )
 
 
@@ -533,7 +587,7 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
         for fach in {fach for fach, _ in ist.paare}:
             if isbn not in zeilen.get(fach, {}) and (isbn, fach) not in ausgemustert:
                 zeilen.setdefault(fach, {})[isbn] = _aus_iserv(
-                    ist, frozenset(paar for paar in ist.paare if paar[0] == fach))
+                    v, ist, frozenset(paar for paar in ist.paare if paar[0] == fach))
     return tuple(Gruppe(name=name, buecher=_sortiert(list(je_isbn.values())))
                  for name, je_isbn in sorted(zeilen.items(), key=lambda e: e[0].casefold()))
 
@@ -553,7 +607,7 @@ def gruppen_nach_verlag_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
     for isbn, abweichung in v.ergebnis.items():
         if abweichung.art == NUR_ISERV:
             ist = v.iserv[isbn]
-            zeilen.setdefault(ist.verlag or OHNE_VERLAG, []).append(_aus_iserv(ist, ist.paare))
+            zeilen.setdefault(ist.verlag or OHNE_VERLAG, []).append(_aus_iserv(v, ist, ist.paare))
     return tuple(Gruppe(name=name, buecher=_sortiert(buecher))
                  for name, buecher in sorted(zeilen.items(), key=lambda e: e[0].casefold()))
 
@@ -574,11 +628,15 @@ def liste_aus_datei(v: Vergleich, liste: Liste) -> tuple[Liste, tuple[Buch, ...]
     def zeile(buch: Buch) -> Buch:
         eigenes = v.planung.buch(buch.isbn)
         aktiv = v.aktiv(eigenes) if eigenes else frozenset()
+        ist = v.iserv[buch.isbn]
+        hier_ist = frozenset(paar for paar in ist.paare if hier(paar))
         if eigenes is None or not aktiv:
-            ist = v.iserv[buch.isbn]
-            return _aus_iserv(ist, frozenset(paar for paar in ist.paare if hier(paar)))
-        return _aus_datei(v, eigenes, frozenset(paar for paar in aktiv if hier(paar)) or aktiv,
-                          hier, BEIDE)
+            return _aus_iserv(v, ist, hier_ist)
+        hier_aktiv = frozenset(paar for paar in aktiv if hier(paar))
+        if not hier_aktiv:
+            # Die Datei führt das Buch, nur nicht mehr in diesem Jahrgang.
+            return _aus_datei(v, eigenes, hier_ist, hier, NUR_ISERV)
+        return _aus_datei(v, eigenes, hier_aktiv, hier, BEIDE)
 
     bereiche = tuple(
         Bereich(titel=bereich.titel, grundpaket=bereich.grundpaket, optionen=tuple(

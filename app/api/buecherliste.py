@@ -464,5 +464,16 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         vorhanden = {buch.isbn for buch in gefunden.buecher if buch.herkunft != NUR_ISERV}
         werte["vorschlaege"] = [buch for buch in planung["buecher"]
                                 if buch["isbn"] not in vorhanden and name not in buch["faecher"]]
+        # Was unter „Ausmusterungen“ steht, IServ in diesem Fach aber noch
+        # führt: die Jahrgänge dort, und ob die ganze Reihe ausgemustert ist.
+        werte["ausmusterung_in_iserv"] = {
+            eintrag["isbn"]: (
+                sorted({j for f, j in ist.paare if f == name}),
+                vergleich.ergebnis[eintrag["isbn"]].art == NUR_ISERV,
+            )
+            for eintrag in planung["ausmusterungen_je_fach"].get(name, [])
+            for ist in ((vergleich.iserv.get(eintrag["isbn"]) if vergleich else None),)
+            if vergleich is not None and ist is not None and any(f == name for f, _ in ist.paare)
+        }
     return _seite(request, "buecherliste_gruppe.html",
                   {**werte, "titel": gefunden.name, "gruppe": gefunden})

@@ -415,12 +415,14 @@ def planungs_status(zeile: Planungszeile | None, schuljahr: str) -> str:
             return None
 
     ende = jahr(zeile.ausgemustert_nach)
-    if ende is not None:
-        return PLANUNG_AUSGEMUSTERT if ende < jetzt else PLANUNG_LAEUFT_AUS
+    if ende is not None and ende < jetzt:
+        return PLANUNG_AUSGEMUSTERT
+    # Vor "läuft aus": ein Buch, das erst später kommt, ist jetzt nicht im
+    # Regal - auch wenn schon feststeht, wann es wieder geht.
     beginn = jahr(zeile.eingefuehrt_ab)
     if beginn is not None and beginn > jetzt:
         return PLANUNG_GEPLANT
-    return PLANUNG_IM_EINSATZ
+    return PLANUNG_LAEUFT_AUS if ende is not None else PLANUNG_IM_EINSATZ
 
 
 def planungs_zusatz(zeile: Planungszeile | None, schuljahr: str) -> str:
@@ -436,15 +438,15 @@ def planungs_zusatz(zeile: Planungszeile | None, schuljahr: str) -> str:
     if zeile is None:
         return ""
     status = planungs_status(zeile, schuljahr)
-    if status == PLANUNG_GEPLANT:
-        return f"ab {zeile.eingefuehrt_ab}"
-    if status not in (PLANUNG_LAEUFT_AUS, PLANUNG_AUSGEMUSTERT):
-        return ""
-    ende = schuljahr_zahl(zeile.ausgemustert_nach)
     try:
+        ende: int | None = schuljahr_zahl(zeile.ausgemustert_nach)
         einjaehrig = schuljahr_zahl(zeile.eingefuehrt_ab) == ende
     except UngueltigesSchuljahr:
-        einjaehrig = False
+        ende, einjaehrig = None, False
+    if status == PLANUNG_GEPLANT:
+        return zeile.ausgemustert_nach if einjaehrig else f"ab {zeile.eingefuehrt_ab}"
+    if status not in (PLANUNG_LAEUFT_AUS, PLANUNG_AUSGEMUSTERT):
+        return ""
     if einjaehrig and ende != schuljahr_zahl(schuljahr):
         return zeile.ausgemustert_nach
     return f"bis {zeile.ausgemustert_nach}"

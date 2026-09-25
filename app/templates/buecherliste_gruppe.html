@@ -44,11 +44,21 @@
   deshalb oben, nicht je Zeile.
 
   Gezeigt wird der Stand der Buchplanungs-Datei, verglichen mit IServ
-  (``app/buecherlisten.py``). Eine Zelle, deren Wert in IServ anders lautet,
-  ist gelb und nennt den IServ-Wert beim Überfahren; eine Zeile, die nur die
-  Datei in dieser Gruppe führt, trägt „fehlt in IServ“, eine, die nur IServ
-  führt, „nur in IServ“. Was in einer ausgeblendeten Spalte abweicht, steht
-  klein unter dem Titel.
+  (``app/buecherlisten.py``), in drei Farben:
+
+  * gelb - eine Änderung: Titel, Verlag, Preise oder leihbar lauten in IServ
+    anders; beim Überfahren steht der IServ-Wert,
+  * blau - eine Einführung: laut Datei in diesem Fach und Jahrgang, in IServ
+    noch nicht,
+  * rot - eine Ausmusterung: in IServ noch in diesem Fach und Jahrgang, laut
+    Datei nicht mehr; der Wert steht zusätzlich da, durchgestrichen.
+
+  Die Zeile trägt vorn einen Strich in der Farbe (Rot vor Blau vor Gelb), die
+  geänderte Zelle ist hell hinterlegt und der geänderte Wert in der Farbe
+  geschrieben. Ist die ganze Buchreihe neu (in keiner IServ-Liste) oder ganz
+  ausgemustert (laut Datei in keiner Liste mehr), ist die ganze Zeile hell
+  hinterlegt. Was in einer ausgeblendeten Spalte oder einer anderen Gruppe
+  abweicht, steht klein unter dem Titel.
 
   In der Fach-Ansicht öffnet ein Klick auf die Zeile das Planungsmenü dieses
   Buchs (Einführung, Ausmusterung, Rücklage). Die Zeile selbst ist der Knopf:
@@ -94,19 +104,23 @@
     {% set menue = planbar and buch.isbn in planung.isbns %}
     {% set iserv = dict(buch.iserv or ()) %}
     {% set klassen = ["aufklappbar"] if menue else [] %}
-    {% if buch.herkunft == "nur_excel" %}{% set klassen = klassen + ["zeile-nur-excel"] %}
-    {% elif buch.herkunft == "nur_iserv" %}{% set klassen = klassen + ["zeile-nur-iserv"] %}{% endif %}
+    {% if buch.art %}{% set klassen = klassen + ["zeile-" ~ buch.art] %}{% endif %}
+    {% if buch.reihe %}{% set klassen = klassen + ["reihe-" ~ buch.reihe] %}{% endif %}
     <tr data-isbn="{{ buch.isbn }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}{% if menue %}
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
       <td{{ feldabweichung(iserv, "titel") }}>{{ buch.titel }}
-        {%- if buch.herkunft == "nur_excel" %} <span class="label label-abweichung-excel">fehlt in IServ</span>
-        {%- elif buch.herkunft == "nur_iserv" %} <span class="label label-abweichung-iserv">nur in IServ</span>
-        {%- elif buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif %}
-        {%- if ohne == "verlag" and "verlag" in iserv %}<br><span class="abweichung-hinweis">Verlag in IServ: {{ iserv.verlag or "–" }}</span>{% endif %}
-        {%- for satz in buch.paare_sonst %}<br><span class="abweichung-hinweis">{{ satz }}</span>{% endfor %}</td>
-      {% if mit_jahrgang %}{{ bp.jahrgangsspalte(planung, buch, fach, abweichung(buch.paare_hier)) }}{% endif %}
-      {% if ohne != "fach" %}<td{{ abweichung(buch.paare_hier) }}>{{ buch.fach_anzeige }}</td>{% endif %}
+        {%- if buch.von_hand and not buch.art %} <span class="klein grau">nicht in IServ</span>{% endif %}
+        {%- if ohne == "verlag" and "verlag" in iserv %}<br><span class="hinweis-aenderung">Verlag in IServ: {{ iserv.verlag or "–" }}</span>{% endif %}
+        {%- for art, satz in buch.paare_sonst %}<br><span class="hinweis-{{ art }}">{{ satz }}</span>{% endfor %}</td>
+      {% if mit_jahrgang %}{{ bp.jahrgangsspalte(planung, buch, fach,
+           markierung(buch, buch.weg_jahrgaenge, buch.neu_jahrgaenge)) }}{% endif %}
+      {% if ohne != "fach" %}<td{{ markierung(buch, buch.weg_faecher, buch.neu_faecher) }}>
+        {%- for name in (buch.faecher | list + buch.weg_faecher | list) | unique | sort(case_sensitive=false) -%}
+        {%- if name in buch.weg_faecher %}<span class="wert-ausmusterung">{{ name }}</span>
+        {%- elif name in buch.neu_faecher %}<span class="wert-einfuehrung">{{ name }}</span>
+        {%- else %}{{ name }}{% endif %}{{ ", " if not loop.last }}
+        {%- endfor %}</td>{% endif %}
       {% if ohne != "verlag" %}<td{{ feldabweichung(iserv, "verlag") }}>{{ buch.verlag }}</td>{% endif %}
       <td data-wert="{{ buch.isbn }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
       <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}"{{ feldabweichung(iserv, "neupreis") }}>{{ euro(buch.neupreis) }}</td>
@@ -130,14 +144,18 @@
 {#
   Die Markierung einer abweichenden Zelle: Klasse und, als Tooltip, was IServ
   dort nennt. Leer, wenn nichts abweicht - dann bleibt die Zelle wie sie war.
+  ``markierung`` gilt für Jahrgang und Fach: rot, wenn dort etwas nur noch in
+  IServ steht, sonst blau, wenn dort etwas neu ist.
 #}
-{% macro abweichung(saetze) -%}
-{%- if saetze %} class="abweichung" title="{{ saetze | join('; ') }}"{% endif -%}
+{% macro markierung(buch, weg, neu) -%}
+{%- set saetze = [buch.weg_text, buch.neu_text] | select | list -%}
+{%- if weg %} class="ausmusterung" title="{{ saetze | join('; ') }}"
+{%- elif neu %} class="einfuehrung" title="{{ saetze | join('; ') }}"{% endif -%}
 {%- endmacro %}
 {% macro feldabweichung(iserv, feld) -%}
 {%- if feld in iserv -%}
 {%- set wert = iserv[feld] -%}
- class="abweichung" title="In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}"
+ class="aenderung" title="In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}"
 {%- endif -%}
 {%- endmacro %}
 {% macro euro(wert) -%}
@@ -209,11 +227,19 @@
   </thead>
   <tbody>
     {% for e in ausgemustert %}
-    <tr data-isbn="{{ e.isbn }}" class="aufklappbar" data-planung="aufklappen"
+    {#- Führt IServ das Buch hier noch, ist die Ausmusterung dort nicht erledigt: rot. -#}
+    {% set in_iserv, ganz = (ausmusterung_in_iserv | default({})).get(e.isbn, ([], false)) %}
+    {% set jahrgaenge = (e.jahrgaenge + in_iserv) | unique | sort | list %}
+    <tr data-isbn="{{ e.isbn }}" class="aufklappbar
+      {%- if in_iserv %} zeile-ausmusterung{% endif %}{% if ganz %} reihe-weg{% endif %}" data-planung="aufklappen"
       data-fach="{{ gruppe.name }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage">
       <td>{{ e.titel }}</td>
-      <td data-wert="{{ e.jahrgaenge | join(', ') }}">{{ e.jahrgaenge | join(", ") }}</td>
+      <td data-wert="{{ jahrgaenge | join(', ') }}"{% if in_iserv %} class="ausmusterung"
+        title="Ausmusterung, in IServ noch: {{ gruppe.name }} Jg. {{ in_iserv | join(', ') }}"{% endif %}>
+        {%- for jahrgang in jahrgaenge -%}
+        {%- if jahrgang in in_iserv %}<span class="wert-ausmusterung">{{ jahrgang }}</span>{% else %}{{ jahrgang }}{% endif %}{{ ", " if not loop.last }}
+        {%- endfor %}</td>
       <td>{{ e.verlag }}</td>
       <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
       <td>{{ planung.vorjahr }}</td>

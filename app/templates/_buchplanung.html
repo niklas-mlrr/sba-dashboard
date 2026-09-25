@@ -89,8 +89,15 @@
 #}
 {#
   ``markierung`` ist die Abweichung zu IServ als fertige Attribute
-  (``abweichung`` in buecherliste_gruppe.html), sonst leer.
+  (``markierung`` in buecherliste_gruppe.html), sonst leer. Ein Jahrgang, der
+  nur in der Datei neu ist, steht blau; einer, den nur IServ noch führt, steht
+  zusätzlich in der Zelle, rot und durchgestrichen.
 #}
+{% macro jahrgangswert(buch, jahrgang, weg) -%}
+{%- if jahrgang in weg %}<span class="wert-ausmusterung">{{ jahrgang }}</span>
+{%- elif jahrgang in buch.neu_jahrgaenge %}<span class="wert-einfuehrung">{{ jahrgang }}</span>
+{%- else %}{{ jahrgang }}{% endif -%}
+{%- endmacro %}
 {% macro jahrgangsspalte(planung, buch, fach=none, markierung="") %}
 {#
   Die gezeigten Jahrgänge sind die, in denen das Buch dieses Schuljahr geführt
@@ -106,13 +113,14 @@
     {%- set _ = zusatz.update({zeile.jahrgang: zeile.zusatz}) -%}
   {%- endfor -%}
 {%- endfor -%}
-{%- set jahrgaenge = (buch.jahrgaenge | list + zusatz.keys() | list) | unique | sort | list -%}
+{%- set weg = buch.weg_jahrgaenge -%}
+{%- set jahrgaenge = (buch.jahrgaenge | list + zusatz.keys() | list + weg | list) | unique | sort | list -%}
 {%- set werte = zusatz.values() | unique | list -%}
 <td data-wert="{{ jahrgaenge | join(', ') }}"{{ markierung }}>
 {%- if werte | length == 1 and zusatz | length == jahrgaenge | length -%}
-{{ jahrgaenge | join(", ") }} ({{ werte[0] }})
+{% for jahrgang in jahrgaenge %}{{ jahrgangswert(buch, jahrgang, weg) }}{{ ", " if not loop.last }}{% endfor %} ({{ werte[0] }})
 {%- else -%}
-{% for jahrgang in jahrgaenge %}{{ jahrgang }}{% if zusatz.get(jahrgang) %} ({{ zusatz[jahrgang] }}){% endif %}{{ ", " if not loop.last }}{% endfor %}
+{% for jahrgang in jahrgaenge %}{{ jahrgangswert(buch, jahrgang, weg) }}{% if zusatz.get(jahrgang) %} ({{ zusatz[jahrgang] }}){% endif %}{{ ", " if not loop.last }}{% endfor %}
 {%- endif -%}
 </td>
 {%- endmacro %}

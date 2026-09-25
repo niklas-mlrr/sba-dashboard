@@ -49,10 +49,14 @@ auf IServ nach. Danach war jede Abweichung verschwunden, bevor sie jemand
 gesehen hatte. Seitdem ist es umgekehrt:
 
 * **Die Bücherlisten-Seiten zeigen die Datei.** IServ wird live geholt und
-  nur verglichen (`vergleich.py`). Ist ein Wert in IServ anders, wird die Zelle
-  gelb und nennt den IServ-Wert beim Überfahren. Steht ein Buch laut Datei in
-  einer Gruppe, in IServ aber nicht, trägt die Zeile „fehlt in IServ“; im
-  umgekehrten Fall „nur in IServ“, mit den Werten aus IServ und ohne
+  nur verglichen (`vergleich.py`). Drei Farben: **gelb** ein anderer Wert
+  (Titel, Verlag, Preise, leihbar; der IServ-Wert steht beim Überfahren),
+  **blau** eine Einführung (laut Datei in Fach und Jahrgang, in IServ noch
+  nicht), **rot** eine Ausmusterung (in IServ noch, laut Datei nicht mehr -
+  auch unter „Ausmusterungen zu diesem Schuljahr“). Die Zeile hat vorn einen
+  Strich in der Farbe, die Zelle ist hell hinterlegt, der Wert farbig. Ist die
+  ganze Buchreihe neu oder ganz ausgemustert, ist die ganze Zeile hinterlegt.
+  Eine Zeile, die nur IServ führt, zeigt die Werte aus IServ und hat kein
   Planungsmenü. Die Übersichten markieren jede Gruppe, in der etwas abweicht.
   Ohne Datei zeigen die Seiten IServ wie vorher. Die PDFs bleiben beim Stand
   aus IServ mit den Korrekturen der Datei.

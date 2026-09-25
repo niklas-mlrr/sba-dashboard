@@ -19,6 +19,7 @@ Was diese Datei festhält, sind die Zusagen der Schreibkette: ohne gültige
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -510,7 +511,7 @@ def test_ein_buch_fuer_nur_ein_schuljahr_zeigt_nur_dieses_jahr(
     })
     assert antwort.status_code == 200, antwort.text
     text = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert "6 (bis 2026/2027), 7 (2028/2029)" in text
+    assert "6 (bis 2026/2027), 7 (2028/2029)" in _ohne_tags(text)
 
 
 def test_die_ruecklagen_spalte_erscheint_erst_mit_einer_ruecklage(
@@ -776,6 +777,9 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
     assert f'data-isbn="{TERRA}"' in tabelle
     assert "<th data-sort=\"zahl\">Rücklagen</th>" in tabelle
     assert '<td data-wert="4">4</td>' in tabelle
+    # Weil IServ es in Erdkunde Jg. 6 noch führt, ist die Ausmusterung rot markiert.
+    assert 'zeile-ausmusterung' in tabelle
+    assert '<span class="wert-ausmusterung">6</span>' in tabelle
 
 
 def test_buch_das_in_einem_anderen_fach_bleibt_kommt_trotzdem_zur_ausmusterung(
@@ -786,6 +790,8 @@ def test_buch_das_in_einem_anderen_fach_bleibt_kommt_trotzdem_zur_ausmusterung(
     erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
     assert f'<tr data-isbn="{TERRA}"' not in _haupttabelle(erdkunde)
     assert f'data-isbn="{TERRA}"' in erdkunde.split('id="ausmusterungen"')[1]
+    # Nur in Erdkunde ausgemustert, nicht die ganze Reihe: keine hinterlegte Zeile.
+    assert "reihe-weg" not in erdkunde.split('id="ausmusterungen"')[1]
     politik = seiten.get("/buecherliste/fach/Politik").text
     assert "Ausmusterungen zu diesem Schuljahr" not in politik
     assert f'<tr data-isbn="{TERRA}"' in politik
@@ -1046,12 +1052,21 @@ def _zeile_von(text: str, isbn: str) -> str:
     return text.split(f'<tr data-isbn="{isbn}"')[1].split("</tr>")[0]
 
 
+def _ohne_tags(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text)
+
+
+def _markiert(text: str) -> bool:
+    return any(f'{art}"' in text or f"{art} " in text
+               for art in ("aenderung", "einfuehrung", "ausmusterung"))
+
+
 def test_ohne_abweichung_stimmt_die_seite_mit_iserv_ueberein(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    assert 'class="abweichung"' not in text
-    assert "zeile-nur-" not in text
+    assert not _markiert(text)
+    assert not re.search(r"reihe-(neu|weg)", text)
     assert "weicht von IServ ab" not in seiten.get("/buecherliste/fach").text
 
 
@@ -1064,7 +1079,8 @@ def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = _zeile_von(text, DEUTSCH)
     assert "22,50" in zeile
-    assert 'class="abweichung" title="In IServ: 24,00 €"' in zeile
+    assert 'class="aenderung" title="In IServ: 24,00 €"' in zeile
+    assert "zeile-aenderung" in zeile and not re.search(r"reihe-(neu|weg)", zeile)
     # Graue Hinweiskästen gibt es auf den Bücherlisten nicht.
     assert 'class="hinweis"' not in text
 
@@ -1086,7 +1102,9 @@ def test_ein_buch_nur_in_iserv_steht_markiert_und_ohne_menue(
                                     (neu, "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0, True)])
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = _zeile_von(text, neu)
-    assert "zeile-nur-iserv" in zeile and "nur in IServ" in zeile
+    # Die ganze Reihe führt nur IServ: roter Strich, ganze Zeile rot hinterlegt.
+    assert "zeile-ausmusterung reihe-weg" in zeile
+    assert '<span class="wert-ausmusterung">5</span>' in zeile
     assert "aufklappbar" not in zeile
     assert f'data-isbn="{neu}" data-fach="Deutsch">' not in text
 
@@ -1097,13 +1115,15 @@ def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
     _iserv_aendern(monkeypatch, 5, [
         (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert "zeile-nur-excel" in zeile and "fehlt in IServ" in zeile
+    # In keiner IServ-Liste mehr: eine neue Reihe, blau und ganz hinterlegt.
+    assert "zeile-einfuehrung reihe-neu" in zeile
+    assert '<span class="wert-einfuehrung">5</span>' in zeile
     # Das Menü bleibt: das Buch steht in der Datei.
     assert "aufklappbar" in zeile
 
     jahrgang = seiten.get("/buecherliste/jahrgang/5").text
     assert "Nicht in IServ" in jahrgang
-    assert "fehlt in IServ" in jahrgang.split("Nicht in IServ")[1]
+    assert "zeile-einfuehrung reihe-neu" in jahrgang.split("Nicht in IServ")[1]
 
 
 def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
@@ -1112,10 +1132,13 @@ def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
                                     (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert 'class="abweichung" title="in IServ zusätzlich: Deutsch Jg. 6"' in zeile
+    assert 'class="ausmusterung" title="Ausmusterung, in IServ noch: Deutsch Jg. 6"' in zeile
+    assert '<span class="wert-ausmusterung">6</span>' in zeile
+    assert "zeile-ausmusterung" in zeile and not re.search(r"reihe-(neu|weg)", zeile)
     # Auf der Jahrgangsseite steht es beim Fach.
     zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH)
-    assert "in IServ zusätzlich: Deutsch Jg. 6" in zeile
+    assert "Ausmusterung, in IServ noch: Deutsch Jg. 6" in zeile
+    assert '<span class="wert-ausmusterung">Deutsch</span>' in zeile
 
 
 def test_eine_eingefuehrte_planung_gleicht_iserv(
@@ -1130,7 +1153,7 @@ def test_eine_eingefuehrte_planung_gleicht_iserv(
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
                                     (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    assert 'class="abweichung"' not in text and "zeile-nur-" not in text
+    assert not _markiert(text)
 
 
 def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(

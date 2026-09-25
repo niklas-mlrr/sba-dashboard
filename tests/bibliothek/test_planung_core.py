@@ -321,6 +321,9 @@ def test_fach_ohne_bestaetigung_ist_offen(stand):
                    ausgemustert_nach="2026/2027"), PLANUNG_LAEUFT_AUS),
     (Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
                    ausgemustert_nach="2025/2026"), PLANUNG_AUSGEMUSTERT),
+    # Erst künftig eingeführt und im selben Jahr wieder ausgemustert: noch geplant.
+    (Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=5, eingefuehrt_ab="2028/2029",
+                   ausgemustert_nach="2028/2029"), PLANUNG_GEPLANT),
 ])
 def test_planungsstatus_wird_gegen_das_schuljahr_gerechnet(zeile, erwartet):
     assert planungs_status(zeile, "2026/2027") == erwartet

@@ -22,13 +22,23 @@
    * Tabelle schon für den Bedarf vergeben. */
   --frisch-grund: #fff4c2;
   --frisch-rand: #e0c65a;
-  /* Bücherlisten: was die Excel-Datei anders sagt als IServ. Gelb für einen
-   * anderen Wert, wie "frisch" - weder Fehler noch Erfolg. Rot: laut Datei
-   * da, in IServ nicht; Blau: nur in IServ. */
-  --abweichung-grund: #fff4c2;
-  --abweichung-rand: #e0c65a;
-  --nur-excel: #d9534f;
-  --nur-iserv: #337ab7;
+  /* Bücherlisten: was die Excel-Datei anders sagt als IServ. Je Art drei
+   * Töne: Strich und Schrift, die Zelle heller, die ganze Zeile (neue oder
+   * ausgemusterte Buchreihe) noch heller, damit die Zelle darin sichtbar
+   * bleibt. Gelb: ein anderer Wert. Blau: Einführung (nur in der Datei).
+   * Rot: Ausmusterung (nur noch in IServ). Die gelbe Schrift ist dunkel -
+   * helles Gelb wäre auf Weiß nicht zu lesen. */
+  --aenderung: #8a6100;
+  --aenderung-strich: #e0b000;
+  --aenderung-grund: #fff4c2;
+  --einfuehrung: #1f5f9e;
+  --einfuehrung-strich: #337ab7;
+  --einfuehrung-grund: #dbe9f7;
+  --einfuehrung-reihe: #f0f6fc;
+  --ausmusterung: #b52b27;
+  --ausmusterung-strich: #d9534f;
+  --ausmusterung-grund: #f8dcdb;
+  --ausmusterung-reihe: #fdf1f1;
   /* Kopf: Werte der IServ-Navigationsleiste (Bootstrap 3). */
   --nav-grund: #f8f8f8;
   --nav-rand: #e7e7e7;
@@ -539,17 +549,23 @@ td.frisch {
 .label-status { background-color: #777; }
 .klein { font-size: 85%; }
 /* Abweichungen zu IServ (Vorlage: buecherliste_gruppe.html). */
-.label-abweichung, .label-abweichung-excel { background-color: var(--nur-excel); }
-.label-abweichung-iserv { background-color: var(--nur-iserv); }
-td.abweichung {
-  background: var(--abweichung-grund);
-  box-shadow: inset 0 0 0 1px var(--abweichung-rand);
-}
-td.abweichung[title] { cursor: help; }
-tr.zeile-nur-excel > td:first-child { box-shadow: inset 3px 0 0 var(--nur-excel); }
-tr.zeile-nur-iserv > td:first-child { box-shadow: inset 3px 0 0 var(--nur-iserv); }
-tr.zeile-nur-iserv > td { color: #777; }
-.abweichung-hinweis { font-size: 85%; color: #8a6d3b; }
+.label-abweichung { background-color: var(--ausmusterung-strich); }
+tr.reihe-neu > td { background: var(--einfuehrung-reihe); }
+tr.reihe-weg > td { background: var(--ausmusterung-reihe); }
+.iserv-tabelle td.aenderung { background: var(--aenderung-grund); color: var(--aenderung); }
+.iserv-tabelle td.einfuehrung { background: var(--einfuehrung-grund); }
+.iserv-tabelle td.ausmusterung { background: var(--ausmusterung-grund); }
+td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: help; }
+/* In Jahrgang und Fach ist nur der geänderte Wert farbig, nicht die ganze Zelle. */
+.wert-einfuehrung { color: var(--einfuehrung); }
+.wert-ausmusterung { color: var(--ausmusterung); text-decoration: line-through; }
+tr.zeile-aenderung > td:first-child { box-shadow: inset 4px 0 0 var(--aenderung-strich); }
+tr.zeile-einfuehrung > td:first-child { box-shadow: inset 4px 0 0 var(--einfuehrung-strich); }
+tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmusterung-strich); }
+.hinweis-aenderung, .hinweis-einfuehrung, .hinweis-ausmusterung { font-size: 85%; }
+.hinweis-aenderung { color: var(--aenderung); }
+.hinweis-einfuehrung { color: var(--einfuehrung); }
+.hinweis-ausmusterung { color: var(--ausmusterung); }
 .grau { color: #777; }
 
 .iserv-h2, .iserv-h3, .iserv-h4 { font-family: var(--iserv-schrift); font-weight: 500; line-height: 1.1; }
