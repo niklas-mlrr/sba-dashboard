@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--kein-browser",
         action="store_true",
-        help="Öffnet keinen Browser automatisch.",
+        help="Öffnet keinen Browser automatisch (weder beim Start noch nach der Anmeldung).",
     )
     parser.add_argument(
         "--kein-fenster",
@@ -137,10 +137,12 @@ def main(argv: list[str] | None = None) -> int:
     # Knopf im Fenster und der Knopf auf der Seite nehmen denselben Weg.
     app.state.server = server
 
-    if not argumente.kein_browser:
-        oeffne_browser(url)
-
     if not mit_fenster:
+        # Ohne Fenster ist die Seite die einzige Oberfläche, also gleich auf.
+        # Mit Fenster kommt zuerst die Anmeldung; die Seite öffnet das Fenster
+        # nach der ersten erfolgreichen Anmeldung selbst (app/fenster.py).
+        if not argumente.kein_browser:
+            oeffne_browser(url)
         server.run()
         print("\nBeendet. Dieses Fenster kann geschlossen werden.")
         return 0
@@ -150,7 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     lauf = threading.Thread(target=server.run, name="sba-server", daemon=True)
     lauf.start()
     try:
-        fenster.starte(url, version=__version__)
+        fenster.starte(url, version=__version__,
+                       seite_nach_anmeldung=not argumente.kein_browser)
     finally:
         # Auch wenn das Fenster mit einer Ausnahme endet: der Server darf den
         # Prozess nicht am Leben halten. Das Zuklappen des Fensters hat den

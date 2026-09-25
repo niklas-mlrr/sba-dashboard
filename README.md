@@ -178,8 +178,8 @@ Plattform, was validiert wird und wie eine alte Vollkopie migriert wird, steht
 in [`docs/architektur.md`](docs/architektur.md#zwei-ebenen-ausgelieferter-standard--benutzerkonfiguration).
 
 ```bash
-uv run python -m app.start           # freier Port, Fenster, Browser
-uv run python -m app.start --kein-browser
+uv run python -m app.start           # freier Port, Fenster; Browser nach der Anmeldung
+uv run python -m app.start --kein-browser   # Browser nur über "Seite öffnen"
 uv run python -m app.start --kein-fenster   # nur Server, beenden mit Strg+C
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8765   # ohne Beenden-Knopf
 ```

@@ -168,6 +168,7 @@ class Hauptfenster:
             self._aktualisiere_status()
             return
         benutzer, passwort = self._benutzer.get(), self._passwort.get()
+        seite_war_offen = self.steuerung.seite_geoeffnet
         try:
             zeile = self.steuerung.anmelden(benutzer, passwort)
         except FensterFehler as exc:
@@ -180,7 +181,10 @@ class Hauptfenster:
             self._passwort.set("")
             self._feld_passwort.delete(0, "end")
             del passwort
-        self._melde("", fehler=False)
+        if self.steuerung.seite_geoeffnet and not seite_war_offen:
+            self._melde("Die Seite wurde im Browser geöffnet.", fehler=False)
+        else:
+            self._melde("", fehler=False)
         self._setze_status(zeile, angemeldet=True)
         self._aktualisiere_status()
 

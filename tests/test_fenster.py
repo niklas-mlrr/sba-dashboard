@@ -173,6 +173,54 @@ def test_seite_oeffnen_ruft_den_browser_mit_der_eigenen_adresse(steuerung: Fenst
     assert geoeffnet == ["http://127.0.0.1/"]
 
 
+def test_die_erste_anmeldung_oeffnet_die_seite_genau_einmal(client: TestClient,
+                                                           geoeffnet: list[str]):
+    client.app.state.client_factory = FakeClient
+    steuerung = Fenstersteuerung(TEST_BASIS_URL, anfrage=_ueber_testclient(client),
+                                 browser_oeffnen=geoeffnet.append, seite_nach_anmeldung=True)
+    steuerung.anmelden(TEST_BENUTZER, TEST_PASSWORT)
+    assert geoeffnet == ["http://127.0.0.1/"]
+
+    # Neuanmeldung, etwa nach dem Zeitschloss: kein zweiter Tab.
+    steuerung.abmelden()
+    steuerung.anmelden(TEST_BENUTZER, TEST_PASSWORT)
+    assert geoeffnet == ["http://127.0.0.1/"]
+
+
+def test_nach_dem_knopf_oeffnet_die_anmeldung_keine_zweite_seite(client: TestClient,
+                                                                 geoeffnet: list[str]):
+    client.app.state.client_factory = FakeClient
+    steuerung = Fenstersteuerung(TEST_BASIS_URL, anfrage=_ueber_testclient(client),
+                                 browser_oeffnen=geoeffnet.append, seite_nach_anmeldung=True)
+    steuerung.seite_oeffnen()
+    steuerung.anmelden(TEST_BENUTZER, TEST_PASSWORT)
+    assert geoeffnet == ["http://127.0.0.1/"]
+
+
+def test_gescheiterte_anmeldung_oeffnet_keine_seite(client: TestClient, geoeffnet: list[str]):
+    from ausleihe.exceptions import AuthError
+
+    class _Falsch:
+        def __init__(self, *args: object) -> None:
+            pass
+
+        def login(self) -> None:
+            raise AuthError("401")
+
+    client.app.state.client_factory = _Falsch
+    steuerung = Fenstersteuerung(TEST_BASIS_URL, anfrage=_ueber_testclient(client),
+                                 browser_oeffnen=geoeffnet.append, seite_nach_anmeldung=True)
+    with pytest.raises(FensterFehler):
+        steuerung.anmelden(TEST_BENUTZER, TEST_PASSWORT)
+    assert geoeffnet == []
+
+
+def test_ohne_schalter_oeffnet_die_anmeldung_keine_seite(steuerung: Fenstersteuerung,
+                                                         geoeffnet: list[str]):
+    steuerung.anmelden(TEST_BENUTZER, TEST_PASSWORT)
+    assert geoeffnet == []
+
+
 def test_beenden_setzt_das_abschaltsignal(steuerung: Fenstersteuerung, client: TestClient):
     class _Server:
         should_exit = False

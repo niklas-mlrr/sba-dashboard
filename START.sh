@@ -68,7 +68,8 @@ ziel.write_text(json.dumps(daten, ensure_ascii=False, indent=2) + "\n", encoding
 PY
 
 echo
-echo "Die Seite öffnet sich gleich im Browser. Dieses Terminal offen lassen."
+echo "Gleich öffnet sich das Programmfenster. Nach der Anmeldung dort"
+echo "öffnet sich die Seite im Browser. Dieses Terminal offen lassen."
 echo "Arbeitsmappe: $MAPPE"
 echo
 exec uv run --project "$WURZEL" python -m app.start --config "$KONFIGURATION"

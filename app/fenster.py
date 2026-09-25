@@ -125,10 +125,16 @@ class Fenstersteuerung:
         *,
         anfrage: Callable[[str, str, dict[str, Any] | None], Antwort] = _anfrage,
         browser_oeffnen: Callable[[str], Any] = webbrowser.open,
+        seite_nach_anmeldung: bool = False,
     ) -> None:
         self.url = url.rstrip("/") + "/"
         self._anfrage = anfrage
         self._browser_oeffnen = browser_oeffnen
+        self._seite_nach_anmeldung = seite_nach_anmeldung
+        # Ob die Seite in diesem Lauf schon aufging, per Knopf oder nach der
+        # Anmeldung. Eine Neuanmeldung nach dem Zeitschloss soll keinen zweiten
+        # Tab neben den ersten legen.
+        self.seite_geoeffnet = False
 
     def _ruf(self, pfad: str, methode: str = "GET",
              koerper: dict[str, Any] | None = None) -> Antwort:
@@ -142,6 +148,10 @@ class Fenstersteuerung:
         Prüft die leeren Felder selbst, obwohl der Server das auch täte: ein
         Klick auf "Anmelden" mit leeren Feldern soll nicht erst eine Anfrage
         auslösen, deren Antwort dasselbe sagt.
+
+        Mit ``seite_nach_anmeldung`` öffnet die erste erfolgreiche Anmeldung die
+        Seite im Browser: beim Start kommt zuerst nur das Fenster, damit die
+        Seite nicht vor der Anmeldung aufgeht und dort ein Abruf scheitert.
         """
         if not benutzer.strip() or not passwort:
             raise FensterFehler("Bitte IServ-Benutzername und Passwort eingeben.")
@@ -150,6 +160,8 @@ class Fenstersteuerung:
         )
         if not antwort.ok:
             raise FensterFehler(antwort.fehlertext)
+        if self._seite_nach_anmeldung and not self.seite_geoeffnet:
+            self.seite_oeffnen()
         return self.statuszeile(antwort.koerper)
 
     def abmelden(self) -> str:
@@ -214,6 +226,7 @@ class Fenstersteuerung:
 
     def seite_oeffnen(self) -> None:
         self._browser_oeffnen(self.url)
+        self.seite_geoeffnet = True
 
     def beenden(self) -> str:
         """Fährt den Server herunter.
@@ -257,7 +270,7 @@ def tkinter_verfuegbar() -> tuple[bool, str]:
     return True, ""
 
 
-def starte(url: str, *, version: str = "") -> None:
+def starte(url: str, *, version: str = "", seite_nach_anmeldung: bool = True) -> None:
     """Baut das Fenster und gibt erst zurück, wenn es geschlossen wurde.
 
     Muss auf dem **Hauptthread** laufen (Tk-Vorgabe); der Server läuft deshalb
@@ -265,4 +278,5 @@ def starte(url: str, *, version: str = "") -> None:
     """
     from ._fenster_tk import Hauptfenster
 
-    Hauptfenster(Fenstersteuerung(url), version=version).laufen()
+    steuerung = Fenstersteuerung(url, seite_nach_anmeldung=seite_nach_anmeldung)
+    Hauptfenster(steuerung, version=version).laufen()

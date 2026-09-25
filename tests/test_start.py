@@ -145,7 +145,7 @@ def test_mit_fenster_laeuft_der_server_im_nebenthread(tmp_path, monkeypatch, ser
     monkeypatch.setattr("app.start.tkinter_verfuegbar", lambda: (True, ""))
     monkeypatch.setattr(
         "app.fenster.starte",
-        lambda url, version="": gerufen.append(url),
+        lambda url, version="", seite_nach_anmeldung=True: gerufen.append(url),
     )
 
     assert main(["--config", str(_config(tmp_path)), "--kein-browser"]) == 0
@@ -153,6 +153,35 @@ def test_mit_fenster_laeuft_der_server_im_nebenthread(tmp_path, monkeypatch, ser
     assert gerufen == ["http://127.0.0.1:18765/"]
     assert server_stub.letzte.gelaufen_in == "sba-server"
     assert server_stub.letzte.should_exit is True
+
+
+def test_mit_fenster_oeffnet_der_start_keinen_browser(tmp_path, monkeypatch, server_stub):
+    """Zuerst kommt die Anmeldung im Fenster; die Seite öffnet erst das Fenster."""
+    browser: list[str] = []
+    fenster: list[bool] = []
+
+    monkeypatch.setattr("app.start.tkinter_verfuegbar", lambda: (True, ""))
+    monkeypatch.setattr("app.start.oeffne_browser", browser.append)
+    monkeypatch.setattr(
+        "app.fenster.starte",
+        lambda url, version="", seite_nach_anmeldung=True: fenster.append(seite_nach_anmeldung),
+    )
+
+    assert main(["--config", str(_config(tmp_path))]) == 0
+    assert browser == []
+    assert fenster == [True]
+
+    fenster.clear()
+    assert main(["--config", str(_config(tmp_path)), "--kein-browser"]) == 0
+    assert fenster == [False]
+
+
+def test_ohne_fenster_oeffnet_der_start_den_browser_sofort(tmp_path, monkeypatch, server_stub):
+    browser: list[str] = []
+    monkeypatch.setattr("app.start.oeffne_browser", browser.append)
+
+    assert main(["--config", str(_config(tmp_path)), "--kein-fenster"]) == 0
+    assert browser == ["http://127.0.0.1:18765/"]
 
 
 def test_ohne_bildschirm_faellt_der_start_auf_die_konsole_zurueck(tmp_path, monkeypatch,

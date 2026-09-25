@@ -38,8 +38,9 @@ Drei Dinge, die dabei wichtig sind:
 
 **Doppelklick auf `START.bat`.** Das ist alles.
 
-Es öffnen sich ein schwarzes Fenster mit Text, das **Programmfenster** und der
-Browser mit der Liste.
+Es öffnen sich ein schwarzes Fenster mit Text und das **Programmfenster**.
+Dort melden Sie sich mit Ihrem IServ-Konto an; danach öffnet sich der Browser
+mit der Liste von selbst. Ohne Anmeldung öffnet **Seite öffnen** die Liste.
 
 > **Weder das schwarze noch das Programmfenster schließen, solange Sie
 > arbeiten.** Darin läuft das Programm. Wenn Sie es schließen, ist die Seite im
@@ -50,7 +51,7 @@ Das Programmfenster ist die Schaltzentrale. Darin:
 | Feld oder Knopf | Wofür |
 |-----------------|-------|
 | Benutzername, Passwort, **Anmelden** | Die IServ-Anmeldung für den Abruf (Abschnitt 5) |
-| **Seite öffnen** | Öffnet die Liste erneut im Browser — falls Sie den Tab versehentlich geschlossen haben |
+| **Seite öffnen** | Öffnet die Liste im Browser — ohne Anmeldung, oder falls Sie den Tab versehentlich geschlossen haben |
 | **Beenden** | Beendet das Programm sauber |
 | **⚙** (Zahnrad) | Server und Ordner der Excel-Datei einstellen |
 
