@@ -580,7 +580,7 @@ def test_ohne_datei_steht_der_knopf_zum_aktualisieren(seiten: TestClient) -> Non
     _anmelden(seiten)
     text = seiten.get("/buecherliste/fach").text
     assert 'data-planung="abgleich"' in text
-    assert "ist noch nichts gespeichert" in text
+    assert 'class="hinweis"' not in text
 
 
 def test_verlagsseite_bietet_keine_preispruefung(seiten: TestClient, abgeglichen: dict) -> None:
@@ -703,11 +703,11 @@ def test_fach_seite_listet_nur_vollstaendig_ausgemusterte_buecher(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     """Terra ist in Erdkunde nur in Jg. 5 ausgelaufen, Jg. 6 bleibt: nicht aufgeführt."""
+    # Ohne Ausmusterung fehlt der ganze Abschnitt, samt Überschrift.
     erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert "Ausmusterungen zu diesem Schuljahr" in erdkunde
-    assert "Keine Ausmusterungen" in erdkunde
+    assert "Ausmusterungen zu diesem Schuljahr" not in erdkunde
     latein = seiten.get("/buecherliste/fach/Latein").text
-    assert "Keine Ausmusterungen" in latein
+    assert "Ausmusterungen zu diesem Schuljahr" not in latein
 
 
 def test_ausgemustertes_buch_laesst_sich_wie_die_anderen_planen(
@@ -719,6 +719,7 @@ def test_ausgemustertes_buch_laesst_sich_wie_die_anderen_planen(
         "ausgemustert_nach": "2025/2026", "mtime": abgeglichen["mtime"],
     })
     text = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert "Ausmusterungen zu diesem Schuljahr" in text
     tabelle = text.split('id="ausmusterungen"')[1]
     assert 'data-planung="aufklappen"' in tabelle
     assert f'<template class="planung-vorlage" data-isbn="{TERRA}" data-fach="Erdkunde">' in text
@@ -974,8 +975,8 @@ def test_ohne_abweichung_stimmt_die_seite_mit_iserv_ueberein(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    assert "Stimmt mit IServ überein." in text
     assert 'class="abweichung"' not in text
+    assert "zeile-nur-" not in text
     assert "weicht von IServ ab" not in seiten.get("/buecherliste/fach").text
 
 
@@ -989,7 +990,8 @@ def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
     zeile = _zeile_von(text, DEUTSCH)
     assert "22,50" in zeile
     assert 'class="abweichung" title="In IServ: 24,00 €"' in zeile
-    assert "1 Zeile weicht" in text
+    # Graue Hinweiskästen gibt es auf den Bücherlisten nicht.
+    assert 'class="hinweis"' not in text
 
     uebersicht = seiten.get("/buecherliste/fach").text
     deutsch = uebersicht.split(">Deutsch</a>")[1].split("</td>")[0]
@@ -1052,7 +1054,8 @@ def test_eine_eingefuehrte_planung_gleicht_iserv(
     })
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
                                     (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
-    assert "Stimmt mit IServ überein." in seiten.get("/buecherliste/fach/Deutsch").text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    assert 'class="abweichung"' not in text and "zeile-nur-" not in text
 
 
 def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(

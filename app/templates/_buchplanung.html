@@ -42,15 +42,12 @@
 
 {% macro hinweise(planung, ansicht, gruppe) %}
 {% if planung.fehler %}<p class="hinweis warnung">{{ planung.fehler }}</p>{% endif %}
-{% if planung.mtime is none and not planung.fehler %}
-<p class="hinweis">Für das Schuljahr {{ planung.schuljahr }} ist noch nichts gespeichert.
-  „Aus IServ aktualisieren“ legt die Datei an; darin stehen danach die Bücher dieses
-  und des vorigen Schuljahres.</p>
-{% endif %}
 {% if gruppe and ansicht == "fach" %}
   {% set stand = planung.fach_je_name.get(gruppe) %}
-  {% if stand and stand.hinweis %}
-  <p class="hinweis {{ 'warnung' if stand.status == 'teilweise' else '' }}">{{ stand.hinweis }}</p>
+  {# Nur die gelbe Warnung (teilweise bestätigt); graue Hinweise stehen hier
+     nicht mehr (Entscheidung 2026-09-25). #}
+  {% if stand and stand.hinweis and stand.status == 'teilweise' %}
+  <p class="hinweis warnung">{{ stand.hinweis }}</p>
   {% endif %}
 {% endif %}
 {% endmacro %}

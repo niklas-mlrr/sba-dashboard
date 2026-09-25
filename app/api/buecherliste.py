@@ -414,7 +414,6 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         "listen": daten.listen,
         "gruppen": gruppen,
         "druck_gruppen": druck_gruppen,
-        "verglichen": vergleich is not None,
         "abweichend": abweichend,
     })
 
@@ -433,7 +432,6 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
-        "verglichen": vergleich is not None,
         # Die Vorschläge für das Feld "Verlag" im Planungsmenü: die der
         # heutigen Listen und die der Datei (dort stehen auch die des Vorjahrs).
         "verlage": sorted(
@@ -452,14 +450,12 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
             liste, fehlend = liste_aus_datei(vergleich, liste)
         return _seite(request, "buecherliste_gruppe.html", {
             **werte, "titel": liste.titel, "liste": liste, "fehlend": fehlend,
-            "abweichungen": sum(b.abweichend for b in liste.alle_buecher) + len(fehlend),
         })
     gruppen = aus_datei(vergleich) if vergleich and aus_datei else gruppierung(daten)
     gefunden = finde_gruppe(gruppen, name)
     if gefunden is None:
         return _hinweis(request, "Nicht gefunden",
                         f"„{name}“ kommt in keiner Bücherliste vor.", 404)
-    werte["abweichungen"] = sum(b.abweichend for b in gefunden.buecher)
     if ansicht == "fach":
         # Die Vorschläge des Hinzufügen-Menüs sind die Bücher, die es hier noch
         # nicht gibt - ein Buch, das schon dasteht, wird in seiner Zeile bearbeitet.

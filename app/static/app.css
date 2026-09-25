@@ -541,12 +541,11 @@ td.frisch {
 /* Abweichungen zu IServ (Vorlage: buecherliste_gruppe.html). */
 .label-abweichung, .label-abweichung-excel { background-color: var(--nur-excel); }
 .label-abweichung-iserv { background-color: var(--nur-iserv); }
-td.abweichung, span.abweichung {
+td.abweichung {
   background: var(--abweichung-grund);
   box-shadow: inset 0 0 0 1px var(--abweichung-rand);
 }
 td.abweichung[title] { cursor: help; }
-span.abweichung { padding: 0 .3em; }
 tr.zeile-nur-excel > td:first-child { box-shadow: inset 3px 0 0 var(--nur-excel); }
 tr.zeile-nur-iserv > td:first-child { box-shadow: inset 3px 0 0 var(--nur-iserv); }
 tr.zeile-nur-iserv > td { color: #777; }

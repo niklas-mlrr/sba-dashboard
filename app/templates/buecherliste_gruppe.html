@@ -140,29 +140,11 @@
  class="abweichung" title="In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}"
 {%- endif -%}
 {%- endmacro %}
-{#
-  Über der ersten Tabelle: wie viele Zeilen abweichen und was die Farben
-  bedeuten. Ohne Datei gibt es nichts zu vergleichen, und es steht nichts da.
-#}
-{% macro vergleichshinweis() -%}
-{% if verglichen %}
-{% if abweichungen %}
-<p class="hinweis abweichung-legende">{{ abweichungen }} {{ "Zeile weicht" if abweichungen == 1 else "Zeilen weichen" }}
-  von IServ ab. Angezeigt wird der Stand der Excel-Datei; <span class="abweichung">gelb</span>:
-  in IServ steht ein anderer Wert (Maus darüber zeigt ihn),
-  <span class="label label-abweichung-excel">fehlt in IServ</span>,
-  <span class="label label-abweichung-iserv">nur in IServ</span>.</p>
-{% else %}
-<p class="hinweis">Stimmt mit IServ überein.</p>
-{% endif %}
-{% endif %}
-{%- endmacro %}
 {% macro euro(wert) -%}
 {%- if wert is not none -%}{{ "%.2f"|format(wert)|replace(".", ",") }}&nbsp;€{%- endif -%}
 {%- endmacro %}
 
 {% block inhalt %}
-{{ vergleichshinweis() }}
 {% if liste %}
   <div id="paketteile">
   {% if liste.grundpaket %}
@@ -204,8 +186,8 @@
 {% endif %}
 {% if ansicht == "fach" and planung.mtime is not none %}
 {% set ausgemustert = planung.ausmusterungen_je_fach.get(gruppe.name, []) %}
-<h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
 {% if ausgemustert %}
+<h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
 <div class="tabellenrahmen">
 <table class="iserv-tabelle sortierbar" id="ausmusterungen">
   <thead>
@@ -233,8 +215,6 @@
 </table>
 {% for e in ausgemustert %}{{ bp.planungsvorlage(planung, e, gruppe.name) }}{% endfor %}
 </div>
-{% else %}
-<p class="hinweis">Keine Ausmusterungen zum Schuljahr {{ planung.schuljahr }}.</p>
 {% endif %}
 {{ bp.planungsmenue(verlage, vorschlaege | default([])) }}{% endif %}
 {% if druckbar %}
