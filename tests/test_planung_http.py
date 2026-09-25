@@ -764,9 +764,9 @@ def test_das_menue_zeigt_die_buchreihe_vor_der_planung(
     for feld in ("isbn", "titel", "verlag", "neupreis", "leihgebuehr"):
         assert f'data-buchreihe-feld="{feld}"' in vorlage
     assert 'value="22.50"' in vorlage
-    # Die ISBN steht nur zum Lesen da (grau hinterlegt): sie ist der Schlüssel.
+    # Die ISBN ist gesperrt (grau, nicht anklickbar): sie ist der Schlüssel.
     isbn_feld = vorlage.split('data-buchreihe-feld="isbn"')[1].split(">")[0]
-    assert "readonly" in isbn_feld
+    assert "disabled" in isbn_feld
     # Die Verlage für die Vorschläge, einmal je Seite.
     verlage = text.split('id="planung-verlage">')[1].split("</script>")[0]
     assert json.loads(verlage) == ["Cornelsen", "Klett", "Langenscheidt", "Westermann"]

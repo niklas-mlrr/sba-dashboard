@@ -213,11 +213,12 @@
   <h4>Buchreihe</h4>
   <div class="form-group">
     <label class="control-label">ISBN</label>
-    {# Nur zum Lesen (Entscheidung 2026-09-24): die ISBN ist der Schlüssel des
-       Buchs und wird im Menü nicht geändert. ``readonly`` statt ``disabled``,
-       damit sie sich markieren und kopieren lässt. Mitgeschickt wird sie nicht. #}
+    {# Gesperrt (Entscheidung 2026-09-24): die ISBN ist der Schlüssel des Buchs
+       und wird im Menü nicht geändert. ``disabled`` wie die Felder eines
+       archivierten Schuljahrs in IServ: grau, nicht anklickbar. Mitgeschickt
+       wird sie nicht. #}
     <input class="form-control" data-buchreihe-feld="isbn" value="{{ buch.isbn_anzeige }}"
-      readonly aria-readonly="true" aria-label="ISBN" autocomplete="off" spellcheck="false">
+      disabled aria-label="ISBN" autocomplete="off" spellcheck="false">
   </div>
   <div class="form-group">
     <label class="control-label">Titel</label>
