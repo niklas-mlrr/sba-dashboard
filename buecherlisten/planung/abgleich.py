@@ -3,14 +3,12 @@ und die einzelnen Eintragungen vornehmen.
 
 Der Abgleich ist die Stelle, an der die beiden Wahrheiten aufeinandertreffen:
 
-* **IServ** sagt, welche Bücher es gibt, in welchen Fächern und Jahrgängen und
-  zu welchem Preis. Das wird bei jedem Abgleich frisch übernommen.
-* **Die Datei** sagt, was bemerkt, bestätigt, geplant und zurückgelegt wurde.
-  Das überlebt jeden Abgleich.
-
-Was verlorengeht, geht nicht stillschweigend verloren: eine Eintragung zu einem
-Buch, das in beiden Schuljahren nicht mehr vorkommt, wird verworfen **und** als
-Warnung ins Blatt ``Info`` geschrieben.
+* **Die Datei** ist das Soll: welche Bücher es gibt, in welchen Fächern und
+  Jahrgängen, zu welchem Preis, und was bemerkt, bestätigt, geplant und
+  zurückgelegt wurde. Das überlebt jeden Abgleich.
+* **IServ** liefert beim Abgleich nur, was die Datei noch nicht kennt: neue
+  Bücher. Was IServ anders sagt als die Datei, steht als Kommentar an der
+  Zelle und wird auf den Bücherlisten-Seiten farbig markiert.
 
 Alle Funktionen hier geben einen **neuen**
 :class:`~buecherlisten.planung.modelle.Buchplanung`-Wert zurück; nichts wird an
@@ -35,7 +33,6 @@ from .modelle import (
     RUECKLAGE_GEWUENSCHT,
     RUECKLAGE_STATUS,
     Buch,
-    Buchbemerkung,
     Buchplanung,
     Planungszeile,
     Ruecklage,
@@ -62,50 +59,52 @@ class UngueltigeEingabe(ValueError):
 
 
 def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) -> Buchplanung:
-    """Übernimmt die Bücher aus IServ und behält alles von Hand Eingetragene.
+    """Nimmt neue Bücher aus IServ auf und lässt alles, was schon in der Datei steht.
 
-    Der Schlüssel ist jeweils der seines Blatts: die ISBN bei der Bemerkung,
-    (ISBN, Fach, Jahrgang) bei der Planung, (ISBN, Fach) bei der Rücklage.
-    Fällt die ISBN weg, fällt die Eintragung weg - mit einer Warnung, die in der
-    Datei landet. Fach und Jahrgang einer Planungszeile werden **nicht** geprüft:
-    „wird ab 2028/29 auch in Jahrgang 9 eingeführt" ist gerade die Zeile, die es
-    in keiner Bücherliste gibt.
+    Die Datei ist das **Soll** (Entscheidung 2026-09-25): was sie zu einem Buch
+    sagt - Titel, Verlag, Preise, leihbar, Fächer und Jahrgänge -, bleibt beim
+    Abgleich stehen. Weicht IServ davon ab, zeigen das die Bücherlisten-Seiten
+    (``buecherlisten/planung/vergleich.py``), und in der Datei steht der
+    IServ-Wert als Kommentar an der Zelle. Bis dahin zog der Abgleich die Datei
+    auf IServ nach; danach war jede Abweichung verschwunden, bevor sie jemand
+    gesehen hatte.
+
+    Aus IServ übernommen wird deshalb nur, was die Datei noch nicht kennt: ein
+    neues Buch, samt der Paare, in denen es im Vorjahr stand und heuer nicht
+    mehr (Ausmusterung nach dem Vorjahr). Verschwindet ein Buch aus IServ,
+    bleibt es in der Datei - das ist gerade eine Abweichung, kein Aufräumen.
+
+    Ein von Hand angelegtes Buch bleibt, solange es eine Planungszeile hat.
+    Taucht seine ISBN in IServ auf, ist es nicht mehr „von Hand“; seine Werte
+    bleiben trotzdem die der Datei.
     """
     alt = vorher or Buchplanung()
-    aus_iserv = {buch.isbn for buch in schnappschuss.buecher}
-    # Ein von Hand hinzugefügtes Buch steht in keiner Bücherliste und bleibt
-    # trotzdem - solange es noch irgendwo geplant ist. Taucht seine ISBN in
-    # IServ auf, gilt von da an IServ; die Planung hängt an der ISBN und bleibt.
+    aus_iserv = {buch.isbn: buch for buch in schnappschuss.buecher}
     geplant = {zeile.isbn for zeile in alt.planung}
-    von_hand = tuple(buch for buch in alt.buecher
-                     if buch.von_hand and buch.isbn not in aus_iserv and buch.isbn in geplant)
-    bekannt = aus_iserv | {buch.isbn for buch in von_hand}
-    warnungen: list[str] = list(schnappschuss.warnungen)
 
-    def verloren(was: str, isbn: str) -> None:
-        warnungen.append(
-            f"{was} zu ISBN {isbn} wurde verworfen: das Buch steht weder im "
-            f"Schuljahr {schnappschuss.schuljahr} noch als leihbares Buch im "
-            f"Vorjahr {schnappschuss.vorjahr} in einer Bücherliste."
-        )
-
-    bemerkungen: list[Buchbemerkung] = []
-    for eintrag in alt.bemerkungen:
-        if eintrag.isbn in bekannt:
-            bemerkungen.append(eintrag)
-        else:
-            verloren("Die Bemerkung", eintrag.isbn)
-
-    planung: list[Planungszeile] = []
-    for zeile in alt.planung:
-        if zeile.isbn in bekannt:
-            planung.append(zeile)
-        else:
-            verloren("Die Planungszeile", zeile.isbn)
+    buecher: list[Buch] = []
+    for altes in alt.buecher:
+        if altes.von_hand and altes.isbn not in aus_iserv and altes.isbn not in geplant:
+            continue
+        frisch = aus_iserv.get(altes.isbn)
+        if frisch is None:
+            buecher.append(altes)
+            continue
+        # Der Wert der Datei gilt; ``iserv`` nennt je abweichendem Feld, was
+        # IServ heute sagt - genau das, was als Kommentar an der Zelle steht.
+        soll = {feld: getattr(altes, feld) for feld in ISERV_FELD}
+        buecher.append(replace(_mit_korrekturen(frisch, soll),
+                               kombinationen=altes.kombinationen, ausgemustert=(),
+                               von_hand=False))
+    bekannt = {buch.isbn for buch in buecher}
+    neue = [buch for buch in schnappschuss.buecher if buch.isbn not in bekannt]
+    buecher.extend(neue)
 
     # Was im Vorjahr in einer Liste stand und heuer nicht mehr, ist nach dem
-    # Vorjahr ausgemustert. Ein von Hand eingetragener Wert bleibt.
-    for buch in schnappschuss.buecher:
+    # Vorjahr ausgemustert - bei einem Buch, das die Datei bisher nicht kannte.
+    # Ein von Hand eingetragener Wert bleibt.
+    planung = list(alt.planung)
+    for buch in neue:
         for fach, jahrgang in buch.ausgemustert:
             bisher = next((i for i, z in enumerate(planung)
                            if (z.isbn, z.fach, z.jahrgang) == (buch.isbn, fach, jahrgang)), None)
@@ -116,37 +115,16 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
                 planung[bisher] = replace(planung[bisher],
                                           ausgemustert_nach=schnappschuss.vorjahr)
 
-    ruecklagen: list[Ruecklage] = []
-    for wunsch in alt.ruecklagen:
-        if wunsch.isbn in bekannt:
-            ruecklagen.append(wunsch)
-        else:
-            verloren("Der Rücklage-Wunsch", wunsch.isbn)
-
-    # Korrigierte Titel, Verlage und Preise bleiben - gegen den frischen Wert
-    # aus IServ. Nennt IServ inzwischen selbst den korrigierten Wert, ist die
-    # Korrektur erledigt und fällt weg.
-    buecher: list[Buch] = []
-    for buch in schnappschuss.buecher:
-        altes = alt.buch(buch.isbn)
-        korrigiert = {feld: getattr(altes, feld) for feld in altes.korrigiert} if altes else {}
-        buecher.append(_mit_korrekturen(buch, korrigiert))
-    buecher.extend(von_hand)
-    for altes in alt.buecher:
-        if altes.korrigiert and altes.isbn not in bekannt:
-            verloren("Die Korrektur", altes.isbn)
-
-    neu = Buchplanung(
+    return Buchplanung(
         schuljahr=schnappschuss.schuljahr,
         vorjahr=schnappschuss.vorjahr,
         stand=schnappschuss.stand,
         buecher=tuple(buecher),
-        bemerkungen=tuple(bemerkungen),
+        bemerkungen=alt.bemerkungen,
         planung=tuple(planung),
-        ruecklagen=tuple(ruecklagen),
-        warnungen=tuple(warnungen),
+        ruecklagen=alt.ruecklagen,
+        warnungen=tuple(schnappschuss.warnungen),
     )
-    return neu
 
 
 def _gleich(a: object, b: object) -> bool:

@@ -172,8 +172,8 @@ _NEIN = "nein"
 
 # Korrekturen auf "Buchreihen": die Zelle trägt den korrigierten Wert, hell
 # hinterlegt, und als Kommentar den Wert aus IServ. An diesem Kommentar
-# erkennt der nächste Abgleich die Korrektur - eine Zelle ohne ihn wird aus
-# IServ neu gesetzt. Feld (``Buch``) -> Spalte.
+# erkennt der nächste Abgleich die Korrektur. Den Wert der Zelle behält der
+# Abgleich so oder so (die Datei ist das Soll). Feld (``Buch``) -> Spalte.
 _KORRIGIERBAR: dict[str, str] = {
     "titel": "Titel", "verlag": "Verlag", "neupreis": "Neupreis", "leihgebuehr": "Leihpreis",
     "leihbar": "leihbar",
@@ -574,13 +574,14 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     zeile(2, "Schuljahr", stand.schuljahr)
     zeile(3, "Vorjahr", stand.vorjahr)
     zeile(4, "Stand", stand.stand)
-    zeile(6, "Eintragen", "Nur die hell hinterlegten Spalten werden gelesen; alle "
-                          "anderen schreibt das Dashboard bei jedem Abgleich neu.")
+    zeile(6, "Eintragen", "Diese Datei ist das Soll: Titel, Verlag, Preise, leihbar, "
+                          "Fächer und Jahrgänge bleiben beim Abgleich, wie sie hier "
+                          "stehen; nur neue Bücher kommen aus IServ dazu.")
     zeile(7, "Bücher", "Aus dem laufenden Schuljahr alle, aus dem Vorjahr die "
                        "leihbaren - nur die liegen im Bestand der Schule.")
-    zeile(8, "Korrekturen", "Auf „Buchreihen“ im Planungsmenü korrigierte Titel, Verlage "
-                            "und Preise: hell hinterlegt, der Wert aus IServ steht im "
-                            "Kommentar. IServ selbst bleibt unverändert.")
+    zeile(8, "Abweichungen", "Steht in IServ ein anderer Wert als auf „Buchreihen“, "
+                             "nennt ihn der Kommentar an der Zelle. IServ selbst "
+                             "bleibt unverändert.")
     zeile(9, "Neue Bücher", "Im Planungsmenü hinzugefügte Bücher, die (noch) nicht in "
                             "IServ stehen, tragen auf „Buchreihen“ „in IServ: nein“. Sie "
                             "bleiben beim Abgleich, solange sie eine Planungszeile haben.")

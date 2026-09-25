@@ -187,8 +187,8 @@ def test_eine_geleerte_planungszeile_kommt_nicht_als_leere_zeile_zurueck(tmp_pat
     assert gelesen.zeilen_des_buchs(gelesen.buch(DEUTSCH)) == (("Deutsch", 5),)
 
 
-def test_von_hand_geaenderter_mitgefuehrter_wert_wirkt_nicht_zurueck(tmp_path, stand):
-    """Wer den Titel auf "Buchreihen" überschreibt, ändert nichts an der Wahrheit."""
+def test_in_excel_geaenderter_titel_ist_das_soll(tmp_path, stand):
+    """Die Datei ist das Soll: ein in Excel überschriebener Titel bleibt stehen."""
     from openpyxl import load_workbook
 
     pfad = tmp_path / "Buchplanung.xlsx"
@@ -199,9 +199,10 @@ def test_von_hand_geaenderter_mitgefuehrter_wert_wirkt_nicht_zurueck(tmp_path, s
     ws.cell(2, 1).value = "Von Hand verbogen"
     wb.save(str(pfad))
 
-    # Der nächste Abgleich holt den Titel aus IServ zurück.
+    # Der nächste Abgleich lässt ihn stehen und merkt sich, was IServ sagt.
     neu = zusammenfuehren(lies_datei(pfad), _schnappschuss())
-    assert "Von Hand verbogen" not in {b.titel for b in neu.buecher}
+    buch = next(b for b in neu.buecher if b.titel == "Von Hand verbogen")
+    assert buch.korrigiert == {"titel": stand.buch(buch.isbn).titel}
 
 
 def test_die_alten_blaetter_verschwinden(tmp_path, stand):
@@ -241,14 +242,34 @@ def test_eintragungen_ueberleben_den_abgleich(stand):
     assert neu.planungszeile(DEUTSCH, "Deutsch", 5).kuerzel == "ABC"
 
 
-def test_verschwundenes_buch_wird_verworfen_aber_gemeldet(stand):
+def test_ein_aus_iserv_verschwundenes_buch_bleibt_in_der_datei(stand):
+    """Verschwindet ein Buch aus IServ, ist das eine Abweichung - kein Aufräumen."""
     stand = _mit_bemerkung(stand, ALT, "läuft aus")
+    stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5)
     ohne_alt = tuple(b for b in _buecher() if b.isbn != ALT)
 
     neu = zusammenfuehren(stand, _schnappschuss(ohne_alt))
 
-    assert neu.bemerkung(ALT) is None
-    assert any(ALT in warnung for warnung in neu.warnungen)
+    assert neu.buch(ALT) == stand.buch(ALT)
+    assert neu.bemerkung(ALT).bemerkung == "läuft aus"
+    assert neu.ruecklage(ALT, "Chemie").anzahl == 5
+    assert not neu.warnungen
+
+
+def test_ein_neues_buch_aus_iserv_wird_aufgenommen(stand):
+    dazu = Buch(isbn=NEU, titel="Neu 7", verlag="Klett", kombinationen=(("Deutsch", 7),))
+    neu = zusammenfuehren(stand, _schnappschuss(_buecher() + (dazu,)))
+    assert neu.buch(NEU) == dazu
+
+
+def test_faecher_und_jahrgaenge_bleiben_die_der_datei(stand):
+    """Ein neuer Jahrgang in IServ wird markiert, nicht übernommen - und ein
+    weggefallener nicht still ausgemustert."""
+    anders = tuple(replace(b, kombinationen=(("Deutsch", 6),), ausgemustert=(("Deutsch", 5),))
+                   if b.isbn == DEUTSCH else b for b in _buecher())
+    neu = zusammenfuehren(stand, _schnappschuss(anders))
+    assert neu.buch(DEUTSCH).kombinationen == (("Deutsch", 5),)
+    assert neu.planungszeile(DEUTSCH, "Deutsch", 5) is None
 
 
 def test_fehlendes_vorjahr_ist_kein_fehler_sondern_eine_warnung(stand):
@@ -635,10 +656,12 @@ def test_der_abgleich_behaelt_korrekturen_und_nimmt_den_frischen_iserv_wert(stan
     assert buch.neupreis == 24.0
 
 
-def test_ohne_korrektur_gilt_nach_dem_abgleich_der_neue_iserv_wert(stand):
-    """Eine Preisänderung in IServ darf nicht an einem alten Wert hängen bleiben."""
+def test_eine_preisaenderung_in_iserv_aendert_das_soll_nicht(stand):
+    """Der Preis der Datei bleibt; der neue IServ-Preis steht als Abweichung daneben."""
     frisch = tuple(replace(b, neupreis=23.9) if b.isbn == DEUTSCH else b for b in _buecher())
-    assert zusammenfuehren(stand, _schnappschuss(frisch)).buch(DEUTSCH).neupreis == 23.9
+    buch = zusammenfuehren(stand, _schnappschuss(frisch)).buch(DEUTSCH)
+    assert buch.neupreis == 22.5
+    assert buch.korrigiert == {"neupreis": 23.9}
 
 
 def test_die_alte_korrekturen_mappe_verliert_ihr_blatt(tmp_path, stand):
@@ -742,12 +765,14 @@ def test_ein_von_hand_angelegtes_buch_uebersteht_datei_und_abgleich(tmp_path, st
     assert neu.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
     assert not neu.warnungen
 
-    # Führt IServ das Buch inzwischen selbst, gilt IServ - die Planung bleibt.
+    # Führt IServ das Buch inzwischen selbst, ist es nicht mehr "von Hand";
+    # Werte und Planung bleiben die der Datei.
     aus_iserv = Buch(isbn=NEU, titel="Neu 7 (IServ)", verlag="Klett",
                      kombinationen=(("Deutsch", 7),), leihbar=True)
     uebergeben = zusammenfuehren(neu, _schnappschuss(_buecher() + (aus_iserv,)))
     assert not uebergeben.buch(NEU).von_hand
-    assert uebergeben.buch(NEU).titel == "Neu 7 (IServ)"
+    assert uebergeben.buch(NEU).titel == "Neu 7"
+    assert uebergeben.buch(NEU).korrigiert == {"titel": "Neu 7 (IServ)", "leihbar": True}
     assert uebergeben.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
 
 

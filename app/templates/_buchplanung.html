@@ -87,10 +87,15 @@
   Sortiert wird weiter nach den nackten Jahrgängen (``data-wert``), nicht nach
   dem Zusatz: sonst stünde "7 (ab …)" plötzlich hinter "11".
 #}
-{% macro jahrgangsspalte(planung, buch, fach=none) %}
 {#
-  Die gezeigten Jahrgänge sind die der heutigen Bücherliste (``buch.jahrgaenge``,
-  live aus IServ) und dazu die, für die etwas geplant ist. **Nur** die mit einem
+  ``markierung`` ist die Abweichung zu IServ als fertige Attribute
+  (``abweichung`` in buecherliste_gruppe.html), sonst leer.
+#}
+{% macro jahrgangsspalte(planung, buch, fach=none, markierung="") %}
+{#
+  Die gezeigten Jahrgänge sind die, in denen das Buch dieses Schuljahr geführt
+  wird (``buch.jahrgaenge``, aus der Datei - ohne Datei aus IServ), und dazu
+  die, für die etwas geplant ist. **Nur** die mit einem
   Zusatz: die gespeicherte Datei führt beide Schuljahre, und ein Jahrgang, den
   das Buch nur im Vorjahr hatte, gehört nicht in die Liste dieses Jahres.
 #}
@@ -107,7 +112,7 @@
 {%- endfor -%}
 {%- set jahrgaenge = (buch.jahrgaenge | list + zusatz.keys() | list) | unique | sort | list -%}
 {%- set werte = zusatz.values() | unique | list -%}
-<td data-wert="{{ jahrgaenge | join(', ') }}">
+<td data-wert="{{ jahrgaenge | join(', ') }}"{{ markierung }}>
 {%- if werte | length == 1 and zusatz | length == jahrgaenge | length -%}
 {{ jahrgaenge | join(", ") }} ({{ werte[0] }})
 {%- else -%}

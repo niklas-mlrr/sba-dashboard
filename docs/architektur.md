@@ -81,7 +81,7 @@ app/
     seite.py        GET /            und GET/POST /api/einstellungen  (HTML + Fenster)
     tabelle.py      GET /api/rows    und POST /api/cell
     abruf.py        /api/anmeldung, POST /api/refresh, GET /api/refresh/status
-    buecherliste.py GET /buecherliste/... (HTML, live aus IServ), GET .../fach/pdf (PDF
+    buecherliste.py GET /buecherliste/... (HTML, Datei verglichen mit IServ), GET .../fach/pdf (PDF
                     über buecherlisten.core)
     mehrjahresbaende.py  GET /mehrjahresbaende (HTML) + drei API-Routen
     system.py       GET /health      und POST /api/beenden

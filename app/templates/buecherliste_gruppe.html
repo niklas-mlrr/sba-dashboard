@@ -43,6 +43,13 @@
   Die Freigabe durch die Fachkonferenz gilt der Liste als Ganzes und steht
   deshalb oben, nicht je Zeile.
 
+  Gezeigt wird der Stand der Buchplanungs-Datei, verglichen mit IServ
+  (``app/buecherlisten.py``). Eine Zelle, deren Wert in IServ anders lautet,
+  ist gelb und nennt den IServ-Wert beim Überfahren; eine Zeile, die nur die
+  Datei in dieser Gruppe führt, trägt „fehlt in IServ“, eine, die nur IServ
+  führt, „nur in IServ“. Was in einer ausgeblendeten Spalte abweicht, steht
+  klein unter dem Titel.
+
   In der Fach-Ansicht öffnet ein Klick auf die Zeile das Planungsmenü dieses
   Buchs (Einführung, Ausmusterung, Rücklage). Die Zeile selbst ist der Knopf:
   eine eigene Spalte dafür ginge nicht, weil jede Spaltenüberschrift der
@@ -84,17 +91,27 @@
   </thead>
   <tbody>
     {% for buch in buecher %}
-    <tr data-isbn="{{ buch.isbn }}"{% if planbar %} class="aufklappbar"
+    {% set menue = planbar and buch.isbn in planung.isbns %}
+    {% set iserv = dict(buch.iserv or ()) %}
+    {% set klassen = ["aufklappbar"] if menue else [] %}
+    {% if buch.herkunft == "nur_excel" %}{% set klassen = klassen + ["zeile-nur-excel"] %}
+    {% elif buch.herkunft == "nur_iserv" %}{% set klassen = klassen + ["zeile-nur-iserv"] %}{% endif %}
+    <tr data-isbn="{{ buch.isbn }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}{% if menue %}
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
-      <td>{{ buch.titel }}{% if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif %}</td>
-      {% if mit_jahrgang %}{{ bp.jahrgangsspalte(planung, buch, fach) }}{% endif %}
-      {% if ohne != "fach" %}<td>{{ buch.fach_anzeige }}</td>{% endif %}
-      {% if ohne != "verlag" %}<td>{{ buch.verlag }}</td>{% endif %}
+      <td{{ feldabweichung(iserv, "titel") }}>{{ buch.titel }}
+        {%- if buch.herkunft == "nur_excel" %} <span class="label label-abweichung-excel">fehlt in IServ</span>
+        {%- elif buch.herkunft == "nur_iserv" %} <span class="label label-abweichung-iserv">nur in IServ</span>
+        {%- elif buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif %}
+        {%- if ohne == "verlag" and "verlag" in iserv %}<br><span class="abweichung-hinweis">Verlag in IServ: {{ iserv.verlag or "–" }}</span>{% endif %}
+        {%- for satz in buch.paare_sonst %}<br><span class="abweichung-hinweis">{{ satz }}</span>{% endfor %}</td>
+      {% if mit_jahrgang %}{{ bp.jahrgangsspalte(planung, buch, fach, abweichung(buch.paare_hier)) }}{% endif %}
+      {% if ohne != "fach" %}<td{{ abweichung(buch.paare_hier) }}>{{ buch.fach_anzeige }}</td>{% endif %}
+      {% if ohne != "verlag" %}<td{{ feldabweichung(iserv, "verlag") }}>{{ buch.verlag }}</td>{% endif %}
       <td data-wert="{{ buch.isbn }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
-      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ euro(buch.neupreis) }}</td>
-      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ euro(buch.leihgebuehr) }}</td>
-      <td data-wert="{{ 1 if buch.leihbar else 0 }}"><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
+      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}"{{ feldabweichung(iserv, "neupreis") }}>{{ euro(buch.neupreis) }}</td>
+      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}"{{ feldabweichung(iserv, "leihgebuehr") }}>{{ euro(buch.leihgebuehr) }}</td>
+      <td data-wert="{{ 1 if buch.leihbar else 0 }}"{{ feldabweichung(iserv, "leihbar") }}><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
         {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
@@ -107,14 +124,45 @@
   baut den Tabellenkörper bei jedem Klick neu auf, und eine Vorlage, die an
   ihrer Zeile hängt, würde dabei von ihr getrennt.
 #}
-{% if planbar %}{% for buch in buecher %}{{ bp.planungsvorlage(planung, buch, fach) }}{% endfor %}{% endif %}
+{% if planbar %}{% for buch in buecher if buch.isbn in planung.isbns %}{{ bp.planungsvorlage(planung, buch, fach) }}{% endfor %}{% endif %}
 </div>
 {% endmacro %}
+{#
+  Die Markierung einer abweichenden Zelle: Klasse und, als Tooltip, was IServ
+  dort nennt. Leer, wenn nichts abweicht - dann bleibt die Zelle wie sie war.
+#}
+{% macro abweichung(saetze) -%}
+{%- if saetze %} class="abweichung" title="{{ saetze | join('; ') }}"{% endif -%}
+{%- endmacro %}
+{% macro feldabweichung(iserv, feld) -%}
+{%- if feld in iserv -%}
+{%- set wert = iserv[feld] -%}
+ class="abweichung" title="In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}"
+{%- endif -%}
+{%- endmacro %}
+{#
+  Über der ersten Tabelle: wie viele Zeilen abweichen und was die Farben
+  bedeuten. Ohne Datei gibt es nichts zu vergleichen, und es steht nichts da.
+#}
+{% macro vergleichshinweis() -%}
+{% if verglichen %}
+{% if abweichungen %}
+<p class="hinweis abweichung-legende">{{ abweichungen }} {{ "Zeile weicht" if abweichungen == 1 else "Zeilen weichen" }}
+  von IServ ab. Angezeigt wird der Stand der Excel-Datei; <span class="abweichung">gelb</span>:
+  in IServ steht ein anderer Wert (Maus darüber zeigt ihn),
+  <span class="label label-abweichung-excel">fehlt in IServ</span>,
+  <span class="label label-abweichung-iserv">nur in IServ</span>.</p>
+{% else %}
+<p class="hinweis">Stimmt mit IServ überein.</p>
+{% endif %}
+{% endif %}
+{%- endmacro %}
 {% macro euro(wert) -%}
 {%- if wert is not none -%}{{ "%.2f"|format(wert)|replace(".", ",") }}&nbsp;€{%- endif -%}
 {%- endmacro %}
 
 {% block inhalt %}
+{{ vergleichshinweis() }}
 {% if liste %}
   <div id="paketteile">
   {% if liste.grundpaket %}
@@ -134,6 +182,11 @@
   </div>
   {% if liste.paket %}
   <div id="gesamtansicht" hidden>{{ buchtabelle(liste.alle_buecher, false, true) }}</div>
+  {% endif %}
+  {% if fehlend %}
+  {# Laut Datei in diesem Jahrgang, in der IServ-Liste aber nicht. #}
+  <h2 class="iserv-h2">Nicht in IServ</h2>
+  {{ buchtabelle(fehlend, false) }}
   {% endif %}
 {% else %}
   {{ buchtabelle(gruppe.buecher, true, ohne=ansicht,

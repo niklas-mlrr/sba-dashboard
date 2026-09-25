@@ -22,6 +22,13 @@
    * Tabelle schon für den Bedarf vergeben. */
   --frisch-grund: #fff4c2;
   --frisch-rand: #e0c65a;
+  /* Bücherlisten: was die Excel-Datei anders sagt als IServ. Gelb für einen
+   * anderen Wert, wie "frisch" - weder Fehler noch Erfolg. Rot: laut Datei
+   * da, in IServ nicht; Blau: nur in IServ. */
+  --abweichung-grund: #fff4c2;
+  --abweichung-rand: #e0c65a;
+  --nur-excel: #d9534f;
+  --nur-iserv: #337ab7;
   /* Kopf: Werte der IServ-Navigationsleiste (Bootstrap 3). */
   --nav-grund: #f8f8f8;
   --nav-rand: #e7e7e7;
@@ -531,6 +538,19 @@ td.frisch {
 /* "offen" und alles, was noch keinen eigenen Ton hat. */
 .label-status { background-color: #777; }
 .klein { font-size: 85%; }
+/* Abweichungen zu IServ (Vorlage: buecherliste_gruppe.html). */
+.label-abweichung, .label-abweichung-excel { background-color: var(--nur-excel); }
+.label-abweichung-iserv { background-color: var(--nur-iserv); }
+td.abweichung, span.abweichung {
+  background: var(--abweichung-grund);
+  box-shadow: inset 0 0 0 1px var(--abweichung-rand);
+}
+td.abweichung[title] { cursor: help; }
+span.abweichung { padding: 0 .3em; }
+tr.zeile-nur-excel > td:first-child { box-shadow: inset 3px 0 0 var(--nur-excel); }
+tr.zeile-nur-iserv > td:first-child { box-shadow: inset 3px 0 0 var(--nur-iserv); }
+tr.zeile-nur-iserv > td { color: #777; }
+.abweichung-hinweis { font-size: 85%; color: #8a6d3b; }
 .grau { color: #777; }
 
 .iserv-h2, .iserv-h3, .iserv-h4 { font-family: var(--iserv-schrift); font-weight: 500; line-height: 1.1; }

@@ -471,15 +471,18 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     """
     stand = seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
-        "zeilen": [{"jahrgang": 6, "ausgemustert_nach": "2029/2030"},
+        # Jahrgang 5 schickt das Menü mit, wie es ihn zeigt: ausgemustert
+        # nach dem Vorjahr. Fehlte er, wäre er laut Datei wieder im Einsatz.
+        "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026"},
+                   {"jahrgang": 6, "ausgemustert_nach": "2029/2030"},
                    {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"}],
         "mtime": abgeglichen["mtime"],
     }).json()
     text = seiten.get("/buecherliste/fach/Erdkunde").text
-    # Zwei verschiedene Zusätze: jeder hängt an seinem Jahrgang.
-    assert "6 (bis 2029/2030), 7 (ab 2028/2029)" in text
+    # Verschiedene Zusätze: jeder hängt an seinem Jahrgang.
+    assert "5 (bis 2025/2026), 6 (bis 2029/2030), 7 (ab 2028/2029)" in text
     # Sortiert wird weiter nach den nackten Jahrgängen.
-    assert 'data-wert="6, 7"' in text
+    assert 'data-wert="5, 6, 7"' in text
 
     # Derselbe Zusatz für alle: dann steht er einmal hinter der ganzen Zelle.
     seiten.post("/api/buchplanung/buch", json={
@@ -679,7 +682,7 @@ def test_druckmenue_kennt_die_nicht_bestaetigten_faecher(
 def test_kaputte_datei_macht_die_buecherliste_nicht_unbrauchbar(
     seiten: TestClient, einstellungen: Einstellungen, abgeglichen: dict,
 ) -> None:
-    """Die Seite kommt live aus IServ; der gespeicherte Stand ist eine Zugabe."""
+    """Ohne lesbare Datei zeigt die Seite IServ - und sagt, warum."""
     _datei(einstellungen).write_bytes(b"kein Excel")
     antwort = seiten.get("/buecherliste/fach/Deutsch")
     assert antwort.status_code == 200
@@ -952,3 +955,112 @@ def test_korrigiertes_leihbar_steht_in_der_liste(seiten: TestClient, abgeglichen
     assert "in IServ: nein" in text
     # Jetzt gibt es auch den Rücklage-Block.
     assert "Rücklage für die Fachschaft Latein" in text
+
+
+# ── Die Datei als Soll, IServ als Vergleich ──────────────────────────────────
+
+
+def _iserv_aendern(monkeypatch: pytest.MonkeyPatch, jahrgang: int,
+                   buecher: list[tuple[str, str, list[str], str, float, bool]]) -> None:
+    """Ändert, was der Fake für dieses Schuljahr in IServ listet - erst NACH dem Abgleich."""
+    monkeypatch.setitem(_BUECHER["2026/2027"], jahrgang, buecher)
+
+
+def _zeile_von(text: str, isbn: str) -> str:
+    return text.split(f'<tr data-isbn="{isbn}"')[1].split("</tr>")[0]
+
+
+def test_ohne_abweichung_stimmt_die_seite_mit_iserv_ueberein(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    assert "Stimmt mit IServ überein." in text
+    assert 'class="abweichung"' not in text
+    assert "weicht von IServ ab" not in seiten.get("/buecherliste/fach").text
+
+
+def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _iserv_aendern(monkeypatch, 5, [
+        (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 24.0, True),
+        (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = _zeile_von(text, DEUTSCH)
+    assert "22,50" in zeile
+    assert 'class="abweichung" title="In IServ: 24,00 €"' in zeile
+    assert "1 Zeile weicht" in text
+
+    uebersicht = seiten.get("/buecherliste/fach").text
+    deutsch = uebersicht.split(">Deutsch</a>")[1].split("</td>")[0]
+    latein = uebersicht.split(">Latein</a>")[1].split("</td>")[0]
+    assert "weicht von IServ ab" in deutsch
+    assert "weicht von IServ ab" not in latein
+    # Auch Verlag und Jahrgang zeigen die Datei.
+    assert "22,50" in _zeile_von(seiten.get("/buecherliste/verlag/Cornelsen").text, DEUTSCH)
+    assert "22,50" in _zeile_von(seiten.get("/buecherliste/jahrgang/5").text, DEUTSCH)
+
+
+def test_ein_buch_nur_in_iserv_steht_markiert_und_ohne_menue(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    neu = "9783060000012"
+    _iserv_aendern(monkeypatch, 5, [*_BUECHER["2026/2027"][5],
+                                    (neu, "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0, True)])
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = _zeile_von(text, neu)
+    assert "zeile-nur-iserv" in zeile and "nur in IServ" in zeile
+    assert "aufklappbar" not in zeile
+    assert f'data-isbn="{neu}" data-fach="Deutsch">' not in text
+
+
+def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _iserv_aendern(monkeypatch, 5, [
+        (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert "zeile-nur-excel" in zeile and "fehlt in IServ" in zeile
+    # Das Menü bleibt: das Buch steht in der Datei.
+    assert "aufklappbar" in zeile
+
+    jahrgang = seiten.get("/buecherliste/jahrgang/5").text
+    assert "Nicht in IServ" in jahrgang
+    assert "fehlt in IServ" in jahrgang.split("Nicht in IServ")[1]
+
+
+def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
+                                    (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert 'class="abweichung" title="in IServ zusätzlich: Deutsch Jg. 6"' in zeile
+    # Auf der Jahrgangsseite steht es beim Fach.
+    zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH)
+    assert "in IServ zusätzlich: Deutsch Jg. 6" in zeile
+
+
+def test_eine_eingefuehrte_planung_gleicht_iserv(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eingeführt ab diesem Schuljahr heißt: laut Datei dieses Jahr da."""
+    seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5}, {"jahrgang": 6, "eingefuehrt_ab": "2026/2027"}],
+        "mtime": abgeglichen["mtime"],
+    })
+    _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
+                                    (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
+    assert "Stimmt mit IServ überein." in seiten.get("/buecherliste/fach/Deutsch").text
+
+
+def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _iserv_aendern(monkeypatch, 5, [
+        (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 24.0, True),
+        (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
+    assert seiten.post("/api/buchplanung/abgleich", json={}).status_code == 200
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert "22,50" in zeile and "In IServ: 24,00 €" in zeile

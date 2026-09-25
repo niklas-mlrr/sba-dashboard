@@ -39,16 +39,42 @@ anderen Blätter tragen nur ihren Schlüssel und das, was dazu eingetragen wird.
 Bis 2026-09-20 standen die Bücher dreimal in der Mappe, einmal je Achse
 (Verlag, Fach, Jahrgang), dazu ein eigenes Blatt `Fachbestätigung`.
 
-### Die eine Regel, die das widerspruchsfrei hält
+### Die Datei ist das Soll, IServ wird verglichen
 
-> Aus jedem Blatt wird nur seine **eigene** Eintragungs-Spalte zurückgelesen;
-> alles andere wird bei jedem Schreiben neu gesetzt.
+> Was in der Datei steht, gilt. Der Abgleich nimmt nur **neue** Bücher aus
+> IServ auf; alles, was die Datei schon kennt, bleibt, wie es dort steht.
 
-Wer auf `Buchreihen` einen Titel überschreibt, ändert damit nichts: beim
-nächsten Abgleich steht dort wieder, was IServ sagt. Die eintragbaren Spalten
-sind in der Datei hell hinterlegt. Dieselbe Regel liegt schon
-`mehrjahresbaende/` zugrunde, dessen Blatt ebenfalls immer vollständig neu
-geschrieben wird.
+Bis 2026-09-25 zog jeder Abgleich Titel, Verlag, Preise, Fächer und Jahrgänge
+auf IServ nach. Danach war jede Abweichung verschwunden, bevor sie jemand
+gesehen hatte. Seitdem ist es umgekehrt:
+
+* **Die Bücherlisten-Seiten zeigen die Datei.** IServ wird live geholt und
+  nur verglichen (`vergleich.py`). Ist ein Wert in IServ anders, wird die Zelle
+  gelb und nennt den IServ-Wert beim Überfahren. Steht ein Buch laut Datei in
+  einer Gruppe, in IServ aber nicht, trägt die Zeile „fehlt in IServ“; im
+  umgekehrten Fall „nur in IServ“, mit den Werten aus IServ und ohne
+  Planungsmenü. Die Übersichten markieren jede Gruppe, in der etwas abweicht.
+  Ohne Datei zeigen die Seiten IServ wie vorher. Die PDFs bleiben beim Stand
+  aus IServ mit den Korrekturen der Datei.
+* **Gleich** ist ein Buch, wenn es in der Datei und in einer Bücherliste
+  dieses Schuljahrs steht, Titel, Verlag, Neupreis, Leihgebühr und leihbar
+  übereinstimmen und seine (Fach, Jahrgang)-Paare in IServ genau die sind, in
+  denen die Datei es **dieses Schuljahr** führt: eingeführt in diesem
+  Schuljahr oder vorher, ausgemustert nach diesem Schuljahr oder später
+  (`wirkt_im_schuljahr`). Ein Buch in zwei Fächern muss in beiden stimmen, ein
+  Mehrjahresband in jedem Jahrgang.
+* **Der Abgleich** legt die Datei an und nimmt danach neue ISBNs auf, samt
+  der Ausmusterung nach dem Vorjahr für ihre weggefallenen Paare. Ein Buch,
+  das aus IServ verschwindet, bleibt mit allem, was dazu eingetragen ist; es
+  ist eine Abweichung, kein Aufräumen. Bei den übrigen Büchern schreibt der
+  Abgleich nur den frischen IServ-Wert als Kommentar an jede abweichende Zelle.
+* **Wer in Excel einen Titel oder Preis überschreibt, ändert damit das
+  Soll.** Der nächste Abgleich lässt den Wert stehen und hängt den IServ-Wert
+  als Kommentar daran.
+
+Die eintragbaren Spalten sind in der Datei hell hinterlegt. Die übrigen Blätter
+(`Info`, die Zusammenfassung `Fach`/`Jahrgang` auf `Buchreihen`) werden bei
+jedem Schreiben neu gesetzt.
 
 Gelesen wird über die **Spaltenüberschriften** in Zeile 1, nicht über feste
 Buchstaben: wer in Excel eine Spalte einfügt, soll danach nicht stillschweigend
@@ -152,8 +178,7 @@ Speichern verloren. Daran hängen zwei Dinge:
   als leere Zeile zurückzukommen.
 
 Eine Datei aus der Zeit vor dieser Spalte hat sie nicht; dort zählt wie früher
-jede Zeile als Vorkommen. Der nächste Abgleich stellt die Wahrheit aus IServ
-ohnehin wieder her.
+jede Zeile als Vorkommen.
 
 ## Status werden gerechnet, nie eingetragen
 
@@ -198,17 +223,14 @@ Kommentar lautet „in IServ: ja“ oder „in IServ: nein“. Ein korrigiertes
   IServ („in IServ: 22,50 €“). Ein eigenes Blatt dafür gab es nur am
   2026-09-24 für einige Stunden; seit die ISBN nicht mehr änderbar ist, hat
   jede Korrektur ihre Zeile schon.
-* **Der Kommentar ist die Markierung.** Eine Zelle mit ihm behält beim
-  Abgleich ihren Wert, und der Kommentar bekommt den frischen IServ-Wert.
-  Nennt IServ inzwischen selbst den korrigierten Wert, fällt die Korrektur
-  weg. Eine Zelle **ohne** Kommentar bekommt den Wert aus IServ - so bleibt
-  eine Preisänderung in IServ nicht an einem alten Wert hängen. Wer in Excel
-  eine solche Zelle überschreibt, verliert die Änderung beim nächsten
-  Abgleich; korrigiert wird im Planungsmenü.
-* **Die Korrektur wirkt überall.** `wende_korrekturen_an` in
-  `../core/daten.py` legt sie auf die Rohdaten jeder Bücherliste, bevor sie
-  ausgewertet werden. Seiten und PDF sehen damit dieselben Werte wie die
-  Datei, auch beim Gruppieren nach Verlag.
+* **Der Kommentar nennt IServ.** Beim Abgleich behält jede Zelle ihren Wert
+  (die Datei ist das Soll, siehe oben). Weicht IServ davon ab, bekommt sie
+  als Kommentar den frischen IServ-Wert; nennt IServ selbst den Wert der
+  Datei, fällt der Kommentar weg. Bis 2026-09-25 bekam eine Zelle **ohne**
+  Kommentar beim Abgleich den Wert aus IServ.
+* **Die Korrektur wirkt überall.** Die Seiten zeigen ohnehin die Datei. Für
+  das PDF legt `wende_korrekturen_an` in `../core/daten.py` die Korrekturen
+  auf die Rohdaten jeder Bücherliste, bevor sie ausgewertet werden.
 * **Zurück auf IServ.** Die Datei kennt zu jedem korrigierten Feld den
   IServ-Wert (`Buch.iserv`), zu jedem anderen ist der heutige Wert der aus
   IServ. `setze_buchreihe` entscheidet daran: gleicht die Eingabe dem
@@ -235,12 +257,14 @@ Planungszeile verschwindet.
   ISBN-13 gespeichert. Das Buch wird von Hand angelegt (`Buch.von_hand`, auf
   `Buchreihen` die Spalte `in IServ` = „nein“). Titel, Verlag und Preise sind
   dann keine Korrektur, sondern die einzige Quelle. Der Abgleich behält das
-  Buch, solange es eine Planungszeile hat. Führt IServ die ISBN selbst, gilt
-  von da an IServ, und die Planung bleibt. Werden im Menü alle Jahrgänge
+  Buch, solange es eine Planungszeile hat. Führt IServ die ISBN selbst, ist es
+  nicht mehr „von Hand“; seine Werte und die Planung bleiben die der Datei,
+  Abweichungen zu IServ werden markiert. Werden im Menü alle Jahrgänge
   entfernt, fällt das Buch aus der Datei.
 
-Die Fach-Seite hängt solche Bücher an ihre Liste an
-(`app/api/buecherliste.py`, `zusaetze_je_fach`). Das PDF bleibt beim Stand
+Die Fach-Seite zeigt solche Bücher in ihrer Liste, weil sie aus der Datei
+kommt (`gruppen_nach_fach_aus_datei` in `app/buecherlisten.py`); ein erst
+künftig eingeführtes Buch steht dort mit „(ab …)“. Das PDF bleibt beim Stand
 aus IServ.
 
 ## Aufbau des Pakets
@@ -251,6 +275,7 @@ aus IServ.
 | `mappe.py` | die Arbeitsmappe lesen und schreiben (openpyxl) |
 | `laden.py` | beide Schuljahre aus IServ, über `../core/daten.py` |
 | `abgleich.py` | zusammenführen und die einzelnen Eintragungen |
+| `vergleich.py` | die Datei mit IServ vergleichen, je Buch |
 
 Kein HTTP, keine Einstellungen, keine Sperren — das steht im Dashboard
 (`app/buchplanung.py`, `app/api/buchplanung.py`). Eingetragen wird in den

@@ -14,7 +14,8 @@ Einstellungen, keine Sperren; das ist ``app/buchplanung.py``.
 Aufbau: :mod:`~buecherlisten.planung.modelle` die Begriffe und die gerechneten
 Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
 :mod:`~buecherlisten.planung.laden` die beiden Schuljahre aus IServ,
-:mod:`~buecherlisten.planung.abgleich` das Zusammenführen und die Eintragungen.
+:mod:`~buecherlisten.planung.abgleich` das Zusammenführen und die Eintragungen,
+:mod:`~buecherlisten.planung.vergleich` den Vergleich der Datei mit IServ.
 """
 from .abgleich import (
     Buchreiheneingabe,
@@ -65,8 +66,24 @@ from .modelle import (
     schuljahr_zahl,
     wirkt_im_schuljahr,
 )
+from .vergleich import (
+    BEIDE,
+    NUR_EXCEL,
+    NUR_ISERV,
+    Abweichung,
+    IservBuch,
+    aktive_paare,
+    vergleiche,
+)
 
 __all__ = [
+    "BEIDE",
+    "NUR_EXCEL",
+    "NUR_ISERV",
+    "Abweichung",
+    "IservBuch",
+    "aktive_paare",
+    "vergleiche",
     "BLAETTER",
     "FACH_BESTAETIGT",
     "FACH_OFFEN",

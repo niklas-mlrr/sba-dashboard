@@ -73,7 +73,7 @@
 
   // Der Server schickt den ganzen neuen Stand zurück. Statt ihn hier Zelle für
   // Zelle einzubauen - Statuslabel, Jahrgang-Spalte, Übersichtszähler -, wird
-  // die Seite neu geladen: sie kommt ohnehin live aus IServ, und der eine
+  // die Seite neu geladen: sie liest ohnehin Datei und IServ neu, und der eine
   // zusätzliche Aufruf ist billiger als eine zweite Fassung der Darstellung,
   // die mit der Vorlage auseinanderlaufen kann.
   async function sende(pfad, koerper, erfolg) {

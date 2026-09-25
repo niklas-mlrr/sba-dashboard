@@ -52,7 +52,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | Route | Zweck |
 |-------|-------|
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
-| `GET /buecherliste/{fach,verlag,jahrgang}` | Bücherlisten-Übersicht, live aus IServ (braucht Anmeldung) |
+| `GET /buecherliste/{fach,verlag,jahrgang}` | Bücherlisten-Übersicht aus der Buchplanungs-Datei, Abweichungen zu IServ markiert (braucht Anmeldung) |
 | `GET /buecherliste/{ansicht}/{name}` | Bücher eines Fachs, Verlags oder Jahrgangs |
 | `GET /buecherliste/{ansicht}/pdf` | Bücherlisten mehrerer Fächer, Verlage oder Jahrgänge als PDF (Druckmenü, Optionen in der URL, Antwort `inline`) |
 | `GET /buecherliste/{ansicht}/{name}/pdf` | Bücherliste eines Fachs, Verlags oder Jahrgangs als PDF |

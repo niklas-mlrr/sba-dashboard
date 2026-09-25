@@ -28,6 +28,13 @@
   Sortierbar über static/sortieren.js: data-sort an jeder Überschrift,
   data-wert an Zellen, deren Anzeige nicht selbst der Schlüssel ist.
 #}
+{#
+  Hinter dem Namen: ob in dieser Gruppe etwas von IServ abweicht. Was genau,
+  zeigt die Gruppenseite.
+#}
+{% macro weicht_ab(schluessel) -%}
+{%- if schluessel in abweichend %} <span class="label label-abweichung" title="Die Excel-Datei weicht hier von IServ ab">weicht von IServ ab</span>{% endif -%}
+{%- endmacro %}
 {% block inhalt %}
 <div class="tabellenrahmen">
 <table class="iserv-tabelle sortierbar">
@@ -48,7 +55,7 @@
   <tbody>
     {% for liste in listen %}
     <tr>
-      <td>{% if liste.jahrgang is not none %}<a href="/buecherliste/jahrgang/{{ liste.jahrgang }}">{{ liste.titel }}</a>{% else %}{{ liste.titel }}{% endif %}</td>
+      <td>{% if liste.jahrgang is not none %}<a href="/buecherliste/jahrgang/{{ liste.jahrgang }}">{{ liste.titel }}</a>{% else %}{{ liste.titel }}{% endif %}{{ weicht_ab(liste.id) }}</td>
       <td data-wert="{{ liste.jahrgang if liste.jahrgang is not none else '' }}">{{ liste.jahrgang if liste.jahrgang is not none else "" }}</td>
       <td>{{ liste.leihmodalitaet }}</td>
       <td data-wert="{{ liste.festpreis or '' }}">{% if liste.festpreis %}{{ "%.2f"|format(liste.festpreis)|replace(".", ",") }}&nbsp;€{% else %}<span class="klein grau">Nein</span>{% endif %}</td>
@@ -70,7 +77,7 @@
   <tbody>
     {% for gruppe in gruppen %}
     <tr>
-      <td><a href="/buecherliste/{{ ansicht }}/{{ gruppe.name|urlencode }}">{{ gruppe.name }}</a></td>
+      <td><a href="/buecherliste/{{ ansicht }}/{{ gruppe.name|urlencode }}">{{ gruppe.name }}</a>{{ weicht_ab(gruppe.name) }}</td>
       {% if ansicht == "fach" %}<td>
         {% if planung.mtime is none %}<span class="label label-status">offen</span>
         {% else %}

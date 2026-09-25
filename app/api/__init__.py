@@ -15,7 +15,7 @@ Die sieben Router hier sind nach dem geschnitten, was ein Leser sucht:
 * :mod:`~app.api.abruf` - die Anmeldung (``/api/anmeldung``) sowie Start und
   Fortschritt des IServ-Abrufs.
 * :mod:`~app.api.buecherliste` - die Bücherlisten nach Fach, Verlag und
-  Jahrgang, live aus IServ (HTML).
+  Jahrgang, aus der Buchplanungs-Datei, verglichen mit IServ live (HTML).
 * :mod:`~app.api.buchplanung` - der gespeicherte Stand eines Schuljahrs:
   Preisprüfung, Fachbestätigung, Planung und Rücklagen (nur API; eingetragen
   wird in den Bücherlisten-Ansichten).

@@ -1,5 +1,10 @@
 """Die Bücherlisten-Seiten hinter dem Reiter "Bücherliste".
 
+Angezeigt wird der Stand der Buchplanungs-Datei; IServ wird live geholt und
+nur verglichen, Abweichungen markiert die Vorlage (``app/buecherlisten.py``,
+zweiter Teil). Ohne Datei zeigen die Seiten IServ. Die PDFs bleiben beim Stand
+aus IServ mit den Korrekturen der Datei.
+
 Wie ``GET /`` fangen diese Routen ihre Fehler selbst ab und liefern HTML: wer
 im Menü auf "Fach" klickt und nicht angemeldet ist, soll einen Satz lesen, was
 zu tun ist - kein JSON aus ``app/fehler.py``.
@@ -23,34 +28,39 @@ from buecherlisten.core.daten import (
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from buecherlisten.planung import (
     FACH_BESTAETIGT,
+    NUR_ISERV,
     OHNE_VERLAG,
-    PLANUNG_AUSGEMUSTERT,
+    Buchplanung,
     fach_bestaetigung,
     fach_status,
     planungs_status,
 )
 
 from .. import buchplanung as planungsdomaene
-from ..buecherlisten import Buch as ListenBuch
 from ..buecherlisten import (
     Buecherlisten,
-    Gruppe,
+    Vergleich,
     finde_gruppe,
     gruppen_nach_fach,
+    gruppen_nach_fach_aus_datei,
     gruppen_nach_verlag,
+    gruppen_nach_verlag_aus_datei,
     lade_buecherlisten,
+    liste_aus_datei,
+    vergleiche_mit_iserv,
 )
 from ..sitzung import Abgelaufen, NichtAngemeldet
 from .gemeinsam import aktuelle_einstellungen, vorlagen
 
 router = APIRouter()
 
-# Ansicht -> (Überschrift, Gruppierung). Jahrgang hat keine Gruppierung, weil
-# seine Zeilen die IServ-Listen selbst sind.
-_ANSICHTEN: dict[str, tuple[str, Callable[[Buecherlisten], Any] | None]] = {
-    "fach": ("Fach", gruppen_nach_fach),
-    "verlag": ("Verlag", gruppen_nach_verlag),
-    "jahrgang": ("Jahrgang", None),
+# Ansicht -> (Überschrift, Gruppierung aus IServ, Gruppierung aus der Datei).
+# Jahrgang hat keine Gruppierung, weil seine Zeilen die IServ-Listen selbst sind.
+_ANSICHTEN: dict[str, tuple[str, Callable[[Buecherlisten], Any] | None,
+                            Callable[[Vergleich], Any] | None]] = {
+    "fach": ("Fach", gruppen_nach_fach, gruppen_nach_fach_aus_datei),
+    "verlag": ("Verlag", gruppen_nach_verlag, gruppen_nach_verlag_aus_datei),
+    "jahrgang": ("Jahrgang", None, None),
 }
 
 
@@ -91,7 +101,9 @@ def _laden(request: Request) -> Buecherlisten | Response:
             "danach diese Seite neu laden.", 401,
         )
     try:
-        return lade_buecherlisten(client, korrekturen=_korrekturen(request))
+        # Ohne Korrekturen: die Seiten zeigen die Datei, und IServ ist das,
+        # womit sie verglichen wird.
+        return lade_buecherlisten(client)
     except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
         return _hinweis(
             request, "IServ nicht erreichbar",
@@ -99,33 +111,36 @@ def _laden(request: Request) -> Buecherlisten | Response:
         )
 
 
-def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
+def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], Buchplanung | None]:
     """Der gespeicherte Stand dieses Schuljahrs, fertig zum Anzeigen.
 
     ``schuljahr`` ist die IServ-**Kennung** ("2026/2027"), nicht der
     Anzeigename: sie ist der Schlüssel der Datei und geht von der Seite
     unverändert in jede Eintragung zurück.
 
-    Die Seiten selbst kommen live aus IServ; was geprüft, bestätigt und geplant
-    ist, steht in der Exceldatei. Beides wird hier zusammengelegt - **ohne**
-    dass ein Fehler an der Datei die Bücherliste unbrauchbar macht: fehlt sie
-    oder ist sie unlesbar, zeigt die Seite die Bücher und einen Hinweis.
+    Die Seiten zeigen die Exceldatei und vergleichen sie mit IServ live. Ein
+    Fehler an der Datei macht die Bücherliste trotzdem nicht unbrauchbar: fehlt
+    sie oder ist sie unlesbar, zeigt die Seite die Bücher aus IServ und einen
+    Hinweis.
 
     Die Status werden nicht mitgeliefert, sondern hier gerechnet - an genau der
     Stelle, an der auch die API sie rechnet (``buecherlisten/planung/modelle.py``).
+
+    Zurück kommt dazu der Stand selbst (oder ``None``): aus ihm bauen die
+    Routen die Zeilen der Seite.
     """
     leer: dict[str, Any] = {
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {}, "ausmusterungen_je_fach": {}, "vorjahr": "",
-        "verlage": [], "zusaetze_je_fach": {}, "buecher": [],
+        "verlage": [], "buecher": [], "isbns": set(),
     }
     try:
         stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
     except Exception as exc:  # noqa: BLE001 - eine kaputte Datei darf die Seite nicht abwürgen
-        return {**leer, "fehler": f"Der gespeicherte Stand ist nicht lesbar: {exc}"}
+        return {**leer, "fehler": f"Der gespeicherte Stand ist nicht lesbar: {exc}"}, None
     if stand is None:
-        return leer
+        return leer, None
 
     planung = stand.planung
     zeilen: dict[str, dict[str, list[dict[str, Any]]]] = {}
@@ -190,22 +205,6 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         for eintrag in eintraege:
             eintrag["jahrgaenge"].sort()
 
-    # Was im Planungsmenü in ein Fach aufgenommen wurde, aber in keiner
-    # Bücherliste dieses Fachs steht - ein Buch aus einem anderen Fach oder
-    # eines, das es in IServ noch gar nicht gibt. Die Fach-Seite hängt es an
-    # ihre Liste an; die Jahrgang-Spalte zeigt dazu „(ab …)“.
-    zusaetze: dict[str, dict[str, ListenBuch]] = {}
-    for zeile in planung.planung:
-        geplant = planung.buch(zeile.isbn)
-        if geplant is None or (zeile.fach, zeile.jahrgang) in geplant.kombinationen \
-                or planungs_status(zeile, planung.schuljahr) == PLANUNG_AUSGEMUSTERT:
-            continue
-        zusaetze.setdefault(zeile.fach, {})[geplant.isbn] = ListenBuch(
-            isbn=geplant.isbn, titel=geplant.titel, faecher=geplant.faecher, verlag=geplant.verlag,
-            neupreis=geplant.neupreis, leihgebuehr=geplant.leihgebuehr, leihbar=geplant.leihbar,
-            jahrgaenge=(), iserv=geplant.iserv, von_hand=geplant.von_hand,
-        )
-
     # Die Vorschläge für „+ Buch hinzufügen“: jedes Buch der Datei, mit dem,
     # was das Menü bei einem Treffer übernimmt.
     buecher = [
@@ -237,9 +236,10 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "ausmusterungen_je_fach": ausgemustert,
         "vorjahr": planung.vorjahr,
         "verlage": [v for v in planung.verlage if v != OHNE_VERLAG],
-        "zusaetze_je_fach": {fach: list(je_isbn.values()) for fach, je_isbn in zusaetze.items()},
         "buecher": buecher,
-    }
+        # Die Bücher der Datei: nur ihre Zeilen haben ein Planungsmenü.
+        "isbns": {buch.isbn for buch in planung.buecher},
+    }, planung
 
 
 def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
@@ -374,15 +374,29 @@ def uebersicht(request: Request, ansicht: str) -> Response:
     daten = _laden(request)
     if isinstance(daten, Response):
         return daten
-    name, gruppierung = _ANSICHTEN[ansicht]
-    gruppen = gruppierung(daten) if gruppierung else ()
+    name, gruppierung, aus_datei = _ANSICHTEN[ansicht]
+    iserv_gruppen = gruppierung(daten) if gruppierung else ()
     # Was im Druckmenü zur Auswahl steht: die Gruppennamen, bei Jahrgang die
     # Listen mit Jahrgang ("Jahrgang 5", wie buecherlisten.core sie nennt).
+    # Aus IServ, nicht aus der Datei: gedruckt wird der Stand aus IServ.
     druck_gruppen = (
         [f"Jahrgang {liste.jahrgang}" for liste in daten.listen if liste.jahrgang is not None]
-        if ansicht == "jahrgang" else [g.name for g in gruppen]
+        if ansicht == "jahrgang" else [g.name for g in iserv_gruppen]
     )
-    kontext = _planungskontext(request, daten.kennung)
+    kontext, stand = _planungskontext(request, daten.kennung)
+    vergleich = vergleiche_mit_iserv(daten, stand) if stand else None
+    gruppen = aus_datei(vergleich) if vergleich and aus_datei else iserv_gruppen
+    # Die Gruppen (bei Jahrgang: die Listen), in denen etwas von IServ abweicht.
+    if vergleich is None:
+        abweichend: set[Any] = set()
+    elif ansicht == "jahrgang":
+        abweichend = {
+            liste.id for liste in daten.listen
+            for neu, fehlend in (liste_aus_datei(vergleich, liste),)
+            if fehlend or any(b.abweichend for b in neu.alle_buecher)
+        }
+    else:
+        abweichend = {g.name for g in gruppen if any(b.abweichend for b in g.buecher)}
     return _seite(request, "buecherliste_uebersicht.html", {
         "planung": kontext,
         # Was hinter "nicht bestätigte" im Druckmenü steckt: die Fächer ohne
@@ -400,6 +414,8 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         "listen": daten.listen,
         "gruppen": gruppen,
         "druck_gruppen": druck_gruppen,
+        "verglichen": vergleich is not None,
+        "abweichend": abweichend,
     })
 
 
@@ -410,12 +426,14 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     daten = _laden(request)
     if isinstance(daten, Response):
         return daten
-    ansicht_name, gruppierung = _ANSICHTEN[ansicht]
-    planung = _planungskontext(request, daten.kennung)
+    ansicht_name, gruppierung, aus_datei = _ANSICHTEN[ansicht]
+    planung, stand = _planungskontext(request, daten.kennung)
+    vergleich = vergleiche_mit_iserv(daten, stand) if stand else None
     werte: dict[str, Any] = {
         "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
+        "verglichen": vergleich is not None,
         # Die Vorschläge für das Feld "Verlag" im Planungsmenü: die der
         # heutigen Listen und die der Datei (dort stehen auch die des Vorjahrs).
         "verlage": sorted(
@@ -429,21 +447,24 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         if liste is None:
             return _hinweis(request, "Nicht gefunden",
                             f"Für Jahrgang „{name}“ gibt es keine Bücherliste.", 404)
-        return _seite(request, "buecherliste_gruppe.html",
-                      {**werte, "titel": liste.titel, "liste": liste})
-    gefunden = finde_gruppe(gruppierung(daten), name)
+        fehlend: tuple = ()
+        if vergleich is not None:
+            liste, fehlend = liste_aus_datei(vergleich, liste)
+        return _seite(request, "buecherliste_gruppe.html", {
+            **werte, "titel": liste.titel, "liste": liste, "fehlend": fehlend,
+            "abweichungen": sum(b.abweichend for b in liste.alle_buecher) + len(fehlend),
+        })
+    gruppen = aus_datei(vergleich) if vergleich and aus_datei else gruppierung(daten)
+    gefunden = finde_gruppe(gruppen, name)
     if gefunden is None:
         return _hinweis(request, "Nicht gefunden",
                         f"„{name}“ kommt in keiner Bücherliste vor.", 404)
+    werte["abweichungen"] = sum(b.abweichend for b in gefunden.buecher)
     if ansicht == "fach":
-        # Hinzugefügte Bücher stehen hinter denen aus IServ, in derselben Tabelle.
         # Die Vorschläge des Hinzufügen-Menüs sind die Bücher, die es hier noch
         # nicht gibt - ein Buch, das schon dasteht, wird in seiner Zeile bearbeitet.
-        vorhanden = {buch.isbn for buch in gefunden.buecher}
-        dazu = [buch for buch in planung["zusaetze_je_fach"].get(name, [])
-                if buch.isbn not in vorhanden]
-        gefunden = Gruppe(name=gefunden.name, buecher=gefunden.buecher + tuple(dazu))
-        vorhanden |= {buch.isbn for buch in dazu}
+        # Eine Zeile „nur in IServ“ steht nicht in der Datei und zählt nicht.
+        vorhanden = {buch.isbn for buch in gefunden.buecher if buch.herkunft != NUR_ISERV}
         werte["vorschlaege"] = [buch for buch in planung["buecher"]
                                 if buch["isbn"] not in vorhanden and name not in buch["faecher"]]
     return _seite(request, "buecherliste_gruppe.html",
