@@ -112,10 +112,12 @@ def korrigiere_eintrag(item: dict, korrekturen: Korrekturen | None) -> dict:
     """
     sd = item.get("series_data") or {}
     isbn = sd.get("isbn") or item.get("series")
-    felder = korrekturen.get(isbn) if korrekturen and isbn else None
+    felder = dict(korrekturen.get(isbn) or {}) if korrekturen and isbn else {}
     if not felder:
         return item
-    return {**item, "series_data": {**sd, **felder}}
+    # "Leihbar" gehört in IServ zum Eintrag der Liste, nicht zur Buchreihe.
+    eintrag = {"borrowable": felder.pop("borrowable")} if "borrowable" in felder else {}
+    return {**item, **eintrag, "series_data": {**sd, **felder}}
 
 
 def hole_jahrgangslisten(

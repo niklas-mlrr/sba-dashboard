@@ -266,7 +266,7 @@
         feld.focus();
         return undefined;
       }
-      werte[feld.dataset.buchreiheFeld] = feld.value.trim();
+      werte[feld.dataset.buchreiheFeld] = feld.type === "checkbox" ? feld.checked : feld.value.trim();
     }
     const pflicht = [["titel", "den Titel"], ["verlag", "den Verlag"]];
     // Beim Hinzufügen ist die ISBN eine Eingabe; ob sie gültig ist, prüft der Server.
@@ -281,6 +281,7 @@
     return {
       isbn: werte.isbn, titel: werte.titel, verlag: werte.verlag,
       neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
+      leihbar: Boolean(werte.leihbar),
     };
   }
 
@@ -404,6 +405,8 @@
     setze("verlag", buch.verlag);
     setze("neupreis", preis(buch.neupreis));
     setze("leihgebuehr", preis(buch.leihgebuehr));
+    const leihbar = bereich.querySelector('[data-buchreihe-feld="leihbar"]');
+    if (leihbar) leihbar.checked = Boolean(buch.leihbar);
     // Weiter geht es mit den Jahrgängen - die Buchreihe ist vollständig.
     const jahrgang = menue.querySelector('[data-planung-zeile] [data-planung-feld="jahrgang"]');
     (jahrgang || feld).focus();

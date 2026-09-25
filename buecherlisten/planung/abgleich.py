@@ -416,6 +416,8 @@ class Buchreiheneingabe:
     verlag: str
     neupreis: float | None = None
     leihgebuehr: float | None = None
+    # ``None`` heißt wie beim Preis: gilt wie in IServ.
+    leihbar: bool | None = None
 
 
 # Ein Preis, den es für ein Schulbuch geben kann. Geprüft wird wie beim
@@ -461,6 +463,7 @@ def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe
         neues_buch = replace(
             buch, titel=titel, verlag=verlag,
             neupreis=_cent(eingabe.neupreis), leihgebuehr=_cent(eingabe.leihgebuehr),
+            leihbar=buch.leihbar if eingabe.leihbar is None else eingabe.leihbar,
         )
         return _ersetzt(
             stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
@@ -475,6 +478,8 @@ def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe
     for feld, betrag in (("neupreis", eingabe.neupreis), ("leihgebuehr", eingabe.leihgebuehr)):
         if betrag is not None:
             eingegeben[feld] = round(betrag, 2)
+    if eingabe.leihbar is not None:
+        eingegeben["leihbar"] = eingabe.leihbar
     neues_buch = _mit_korrekturen(aus_iserv, eingegeben)
     return _ersetzt(
         stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
@@ -550,7 +555,7 @@ def fuege_buch_hinzu(
         neu = _ersetzt(stand, buecher=stand.buecher + (Buch(
             isbn=isbn, titel=titel, verlag=verlag,
             neupreis=_cent(buchreihe.neupreis), leihgebuehr=_cent(buchreihe.leihgebuehr),
-            von_hand=True,
+            leihbar=bool(buchreihe.leihbar), von_hand=True,
         ),))
     else:
         if fach in buch.faecher or any(

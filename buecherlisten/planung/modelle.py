@@ -64,8 +64,14 @@ OHNE_VERLAG = "(ohne Verlag)"
 # Die Felder einer Buchreihe, die sich im Planungsmenü korrigieren lassen -
 # Name hier -> Name in IServ (``series_data``). Die ISBN gehört nicht dazu:
 # sie ist der Schlüssel des Buchs und steht im Menü nur zum Lesen.
+#
+# ``leihbar`` ist in IServ kein Feld der Buchreihe, sondern des Eintrags einer
+# Bücherliste (``borrowable``, neben ``series_data``). Korrigiert wird es
+# trotzdem wie die anderen - ``korrigiere_eintrag`` in
+# ``buecherlisten/core/daten.py`` legt es an die richtige Stelle.
 ISERV_FELD: dict[str, str] = {
     "titel": "title", "verlag": "publisher", "neupreis": "price", "leihgebuehr": "fee",
+    "leihbar": "borrowable",
 }
 
 # Die Legende, die im Blatt "Info" steht: Status → was er bedeutet. Sie steht

@@ -176,8 +176,10 @@ _NEIN = "nein"
 # IServ neu gesetzt. Feld (``Buch``) -> Spalte.
 _KORRIGIERBAR: dict[str, str] = {
     "titel": "Titel", "verlag": "Verlag", "neupreis": "Neupreis", "leihgebuehr": "Leihpreis",
+    "leihbar": "leihbar",
 }
 _PREISFELDER = frozenset({"neupreis", "leihgebuehr"})
+_JA_NEIN_FELDER = frozenset({"leihbar"})
 _ISERV_MARKE = "in IServ:"
 _OHNE_WERT = "–"
 _KOMMENTARE = "_kommentare"
@@ -268,10 +270,13 @@ def _zeilen(ws: Worksheet) -> list[dict[str, object]]:
     return heraus
 
 
-def _iserv_aus_kommentar(text: str, preis: bool) -> object:
-    """``"in IServ: 22,50 €"`` -> 22.5. Excel setzt beim Bearbeiten den Namen
-    davor; gelesen wird deshalb ab dem letzten „in IServ:“."""
+def _iserv_aus_kommentar(text: str, feld: str) -> object:
+    """``"in IServ: 22,50 €"`` -> 22.5, ``"in IServ: nein"`` -> False. Excel setzt
+    beim Bearbeiten den Namen davor; gelesen wird deshalb ab dem letzten „in IServ:“."""
     rest = text.rsplit(_ISERV_MARKE, 1)[-1].strip()
+    if feld in _JA_NEIN_FELDER:
+        return rest.casefold() == _JA
+    preis = feld in _PREISFELDER
     if rest in ("", _OHNE_WERT):
         return None if preis else ""
     return _zahl(rest) if preis else rest
@@ -282,7 +287,7 @@ def _korrekturen(zeile: dict[str, object]) -> tuple[tuple[str, object], ...]:
     kommentare = zeile.get(_KOMMENTARE) or {}
     assert isinstance(kommentare, dict)
     return tuple(
-        (feld, _iserv_aus_kommentar(kommentare[spalte], feld in _PREISFELDER))
+        (feld, _iserv_aus_kommentar(kommentare[spalte], feld))
         for feld, spalte in _KORRIGIERBAR.items()
         if _ISERV_MARKE in str(kommentare.get(spalte) or "")
     )
@@ -481,18 +486,20 @@ def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             SPALTE_IN_ISERV: _NEIN if buch.von_hand else _JA,
             "Bemerkung": eintrag.bemerkung if eintrag else "",
             _KOMMENTARE: {
-                _KORRIGIERBAR[feld]: _iserv_kommentar(original, feld in _PREISFELDER)
+                _KORRIGIERBAR[feld]: _iserv_kommentar(original, feld)
                 for feld, original in buch.iserv if feld in _KORRIGIERBAR
             },
         })
     return zeilen
 
 
-def _iserv_kommentar(original: object, preis: bool) -> str:
+def _iserv_kommentar(original: object, feld: str) -> str:
     """Der Kommentar an einer korrigierten Zelle: was IServ dort nennt."""
+    if feld in _JA_NEIN_FELDER:
+        return f"{_ISERV_MARKE} {_JA if original else _NEIN}"
     if original is None or original == "":
         return f"{_ISERV_MARKE} {_OHNE_WERT}"
-    if preis and isinstance(original, (int, float)):
+    if feld in _PREISFELDER and isinstance(original, (int, float)):
         return f"{_ISERV_MARKE} {original:.2f} €".replace(".", ",")
     return f"{_ISERV_MARKE} {original}"
 

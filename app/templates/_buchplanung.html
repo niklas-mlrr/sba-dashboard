@@ -184,7 +184,7 @@
 {% endmacro %}
 
 {#
-  Der Block "Buchreihe" - ISBN, Titel, Verlag, Neupreis, Leihgebühr. Aufbau
+  Der Block "Buchreihe" - ISBN, Titel, Verlag, Neupreis, Leihgebühr, Leihbar. Aufbau
   nach dem IServ-Dialog "Buchreihe bearbeiten" (partials/stock/
   modal_series_edit.html): Beschriftung über dem Feld, die Preise mit "€"
   dahinter. Fächer und Jahrgänge, die IServ dort ebenfalls führt, fehlen:
@@ -203,7 +203,7 @@
 {% macro in_iserv(iserv, feld, preis=false) -%}
 {%- if feld in iserv -%}
 {%- set wert = iserv[feld] -%}
-<span class="buchreihe-iserv">in IServ: {% if wert is none or wert == "" %}–{% elif preis %}{{ preisfeld(wert) | replace(".", ",") }}&nbsp;€{% else %}{{ wert }}{% endif %}</span>
+<span class="buchreihe-iserv">in IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif preis %}{{ preisfeld(wert) | replace(".", ",") }}&nbsp;€{% else %}{{ wert }}{% endif %}</span>
 {%- endif -%}
 {%- endmacro %}
 
@@ -216,7 +216,6 @@
 {% set neu = buch is none %}
 {% set iserv = {} if neu else dict(buch.iserv or ()) %}
 <div class="planung-block buchreihe-form" data-buchreihe>
-  <h4>Buchreihe</h4>
   <div class="form-group">
     <label class="control-label">ISBN</label>
     {% if neu %}
@@ -252,29 +251,43 @@
       role="combobox" aria-autocomplete="list" aria-expanded="false"></span>
     {{ in_iserv(iserv, "verlag") }}
   </div>
-  <div class="form-group preiszeile">
-    <label class="control-label">Neupreis</label>
-    <div class="input-group"><input class="form-control text-right" type="number"
-      data-buchreihe-feld="neupreis" min="0" step="0.01"
-      value="{{ '' if neu else preisfeld(buch.neupreis) }}"
-      aria-label="Neupreis"><div class="input-group-addon">€</div></div>
+  {# Wie in IServ stehen die beiden Preise dicht untereinander, jeweils
+     Beschriftung links (8/12) und Feld rechts (4/12), beide eingerückt. #}
+  <div class="preise">
+    <div class="form-group preiszeile">
+      <label class="control-label">Neupreis</label>
+      <div class="preisfeld"><div class="input-group"><input class="form-control text-right"
+        type="number" data-buchreihe-feld="neupreis" min="0" step="0.01"
+        value="{{ '' if neu else preisfeld(buch.neupreis) }}"
+        aria-label="Neupreis"><div class="input-group-addon">€</div></div></div>
+    </div>
+    {{ in_iserv(iserv, "neupreis", preis=true) }}
+    <div class="form-group preiszeile">
+      <label class="control-label">Leihgebühr</label>
+      <div class="preisfeld"><div class="input-group"><input class="form-control text-right"
+        type="number" data-buchreihe-feld="leihgebuehr" min="0" step="0.01"
+        value="{{ '' if neu else preisfeld(buch.leihgebuehr) }}"
+        aria-label="Leihgebühr"><div class="input-group-addon">€</div></div></div>
+    </div>
+    {{ in_iserv(iserv, "leihgebuehr", preis=true) }}
   </div>
-  {{ in_iserv(iserv, "neupreis", preis=true) }}
-  <div class="form-group preiszeile">
-    <label class="control-label">Leihgebühr</label>
-    <div class="input-group"><input class="form-control text-right" type="number"
-      data-buchreihe-feld="leihgebuehr" min="0" step="0.01"
-      value="{{ '' if neu else preisfeld(buch.leihgebuehr) }}"
-      aria-label="Leihgebühr"><div class="input-group-addon">€</div></div>
+  {#
+    „Leihbar“ steht in IServ nicht im Dialog der Buchreihe, sondern als Häkchen
+    je Eintrag einer Bücherliste. Hier gilt es für das Buch in allen Listen und
+    ist wie Titel und Preise eine Korrektur, die IServ selbst nicht ändert.
+  #}
+  <div class="form-group buchreihe-leihbar">
+    <div class="checkbox"><label><input type="checkbox" data-buchreihe-feld="leihbar"
+      {% if not neu and buch.leihbar %}checked{% endif %}> Leihbar</label></div>
+    {{ in_iserv(iserv, "leihbar") }}
   </div>
-  {{ in_iserv(iserv, "leihgebuehr", preis=true) }}
   {% if neu %}
   <p class="small help-block">ISBN oder Titel eintippen: Bücher aus anderen Fächern werden
-    vorgeschlagen und bringen Titel, Verlag und Preise mit. Eine neue ISBN legt das Buch nur
+    vorgeschlagen und bringen Titel, Verlag, Preise und „Leihbar“ mit. Eine neue ISBN legt das Buch nur
     im Dashboard an - in IServ ändert sich nichts.</p>
   {% elif buch.von_hand %}
   <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
-    hinzugefügt. Titel, Verlag und Preise gelten, wie sie hier stehen.</p>
+    hinzugefügt. Titel, Verlag, Preise und „Leihbar“ gelten, wie sie hier stehen.</p>
   {% else %}
   <p class="small help-block">Die Korrektur gilt im Dashboard - in den Bücherlisten, im
     PDF und in der Planungsdatei. In IServ selbst ändert sich nichts.</p>
@@ -287,7 +300,7 @@
 {% set ruecklage = planung.ruecklage_je_isbn.get(buch.isbn, {}).get(fach) %}
 <template class="planung-vorlage" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}">
   <div class="modal-header">
-    <h3 class="modal-title">{{ buch.titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
+    <h3 class="modal-title">Buchreihe bearbeiten<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
   </div>
   <div class="modal-body">
     {{ buchreihe(buch) }}

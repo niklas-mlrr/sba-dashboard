@@ -239,12 +239,15 @@ def _liste(kopf: dict, detail: dict, heute: date,
 
 
 # Feldname in IServ -> Feldname hier.
-_FELDER = {"title": "titel", "publisher": "verlag", "price": "neupreis", "fee": "leihgebuehr"}
+_FELDER = {"title": "titel", "publisher": "verlag", "price": "neupreis", "fee": "leihgebuehr",
+           "borrowable": "leihbar"}
 
 
 def _buch(item: dict, jahrgang: int | None, korrekturen: Korrekturen | None = None) -> Buch | None:
-    original = item.get("series_data") or {}
-    daten = korrigiere_eintrag(item, korrekturen).get("series_data") or {}
+    # "borrowable" steht am Eintrag, alles andere an der Buchreihe.
+    original = {**(item.get("series_data") or {}), "borrowable": bool(item.get("borrowable"))}
+    korrigiert = korrigiere_eintrag(item, korrekturen)
+    daten = korrigiert.get("series_data") or {}
     isbn = daten.get("isbn") or item.get("series")
     if not isbn:
         return None
@@ -260,7 +263,7 @@ def _buch(item: dict, jahrgang: int | None, korrekturen: Korrekturen | None = No
         verlag=daten.get("publisher") or "",
         neupreis=daten.get("price"),
         leihgebuehr=daten.get("fee"),
-        leihbar=bool(item.get("borrowable")),
+        leihbar=bool(korrigiert.get("borrowable")),
         jahrgaenge=(jahrgang,) if jahrgang is not None else (),
     )
 

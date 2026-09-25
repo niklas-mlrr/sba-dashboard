@@ -826,9 +826,20 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   text-align: left;
 }
 .iserv-modal .buchreihe-form .form-control { display: block; width: 100%; }
-.iserv-modal .buchreihe-form .preiszeile { display: flex; align-items: center; }
-.iserv-modal .buchreihe-form .preiszeile .control-label { flex: 0 0 66.66666667%; margin: 0; }
-.iserv-modal .buchreihe-form .preiszeile .input-group { flex: 0 0 33.33333333%; }
+/* Die Preise wie in IServ: dort sind Beschriftung und Feld `col-sm-8` und
+   `col-sm-4` ohne umgebende `.row` - beide tragen deshalb 15 px Innenabstand,
+   die Beschriftung steht oben statt mittig, und die zwei Zeilen liegen ohne
+   Abstand aufeinander (die Gruppen enthalten nur schwebende Spalten). */
+.iserv-modal .buchreihe-form .preise { margin-bottom: 15px; }
+.iserv-modal .buchreihe-form .preiszeile { display: flex; align-items: flex-start; margin-bottom: 0; }
+.iserv-modal .buchreihe-form .preiszeile .control-label {
+  flex: 0 0 66.66666667%;
+  margin: 0;
+  padding: 0 15px;
+}
+.iserv-modal .buchreihe-form .preisfeld { flex: 0 0 33.33333333%; padding: 0 15px; }
+.iserv-modal .buchreihe-leihbar .checkbox { margin: 0; }
+.iserv-modal .buchreihe-leihbar .checkbox label { font-weight: 700; cursor: pointer; }
 .iserv-modal .input-group { display: flex; }
 .iserv-modal .input-group .form-control {
   flex: 1 1 auto;
@@ -851,7 +862,7 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .iserv-modal .text-right { text-align: right; }
 /* Was IServ zu einem korrigierten Feld sagt - klein und grau darunter. */
 .iserv-modal .buchreihe-iserv { display: block; margin-top: 3px; color: #737373; font-size: 85%; }
-.iserv-modal .preiszeile + .buchreihe-iserv { margin-top: -10px; margin-bottom: 15px; text-align: right; }
+.iserv-modal .preiszeile + .buchreihe-iserv { margin: 2px 0 4px; padding-right: 15px; text-align: right; }
 
 /* Der Verlag schlägt beim Tippen die Verlage vor, die mit der Eingabe
    anfangen, beim Hinzufügen auch ISBN und Titel die Bücher anderer Fächer -

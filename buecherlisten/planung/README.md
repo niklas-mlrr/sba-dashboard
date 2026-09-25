@@ -27,8 +27,7 @@ alles andere darunter.
 ## Die Datei: ein Bücher-Blatt, zwei Tabellen daneben
 
 | Blatt | Schlüssel | eintragbar |
-| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis als Korrektur (mit Kommentar) |
-| `Buchreihen` | ISBN | Bemerkung |
+| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis, leihbar als Korrektur (mit Kommentar) |
 | `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung (dazu `in der Bücherliste`, gesetzt) |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
@@ -186,6 +185,13 @@ Ausmusterung. Der Block ist dem IServ-Dialog „Buchreihe bearbeiten“
 nachgebaut. Die ISBN steht dort nur zum Lesen, grau hinterlegt: sie ist der
 Schlüssel des Buchs. **Gespeichert wird in dieser Datei, nicht in IServ**: das
 Dashboard bleibt dort nur-lesend.
+
+Seit 2026-09-25 gehört auch „Leihbar“ dazu, als Häkchen unter den Preisen und
+vor Einführung und Ausmusterung. In IServ ist das kein Feld der Buchreihe,
+sondern eines jeden Listeneintrags (`borrowable`). Die Korrektur gilt für das
+Buch in allen Listen, und `korrigiere_eintrag` setzt sie auf den Eintrag. Der
+Kommentar lautet „in IServ: ja“ oder „in IServ: nein“. Ein korrigiertes
+„leihbar“ entscheidet auch, ob eine Rücklage möglich ist.
 
 * **Die Korrektur steht in der Zeile des Buchs.** Auf `Buchreihen` trägt die
   Zelle den korrigierten Wert, hell hinterlegt, und als Kommentar den Wert aus

@@ -211,7 +211,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
     buecher = [
         {"isbn": buch.isbn, "isbn_anzeige": format_isbn(buch.isbn), "titel": buch.titel,
          "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
-         "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
+         "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr, "leihbar": buch.leihbar,
          "faecher": sorted({fach for fach, _ in buch.kombinationen}
                            | {z.fach for z in planung.planung if z.isbn == buch.isbn},
                            key=str.casefold)}

@@ -772,3 +772,50 @@ def test_eine_alte_datei_ohne_spalte_kennt_nur_buecher_aus_iserv(tmp_path, stand
     ws.delete_cols(spalte)
     wb.save(str(pfad))
     assert not any(b.von_hand for b in lies_datei(pfad).buecher)
+
+
+# ── Leihbar als Korrektur ────────────────────────────────────────────────────
+
+
+def test_leihbar_wird_korrigiert_und_uebersteht_datei_und_abgleich(tmp_path, stand):
+    kauf = stand.buch(KAUF)
+    neu = setze_buchreihe(stand, isbn=KAUF, eingabe=_reihe(kauf, leihbar=True))
+    assert neu.buch(KAUF).leihbar
+    assert neu.buch(KAUF).korrigiert == {"leihbar": False}
+    # Jetzt darf die Fachschaft auch zurücklegen.
+    setze_ruecklage(neu, isbn=KAUF, fach="Latein", anzahl=3)
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, neu)
+    gelesen = lies_datei(pfad)
+    assert gelesen.buch(KAUF).leihbar
+    assert gelesen.buch(KAUF).korrigiert == {"leihbar": False}
+    assert gelesen.korrekturen_fuer_iserv() == {KAUF: {"borrowable": True}}
+
+    abgeglichen = zusammenfuehren(gelesen, _schnappschuss())
+    assert abgeglichen.buch(KAUF).leihbar
+    # Ohne Angabe gilt wieder IServ.
+    zurueck = setze_buchreihe(abgeglichen, isbn=KAUF, eingabe=_reihe(kauf, leihbar=None))
+    assert not zurueck.buch(KAUF).leihbar
+    assert zurueck.buch(KAUF).korrigiert == {}
+
+
+def test_der_kommentar_nennt_leihbar_als_ja_oder_nein(tmp_path, stand):
+    from openpyxl import load_workbook
+
+    neu = setze_buchreihe(stand, isbn=KAUF, eingabe=_reihe(stand.buch(KAUF), leihbar=True))
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, neu)
+    ws = load_workbook(str(pfad))["Buchreihen"]
+    spalte = next(z.column for z in ws[1] if z.value == "leihbar")
+    zeile = next(z.row for z in ws["E"] if z.value == KAUF)
+    zelle = ws.cell(zeile, spalte)
+    assert (zelle.value, zelle.comment.text) == ("ja", "in IServ: nein")
+
+
+def test_ein_neues_buch_nimmt_leihbar_aus_dem_menue(stand):
+    neu = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
+                           buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett", leihbar=True),
+                           zeilen=_einfuehrung(7))
+    assert neu.buch(NEU).leihbar
+    assert neu.buch(NEU).korrigiert == {}

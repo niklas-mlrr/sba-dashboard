@@ -919,3 +919,36 @@ def test_hinzufuegen_meldet_fehler_als_satz(seiten: TestClient, abgeglichen: dic
 def test_hinzufuegen_mit_veralteter_mtime_ist_409(seiten: TestClient, abgeglichen: dict) -> None:
     assert _hinzufuegen(seiten, abgeglichen["mtime"], TERRA).status_code == 200
     assert _hinzufuegen(seiten, abgeglichen["mtime"], NEU).status_code == 409
+
+
+def test_das_menue_heisst_wie_in_iserv_und_fragt_nach_leihbar(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
+    assert "Buchreihe bearbeiten" in vorlage
+    # Erst die Buchreihe, dann Leihbar, dann Einführung und Ausmusterung.
+    assert vorlage.index('data-buchreihe-feld="leihgebuehr"') \
+        < vorlage.index('data-buchreihe-feld="leihbar"') \
+        < vorlage.index("Einführung und Ausmusterung")
+    leihbar = vorlage.split('data-buchreihe-feld="leihbar"')[1].split(">")[0]
+    assert "checked" in leihbar
+    neu = text.split('id="planung-neu-vorlage"')[1].split("</template>")[0]
+    assert "Buch hinzufügen" in neu
+    assert 'data-buchreihe-feld="leihbar"' in neu
+
+
+def test_korrigiertes_leihbar_steht_in_der_liste(seiten: TestClient, abgeglichen: dict) -> None:
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": KAUF, "fach": "Latein",
+        "zeilen": [{"jahrgang": 5}],
+        "buchreihe": {**_buchreihe("Wörterbuch Latein", "Langenscheidt", 19.9), "leihbar": True},
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Latein").text
+    zeile = text.split(f'<tr data-isbn="{KAUF}"')[1].split("</tr>")[0]
+    assert 'data-wert="1"' in zeile
+    assert "in IServ: nein" in text
+    # Jetzt gibt es auch den Rücklage-Block.
+    assert "Rücklage für die Fachschaft Latein" in text
