@@ -549,11 +549,14 @@ td.frisch {
 .label-status { background-color: #777; }
 .klein { font-size: 85%; }
 /* Abweichungen zu IServ (Vorlage: buecherliste_gruppe.html). */
-tr.reihe-neu > td { background: var(--einfuehrung-reihe); }
-tr.reihe-weg > td { background: var(--ausmusterung-reihe); }
-.iserv-tabelle td.aenderung { background: var(--aenderung-grund); color: var(--aenderung); }
-.iserv-tabelle td.einfuehrung { background: var(--einfuehrung-grund); }
-.iserv-tabelle td.ausmusterung { background: var(--ausmusterung-grund); }
+/* So spezifisch wie ".iserv-tabelle > tbody > tr > td" oben, das den Grund
+   sonst auf transparent setzt - "tr.reihe-weg > td" allein kam nie an. */
+.iserv-tabelle > tbody > tr.reihe-neu > td { background: var(--einfuehrung-reihe); }
+.iserv-tabelle > tbody > tr.reihe-weg > td { background: var(--ausmusterung-reihe); }
+/* Die Zelle geht vor der Zeile: gleich spezifisch, aber später. */
+.iserv-tabelle > tbody > tr > td.aenderung { background: var(--aenderung-grund); color: var(--aenderung); }
+.iserv-tabelle > tbody > tr > td.einfuehrung { background: var(--einfuehrung-grund); }
+.iserv-tabelle > tbody > tr > td.ausmusterung { background: var(--ausmusterung-grund); }
 td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: help; }
 /* In Jahrgang und Fach ist nur der geänderte Wert farbig, nicht die ganze Zelle. */
 .wert-einfuehrung { color: var(--einfuehrung); }
@@ -832,6 +835,9 @@ tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmust
    Hand-Zeiger. Ein ständiges Zeichen in der Zeile stand vorher da und ist
    wieder weg: es steht in jeder Zeile und sagt immer dasselbe. */
 tr.aufklappbar { cursor: pointer; }
+/* Spezifischer als die Farben der Abweichungen: das Überfahren zeigt sich
+   auch auf einer roten oder blauen Zeile. */
+.iserv-tabelle > tbody > tr.aufklappbar:hover > td,
 tr.aufklappbar:hover > td { background: var(--warnung-grund); }
 tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset: -2px; }
 
