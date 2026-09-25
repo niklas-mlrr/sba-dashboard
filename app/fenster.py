@@ -41,6 +41,8 @@ unvermeidlich ist und was das Zeitschloss daran ändert, steht in
 from __future__ import annotations
 
 import json
+import queue
+import threading
 import urllib.error
 import urllib.request
 import webbrowser
@@ -49,6 +51,7 @@ from typing import Any, Callable
 
 ZEITGRENZE = 30.0  # Sekunden. Die Anmeldung geht über IServ ins Netz.
 STATUS_TAKT_MS = 15_000  # Wie oft die Statuszeile nachfragt.
+START_TAKT_MS = 100  # Wie oft das Fenster beim Start nach dem Server sieht.
 
 
 class FensterFehler(RuntimeError):
@@ -244,6 +247,38 @@ class Fenstersteuerung:
         return "Das Dashboard wurde beendet."
 
 
+class Startlauf:
+    """Fährt den Server in einem Nebenthread hoch und hält das Ergebnis bereit.
+
+    Ohne tkinter, damit die Übergabe zwischen den Threads prüfbar bleibt: das
+    Fenster fragt :meth:`ergebnis` in seinem Takt ab, statt dass der Nebenthread
+    selbst in Tk hineinruft.
+    """
+
+    def __init__(self, hochfahren: Callable[[], str]) -> None:
+        self._ablage: queue.Queue[str | FensterFehler] = queue.Queue(maxsize=1)
+        self._thread = threading.Thread(target=self._lauf, args=(hochfahren,),
+                                        name="sba-start", daemon=True)
+        self._thread.start()
+
+    def _lauf(self, hochfahren: Callable[[], str]) -> None:
+        try:
+            self._ablage.put(hochfahren())
+        except (Exception, SystemExit) as exc:  # noqa: BLE001 - jeder Fehler wird zur Zeile
+            text = str(exc).strip() or f"Unerwarteter Fehler beim Start ({type(exc).__name__})."
+            self._ablage.put(FensterFehler(text))
+
+    def ergebnis(self) -> str | FensterFehler | None:
+        """Die Adresse, der Fehler - oder ``None``, solange der Start noch läuft."""
+        try:
+            return self._ablage.get_nowait()
+        except queue.Empty:
+            return None
+
+    def warte(self, zeitgrenze: float | None = None) -> None:
+        self._thread.join(zeitgrenze)
+
+
 # ── Die Tk-Hülle ──────────────────────────────────────────────────────────────
 #
 # Ab hier beginnt der Teil, der einen Bildschirm braucht. Er enthält bewusst
@@ -270,13 +305,33 @@ def tkinter_verfuegbar() -> tuple[bool, str]:
     return True, ""
 
 
-def starte(url: str, *, version: str = "", seite_nach_anmeldung: bool = True) -> None:
+def starte(hochfahren: Callable[[], str], *, version: str = "",
+           seite_nach_anmeldung: bool = True) -> None:
     """Baut das Fenster und gibt erst zurück, wenn es geschlossen wurde.
+
+    Das Fenster steht sofort und zeigt "Das Programm startet", während
+    ``hochfahren`` im Nebenthread den Server aufbaut; es gibt die Adresse des
+    lauschenden Servers zurück oder wirft mit Klartext. Erst danach werden die
+    Knöpfe bedienbar.
 
     Muss auf dem **Hauptthread** laufen (Tk-Vorgabe); der Server läuft deshalb
     im Nebenthread, siehe ``app/start.py``.
     """
     from ._fenster_tk import Hauptfenster
 
-    steuerung = Fenstersteuerung(url, seite_nach_anmeldung=seite_nach_anmeldung)
-    Hauptfenster(steuerung, version=version).laufen()
+    fenster = Hauptfenster(version=version)
+    start = Startlauf(hochfahren)
+
+    # Tk darf nur vom Hauptthread aus angefasst werden. Der Nebenthread legt
+    # sein Ergebnis deshalb nur ab, und das Fenster holt es im eigenen Takt.
+    def _pruefe() -> None:
+        ergebnis = start.ergebnis()
+        if ergebnis is None:
+            fenster.wurzel.after(START_TAKT_MS, _pruefe)
+        elif isinstance(ergebnis, str):
+            fenster.bereit(Fenstersteuerung(ergebnis, seite_nach_anmeldung=seite_nach_anmeldung))
+        else:
+            fenster.startfehler(str(ergebnis))
+
+    fenster.wurzel.after(START_TAKT_MS, _pruefe)
+    fenster.laufen()

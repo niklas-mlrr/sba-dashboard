@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.start import HOST, freier_port, main
+from app.start import HOST, Startfehler, freier_port, main, warte_auf_server
 
 WURZEL = Path(__file__).resolve().parents[1]
 START_SH = WURZEL / "START.sh"
@@ -102,10 +102,12 @@ class _ServerStub:
         _ServerStub.letzte = self
         self.config = _config
         self.should_exit = False
+        self.started = False
         self.gelaufen_in: str | None = None
 
     def run(self) -> None:
         self.gelaufen_in = threading.current_thread().name
+        self.started = True
 
 
 @pytest.fixture()
@@ -137,16 +139,18 @@ def test_mit_fenster_laeuft_der_server_im_nebenthread(tmp_path, monkeypatch, ser
     """Tk muss auf den Hauptthread - also tauschen Server und Oberfläche die Plätze.
 
     Geprüft wird genau die Reihenfolge, von der das Beenden abhängt: das Fenster
-    bekommt die Adresse, der Server läuft daneben, und wenn das Fenster zu ist,
-    steht ``should_exit``.
+    steht zuerst, der Start im Nebenthread liefert ihm die Adresse, der Server
+    läuft daneben, und wenn das Fenster zu ist, steht ``should_exit``.
     """
     gerufen: list[str] = []
 
+    def _fenster(hochfahren, version="", seite_nach_anmeldung=True):
+        # Beim Aufruf des Fensters darf noch kein Server gebaut sein.
+        assert server_stub.letzte is None
+        gerufen.append(hochfahren())
+
     monkeypatch.setattr("app.start.tkinter_verfuegbar", lambda: (True, ""))
-    monkeypatch.setattr(
-        "app.fenster.starte",
-        lambda url, version="", seite_nach_anmeldung=True: gerufen.append(url),
-    )
+    monkeypatch.setattr("app.fenster.starte", _fenster)
 
     assert main(["--config", str(_config(tmp_path)), "--kein-browser"]) == 0
 
@@ -155,17 +159,62 @@ def test_mit_fenster_laeuft_der_server_im_nebenthread(tmp_path, monkeypatch, ser
     assert server_stub.letzte.should_exit is True
 
 
+def test_mit_fenster_landet_ein_konfigurationsfehler_im_fenster(tmp_path, monkeypatch,
+                                                                 server_stub):
+    kaputt = tmp_path / "kaputt.json"
+    kaputt.write_text("{ kein json", encoding="utf-8")
+    meldungen: list[str] = []
+
+    def _fenster(hochfahren, version="", seite_nach_anmeldung=True):
+        with pytest.raises(Startfehler) as fehler:
+            hochfahren()
+        meldungen.append(str(fehler.value))
+
+    monkeypatch.setattr("app.start.tkinter_verfuegbar", lambda: (True, ""))
+    monkeypatch.setattr("app.fenster.starte", _fenster)
+
+    assert main(["--config", str(kaputt)]) == 2
+    assert meldungen and "Konfiguration ist unbrauchbar" in meldungen[0]
+    assert server_stub.letzte is None
+
+
+def test_warte_auf_server_meldet_einen_toten_serverthread():
+    class _Server:
+        started = False
+
+    lauf = threading.Thread(target=lambda: None)
+    lauf.start()
+    lauf.join()
+    with pytest.raises(Startfehler, match="nicht starten"):
+        warte_auf_server(_Server(), lauf)
+
+
+def test_warte_auf_server_gibt_nach_der_zeitgrenze_auf():
+    class _Server:
+        started = False
+
+    halt = threading.Event()
+    lauf = threading.Thread(target=halt.wait, daemon=True)
+    lauf.start()
+    try:
+        with pytest.raises(Startfehler, match="startet nicht"):
+            warte_auf_server(_Server(), lauf, zeitgrenze=0.1)
+    finally:
+        halt.set()
+
+
 def test_mit_fenster_oeffnet_der_start_keinen_browser(tmp_path, monkeypatch, server_stub):
     """Zuerst kommt die Anmeldung im Fenster; die Seite öffnet erst das Fenster."""
     browser: list[str] = []
     fenster: list[bool] = []
 
+    def _fenster(hochfahren, version="", seite_nach_anmeldung=True):
+        hochfahren()
+        fenster.append(seite_nach_anmeldung)
+
     monkeypatch.setattr("app.start.tkinter_verfuegbar", lambda: (True, ""))
     monkeypatch.setattr("app.start.oeffne_browser", browser.append)
-    monkeypatch.setattr(
-        "app.fenster.starte",
-        lambda url, version="", seite_nach_anmeldung=True: fenster.append(seite_nach_anmeldung),
-    )
+    monkeypatch.setattr("app.fenster.starte", _fenster)
 
     assert main(["--config", str(_config(tmp_path))]) == 0
     assert browser == []

@@ -19,7 +19,13 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.fenster import Antwort, FensterFehler, Fenstersteuerung, tkinter_verfuegbar
+from app.fenster import (
+    Antwort,
+    FensterFehler,
+    Fenstersteuerung,
+    Startlauf,
+    tkinter_verfuegbar,
+)
 from bestand.core.testing import FakeClient
 from conftest import TEST_BASIS_URL, TEST_BENUTZER, TEST_PASSWORT
 
@@ -221,6 +227,44 @@ def test_ohne_schalter_oeffnet_die_anmeldung_keine_seite(steuerung: Fenstersteue
     assert geoeffnet == []
 
 
+def test_startlauf_liefert_die_adresse_erst_wenn_der_server_steht():
+    import threading
+
+    los = threading.Event()
+
+    def hochfahren() -> str:
+        los.wait(5)
+        return "http://127.0.0.1:18765/"
+
+    start = Startlauf(hochfahren)
+    assert start.ergebnis() is None      # das Fenster zeigt weiter "startet"
+    los.set()
+    start.warte(5)
+    assert start.ergebnis() == "http://127.0.0.1:18765/"
+
+
+@pytest.mark.parametrize("fehler", [RuntimeError("Konfiguration ist unbrauchbar: x"),
+                                    SystemExit("Die Ports 1 bis 2 sind alle belegt.")])
+def test_startlauf_macht_jeden_startfehler_zur_zeile(fehler: BaseException):
+    def hochfahren() -> str:
+        raise fehler
+
+    start = Startlauf(hochfahren)
+    start.warte(5)
+    ergebnis = start.ergebnis()
+    assert isinstance(ergebnis, FensterFehler)
+    assert str(ergebnis) == str(fehler)
+
+
+def test_startlauf_ohne_fehlertext_meldet_trotzdem_etwas():
+    def hochfahren() -> str:
+        raise ValueError()
+
+    start = Startlauf(hochfahren)
+    start.warte(5)
+    assert "ValueError" in str(start.ergebnis())
+
+
 def test_beenden_setzt_das_abschaltsignal(steuerung: Fenstersteuerung, client: TestClient):
     class _Server:
         should_exit = False
@@ -301,4 +345,50 @@ def test_das_fenster_baut_sich_und_zeigt_die_vorbelegten_werte(steuerung: Fenste
     finally:
         if fenster._timer is not None:
             fenster.wurzel.after_cancel(fenster._timer)
+        fenster.wurzel.destroy()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("DISPLAY") and sys.platform not in ("win32", "darwin"),
+    reason="Kein Bildschirm vorhanden - das Fenster lässt sich hier nicht bauen.",
+)
+def test_das_fenster_steht_vor_dem_server_und_wird_erst_danach_bedienbar(
+        steuerung: Fenstersteuerung):
+    pytest.importorskip("tkinter")
+    from app._fenster_tk import Hauptfenster
+
+    fenster = Hauptfenster(version="9.9.9")
+    try:
+        assert "startet" in fenster._zeile_status.cget("text")
+        for knopf in (fenster._knopf_anmelden, fenster._knopf_seite, fenster._knopf_zahnrad):
+            assert str(knopf.cget("state")) == "disabled"
+
+        fenster.bereit(steuerung)
+        assert fenster._ladetimer is None
+        assert "Nicht angemeldet" in fenster._zeile_status.cget("text")
+        assert "beispiel-schule.de" in fenster._zeile_server.cget("text")
+        for knopf in (fenster._knopf_anmelden, fenster._knopf_seite, fenster._knopf_zahnrad):
+            assert str(knopf.cget("state")) == "normal"
+    finally:
+        if fenster._timer is not None:
+            fenster.wurzel.after_cancel(fenster._timer)
+        fenster.wurzel.destroy()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("DISPLAY") and sys.platform not in ("win32", "darwin"),
+    reason="Kein Bildschirm vorhanden - das Fenster lässt sich hier nicht bauen.",
+)
+def test_ein_startfehler_bleibt_im_fenster_stehen():
+    pytest.importorskip("tkinter")
+    from app._fenster_tk import Hauptfenster
+
+    fenster = Hauptfenster()
+    try:
+        fenster.startfehler("Die Ports 1 bis 2 sind alle belegt.")
+        assert fenster._ladetimer is None
+        assert "nicht starten" in fenster._zeile_status.cget("text")
+        assert "belegt" in fenster._zeile_meldung.cget("text")
+        assert str(fenster._knopf_anmelden.cget("state")) == "disabled"
+    finally:
         fenster.wurzel.destroy()

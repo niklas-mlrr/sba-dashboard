@@ -848,6 +848,19 @@ auf dem Hauptthread und überspringt sie sonst. Ohne Bildschirm (`--kein-fenster
 oder kein `DISPLAY` unter Linux) bleibt es beim alten Ablauf: Server auf dem
 Hauptthread, beenden mit Strg+C.
 
+**Das Fenster steht vor dem Server.** Die Importe hinter dem Server (FastAPI,
+openpyxl, der IServ-Client) brauchen auf einem Schul-Laptop mehrere Sekunden, in
+denen sonst nur die Konsole zu sehen wäre. `app/start.py` baut deshalb nur das
+Nötigste und übergibt `fenster.starte()` eine Funktion `hochfahren`; das Fenster
+erscheint sofort mit „Das Programm startet …“ und grauen Knöpfen, während
+`Startlauf` sie im Nebenthread ausführt: Konfiguration laden, Anwendung bauen,
+Port suchen, Server starten und warten, bis uvicorn lauscht (`started`). Das
+Ergebnis — Adresse oder Klartextfehler — holt das Fenster im 100-ms-Takt ab,
+weil Tk nur vom Hauptthread aus angefasst werden darf. Erst dann fragt es
+Einstellungen und Anmeldestand ab; vorher liefe die erste Anfrage ins Leere.
+Ein Fehler beim Start (kaputte Konfiguration, alle Ports belegt) bleibt im
+Fenster stehen, bedienbar ist dann nur noch „Beenden“.
+
 **Die Logik steckt in `Fenstersteuerung`, die Widgets in `app/_fenster_tk.py`.**
 Diese Trennung ist der Grund, warum das Fenster überhaupt geprüft ist: der
 Entwicklungsrechner hat keinen Bildschirm und die CI auch nicht.

@@ -34,8 +34,11 @@ _HINWEIS_DOMAIN_GESPERRT = (
 class Hauptfenster:
     """Ein Fenster mit zwei Ansichten: Bedienung und (hinterm Zahnrad) Einstellungen."""
 
-    def __init__(self, steuerung: Fenstersteuerung, *, version: str = "") -> None:
-        self.steuerung = steuerung
+    def __init__(self, steuerung: Fenstersteuerung | None = None, *,
+                 version: str = "") -> None:
+        # Ohne Steuerung läuft der Server noch nicht: das Fenster zeigt dann
+        # "Das Programm startet", bis bereit() oder startfehler() kommt.
+        self._steuerung = steuerung
         self.wurzel = tk.Tk()
         self.wurzel.title("Schulbuchausleihe — Bestand")
         self.wurzel.minsize(520, 360)
@@ -48,6 +51,8 @@ class Hauptfenster:
         self._ordner = tk.StringVar()
         self._angemeldet = False
         self._timer: str | None = None
+        self._ladetimer: str | None = None
+        self._ladepunkte = 0
 
         self._bedienung = ttk.Frame(self.wurzel, padding=_RAND)
         self._einstellungen = ttk.Frame(self.wurzel, padding=_RAND)
@@ -55,8 +60,56 @@ class Hauptfenster:
         self._baue_einstellungen()
         self._zeige(self._bedienung)
 
+        if steuerung is None:
+            self._setze_bedienbar(False)
+            self._zeige_ladehinweis()
+        else:
+            self.bereit(steuerung)
+
+    # ── Start ────────────────────────────────────────────────────────────────
+
+    @property
+    def steuerung(self) -> Fenstersteuerung:
+        # Jeder Weg hierher geht über einen Knopf oder den Statustakt, und
+        # beide gibt es erst nach bereit().
+        if self._steuerung is None:
+            raise RuntimeError("Das Fenster ist noch nicht bereit.")
+        return self._steuerung
+
+    def bereit(self, steuerung: Fenstersteuerung) -> None:
+        """Der Server lauscht: Knöpfe frei, Einstellungen und Anmeldestand holen."""
+        self._steuerung = steuerung
+        self._stoppe_ladehinweis()
+        self._zeile_status.configure(text="")
+        self._setze_bedienbar(True)
         self._lade_einstellungen()
         self._aktualisiere_status()
+        self._feld_benutzer.focus_set()
+
+    def startfehler(self, text: str) -> None:
+        """Der Start ist gescheitert. Bedienbar bleibt nur "Beenden"."""
+        self._stoppe_ladehinweis()
+        self._zeile_status.configure(text="Das Programm konnte nicht starten.")
+        self._melde(text, fehler=True)
+
+    def _setze_bedienbar(self, bedienbar: bool) -> None:
+        zustand = "normal" if bedienbar else "disabled"
+        for knopf in (self._knopf_anmelden, self._knopf_seite, self._knopf_zahnrad,
+                      self._feld_benutzer, self._feld_passwort):
+            knopf.configure(state=zustand)
+
+    def _zeige_ladehinweis(self) -> None:
+        # Die wandernden Punkte zeigen, dass noch etwas passiert - ein
+        # stehender Text sähe nach wenigen Sekunden aus wie ein Hänger.
+        self._ladepunkte = self._ladepunkte % 3 + 1
+        self._zeile_status.configure(
+            text="Das Programm startet, bitte einen Moment warten" + "." * self._ladepunkte)
+        self._ladetimer = self.wurzel.after(400, self._zeige_ladehinweis)
+
+    def _stoppe_ladehinweis(self) -> None:
+        if self._ladetimer is not None:
+            self.wurzel.after_cancel(self._ladetimer)
+            self._ladetimer = None
 
     # ── Aufbau ───────────────────────────────────────────────────────────────
 
@@ -67,8 +120,9 @@ class Hauptfenster:
         kopf = ttk.Label(rahmen, text="Schulbuchausleihe — Bestand",
                          font=("TkDefaultFont", 12, "bold"))
         kopf.grid(row=0, column=0, columnspan=2, sticky="w")
-        ttk.Button(rahmen, text="⚙", width=3, command=self._zeige_einstellungen).grid(
-            row=0, column=2, sticky="e")
+        self._knopf_zahnrad = ttk.Button(rahmen, text="⚙", width=3,
+                                         command=self._zeige_einstellungen)
+        self._knopf_zahnrad.grid(row=0, column=2, sticky="e")
 
         self._zeile_server = ttk.Label(rahmen, text="Server: —")
         self._zeile_server.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
@@ -101,8 +155,8 @@ class Hauptfenster:
         fuss = ttk.Frame(rahmen)
         fuss.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(_RAND, 0))
         fuss.columnconfigure(0, weight=1)
-        ttk.Button(fuss, text="Seite öffnen", command=self._seite_oeffnen).grid(
-            row=0, column=0, sticky="w")
+        self._knopf_seite = ttk.Button(fuss, text="Seite öffnen", command=self._seite_oeffnen)
+        self._knopf_seite.grid(row=0, column=0, sticky="w")
         ttk.Button(fuss, text="Beenden", command=self._beenden).grid(row=0, column=1, sticky="e")
         if self._version:
             ttk.Label(fuss, text=f"Version {self._version}", foreground="#777").grid(
@@ -199,12 +253,16 @@ class Hauptfenster:
             parent=self.wurzel,
         ):
             return
-        try:
-            self.steuerung.beenden()
-        except FensterFehler:
-            # Der Server antwortet nicht mehr - dann ist er auch nicht mehr da.
-            # Das Fenster offen zu lassen, wäre die falsche Folgerung.
-            pass
+        # Ohne Steuerung läuft noch kein Server; app/start.py räumt einen
+        # halb gestarteten nach dem Schließen selbst ab.
+        if self._steuerung is not None:
+            try:
+                self.steuerung.beenden()
+            except FensterFehler:
+                # Der Server antwortet nicht mehr - dann ist er auch nicht mehr
+                # da. Das Fenster offen zu lassen, wäre die falsche Folgerung.
+                pass
+        self._stoppe_ladehinweis()
         if self._timer is not None:
             self.wurzel.after_cancel(self._timer)
             self._timer = None
