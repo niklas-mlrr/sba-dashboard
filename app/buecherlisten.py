@@ -50,6 +50,7 @@ from buecherlisten.planung import (
     aktive_paare,
     planungs_status,
     vergleiche,
+    zum_schuljahr_ausgemustert,
 )
 from buecherlisten.planung import Buch as PlanBuch
 
@@ -406,6 +407,14 @@ class Vergleich:
                                self.planung.schuljahr) != PLANUNG_AUSGEMUSTERT
         )
 
+    def zum_schuljahr_ausgemustert(self, buch: PlanBuch) -> frozenset[str]:
+        """Die Fächer, in denen das Buch zu diesem Schuljahr ausgemustert ist:
+        dort steht es nur unter „Ausmusterungen“."""
+        return frozenset(
+            fach for fach, _ in self.planung.zeilen_des_buchs(buch)
+            if zum_schuljahr_ausgemustert(self.planung, buch, fach)
+        )
+
     @property
     def anzahl_abweichungen(self) -> int:
         return sum(1 for abweichung in self.ergebnis.values() if not abweichung.gleich)
@@ -486,12 +495,21 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
 
     Aus der Datei steht in einem Fach jedes Buch, das dort dieses Schuljahr
     geführt wird **oder** erst noch eingeführt wird: die geplante Einführung
-    soll man in der Liste sehen und im Planungsmenü ändern können. Gezeigt
-    werden die Jahrgänge, die dieses Schuljahr gelten; „(ab …)“ hängt die
-    Vorlage an (``jahrgangsspalte``).
+    soll man in der Liste sehen und im Planungsmenü ändern können. Ist es in
+    einem Fach zu diesem Schuljahr ausgemustert, steht es dort nur unter
+    „Ausmusterungen“ (``zum_schuljahr_ausgemustert``) - auch wenn IServ es
+    noch führt. Gezeigt
+    werden die Jahrgänge, die dieses Schuljahr gelten; „(ab …)“ und „(bis …)“
+    hängt die Vorlage an (``jahrgangsspalte``).
     """
     zeilen: dict[str, dict[str, Buch]] = {}
+    ausgemustert: set[tuple[str, str]] = set()  # (ISBN, Fach)
     for buch in v.planung.buecher:
+        # Ein Fach, in dem nur noch Ausgemustertes steht, behält seine Seite:
+        # dort stehen die Ausmusterungen und ihre Rücklagen.
+        for fach in v.zum_schuljahr_ausgemustert(buch):
+            ausgemustert.add((buch.isbn, fach))
+            zeilen.setdefault(fach, {})
         offen = v.nicht_ausgemustert(buch)
         aktiv = v.aktiv(buch)
         ist = v.iserv.get(buch.isbn)
@@ -513,7 +531,7 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
             )
     for isbn, ist in v.iserv.items():
         for fach in {fach for fach, _ in ist.paare}:
-            if isbn not in zeilen.get(fach, {}):
+            if isbn not in zeilen.get(fach, {}) and (isbn, fach) not in ausgemustert:
                 zeilen.setdefault(fach, {})[isbn] = _aus_iserv(
                     ist, frozenset(paar for paar in ist.paare if paar[0] == fach))
     return tuple(Gruppe(name=name, buecher=_sortiert(list(je_isbn.values())))

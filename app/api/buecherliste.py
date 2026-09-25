@@ -31,9 +31,12 @@ from buecherlisten.planung import (
     NUR_ISERV,
     OHNE_VERLAG,
     Buchplanung,
+    endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
     planungs_status,
+    planungs_zusatz,
+    zum_schuljahr_ausgemustert,
 )
 
 from .. import buchplanung as planungsdomaene
@@ -166,6 +169,7 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
                 "datum": zeile.datum if zeile else None,
                 "bemerkung": zeile.bemerkung if zeile else "",
                 "status": planungs_status(zeile, planung.schuljahr),
+                "zusatz": planungs_zusatz(zeile, planung.schuljahr),
             })
         zeilen[buch.isbn] = je_fach
     for wunsch in planung.ruecklagen:
@@ -176,17 +180,14 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         }
 
     # Was mit dem Vorjahr endete: in diesem Schuljahr nicht mehr auf der Liste.
+    # Nur vollständig ausgemustert - in keinem Jahrgang dieses Fachs bleibt das
+    # Buch danach noch stehen; ein anderes Fach zählt nicht. Sonst steht es in
+    # der normalen Liste.
     ausmusterungen: dict[str, dict[str, dict[str, Any]]] = {}
     for zeile in planung.planung:
         altes = planung.buch(zeile.isbn)
-        if altes is None or not planung.vorjahr \
-                or zeile.ausgemustert_nach != planung.vorjahr:
-            continue
-        # Nur vollständig ausgemustert: in keinem Jahrgang dieses Fachs bleibt
-        # das Buch danach noch stehen.
-        if any((rest := planung.planungszeile(altes.isbn, fach, jg)) is None
-               or rest.ausgemustert_nach != planung.vorjahr
-               for fach, jg in planung.zeilen_des_buchs(altes) if fach == zeile.fach):
+        if altes is None or not endet_mit_vorjahr(zeile, planung.schuljahr) \
+                or not zum_schuljahr_ausgemustert(planung, altes, zeile.fach):
             continue
         je_buch = ausmusterungen.setdefault(zeile.fach, {})
         eintrag = je_buch.setdefault(altes.isbn, {

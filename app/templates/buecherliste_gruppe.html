@@ -187,6 +187,13 @@
 {% if ansicht == "fach" and planung.mtime is not none %}
 {% set ausgemustert = planung.ausmusterungen_je_fach.get(gruppe.name, []) %}
 {% if ausgemustert %}
+{#
+  Hier stehen nur Bücher, die zu diesem Schuljahr überall ausgemustert sind
+  (``zum_schuljahr_ausgemustert``); die normale Liste oben führt sie nicht.
+  Die Rücklagen stehen mit dabei: was aus den Regalen geht, ist genau das,
+  wovon die Fachschaft noch etwas behalten will.
+#}
+{% set mit_ruecklagen = bp.ruecklagen_vorhanden(planung, ausgemustert, gruppe.name) | trim %}
 <h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
 <div class="tabellenrahmen">
 <table class="iserv-tabelle sortierbar" id="ausmusterungen">
@@ -197,6 +204,7 @@
       <th data-sort="text">Verlag</th>
       <th data-sort="text">ISBN</th>
       <th data-sort="text">Ausgemustert nach</th>
+      {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -209,6 +217,8 @@
       <td>{{ e.verlag }}</td>
       <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
       <td>{{ planung.vorjahr }}</td>
+      {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, e, gruppe.name) | trim %}
+      <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
     </tr>
     {% endfor %}
   </tbody>

@@ -493,6 +493,26 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     assert "6 (bis 2029/2030)" in seiten.get("/buecherliste/fach/Erdkunde").text
 
 
+def test_ein_buch_fuer_nur_ein_schuljahr_zeigt_nur_dieses_jahr(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Eingeführt und ausgemustert im selben Schuljahr: nur das Jahr, ohne „ab“/„bis“.
+
+    Ist es das laufende Schuljahr, bleibt es bei „bis …“.
+    """
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [{"jahrgang": 6, "eingefuehrt_ab": "2026/2027",
+                    "ausgemustert_nach": "2026/2027"},
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029",
+                    "ausgemustert_nach": "2028/2029"}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert "6 (bis 2026/2027), 7 (2028/2029)" in text
+
+
 def test_die_ruecklagen_spalte_erscheint_erst_mit_einer_ruecklage(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
@@ -710,20 +730,75 @@ def test_fach_seite_listet_nur_vollstaendig_ausgemusterte_buecher(
     assert "Ausmusterungen zu diesem Schuljahr" not in latein
 
 
+def _mustere_terra_aus(seiten: TestClient, mtime: float, *faecher: str) -> float:
+    """Jg. 5 und 6 von Terra in diesen Fächern: ausgemustert nach dem Vorjahr."""
+    for fach in faecher:
+        antwort = seiten.post("/api/buchplanung/buch", json={
+            "schuljahr": "2026/2027", "isbn": TERRA, "fach": fach,
+            "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026"},
+                       {"jahrgang": 6, "ausgemustert_nach": "2025/2026"}],
+            "mtime": mtime,
+        })
+        assert antwort.status_code == 200, antwort.text
+        mtime = antwort.json()["mtime"]
+    return mtime
+
+
+def _haupttabelle(text: str) -> str:
+    return text.split("Ausmusterungen zu diesem Schuljahr")[0]
+
+
 def test_ausgemustertes_buch_laesst_sich_wie_die_anderen_planen(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Läuft Terra auch in Jg. 6 mit dem Vorjahr aus, steht es klickbar in der Tabelle."""
-    seiten.post("/api/buchplanung/planung", json={
-        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "jahrgang": 6,
-        "ausgemustert_nach": "2025/2026", "mtime": abgeglichen["mtime"],
-    })
+    """Läuft Terra in Erdkunde ganz mit dem Vorjahr aus, steht es klickbar in der Tabelle."""
+    _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
     text = seiten.get("/buecherliste/fach/Erdkunde").text
     assert "Ausmusterungen zu diesem Schuljahr" in text
     tabelle = text.split('id="ausmusterungen"')[1]
     assert 'data-planung="aufklappen"' in tabelle
     assert f'<template class="planung-vorlage" data-isbn="{TERRA}" data-fach="Erdkunde">' in text
     assert 'data-planung-feld="anzahl"' in text.split("planung-vorlage")[-1]
+
+
+def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    mtime = _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
+    seiten.post("/api/buchplanung/ruecklage", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "anzahl": 4,
+        "mtime": mtime,
+    })
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    # IServ führt Terra noch in Jg. 6 - in der normalen Liste steht es trotzdem nicht.
+    assert f'<tr data-isbn="{TERRA}"' not in _haupttabelle(text)
+    tabelle = text.split('id="ausmusterungen"')[1].split("</table>")[0]
+    assert f'data-isbn="{TERRA}"' in tabelle
+    assert "<th data-sort=\"zahl\">Rücklagen</th>" in tabelle
+    assert '<td data-wert="4">4</td>' in tabelle
+
+
+def test_buch_das_in_einem_anderen_fach_bleibt_kommt_trotzdem_zur_ausmusterung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """In Erdkunde ausgelaufen, in Politik weiter im Einsatz: in Erdkunde „Ausmusterung“."""
+    _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
+    erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert f'<tr data-isbn="{TERRA}"' not in _haupttabelle(erdkunde)
+    assert f'data-isbn="{TERRA}"' in erdkunde.split('id="ausmusterungen"')[1]
+    politik = seiten.get("/buecherliste/fach/Politik").text
+    assert "Ausmusterungen zu diesem Schuljahr" not in politik
+    assert f'<tr data-isbn="{TERRA}"' in politik
+
+
+def test_buch_das_im_selben_fach_weiterlaeuft_steht_in_der_normalen_liste(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Terra: in Erdkunde Jg. 5 mit dem Vorjahr ausgelaufen, Jg. 6 läuft weiter."""
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert "Ausmusterungen zu diesem Schuljahr" not in text
+    assert f'<tr data-isbn="{TERRA}"' in text
+    assert "5 (bis 2025/2026), 6" in text
 
 
 def test_handeingetragene_ausmusterung_bleibt_beim_naechsten_abgleich(
@@ -1067,3 +1142,4 @@ def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(
     assert seiten.post("/api/buchplanung/abgleich", json={}).status_code == 200
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
     assert "22,50" in zeile and "In IServ: 24,00 €" in zeile
+

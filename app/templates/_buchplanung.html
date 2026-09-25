@@ -73,7 +73,10 @@
   Die Jahrgang-Spalte der Bücherliste, um die Planung ergänzt: hinter dem
   Jahrgang steht „(ab …)", solange das Buch dort erst in einem späteren
   Schuljahr eingeführt wird, und „(bis …)", wenn es ausläuft oder schon
-  ausgemustert ist. So sieht man die Planung, ohne ein Menü zu öffnen.
+  ausgemustert ist. Wird es im selben Schuljahr eingeführt und ausgemustert,
+  steht nur dieses Schuljahr da, außer es ist das laufende
+  (``planungs_zusatz`` in buecherlisten/planung/modelle.py). So sieht man die
+  Planung, ohne ein Menü zu öffnen.
 
   Gilt für alle gezeigten Jahrgänge derselbe Zusatz, steht er einmal hinter der
   ganzen Zelle ("7, 8 (ab 2028/2029)"). Unterscheiden sie sich, hängt er am
@@ -99,12 +102,8 @@
 {%- set zusatz = {} -%}
 {%- for name, zeilen in planung.planung_je_isbn_und_fach.get(buch.isbn, {}).items()
     if fach is none or name == fach -%}
-  {%- for zeile in zeilen -%}
-    {%- if zeile.status == "geplant" and zeile.eingefuehrt_ab -%}
-      {%- set _ = zusatz.update({zeile.jahrgang: "ab " ~ zeile.eingefuehrt_ab}) -%}
-    {%- elif zeile.status in ("läuft aus", "ausgemustert") and zeile.ausgemustert_nach -%}
-      {%- set _ = zusatz.update({zeile.jahrgang: "bis " ~ zeile.ausgemustert_nach}) -%}
-    {%- endif -%}
+  {%- for zeile in zeilen if zeile.zusatz -%}
+    {%- set _ = zusatz.update({zeile.jahrgang: zeile.zusatz}) -%}
   {%- endfor -%}
 {%- endfor -%}
 {%- set jahrgaenge = (buch.jahrgaenge | list + zusatz.keys() | list) | unique | sort | list -%}

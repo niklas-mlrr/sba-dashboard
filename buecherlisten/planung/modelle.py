@@ -423,6 +423,33 @@ def planungs_status(zeile: Planungszeile | None, schuljahr: str) -> str:
     return PLANUNG_IM_EINSATZ
 
 
+def planungs_zusatz(zeile: Planungszeile | None, schuljahr: str) -> str:
+    """Was in der Bücherliste in Klammern hinter dem Jahrgang steht.
+
+    „ab …“, solange das Buch dort erst später eingeführt wird, „bis …“, wenn
+    es ausläuft oder schon ausgemustert ist. Wird es im selben Schuljahr
+    eingeführt und ausgemustert, steht nur dieses Schuljahr da - „ab 2028/2029“
+    oder „bis 2028/2029“ allein wäre dann jeweils nur die halbe Wahrheit. Ist
+    dieses eine Jahr das laufende Schuljahr, bleibt es bei „bis …“: das Buch
+    ist jetzt im Regal, und wichtig ist nur noch, dass es danach geht.
+    """
+    if zeile is None:
+        return ""
+    status = planungs_status(zeile, schuljahr)
+    if status == PLANUNG_GEPLANT:
+        return f"ab {zeile.eingefuehrt_ab}"
+    if status not in (PLANUNG_LAEUFT_AUS, PLANUNG_AUSGEMUSTERT):
+        return ""
+    ende = schuljahr_zahl(zeile.ausgemustert_nach)
+    try:
+        einjaehrig = schuljahr_zahl(zeile.eingefuehrt_ab) == ende
+    except UngueltigesSchuljahr:
+        einjaehrig = False
+    if einjaehrig and ende != schuljahr_zahl(schuljahr):
+        return zeile.ausgemustert_nach
+    return f"bis {zeile.ausgemustert_nach}"
+
+
 # Die beiden Status, bei denen das Buch in **diesem** Schuljahr im Regal steht.
 # "läuft aus" gehört dazu: ausgemustert wird nach dem angegebenen Schuljahr,
 # also ist es dieses Jahr noch da.
@@ -440,3 +467,29 @@ def wirkt_im_schuljahr(zeile: Planungszeile | None, schuljahr: str) -> bool:
     (``buecherlisten/planung/abgleich.py``) mit genau dieser Funktion.
     """
     return planungs_status(zeile, schuljahr) in _ANWESEND
+
+
+def endet_mit_vorjahr(zeile: Planungszeile | None, schuljahr: str) -> bool:
+    """Wurde diese Zeile genau nach dem Vorjahr ausgemustert, also zu diesem Schuljahr?"""
+    if zeile is None:
+        return False
+    try:
+        return schuljahr_zahl(zeile.ausgemustert_nach) == schuljahr_zahl(schuljahr) - 1
+    except UngueltigesSchuljahr:
+        return False
+
+
+def zum_schuljahr_ausgemustert(stand: Buchplanung, buch: Buch, fach: str) -> bool:
+    """Ist das Buch in diesem Fach zu diesem Schuljahr ausgemustert - in keinem
+    Jahrgang des Fachs mehr, und das zuletzt mit dem Vorjahr?
+
+    Nur dann steht es auf der Fach-Seite allein unter „Ausmusterungen zu diesem
+    Schuljahr“, egal ob es in einem anderen Fach weiterläuft. Läuft es im selben
+    Fach in einem anderen Jahrgang weiter oder ist dort noch geplant, steht es
+    in der normalen Liste, mit „(bis …)“ hinter dem auslaufenden Jahrgang.
+    """
+    zeilen = [stand.planungszeile(buch.isbn, f, jahrgang)
+              for f, jahrgang in stand.zeilen_des_buchs(buch) if f == fach]
+    return bool(zeilen) \
+        and all(planungs_status(z, stand.schuljahr) == PLANUNG_AUSGEMUSTERT for z in zeilen) \
+        and any(endet_mit_vorjahr(z, stand.schuljahr) for z in zeilen)

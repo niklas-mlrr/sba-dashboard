@@ -60,11 +60,14 @@ from .modelle import (
     Planungszeile,
     Ruecklage,
     UngueltigesSchuljahr,
+    endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
     planungs_status,
+    planungs_zusatz,
     schuljahr_zahl,
     wirkt_im_schuljahr,
+    zum_schuljahr_ausgemustert,
 )
 from .vergleich import (
     BEIDE,
@@ -112,6 +115,7 @@ __all__ = [
     "UngueltigeEingabe",
     "UngueltigesSchuljahr",
     "bestaetige_fach",
+    "endet_mit_vorjahr",
     "fach_bestaetigung",
     "fach_status",
     "fuege_buch_hinzu",
@@ -120,6 +124,7 @@ __all__ = [
     "lies_mappe",
     "neue_mappe",
     "planungs_status",
+    "planungs_zusatz",
     "schreibe_datei",
     "schreibe_mappe",
     "schuljahr_zahl",
@@ -128,5 +133,6 @@ __all__ = [
     "setze_planung",
     "setze_ruecklage",
     "wirkt_im_schuljahr",
+    "zum_schuljahr_ausgemustert",
     "zusammenfuehren",
 ]
