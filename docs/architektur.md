@@ -533,11 +533,11 @@ zwischen `Leihbar` und `Status` — und nur dann, wenn diese Liste überhaupt ei
 hat: eine Spalte aus lauter leeren Zellen ist der Normalfall und sagt nichts.
 
 Was geplant ist, steht danach in der **Jahrgang-Spalte** der Bücherliste:
-`7, 8 (ab 2028/2029)` bzw. `9 (bis 2029/2030)`. Unterscheiden sich die
-Jahrgänge, hängt der Zusatz am einzelnen — eine gestaffelte Einführung ist
-gerade der Fall, für den es die Zeilen je Jahrgang gibt, und sie darf in der
-Anzeige nicht wieder verschwinden. Sortiert wird weiter nach den nackten
-Jahrgängen (`data-wert`).
+`7 (ab 2028/2029), 8 (ab 2028/2029)` bzw. `9 (bis 2029/2030)`. Der Zusatz
+hängt immer am einzelnen Jahrgang, auch wenn er für alle gleich ist
+(seit 2026-09-25) — so ist jeder Jahrgang für sich lesbar, und eine
+gestaffelte Einführung sieht nicht anders aus als eine gemeinsame. Sortiert
+wird weiter nach den nackten Jahrgängen (`data-wert`).
 
 **Korrekturen an der Buchreihe (2026-09-24).** Vor Einführung und Ausmusterung
 steht im Menü der Block „Buchreihe“ (ISBN, Titel, Verlag, Neupreis,

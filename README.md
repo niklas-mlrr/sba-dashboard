@@ -21,7 +21,7 @@ Regeln in [`buecherlisten/planung/README.md`](buecherlisten/planung/README.md));
 den Bücherlisten-Seiten selbst. Seit 2026-09-20 öffnet dort ein Klick auf eine
 Buchzeile ein **Planungsmenü** (Einführung und Ausmusterung je Jahrgang,
 „+ Jahrgang“, Rücklage, Bemerkungen) mit Abbrechen und Speichern; was geplant
-ist, steht danach in der Jahrgang-Spalte der Liste — `7, 8 (ab 2028/2029)`.
+ist, steht danach in der Jahrgang-Spalte der Liste — `7 (ab 2028/2029), 8 (ab 2028/2029)`.
 Seit 2026-09-24 steht darin zuerst die **Buchreihe** wie in IServ: Titel,
 Verlag (mit Vorschlägen beim Tippen), Neupreis und Leihgebühr lassen sich
 korrigieren; die ISBN steht grau hinterlegt darüber und bleibt, wie sie ist. Die Korrektur steht in der Planungsdatei und gilt in allen

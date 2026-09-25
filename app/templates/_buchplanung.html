@@ -78,11 +78,11 @@
   (``planungs_zusatz`` in buecherlisten/planung/modelle.py). So sieht man die
   Planung, ohne ein Menü zu öffnen.
 
-  Gilt für alle gezeigten Jahrgänge derselbe Zusatz, steht er einmal hinter der
-  ganzen Zelle ("7, 8 (ab 2028/2029)"). Unterscheiden sie sich, hängt er am
-  einzelnen Jahrgang ("7 (bis 2029/2030), 9 (ab 2028/2029)") - eine gestaffelte
-  Einführung ist genau der Fall, für den es die Zeilen je Jahrgang gibt, und
-  sie darf in der Anzeige nicht wieder verschwinden.
+  Der Zusatz hängt immer am einzelnen Jahrgang ("7 (ab 2028/2029), 8 (ab
+  2028/2029)"), auch wenn er für alle gleich ist - so sieht man auf einen
+  Blick, welcher Jahrgang wann dran ist. Eine gestaffelte Einführung
+  ("7 (bis 2029/2030), 9 (ab 2028/2029)") ist genau der Fall, für den es die
+  Zeilen je Jahrgang gibt.
 
   Sortiert wird weiter nach den nackten Jahrgängen (``data-wert``), nicht nach
   dem Zusatz: sonst stünde "7 (ab …)" plötzlich hinter "11".
@@ -115,13 +115,8 @@
 {%- endfor -%}
 {%- set weg = buch.weg_jahrgaenge -%}
 {%- set jahrgaenge = (buch.jahrgaenge | list + zusatz.keys() | list + weg | list) | unique | sort | list -%}
-{%- set werte = zusatz.values() | unique | list -%}
 <td data-wert="{{ jahrgaenge | join(', ') }}"{{ markierung }}>
-{%- if werte | length == 1 and zusatz | length == jahrgaenge | length -%}
-{% for jahrgang in jahrgaenge %}{{ jahrgangswert(buch, jahrgang, weg) }}{{ ", " if not loop.last }}{% endfor %} ({{ werte[0] }})
-{%- else -%}
-{% for jahrgang in jahrgaenge %}{{ jahrgangswert(buch, jahrgang, weg) }}{% if zusatz.get(jahrgang) %} ({{ zusatz[jahrgang] }}){% endif %}{{ ", " if not loop.last }}{% endfor %}
-{%- endif -%}
+{%- for jahrgang in jahrgaenge %}{{ jahrgangswert(buch, jahrgang, weg) }}{% if zusatz.get(jahrgang) %} ({{ zusatz[jahrgang] }}){% endif %}{{ ", " if not loop.last }}{% endfor -%}
 </td>
 {%- endmacro %}
 

@@ -486,13 +486,17 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     # Sortiert wird weiter nach den nackten Jahrgängen.
     assert 'data-wert="5, 6, 7"' in text
 
-    # Derselbe Zusatz für alle: dann steht er einmal hinter der ganzen Zelle.
+    # Derselbe Zusatz für alle: er steht trotzdem an jedem Jahrgang einzeln.
     seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
-        "zeilen": [{"jahrgang": 6, "ausgemustert_nach": "2029/2030"}],
+        "zeilen": [{"jahrgang": 6, "ausgemustert_nach": "2029/2030"},
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"},
+                   {"jahrgang": 8, "eingefuehrt_ab": "2028/2029"}],
         "mtime": stand["mtime"],
     })
-    assert "6 (bis 2029/2030)" in seiten.get("/buecherliste/fach/Erdkunde").text
+    text = _ohne_tags(seiten.get("/buecherliste/fach/Erdkunde").text)
+    assert "6 (bis 2029/2030), 7 (ab 2028/2029), 8 (ab 2028/2029)" in text
+    assert "7, 8 (ab" not in text
 
 
 def test_ein_buch_fuer_nur_ein_schuljahr_zeigt_nur_dieses_jahr(
