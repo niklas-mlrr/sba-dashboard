@@ -791,6 +791,18 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
     assert "5 (bis 2025/2026), 6 (bis 2025/2026)" in _ohne_tags(tabelle)
 
 
+def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Excel führt Terra dieses Jahr nirgends mehr, IServ schon: die ganze Zeile rot."""
+    _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde", "Politik")
+    for fach in ("Erdkunde", "Politik"):
+        tabelle = seiten.get(f"/buecherliste/fach/{fach}").text.split('id="ausmusterungen"')[1]
+        assert "reihe-weg" in _zeile_von(tabelle, TERRA)
+    # IServ führt Terra dieses Jahr in Jg. 6.
+    assert "reihe-weg" in _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, TERRA)
+
+
 def test_buch_das_in_einem_anderen_fach_bleibt_kommt_trotzdem_zur_ausmusterung(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
