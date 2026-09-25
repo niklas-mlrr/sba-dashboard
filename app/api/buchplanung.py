@@ -56,9 +56,6 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
         bemerkung = stand.bemerkung(buch.isbn)
         buecher.append({
             "isbn": buch.isbn,
-            # Korrigiertes Feld -> Wert in IServ.
-            "iserv": buch.korrigiert,
-            "von_hand": buch.von_hand,
             "titel": buch.titel,
             "verlag": buch.verlag,
             "faecher": list(buch.faecher),

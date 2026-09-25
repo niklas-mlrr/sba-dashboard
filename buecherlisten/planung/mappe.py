@@ -28,17 +28,15 @@ Unverändert gilt die Regel, die die Mappe widerspruchsfrei hält:
     Aus jedem Blatt wird nur seine eigene Eintragungs-Spalte zurückgelesen;
     alles andere wird bei jedem Schreiben neu gesetzt.
 
-Wer also auf ``Buchreihen`` einen Titel überschreibt, ändert nichts - beim
-nächsten Abgleich steht dort wieder, was IServ sagt. Die eine Ausnahme sind
-**Korrekturen** aus dem Planungsmenü (seit 2026-09-24): eine korrigierte Zelle
-bei Titel, Verlag, Neupreis oder Leihpreis ist hell hinterlegt und trägt den
-IServ-Wert als Kommentar („in IServ: 22,50 €“). Der Kommentar ist die
-Markierung - eine Zelle mit ihm behält beim Abgleich ihren Wert, eine ohne ihn
-bekommt den aus IServ. Ein eigenes Blatt dafür gab es nur für einen Tag; seit
-die ISBN im Menü nicht mehr änderbar ist, hat jede Korrektur ihre Zeile
-schon. Dieselbe Regel liegt
-schon ``mehrjahresbaende/core/mappe.py`` zugrunde, das sein Blatt ebenfalls
-immer vollständig neu schreibt, statt einzelne Zellen zu flicken.
+Die Ausnahme ist ``Buchreihen``: seit 2026-09-25 ist die Datei das Soll, und
+Titel, Verlag, Preise und leihbar werden gelesen, wie sie dort stehen - der
+Abgleich überschreibt sie nicht. Was IServ davon abweichend nennt, zeigt das
+Dashboard im Vergleich, nicht die Datei. Bis dahin trug eine im Menü
+korrigierte Zelle den IServ-Wert als Kommentar („in IServ: 22,50 €“); ein
+solcher Kommentar wird nicht mehr gelesen und fällt beim Schreiben weg.
+Dieselbe Regel des vollständigen Neuschreibens liegt schon
+``mehrjahresbaende/core/mappe.py`` zugrunde, das sein Blatt ebenfalls immer
+vollständig neu schreibt, statt einzelne Zellen zu flicken.
 
 Gelesen wird über die **Spaltenüberschriften** in Zeile 1, nicht über feste
 Buchstaben: wer in Excel eine Spalte einfügt, soll danach nicht stillschweigend
@@ -53,7 +51,6 @@ from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -102,18 +99,6 @@ class MappeUnlesbar(ValueError):
 
 SPALTE_EINFUEHRUNG = "Einführung"
 SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
-# Steht dieses (Fach, Jahrgang) in einer Bücherliste aus IServ - oder ist es
-# bloß geplant? Ohne diese Spalte wäre das nach einem Speichern nicht mehr zu
-# unterscheiden: das Blatt trägt beide Arten von Zeile, und beim Lesen sähen
-# sie gleich aus. Daran hängen zwei Dinge - das Menü lässt die Einführung eines
-# laufenden Jahrgangs nicht ändern, und eine geleerte Planungszeile
-# verschwindet wirklich, statt als leere Zeile wiederzukommen.
-SPALTE_IN_LISTE = "in der Bücherliste"
-# Auf "Buchreihen": steht das Buch in IServ, oder wurde es im Dashboard von
-# Hand hinzugefügt ("nein")? Ohne diese Spalte verwürfe der nächste Abgleich
-# ein von Hand angelegtes Buch als verschwunden. Eine Datei aus der Zeit davor
-# hat sie nicht; dort stammt jedes Buch aus IServ.
-SPALTE_IN_ISERV = "in IServ"
 
 _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
     BLATT_BUECHER: (
@@ -125,14 +110,12 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Neupreis", 12, False),
         ("Leihpreis", 12, False),
         ("leihbar", 9, False),
-        (SPALTE_IN_ISERV, 10, False),
         ("Bemerkung", 30, True),
     ),
     BLATT_FACH_JAHRGANG: (
         ("ISBN", 18, False),
         ("Fach", 22, False),
         ("Jahrgang", 10, False),
-        (SPALTE_IN_LISTE, 18, False),
         (SPALTE_EINFUEHRUNG, 13, True),
         (SPALTE_AUSMUSTERUNG, 24, True),
         ("Kürzel", 10, True),
@@ -169,21 +152,6 @@ _EUROSPALTEN = ("Neupreis", "Leihpreis")
 
 _JA = "ja"
 _NEIN = "nein"
-
-# Korrekturen auf "Buchreihen": die Zelle trägt den korrigierten Wert, hell
-# hinterlegt, und als Kommentar den Wert aus IServ. An diesem Kommentar
-# erkennt der nächste Abgleich die Korrektur. Den Wert der Zelle behält der
-# Abgleich so oder so (die Datei ist das Soll). Feld (``Buch``) -> Spalte.
-_KORRIGIERBAR: dict[str, str] = {
-    "titel": "Titel", "verlag": "Verlag", "neupreis": "Neupreis", "leihgebuehr": "Leihpreis",
-    "leihbar": "leihbar",
-}
-_PREISFELDER = frozenset({"neupreis", "leihgebuehr"})
-_JA_NEIN_FELDER = frozenset({"leihbar"})
-_ISERV_MARKE = "in IServ:"
-_OHNE_WERT = "–"
-_KOMMENTARE = "_kommentare"
-_KOMMENTAR_VON = "Dashboard"
 
 
 # ── Kleine Umwandlungen ──────────────────────────────────────────────────────
@@ -248,12 +216,7 @@ def _kopf(ws: Worksheet) -> dict[str, int]:
 
 
 def _zeilen(ws: Worksheet) -> list[dict[str, object]]:
-    """Alle Datenzeilen als {Überschrift: Wert}; leere Zeilen fallen weg.
-
-    Unter ``_KOMMENTARE`` stehen zusätzlich die Kommentare der Zeile
-    ({Überschrift: Text}) - auf ``Buchreihen`` tragen sie die IServ-Werte
-    korrigierter Zellen.
-    """
+    """Alle Datenzeilen als {Überschrift: Wert}; leere Zeilen fallen weg."""
     kopf = _kopf(ws)
     if not kopf:
         return []
@@ -262,35 +225,8 @@ def _zeilen(ws: Worksheet) -> list[dict[str, object]]:
         werte: dict[str, object] = {
             name: ws.cell(nummer, spalte).value for name, spalte in kopf.items()}
         if any(_text(wert) for wert in werte.values()):
-            werte[_KOMMENTARE] = {
-                name: zelle.comment.text for name, spalte in kopf.items()
-                for zelle in (ws.cell(nummer, spalte),) if zelle.comment is not None
-            }
             heraus.append(werte)
     return heraus
-
-
-def _iserv_aus_kommentar(text: str, feld: str) -> object:
-    """``"in IServ: 22,50 €"`` -> 22.5, ``"in IServ: nein"`` -> False. Excel setzt
-    beim Bearbeiten den Namen davor; gelesen wird deshalb ab dem letzten „in IServ:“."""
-    rest = text.rsplit(_ISERV_MARKE, 1)[-1].strip()
-    if feld in _JA_NEIN_FELDER:
-        return rest.casefold() == _JA
-    preis = feld in _PREISFELDER
-    if rest in ("", _OHNE_WERT):
-        return None if preis else ""
-    return _zahl(rest) if preis else rest
-
-
-def _korrekturen(zeile: dict[str, object]) -> tuple[tuple[str, object], ...]:
-    """Die korrigierten Felder einer Zeile auf ``Buchreihen``, mit ihrem IServ-Wert."""
-    kommentare = zeile.get(_KOMMENTARE) or {}
-    assert isinstance(kommentare, dict)
-    return tuple(
-        (feld, _iserv_aus_kommentar(kommentare[spalte], feld))
-        for feld, spalte in _KORRIGIERBAR.items()
-        if _ISERV_MARKE in str(kommentare.get(spalte) or "")
-    )
 
 
 def lies_mappe(wb: Workbook) -> Buchplanung:
@@ -302,9 +238,11 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     gelesen - sie stehen dort, damit ein Buch auch ohne das zweite Blatt
     einzuordnen ist.
 
-    Zu den Paaren des Buchs (``kombinationen``) zählen nur die Zeilen, die
-    ``in der Bücherliste`` mit "ja" führen: das Blatt trägt auch die bloß
-    geplanten Jahrgänge, und die stehen gerade **nicht** in einer Liste.
+    Zu den Paaren des Buchs (``kombinationen``) zählen nur die Zeilen **ohne**
+    Einführung: dort ist das Buch schon eingeführt. Eine Zeile mit Einführung
+    ist geplant - auch dann, wenn ihr Schuljahr schon erreicht ist. Bis
+    2026-09-25 hielt das eine eigene Spalte ``in der Bücherliste`` fest; eine
+    Datei, die sie noch hat, wird genauso gelesen.
     """
     fehlend = [name for name in BLAETTER if name not in wb.sheetnames]
     if fehlend:
@@ -324,10 +262,7 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
         jahrgang = _ganzzahl(zeile.get("Jahrgang"))
         if not isbn or jahrgang is None:
             continue
-        # Eine Datei aus der Zeit vor dieser Spalte kennt den Unterschied
-        # nicht; dort zählt wie früher jede Zeile als Vorkommen. Der nächste
-        # Abgleich stellt die Wahrheit aus IServ ohnehin wieder her.
-        if SPALTE_IN_LISTE not in zeile or _text(zeile.get(SPALTE_IN_LISTE)).casefold() == _JA:
+        if not _text(zeile.get(SPALTE_EINFUEHRUNG)):
             kombinationen.setdefault(isbn, set()).add((fach, jahrgang))
         eintrag = Planungszeile(
             isbn=isbn,
@@ -352,8 +287,6 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             leihbar=_text(zeile.get("leihbar")).casefold() == _JA,
             neupreis=_zahl(zeile.get("Neupreis")),
             leihgebuehr=_zahl(zeile.get("Leihpreis")),
-            iserv=_korrekturen(zeile),
-            von_hand=_text(zeile.get(SPALTE_IN_ISERV)).casefold() == _NEIN,
         )
         for zeile in buch_roh
         for isbn in (_text(zeile.get("ISBN")),) if isbn
@@ -440,18 +373,15 @@ def _schreibe_kopf(ws: Worksheet, blatt: str) -> None:
 
 
 def _schreibe_zeile(ws: Worksheet, blatt: str, nummer: int, werte: dict[str, object]) -> None:
-    kommentare = werte.get(_KOMMENTARE) or {}
-    assert isinstance(kommentare, dict)
     for spalte, (name, _, eintragbar) in enumerate(_SPALTEN[blatt], start=1):
         wert = werte.get(name)
         zelle = ws.cell(nummer, spalte)
         zelle.value = wert if wert != "" else None
         zelle.font = _SCHRIFT
         zelle.border = _RAHMEN
-        # Eine korrigierte Zelle ist hell wie eine eintragbare - sie ist es auch.
-        zelle.fill = _EINTRAG_FUELLUNG if eintragbar or name in kommentare else _LEER
-        zelle.comment = (Comment(str(kommentare[name]), _KOMMENTAR_VON)
-                         if name in kommentare else None)
+        zelle.fill = _EINTRAG_FUELLUNG if eintragbar else _LEER
+        # Ein Kommentar „in IServ: …“ aus der Zeit bis 2026-09-25 fällt weg.
+        zelle.comment = None
         zelle.alignment = _LINKS
         if isinstance(wert, date):
             zelle.number_format = _DATUMSFORMAT
@@ -483,37 +413,18 @@ def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "Neupreis": buch.neupreis,
             "Leihpreis": buch.leihgebuehr,
             "leihbar": _JA if buch.leihbar else _NEIN,
-            SPALTE_IN_ISERV: _NEIN if buch.von_hand else _JA,
             "Bemerkung": eintrag.bemerkung if eintrag else "",
-            _KOMMENTARE: {
-                _KORRIGIERBAR[feld]: _iserv_kommentar(original, feld)
-                for feld, original in buch.iserv if feld in _KORRIGIERBAR
-            },
         })
     return zeilen
-
-
-def _iserv_kommentar(original: object, feld: str) -> str:
-    """Der Kommentar an einer korrigierten Zelle: was IServ dort nennt."""
-    if feld in _JA_NEIN_FELDER:
-        return f"{_ISERV_MARKE} {_JA if original else _NEIN}"
-    if original is None or original == "":
-        return f"{_ISERV_MARKE} {_OHNE_WERT}"
-    if feld in _PREISFELDER and isinstance(original, (int, float)):
-        return f"{_ISERV_MARKE} {original:.2f} €".replace(".", ",")
-    return f"{_ISERV_MARKE} {original}"
 
 
 def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
     """Je (Buch, Fach, Jahrgang) eine Zeile - sortiert nach Fach, Jahrgang, Titel."""
     zeilen: list[dict[str, object]] = []
     aufgestellt: list[tuple[str, int, str, str]] = []
-    aus_liste: set[tuple[str, str, int]] = set()
     for buch in stand.buecher:
         for fach, jahrgang in stand.zeilen_des_buchs(buch):
             aufgestellt.append((fach, jahrgang, buch.titel.casefold(), buch.isbn))
-        for fach, jahrgang in buch.kombinationen:
-            aus_liste.add((buch.isbn, fach, jahrgang))
     for fach, jahrgang, _, isbn in sorted(
             aufgestellt, key=lambda e: (e[0].casefold(), e[1], e[2], e[3])):
         zeile = stand.planungszeile(isbn, fach, jahrgang)
@@ -521,7 +432,6 @@ def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "ISBN": isbn,
             "Fach": fach,
             "Jahrgang": jahrgang,
-            SPALTE_IN_LISTE: _JA if (isbn, fach, jahrgang) in aus_liste else _NEIN,
             SPALTE_EINFUEHRUNG: zeile.eingefuehrt_ab if zeile else "",
             SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach if zeile else "",
             "Kürzel": zeile.kuerzel if zeile else "",
@@ -579,12 +489,11 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
                           "stehen; nur neue Bücher kommen aus IServ dazu.")
     zeile(7, "Bücher", "Aus dem laufenden Schuljahr alle, aus dem Vorjahr die "
                        "leihbaren - nur die liegen im Bestand der Schule.")
-    zeile(8, "Abweichungen", "Steht in IServ ein anderer Wert als auf „Buchreihen“, "
-                             "nennt ihn der Kommentar an der Zelle. IServ selbst "
+    zeile(8, "Abweichungen", "Was IServ anders führt, zeigt das Dashboard beim "
+                             "Öffnen der Bücherlisten. IServ selbst "
                              "bleibt unverändert.")
-    zeile(9, "Neue Bücher", "Im Planungsmenü hinzugefügte Bücher, die (noch) nicht in "
-                            "IServ stehen, tragen auf „Buchreihen“ „in IServ: nein“. Sie "
-                            "bleiben beim Abgleich, solange sie eine Planungszeile haben.")
+    zeile(9, "Jahrgänge", "Ohne Einführung ist ein Jahrgang eingeführt, mit Einführung "
+                          "geplant. Ein Buch ohne jeden Jahrgang fällt aus der Datei.")
     zeile(10, "Legende", "", fett=True)
     for versatz, (marke, text) in enumerate(LEGENDE):
         zeile(11 + versatz, marke, text)

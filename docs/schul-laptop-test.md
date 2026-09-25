@@ -271,7 +271,7 @@ nichts zu sichern.
 | G5-9b | „Planung…" bei einem **Kaufbuch** | Das Feld „Ausmusterung nach Schuljahr" ist gesperrt |
 | G5-10 | „Planung…": weiterer Jahrgang mit „Einführung" | Neue Zeile auf „Fächer & Jahrgang" mit diesem Fach, Status „geplant" |
 | G5-11 | Rücklage mit Anzahl und Bemerkung speichern | Steht im Blatt „Rücklage" beim richtigen Fach |
-| G5-11a | Menü eines Buchs: Block „Buchreihe" steht vor „Einführung und Ausmusterung", Titel und Neupreis ändern, speichern | Neuer Titel/Preis in Fach-, Verlags- und Jahrgangsansicht und im PDF; im Menü darunter „in IServ: …"; auf „Buchreihen" die Zelle hell mit Kommentar „in IServ: …"; nach „Aus IServ aktualisieren" bleibt die Korrektur. In IServ unverändert |
+| G5-11a | Menü eines Buchs: Block „Buchreihe" steht vor „Einführung und Ausmusterung", Titel und Neupreis ändern, speichern | Neuer Titel/Preis in Fach-, Verlags- und Jahrgangsansicht und im PDF; im Menü darunter „in IServ: …"; auf „Buchreihen" der neue Wert ohne Kommentar; nach „Aus IServ aktualisieren" bleibt die Korrektur. In IServ unverändert |
 | G5-11b | Im Feld „Verlag" einen Buchstaben tippen | Darunter alle Verlage, die damit anfangen; Klick oder ↑/↓ + Enter übernimmt; Esc schließt nur die Liste; ein neuer Verlag lässt sich frei eintippen |
 | G5-11c | Ins Feld „ISBN" klicken und tippen | Grau hinterlegt, nicht änderbar; markieren und kopieren geht |
 | G5-12 | Datei in Excel offen lassen und etwas eintragen | Meldung „Datei ist in Excel geöffnet" (423), nichts geht verloren |

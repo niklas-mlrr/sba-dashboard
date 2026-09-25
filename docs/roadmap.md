@@ -35,14 +35,16 @@ Der Preis gilt, wie er in IServ steht.
 **Neu am 2026-09-24: die Buchreihe im Planungsmenü.** Titel, Verlag,
 Neupreis und Leihgebühr lassen sich im Menü eines Buchs korrigieren; die ISBN
 steht dort nur zum Lesen (grau hinterlegt). Die Korrektur steht auf
-`Buchreihen` (Zelle hell, IServ-Wert als Kommentar) und gilt in allen
-Bücherlisten und im PDF. IServ selbst bleibt unverändert.
+`Buchreihen` und gilt in allen Bücherlisten und im PDF. IServ selbst bleibt
+unverändert. Seit 2026-09-25 steht der IServ-Wert nicht mehr als Kommentar an
+der Zelle; die Abweichung zeigt der Live-Vergleich auf den Seiten.
 
 **Offen: Korrekturen ins nächste Schuljahr mitnehmen.** Die Datei gilt je
 Schuljahr. Legt der erste Abgleich eines neuen Schuljahrs seine Datei an,
 fehlen darin die Korrekturen des Vorjahrs, und das Buch steht wieder so da, wie
-IServ es führt. Naheliegend wäre, beim Anlegen die korrigierten Zellen von
-„Buchreihen“ aus der Datei des Vorjahrs zu übernehmen. Ebenfalls offen: das
+IServ es führt. Naheliegend wäre, beim Anlegen Titel, Verlag, Preise und
+leihbar von „Buchreihen“ aus der Datei des Vorjahrs zu übernehmen - welche
+davon geändert waren, weiß die Datei ohne Kommentar nicht mehr. Ebenfalls offen: das
 Kommandozeilen-Skript `buecherlisten/generate_booklists.py` kennt die
 Korrekturen nicht.
 

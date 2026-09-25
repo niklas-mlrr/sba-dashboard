@@ -61,14 +61,15 @@ RUECKLAGE_STATUS: tuple[str, ...] = (
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
 
-# Die Felder einer Buchreihe, die sich im Planungsmenü korrigieren lassen -
-# Name hier -> Name in IServ (``series_data``). Die ISBN gehört nicht dazu:
-# sie ist der Schlüssel des Buchs und steht im Menü nur zum Lesen.
+# Die Felder einer Buchreihe, die die Datei führt und die sich im Planungsmenü
+# ändern lassen - Name hier -> Name in IServ (``series_data``). Die ISBN
+# gehört nicht dazu: sie ist der Schlüssel des Buchs und steht im Menü nur zum
+# Lesen.
 #
 # ``leihbar`` ist in IServ kein Feld der Buchreihe, sondern des Eintrags einer
-# Bücherliste (``borrowable``, neben ``series_data``). Korrigiert wird es
-# trotzdem wie die anderen - ``korrigiere_eintrag`` in
-# ``buecherlisten/core/daten.py`` legt es an die richtige Stelle.
+# Bücherliste (``borrowable``, neben ``series_data``). Es gilt trotzdem wie
+# die anderen - ``korrigiere_eintrag`` in ``buecherlisten/core/daten.py`` legt
+# es an die richtige Stelle.
 ISERV_FELD: dict[str, str] = {
     "titel": "title", "verlag": "publisher", "neupreis": "price", "leihgebuehr": "fee",
     "leihbar": "borrowable",
@@ -125,7 +126,9 @@ class Buch:
     tatsächlich vorkommt, und **nicht** das Kreuzprodukt aus Fächern und
     Jahrgängen: ein Band, der in Jahrgang 7 zum Fach Mathematik und in
     Jahrgang 8 zum Fach Informatik gehört, hat zwei Paare, nicht vier. Genau
-    diese Paare sind die Zeilen des Blatts ``Fächer & Jahrgang``.
+    diese Paare sind die Zeilen des Blatts ``Fächer & Jahrgang``, und zwar die
+    **ohne** Einführung: dort ist das Buch schon eingeführt. Eine Zeile mit
+    Einführung ist geplant und steht nur in ``Buchplanung.planung``.
     """
 
     isbn: str
@@ -138,23 +141,6 @@ class Buch:
     # Paare, die nur im Vorjahr vorkamen. Kein Dateiinhalt: der Abgleich macht
     # daraus Planungszeilen mit "Ausmusterung nach" = Vorjahr.
     ausgemustert: tuple[tuple[str, int], ...] = ()
-    # Die im Planungsmenü korrigierten Felder, je Feld mit dem Wert, den IServ
-    # nennt: (("titel", "Deutschbuch 5"), ("neupreis", 22.5)). ``titel``,
-    # ``verlag``, ``neupreis`` und ``leihgebuehr`` oben tragen dann den
-    # korrigierten Wert. In der Datei steht der IServ-Wert als Kommentar an
-    # der Zelle - so erkennt der nächste Abgleich die Korrektur wieder.
-    iserv: tuple[tuple[str, object], ...] = ()
-    # Im Dashboard von Hand angelegt, nicht aus IServ: ein Buch, das an der
-    # Schule erst eingeführt wird. Titel, Verlag und Preise sind dann keine
-    # Korrektur, sondern die einzige Quelle. Der Abgleich behält das Buch,
-    # solange es eine Planungszeile hat, und übergibt es an IServ, sobald die
-    # ISBN dort auftaucht.
-    von_hand: bool = False
-
-    @property
-    def korrigiert(self) -> dict[str, object]:
-        """Korrigiertes Feld -> Wert in IServ."""
-        return dict(self.iserv)
 
     @property
     def faecher(self) -> tuple[str, ...]:
@@ -261,14 +247,23 @@ class Buchplanung:
         return next((b for b in self.buecher if b.isbn == isbn), None)
 
     def korrekturen_fuer_iserv(self) -> dict[str, dict[str, object]]:
-        """Die korrigierten Felder je ISBN, in den Feldnamen von IServ (``series_data``).
+        """Die Angaben jedes Buchs, in den Feldnamen von IServ (``series_data``).
+
+        Die Datei ist das Soll: ihre Werte gelten für jedes Buch, das sie
+        kennt, nicht nur für eines, das im Menü korrigiert wurde. Bis
+        2026-09-25 markierte ein Kommentar „in IServ: …“ die korrigierten
+        Zellen, und nur diese wirkten.
 
         So nimmt sie ``buecherlisten.core.daten.wende_korrekturen_an`` entgegen:
         der Kern der Bücherlisten kennt diese Datei nicht und soll es auch nicht.
         """
         return {
-            buch.isbn: {ISERV_FELD[feld]: getattr(buch, feld) for feld in buch.korrigiert}
-            for buch in self.buecher if buch.korrigiert
+            buch.isbn: {
+                ISERV_FELD[feld]: "" if feld == "verlag" and buch.verlag == OHNE_VERLAG
+                else getattr(buch, feld)
+                for feld in ISERV_FELD
+            }
+            for buch in self.buecher
         }
 
     def bemerkung(self, isbn: str) -> Buchbemerkung | None:

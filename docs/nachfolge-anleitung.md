@@ -279,17 +279,18 @@ nicht, korrigieren Sie es hier. Die Korrektur gilt in allen Bücherlisten und
 PDFs des Programms; **in IServ ändert sich nichts**, dort müsste der Fehler
 gesondert behoben werden. Beim Verlag schlägt das Feld nach dem ersten
 Buchstaben die bekannten Verlage vor; ein neuer lässt sich einfach eintippen.
-Unter einem korrigierten Feld steht klein, was IServ dazu sagt. Wer den
-IServ-Wert wieder einträgt (oder einen Preis leert), nimmt die Korrektur zurück.
+Weicht IServ ab, steht unter dem Feld klein, was IServ dazu sagt. Das rechnet
+das Programm bei jedem Öffnen der Seite neu. Wer den IServ-Wert wieder
+einträgt, gleicht die Angabe an IServ an. Ein geleerter Preis bleibt leer.
 
 ### Was in der Datei steht
 
 Vier Blätter:
 
 * **Buchreihen** — jeder Titel einmal, mit Fach, Jahrgang und Preisen. Drin sind alle Bücher des laufenden Schuljahres und aus dem
-  Vorjahr die leihbaren; nur die liegen noch im Bestand der Schule. Im Menü
-  korrigierte Titel, Verlage und Preise sind hell hinterlegt; der Wert aus
-  IServ steht im Kommentar der Zelle.
+  Vorjahr die leihbaren; nur die liegen noch im Bestand der Schule. Titel,
+  Verlag, Preise und „leihbar“ gelten, wie sie hier stehen. Was IServ anders
+  führt, zeigt das Programm auf den Bücherlisten-Seiten, nicht in der Datei.
 * **Fächer & Jahrgang** — eine Zeile je Buch, Fach und Jahrgang, mit
   Einführung, Ausmusterung und der Bestätigung der Fachkonferenzleitung. Den
   Titel schlagen Sie auf „Buchreihen" nach; hier steht nur die ISBN.

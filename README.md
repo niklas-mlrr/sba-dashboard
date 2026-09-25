@@ -60,7 +60,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `GET /api/buchplanung?schuljahr=…` | Der gespeicherte Stand eines Schuljahrs als JSON (ohne Datei: `planung: null`) |
 | `POST /api/buchplanung/abgleich` | Beide Schuljahre aus IServ holen und zusammenführen: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |
 | `POST /api/buchplanung/fach` | Freigabe der Fachkonferenzleitung: `{schuljahr, fach, kuerzel, datum, mtime}` → 200/400/409/423/503 |
-| `POST /api/buchplanung/buch` | Das Planungsmenü eines Buchs in einem Fach, in einem Zug: `{schuljahr, isbn, fach, zeilen: [{jahrgang, eingefuehrt_ab, ausgemustert_nach, bemerkung}], ruecklage, buchreihe, mtime}` — `zeilen` ist der ganze Stand, ein fehlender Jahrgang wird gelöscht; `buchreihe` `{titel, verlag, neupreis, leihgebuehr}` korrigiert die Angaben aus IServ in der Datei (auf „Buchreihen“, IServ-Wert als Kommentar) |
+| `POST /api/buchplanung/buch` | Das Planungsmenü eines Buchs in einem Fach, in einem Zug: `{schuljahr, isbn, fach, zeilen: [{jahrgang, eingefuehrt_ab, ausgemustert_nach, bemerkung}], ruecklage, buchreihe, mtime}` — `zeilen` ist der ganze Stand, ein fehlender Jahrgang wird gelöscht; `buchreihe` `{titel, verlag, neupreis, leihgebuehr, leihbar}` setzt die Angaben der Buchreihe in der Datei (auf „Buchreihen“, ohne Kommentar; ein leerer Preis ist leer) |
 | `POST /api/buchplanung/planung` | Eine einzelne Zeile: `{schuljahr, isbn, fach, jahrgang, eingefuehrt_ab, ausgemustert_nach, kuerzel, datum, mtime}` |
 | `POST /api/buchplanung/ruecklage` | Rücklage einer Fachschaft: `{schuljahr, isbn, fach, anzahl, status, mtime}` |
 | `GET /api/mehrjahresbaende` | dieselbe Übersicht als JSON |

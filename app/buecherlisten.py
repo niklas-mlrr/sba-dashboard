@@ -94,12 +94,13 @@ class Buch:
     leihgebuehr: float | None
     leihbar: bool
     jahrgaenge: tuple[int, ...]
-    # Ist an der Buchreihe etwas korrigiert (Buchplanung, Blatt "Buchreihen"),
-    # stehen oben die korrigierten Werte und hier die IServ-Werte der
-    # korrigierten Felder. Das Planungsmenü zeigt sie als „in IServ: …“.
+    # Weicht IServ von der Datei ab, stehen oben die Werte der Datei und hier
+    # die IServ-Werte der abweichenden Felder - live verglichen. Das
+    # Planungsmenü zeigt sie als „in IServ: …“.
     iserv: tuple[tuple[str, Any], ...] = ()
-    # Im Planungsmenü hinzugefügt und (noch) nicht in IServ - die Zeile kommt
-    # aus der Buchplanung, nicht aus einer Bücherliste.
+    # Steht nicht in IServ - live gegen den Abruf geprüft. Meist ein im
+    # Planungsmenü hinzugefügtes Buch; die Zeile kommt dann aus der
+    # Buchplanung, nicht aus einer Bücherliste.
     von_hand: bool = False
     # Der Vergleich mit IServ, gerechnet für die Gruppe, in der die Zeile
     # steht. ``herkunft``: ``beide``; ``nur_excel`` - laut Datei gehört das Buch
@@ -516,7 +517,7 @@ def _aus_datei(v: Vergleich, buch: PlanBuch, paare: tuple[Paar, ...] | frozenset
         jahrgaenge=jahrgaenge if jahrgaenge is not None
         else tuple(sorted({jahrgang for _, jahrgang in paare})),
         iserv=abweichung.felder if abweichung and abweichung.art == BEIDE else (),
-        von_hand=buch.von_hand, herkunft=herkunft,
+        von_hand=buch.isbn not in v.iserv, herkunft=herkunft,
         neu=tuple(paar for paar in neu if hier(paar)),
         weg=tuple(paar for paar in weg if hier(paar)),
         paare_sonst=tuple(sonst), reihe=_reihe(abweichung),

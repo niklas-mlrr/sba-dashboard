@@ -165,11 +165,33 @@ def test_eine_planung_ohne_heutiges_vorkommen_bleibt_erhalten(tmp_path, stand):
     zeile = gelesen.planungszeile(DEUTSCH, "Deutsch", 7)
     assert zeile.eingefuehrt_ab == "2028/2029"
     assert planungs_status(zeile, gelesen.schuljahr) == PLANUNG_GEPLANT
-    # Der geplante Jahrgang wird dadurch **kein** Vorkommen: das Buch steht in
-    # Jahrgang 7 in keiner Bücherliste. Daran hängt, dass das Planungsmenü die
-    # Einführung dort noch ändern lässt (Spalte "in der Bücherliste").
+    # Der geplante Jahrgang wird dadurch **kein** eingeführter: er trägt eine
+    # Einführung. Daran hängt, dass das Planungsmenü sie dort noch ändern lässt.
     assert gelesen.buch(DEUTSCH).jahrgaenge == (5,)
     assert gelesen.zeilen_des_buchs(gelesen.buch(DEUTSCH)) == (("Deutsch", 5), ("Deutsch", 7))
+
+
+def test_ein_jahrgang_ohne_einfuehrung_gilt_als_eingefuehrt(tmp_path, stand):
+    """Nur mit Ausmusterung, ohne Einführung: eingeführt, die Einführung gesperrt."""
+    stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=6,
+                          ausgemustert_nach="2027/2028")
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    gelesen = lies_datei(pfad)
+    assert gelesen.buch(DEUTSCH).kombinationen == (("Deutsch", 5), ("Deutsch", 6))
+
+
+def test_das_menue_verlangt_fuer_einen_geplanten_jahrgang_die_einfuehrung(stand):
+    """Sonst würde ein geplanter Jahrgang durch ein geleertes Feld still eingeführt."""
+    with pytest.raises(UngueltigeEingabe, match="Jahrgang 7 das Schuljahr der Einführung"):
+        setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+            Jahrgangseingabe(jahrgang=5),
+            Jahrgangseingabe(jahrgang=7, ausgemustert_nach="2029/2030"),
+        ])
+    # Ein eingeführter Jahrgang braucht keine.
+    neu = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2029/2030")])
+    assert neu.planungszeile(DEUTSCH, "Deutsch", 5).ausgemustert_nach == "2029/2030"
 
 
 def test_eine_geleerte_planungszeile_kommt_nicht_als_leere_zeile_zurueck(tmp_path, stand):
@@ -199,10 +221,9 @@ def test_in_excel_geaenderter_titel_ist_das_soll(tmp_path, stand):
     ws.cell(2, 1).value = "Von Hand verbogen"
     wb.save(str(pfad))
 
-    # Der nächste Abgleich lässt ihn stehen und merkt sich, was IServ sagt.
+    # Der nächste Abgleich lässt ihn stehen; was IServ sagt, zeigt der Vergleich.
     neu = zusammenfuehren(lies_datei(pfad), _schnappschuss())
-    buch = next(b for b in neu.buecher if b.titel == "Von Hand verbogen")
-    assert buch.korrigiert == {"titel": stand.buch(buch.isbn).titel}
+    assert any(b.titel == "Von Hand verbogen" for b in neu.buecher)
 
 
 def test_die_alten_blaetter_verschwinden(tmp_path, stand):
@@ -546,48 +567,26 @@ def _reihe(buch: Buch, **felder) -> Buchreiheneingabe:
     })
 
 
-def test_titel_und_preis_werden_korrigiert(stand):
+def test_titel_und_preis_werden_geaendert(stand):
     buch = stand.buch(DEUTSCH)
     neu = setze_buchreihe(stand, isbn=DEUTSCH,
                           eingabe=_reihe(buch, titel="Deutschbuch 5 (NRW)", neupreis=24.0))
 
-    korrigiert = neu.buch(DEUTSCH)
-    assert korrigiert.titel == "Deutschbuch 5 (NRW)"
-    assert korrigiert.neupreis == 24.0
-    # Die Datei merkt sich, was IServ sagt - nur zu den korrigierten Feldern.
-    assert korrigiert.korrigiert == {"titel": "Deutschbuch 5", "neupreis": 22.5}
-    assert neu.korrekturen_fuer_iserv() == {
-        DEUTSCH: {"title": "Deutschbuch 5 (NRW)", "price": 24.0}}
+    geaendert = neu.buch(DEUTSCH)
+    assert geaendert.titel == "Deutschbuch 5 (NRW)"
+    assert geaendert.neupreis == 24.0
+    # Für das PDF gelten die Werte der Datei - für jedes Buch, alle Felder.
+    assert neu.korrekturen_fuer_iserv()[DEUTSCH] == {
+        "title": "Deutschbuch 5 (NRW)", "publisher": "Cornelsen", "price": 24.0,
+        "fee": 5.0, "borrowable": True}
+    assert set(neu.korrekturen_fuer_iserv()) == {b.isbn for b in neu.buecher}
 
 
-def test_zurueck_auf_den_iserv_wert_nimmt_die_korrektur_zurueck(stand):
+def test_ein_leerer_preis_ist_leer(stand):
+    """Bis 2026-09-25 hieß ein leerer Preis „wie in IServ“; die Datei kennt IServ nicht mehr."""
     buch = stand.buch(DEUTSCH)
-    korrigiert = setze_buchreihe(stand, isbn=DEUTSCH,
-                                 eingabe=_reihe(buch, verlag="Cornelsen Verlag"))
-    assert korrigiert.buch(DEUTSCH).korrigiert == {"verlag": "Cornelsen"}
-
-    zurueck = setze_buchreihe(korrigiert, isbn=DEUTSCH,
-                              eingabe=_reihe(korrigiert.buch(DEUTSCH), verlag="Cornelsen"))
-    assert zurueck.buch(DEUTSCH) == buch
-
-
-def test_eine_zweite_korrektur_behaelt_den_iserv_wert(stand):
-    """Der IServ-Wert ist der vom ersten Mal - nicht die vorige Korrektur."""
-    buch = stand.buch(DEUTSCH)
-    einmal = setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(buch, neupreis=24.0))
-    zweimal = setze_buchreihe(einmal, isbn=DEUTSCH,
-                              eingabe=_reihe(einmal.buch(DEUTSCH), neupreis=26.0))
-    assert zweimal.buch(DEUTSCH).korrigiert == {"neupreis": 22.5}
-    assert zweimal.buch(DEUTSCH).neupreis == 26.0
-
-
-def test_ein_leerer_preis_gilt_wie_in_iserv(stand):
-    buch = stand.buch(DEUTSCH)
-    korrigiert = setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(buch, leihgebuehr=7.0))
-    zurueck = setze_buchreihe(korrigiert, isbn=DEUTSCH,
-                              eingabe=_reihe(korrigiert.buch(DEUTSCH), leihgebuehr=None))
-    assert zurueck.buch(DEUTSCH).korrigiert == {}
-    assert zurueck.buch(DEUTSCH).leihgebuehr == 5.0
+    neu = setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(buch, leihgebuehr=None))
+    assert neu.buch(DEUTSCH).leihgebuehr is None
 
 
 @pytest.mark.parametrize("felder, teil", [
@@ -601,7 +600,7 @@ def test_ungueltige_buchreihe_wird_abgelehnt(stand, felder, teil):
         setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(buch, **felder))
 
 
-def test_korrekturen_stehen_auf_buchreihen_mit_dem_iserv_wert_als_kommentar(tmp_path, stand):
+def test_die_buchreihe_steht_ohne_kommentar_in_der_datei(tmp_path, stand):
     from openpyxl import load_workbook
 
     buch = stand.buch(ALT)
@@ -610,24 +609,18 @@ def test_korrekturen_stehen_auf_buchreihen_mit_dem_iserv_wert_als_kommentar(tmp_
     pfad = tmp_path / "Buchplanung.xlsx"
     schreibe_datei(pfad, stand)
 
-    wb = load_workbook(str(pfad))
-    # Kein eigenes Blatt: die Korrektur steht in der Zeile des Buchs.
-    assert "Korrekturen" not in wb.sheetnames
-    ws = wb["Buchreihen"]
+    ws = load_workbook(str(pfad))["Buchreihen"]
     kopf = {ws.cell(1, s).value: s for s in range(1, ws.max_column + 1)}
     (zeile,) = [z for z in range(2, ws.max_row + 1) if ws.cell(z, kopf["ISBN"]).value == ALT]
     assert ws.cell(zeile, kopf["Verlag"]).value == "Westermann Schulbuch"
-    assert ws.cell(zeile, kopf["Verlag"]).comment.text == "in IServ: Westermann"
-    assert ws.cell(zeile, kopf["Neupreis"]).comment.text == "in IServ: 30,00 €"
-    assert ws.cell(zeile, kopf["Titel"]).comment is None
+    assert all(ws.cell(zeile, s).comment is None for s in kopf.values())
 
     gelesen = lies_datei(pfad).buch(ALT)
-    assert gelesen.verlag == "Westermann Schulbuch"
-    assert gelesen.korrigiert == {"verlag": "Westermann", "neupreis": 30.0}
+    assert (gelesen.verlag, gelesen.neupreis) == ("Westermann Schulbuch", 31.0)
 
 
-def test_ein_von_excel_ergaenzter_kommentar_wird_trotzdem_gelesen(tmp_path, stand):
-    """Excel setzt beim Bearbeiten den Namen des Bearbeiters vor den Kommentar."""
+def test_ein_alter_kommentar_faellt_weg_und_der_wert_bleibt(tmp_path, stand):
+    """Bis 2026-09-25 trug eine korrigierte Zelle „in IServ: …“ als Kommentar."""
     from openpyxl import load_workbook
     from openpyxl.comments import Comment
 
@@ -638,33 +631,23 @@ def test_ein_von_excel_ergaenzter_kommentar_wird_trotzdem_gelesen(tmp_path, stan
     ws = wb["Buchreihen"]
     for zeile in range(2, ws.max_row + 1):
         if ws.cell(zeile, 1).value == "Chemie 9":
-            ws.cell(zeile, 1).comment = Comment("Frau Muster:\nin IServ: Chemie heute 9", "x")
+            ws.cell(zeile, 1).comment = Comment("in IServ: Chemie heute 9", "Dashboard")
     wb.save(str(pfad))
 
-    assert lies_datei(pfad).buch(ALT).korrigiert == {"titel": "Chemie heute 9"}
+    gelesen = lies_datei(pfad)
+    assert gelesen.buch(ALT).titel == "Chemie 9"
+    schreibe_datei(pfad, gelesen)
+    ws = load_workbook(str(pfad))["Buchreihen"]
+    assert not any(zelle.comment for reihe in ws.iter_rows() for zelle in reihe)
 
 
-def test_der_abgleich_behaelt_korrekturen_und_nimmt_den_frischen_iserv_wert(stand):
+def test_der_abgleich_behaelt_die_werte_der_datei(stand):
+    """Die Datei ist das Soll: ein neuer IServ-Preis ändert sie nicht."""
     stand = setze_buchreihe(stand, isbn=DEUTSCH, eingabe=_reihe(
-        stand.buch(DEUTSCH), titel="Deutschbuch 5 NRW", neupreis=24.0))
-
-    # In IServ ist inzwischen der Preis gestiegen - auf genau den korrigierten.
-    frisch = tuple(replace(b, neupreis=24.0) if b.isbn == DEUTSCH else b for b in _buecher())
-    neu = zusammenfuehren(stand, _schnappschuss(frisch))
-
-    buch = neu.buch(DEUTSCH)
-    assert buch.titel == "Deutschbuch 5 NRW"
-    # Die Preiskorrektur ist erledigt: IServ nennt den Wert selbst.
-    assert buch.korrigiert == {"titel": "Deutschbuch 5"}
-    assert buch.neupreis == 24.0
-
-
-def test_eine_preisaenderung_in_iserv_aendert_das_soll_nicht(stand):
-    """Der Preis der Datei bleibt; der neue IServ-Preis steht als Abweichung daneben."""
+        stand.buch(DEUTSCH), titel="Deutschbuch 5 NRW"))
     frisch = tuple(replace(b, neupreis=23.9) if b.isbn == DEUTSCH else b for b in _buecher())
     buch = zusammenfuehren(stand, _schnappschuss(frisch)).buch(DEUTSCH)
-    assert buch.neupreis == 22.5
-    assert buch.korrigiert == {"neupreis": 23.9}
+    assert (buch.titel, buch.neupreis) == ("Deutschbuch 5 NRW", 22.5)
 
 
 def test_die_alte_korrekturen_mappe_verliert_ihr_blatt(tmp_path, stand):
@@ -699,10 +682,9 @@ def test_ein_buch_aus_einem_anderen_fach_kommt_ueber_seine_jahrgaenge_dazu(stand
     assert neu.planungszeile(TERRA, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
     assert planungs_status(neu.planungszeile(TERRA, "Deutsch", 8), neu.schuljahr) \
         == PLANUNG_GEPLANT
-    # Dasselbe Buch, keine Kopie: IServ-Werte, keine Korrektur.
+    # Dasselbe Buch, keine Kopie, mit denselben Werten.
     assert len(neu.buecher) == len(stand.buecher)
-    assert not neu.buch(TERRA).von_hand
-    assert neu.buch(TERRA).korrigiert == {}
+    assert neu.buch(TERRA) == terra
     # Die neue Zeile ist unbestätigt, das Fach damit nicht mehr ganz bestätigt.
     bestaetigt, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
     nachher = fuege_buch_hinzu(bestaetigt, isbn=TERRA, fach="Deutsch",
@@ -710,14 +692,14 @@ def test_ein_buch_aus_einem_anderen_fach_kommt_ueber_seine_jahrgaenge_dazu(stand
     assert fach_status(nachher, "Deutsch")[0] == FACH_TEILWEISE
 
 
-def test_eine_abweichende_buchreihe_ist_eine_korrektur(stand):
+def test_eine_abweichende_buchreihe_gilt(stand):
     terra = stand.buch(TERRA)
     neu = fuege_buch_hinzu(stand, isbn=TERRA, fach="Deutsch",
                            buchreihe=_reihe(terra, neupreis=26.0), zeilen=_einfuehrung(7))
-    assert neu.buch(TERRA).korrigiert == {"neupreis": 25.0}
+    assert neu.buch(TERRA).neupreis == 26.0
 
 
-def test_eine_neue_isbn_legt_das_buch_von_hand_an(stand):
+def test_eine_neue_isbn_legt_das_buch_an(stand):
     neu = fuege_buch_hinzu(
         stand, isbn="3-16-148410-X", fach="Deutsch",
         buchreihe=Buchreiheneingabe(titel="Neues Deutschbuch 7", verlag="Klett",
@@ -725,16 +707,14 @@ def test_eine_neue_isbn_legt_das_buch_von_hand_an(stand):
         zeilen=_einfuehrung(7),
     )
     buch = neu.buch(NEU)          # als ISBN-13
-    assert buch is not None and buch.von_hand
+    assert buch is not None
     assert (buch.titel, buch.verlag, buch.neupreis, buch.leihgebuehr) == (
         "Neues Deutschbuch 7", "Klett", 25.0, None)
     assert buch.kombinationen == ()
     assert NEU in [b.isbn for b in neu.buecher_je_fach("Deutsch")]
 
-    # Bearbeitet wird es danach ohne IServ-Kommentar: es gibt keinen IServ-Wert.
     geaendert = setze_buchreihe(neu, isbn=NEU, eingabe=_reihe(buch, titel="Deutschbuch 7"))
     assert geaendert.buch(NEU).titel == "Deutschbuch 7"
-    assert geaendert.buch(NEU).korrigiert == {}
 
 
 @pytest.mark.parametrize(("isbn", "zeilen", "teil"), [
@@ -753,29 +733,25 @@ def test_ungueltiges_hinzufuegen_wird_abgelehnt(stand, isbn, zeilen, teil):
                          buchreihe=Buchreiheneingabe(titel="X", verlag="Y"), zeilen=zeilen)
 
 
-def test_ein_von_hand_angelegtes_buch_uebersteht_datei_und_abgleich(tmp_path, stand):
+def test_ein_im_menue_angelegtes_buch_uebersteht_datei_und_abgleich(tmp_path, stand):
     stand = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
                              buchreihe=Buchreiheneingabe(titel="Neu 7", verlag="Klett"),
                              zeilen=_einfuehrung(7))
     pfad = tmp_path / "Buchplanung.xlsx"
     schreibe_datei(pfad, stand)
     gelesen = lies_datei(pfad)
-    assert gelesen.buch(NEU).von_hand
-    assert not gelesen.buch(DEUTSCH).von_hand
+    assert gelesen.buch(NEU).titel == "Neu 7"
 
     neu = zusammenfuehren(gelesen, _schnappschuss())
-    assert neu.buch(NEU).von_hand
+    assert neu.buch(NEU) is not None
     assert neu.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
     assert not neu.warnungen
 
-    # Führt IServ das Buch inzwischen selbst, ist es nicht mehr "von Hand";
-    # Werte und Planung bleiben die der Datei.
+    # Führt IServ das Buch inzwischen selbst, bleiben Werte und Planung die der Datei.
     aus_iserv = Buch(isbn=NEU, titel="Neu 7 (IServ)", verlag="Klett",
                      kombinationen=(("Deutsch", 7),), leihbar=True)
     uebergeben = zusammenfuehren(neu, _schnappschuss(_buecher() + (aus_iserv,)))
-    assert not uebergeben.buch(NEU).von_hand
-    assert uebergeben.buch(NEU).titel == "Neu 7"
-    assert uebergeben.buch(NEU).korrigiert == {"titel": "Neu 7 (IServ)", "leihbar": True}
+    assert (uebergeben.buch(NEU).titel, uebergeben.buch(NEU).leihbar) == ("Neu 7", False)
     assert uebergeben.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
 
 
@@ -789,27 +765,58 @@ def test_ein_von_hand_angelegtes_buch_ohne_jahrgang_verschwindet(stand):
     assert setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[]).buch(DEUTSCH)
 
 
-def test_eine_alte_datei_ohne_spalte_kennt_nur_buecher_aus_iserv(tmp_path, stand):
+def test_ein_buch_aus_iserv_ohne_jahrgang_verschwindet_auch(tmp_path, stand):
+    """Ohne Jahrgang gehört ein Buch zu keinem Fach mehr - egal, woher es stammt.
+
+    Entfernen lässt sich nur ein Jahrgang mit Einführung; bei einem Buch aus
+    IServ ist das einer, dem jemand in Excel eine Einführung eingetragen hat.
+    """
+    stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
+                          eingefuehrt_ab="2020/2021")
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    gelesen = lies_datei(pfad)
+
+    ohne = setze_buchplanung(gelesen, isbn=DEUTSCH, fach="Deutsch", zeilen=[])
+    assert ohne.buch(DEUTSCH) is None
+
+
+def test_eine_alte_datei_mit_den_spalten_wird_gelesen_und_verliert_sie(tmp_path, stand):
+    """Bis 2026-09-25 standen „in IServ“ und „in der Bücherliste“ in der Datei."""
     from openpyxl import load_workbook
 
+    stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                          eingefuehrt_ab="2028/2029")
     pfad = tmp_path / "Buchplanung.xlsx"
     schreibe_datei(pfad, stand)
     wb = load_workbook(str(pfad))
-    ws = wb["Buchreihen"]
-    spalte = next(z.column for z in ws[1] if z.value == "in IServ")
-    ws.delete_cols(spalte)
+    for blatt, spalte, wert in (("Buchreihen", "in IServ", "ja"),
+                                ("Fächer & Jahrgang", "in der Bücherliste", "nein")):
+        ws = wb[blatt]
+        neu = ws.max_column + 1
+        ws.cell(1, neu).value = spalte
+        for zeile in range(2, ws.max_row + 1):
+            ws.cell(zeile, neu).value = wert
     wb.save(str(pfad))
-    assert not any(b.von_hand for b in lies_datei(pfad).buecher)
+
+    gelesen = lies_datei(pfad)
+    # Es zählt allein die Einführung, nicht das "nein" der alten Spalte.
+    assert gelesen.buch(DEUTSCH).kombinationen == (("Deutsch", 5),)
+    assert gelesen.zeilen_des_buchs(gelesen.buch(DEUTSCH)) == (("Deutsch", 5), ("Deutsch", 7))
+
+    schreibe_datei(pfad, gelesen)
+    wb = load_workbook(str(pfad))
+    assert "in IServ" not in [z.value for z in wb["Buchreihen"][1]]
+    assert "in der Bücherliste" not in [z.value for z in wb["Fächer & Jahrgang"][1]]
 
 
-# ── Leihbar als Korrektur ────────────────────────────────────────────────────
+# ── Leihbar ──────────────────────────────────────────────────────────────────
 
 
-def test_leihbar_wird_korrigiert_und_uebersteht_datei_und_abgleich(tmp_path, stand):
+def test_leihbar_wird_geaendert_und_uebersteht_datei_und_abgleich(tmp_path, stand):
     kauf = stand.buch(KAUF)
     neu = setze_buchreihe(stand, isbn=KAUF, eingabe=_reihe(kauf, leihbar=True))
     assert neu.buch(KAUF).leihbar
-    assert neu.buch(KAUF).korrigiert == {"leihbar": False}
     # Jetzt darf die Fachschaft auch zurücklegen.
     setze_ruecklage(neu, isbn=KAUF, fach="Latein", anzahl=3)
 
@@ -817,28 +824,13 @@ def test_leihbar_wird_korrigiert_und_uebersteht_datei_und_abgleich(tmp_path, sta
     schreibe_datei(pfad, neu)
     gelesen = lies_datei(pfad)
     assert gelesen.buch(KAUF).leihbar
-    assert gelesen.buch(KAUF).korrigiert == {"leihbar": False}
-    assert gelesen.korrekturen_fuer_iserv() == {KAUF: {"borrowable": True}}
+    assert gelesen.korrekturen_fuer_iserv()[KAUF]["borrowable"] is True
 
     abgeglichen = zusammenfuehren(gelesen, _schnappschuss())
     assert abgeglichen.buch(KAUF).leihbar
-    # Ohne Angabe gilt wieder IServ.
-    zurueck = setze_buchreihe(abgeglichen, isbn=KAUF, eingabe=_reihe(kauf, leihbar=None))
-    assert not zurueck.buch(KAUF).leihbar
-    assert zurueck.buch(KAUF).korrigiert == {}
-
-
-def test_der_kommentar_nennt_leihbar_als_ja_oder_nein(tmp_path, stand):
-    from openpyxl import load_workbook
-
-    neu = setze_buchreihe(stand, isbn=KAUF, eingabe=_reihe(stand.buch(KAUF), leihbar=True))
-    pfad = tmp_path / "Buchplanung.xlsx"
-    schreibe_datei(pfad, neu)
-    ws = load_workbook(str(pfad))["Buchreihen"]
-    spalte = next(z.column for z in ws[1] if z.value == "leihbar")
-    zeile = next(z.row for z in ws["E"] if z.value == KAUF)
-    zelle = ws.cell(zeile, spalte)
-    assert (zelle.value, zelle.comment.text) == ("ja", "in IServ: nein")
+    # Ohne Angabe bleibt, was in der Datei steht.
+    ohne = setze_buchreihe(abgeglichen, isbn=KAUF, eingabe=_reihe(kauf, leihbar=None))
+    assert ohne.buch(KAUF).leihbar
 
 
 def test_ein_neues_buch_nimmt_leihbar_aus_dem_menue(stand):
@@ -846,4 +838,3 @@ def test_ein_neues_buch_nimmt_leihbar_aus_dem_menue(stand):
                            buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett", leihbar=True),
                            zeilen=_einfuehrung(7))
     assert neu.buch(NEU).leihbar
-    assert neu.buch(NEU).korrigiert == {}

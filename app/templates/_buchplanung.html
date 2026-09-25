@@ -145,10 +145,10 @@
 
 {% macro jahrgangszeile(planung, buch, zeile) %}
 {#
-  Ein Jahrgang aus einer heutigen Bücherliste (``zeile.aktuell``) ist
-  eingeführt - daran lässt sich nichts mehr entscheiden, offen ist nur noch
-  die Ausmusterung. Ein bloß geplanter Jahrgang steht in keiner Liste; dort
-  sind alle Felder offen, und er lässt sich auch wieder entfernen.
+  Ein Jahrgang ohne Einführung (``zeile.aktuell``) ist eingeführt - daran
+  lässt sich nichts mehr entscheiden, offen ist nur noch die Ausmusterung. Ein
+  geplanter Jahrgang trägt eine Einführung; dort sind alle Felder offen, und er
+  lässt sich auch wieder entfernen.
 #}
 <tr data-planung-zeile{% if zeile.aktuell %} data-aktuell{% endif %}>
   <td class="planung-spalte-jahrgang">
@@ -195,10 +195,9 @@
   sie kommen aus den Bücherlisten, nicht aus der Buchreihe.
 
   Gespeichert wird in der Buchplanungs-Datei, nicht in IServ: auf "Buchreihen"
-  steht der korrigierte Wert, der aus IServ als Kommentar an der Zelle.
-  ``buch.iserv`` nennt die IServ-Werte der korrigierten Felder; sie stehen
-  klein darunter. Ob eine Eingabe eine Korrektur ist, entscheidet der Server
-  (``setze_buchreihe``) - er kennt die IServ-Werte aus der Datei.
+  steht der eingegebene Wert, ohne Kommentar. ``buch.iserv`` nennt die
+  IServ-Werte der Felder, in denen IServ abweicht - live verglichen beim
+  Öffnen der Seite; sie stehen klein darunter.
 #}
 {% macro preisfeld(wert) -%}
 {%- if wert is not none %}{{ "%.2f"|format(wert) }}{% endif -%}
@@ -293,7 +292,7 @@
   <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
     hinzugefügt. Titel, Verlag, Preise und „Leihbar“ gelten, wie sie hier stehen.</p>
   {% else %}
-  <p class="small help-block">Die Korrektur gilt im Dashboard - in den Bücherlisten, im
+  <p class="small help-block">Die Angaben gelten im Dashboard - in den Bücherlisten, im
     PDF und in der Planungsdatei. In IServ selbst ändert sich nichts.</p>
   {% endif %}
 </div>

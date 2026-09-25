@@ -874,12 +874,13 @@ def test_korrigierte_buchreihe_steht_in_allen_bucherlisten(
                                 neupreis=24.0)
     buch = next(b for b in stand["planung"]["buecher"] if b["isbn"] == DEUTSCH)
     assert buch["titel"] == "Deutschbuch 5 NRW"
-    assert buch["iserv"] == {"titel": "Deutschbuch 5", "verlag": "Cornelsen", "neupreis": 22.5}
+    # Die Datei nennt IServ nicht mehr, nur ihre eigenen Werte.
+    assert "iserv" not in buch
 
     fach = seiten.get("/buecherliste/fach/Deutsch").text
     assert "Deutschbuch 5 NRW" in fach
     assert "24,00" in fach
-    # Das Menü nennt, was IServ sagt.
+    # Das Menü nennt, was IServ sagt - live verglichen.
     assert "in IServ: Deutschbuch 5" in fach
     assert "in IServ: 22,50&nbsp;€" in fach
 
@@ -896,8 +897,9 @@ def test_korrektur_uebersteht_den_abgleich(
     neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
     buch = next(b for b in neu["planung"]["buecher"] if b["isbn"] == DEUTSCH)
     assert buch["titel"] == "Deutschbuch 5 NRW"
-    assert buch["iserv"] == {"titel": "Deutschbuch 5"}
     assert not neu["planung"]["warnungen"]
+    # Die Abweichung zeigt die Seite, live gegen IServ.
+    assert "in IServ: Deutschbuch 5" in seiten.get("/buecherliste/fach/Deutsch").text
 
 
 def test_eine_isbn_im_koerper_der_buchreihe_aendert_nichts(
@@ -986,8 +988,7 @@ def test_eine_neue_isbn_steht_als_nicht_in_iserv_in_der_liste_und_bleibt(
 ) -> None:
     stand = _hinzufuegen(seiten, abgeglichen["mtime"], NEU, titel="Neues Deutschbuch 7",
                          verlag="Cornelsen").json()
-    buch = next(b for b in stand["planung"]["buecher"] if b["isbn"] == NEU)
-    assert buch["von_hand"] is True
+    assert any(b["isbn"] == NEU for b in stand["planung"]["buecher"])
 
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = text.split(f'<tr data-isbn="{NEU}"')[1].split("</tr>")[0]

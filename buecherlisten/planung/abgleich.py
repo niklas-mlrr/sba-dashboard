@@ -7,8 +7,8 @@ Der Abgleich ist die Stelle, an der die beiden Wahrheiten aufeinandertreffen:
   Jahrgängen, zu welchem Preis, und was bemerkt, bestätigt, geplant und
   zurückgelegt wurde. Das überlebt jeden Abgleich.
 * **IServ** liefert beim Abgleich nur, was die Datei noch nicht kennt: neue
-  Bücher. Was IServ anders sagt als die Datei, steht als Kommentar an der
-  Zelle und wird auf den Bücherlisten-Seiten farbig markiert.
+  Bücher. Was IServ anders sagt als die Datei, markieren die
+  Bücherlisten-Seiten farbig - live, bei jedem Öffnen.
 
 Alle Funktionen hier geben einen **neuen**
 :class:`~buecherlisten.planung.modelle.Buchplanung`-Wert zurück; nichts wird an
@@ -28,7 +28,6 @@ import isbnlib
 
 from .laden import Schnappschuss
 from .modelle import (
-    ISERV_FELD,
     OHNE_FACH,
     RUECKLAGE_GEWUENSCHT,
     RUECKLAGE_STATUS,
@@ -64,38 +63,25 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
     Die Datei ist das **Soll** (Entscheidung 2026-09-25): was sie zu einem Buch
     sagt - Titel, Verlag, Preise, leihbar, Fächer und Jahrgänge -, bleibt beim
     Abgleich stehen. Weicht IServ davon ab, zeigen das die Bücherlisten-Seiten
-    (``buecherlisten/planung/vergleich.py``), und in der Datei steht der
-    IServ-Wert als Kommentar an der Zelle. Bis dahin zog der Abgleich die Datei
-    auf IServ nach; danach war jede Abweichung verschwunden, bevor sie jemand
-    gesehen hatte.
+    (``buecherlisten/planung/vergleich.py``) bei jedem Öffnen; die Datei selbst
+    nennt den IServ-Wert nicht. Bis dahin zog der Abgleich die Datei auf IServ
+    nach; danach war jede Abweichung verschwunden, bevor sie jemand gesehen
+    hatte.
 
     Aus IServ übernommen wird deshalb nur, was die Datei noch nicht kennt: ein
     neues Buch, samt der Paare, in denen es im Vorjahr stand und heuer nicht
     mehr (Ausmusterung nach dem Vorjahr). Verschwindet ein Buch aus IServ,
     bleibt es in der Datei - das ist gerade eine Abweichung, kein Aufräumen.
 
-    Ein von Hand angelegtes Buch bleibt, solange es eine Planungszeile hat.
-    Taucht seine ISBN in IServ auf, ist es nicht mehr „von Hand“; seine Werte
-    bleiben trotzdem die der Datei.
+    Ein Buch, das nicht in IServ steht, bleibt, solange es einen Jahrgang hat.
+    Taucht die ISBN eines im Menü angelegten Buchs in IServ auf, bleiben seine
+    Werte und seine Planung trotzdem die der Datei.
     """
     alt = vorher or Buchplanung()
     aus_iserv = {buch.isbn: buch for buch in schnappschuss.buecher}
-    geplant = {zeile.isbn for zeile in alt.planung}
 
-    buecher: list[Buch] = []
-    for altes in alt.buecher:
-        if altes.von_hand and altes.isbn not in aus_iserv and altes.isbn not in geplant:
-            continue
-        frisch = aus_iserv.get(altes.isbn)
-        if frisch is None:
-            buecher.append(altes)
-            continue
-        # Der Wert der Datei gilt; ``iserv`` nennt je abweichendem Feld, was
-        # IServ heute sagt - genau das, was als Kommentar an der Zelle steht.
-        soll = {feld: getattr(altes, feld) for feld in ISERV_FELD}
-        buecher.append(replace(_mit_korrekturen(frisch, soll),
-                               kombinationen=altes.kombinationen, ausgemustert=(),
-                               von_hand=False))
+    buecher = [altes for altes in alt.buecher
+               if altes.isbn in aus_iserv or alt.zeilen_des_buchs(altes)]
     bekannt = {buch.isbn for buch in buecher}
     neue = [buch for buch in schnappschuss.buecher if buch.isbn not in bekannt]
     buecher.extend(neue)
@@ -125,35 +111,6 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         ruecklagen=alt.ruecklagen,
         warnungen=tuple(schnappschuss.warnungen),
     )
-
-
-def _gleich(a: object, b: object) -> bool:
-    """Gleich im Sinn einer Korrektur: Preise auf den Cent, Texte ohne Randleerzeichen."""
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-        return round(float(a), 2) == round(float(b), 2)
-    if isinstance(a, str) and isinstance(b, str):
-        return a.strip() == b.strip()
-    return a == b
-
-
-def _mit_korrekturen(buch: Buch, korrigiert: dict[str, object]) -> Buch:
-    """Das Buch aus IServ, mit den korrigierten Feldern darüber.
-
-    ``buch`` trägt die Werte aus IServ; sie wandern nach ``iserv``, soweit ein
-    Feld korrigiert ist. Ein Feld, dessen Korrektur dem IServ-Wert gleicht,
-    ist nicht korrigiert.
-    """
-    felder: dict[str, Any] = {}
-    iserv: list[tuple[str, object]] = []
-    for feld in ISERV_FELD:
-        if feld not in korrigiert:
-            continue
-        original = getattr(buch, feld)
-        if _gleich(korrigiert[feld], original):
-            continue
-        felder[feld] = korrigiert[feld]
-        iserv.append((feld, original))
-    return replace(buch, iserv=tuple(iserv), **felder)
 
 
 # ── Einzelne Eintragungen ────────────────────────────────────────────────────
@@ -327,6 +284,14 @@ def setze_buchplanung(
                 "Jahrgang darf nur einmal vorkommen."
             )
         gesehen.add(eingabe.jahrgang)
+        # Ein Jahrgang ohne Einführung gilt als schon eingeführt. Ein geplanter
+        # würde durch ein geleertes Feld also still zu einem eingeführten.
+        if ((fach, eingabe.jahrgang) not in buch.kombinationen
+                and not eingabe.eingefuehrt_ab.strip()):
+            raise UngueltigeEingabe(
+                f"Bitte für Jahrgang {eingabe.jahrgang} das Schuljahr der Einführung "
+                "eintragen."
+            )
         vorher = stand.planungszeile(isbn, fach, eingabe.jahrgang)
 
         def eintragen(basis: Buchplanung, kuerzel: str, datum: date | None,
@@ -365,14 +330,16 @@ def setze_buchplanung(
 
 
 def _ohne_verwaiste(stand: Buchplanung, isbn: str) -> Buchplanung:
-    """Ein von Hand angelegtes Buch ohne jede Planungszeile fällt aus der Datei.
+    """Ein Buch ohne jeden Jahrgang fällt aus der Datei.
 
-    Es steht in keiner Bücherliste; ohne Planung gehört es zu keinem Fach
-    mehr und wäre nur noch eine Zeile, die niemand mehr öffnen kann. Der
-    Abgleich verwirft es aus demselben Grund (:func:`zusammenfuehren`).
+    Es gehört zu keinem Fach mehr und wäre nur noch eine Zeile, die niemand
+    mehr öffnen kann. Das trifft praktisch nur ein von Hand angelegtes Buch:
+    die eingeführten Jahrgänge eines Buchs aus IServ lassen sich im Menü nicht
+    entfernen. Der Abgleich verwirft ein solches Buch aus demselben Grund
+    (:func:`zusammenfuehren`).
     """
     buch = stand.buch(isbn)
-    if buch is None or not buch.von_hand or any(z.isbn == isbn for z in stand.planung):
+    if buch is None or stand.zeilen_des_buchs(buch):
         return stand
     return _ersetzt(
         stand,
@@ -384,17 +351,17 @@ def _ohne_verwaiste(stand: Buchplanung, isbn: str) -> Buchplanung:
 
 @dataclass(frozen=True)
 class Buchreiheneingabe:
-    """Der Block „Buchreihe“ des Planungsmenüs - die korrigierbaren Felder.
+    """Der Block „Buchreihe“ des Planungsmenüs - die änderbaren Felder.
 
     Ohne ISBN: sie ist der Schlüssel des Buchs und steht im Menü nur zum
-    Lesen. Ein leerer Preis heißt: gilt wie in IServ.
+    Lesen. Ein leerer Preis ist leer.
     """
 
     titel: str
     verlag: str
     neupreis: float | None = None
     leihgebuehr: float | None = None
-    # ``None`` heißt wie beim Preis: gilt wie in IServ.
+    # ``None`` heißt: bleibt, wie es in der Datei steht.
     leihbar: bool | None = None
 
 
@@ -424,41 +391,20 @@ def _cent(betrag: float | None) -> float | None:
 
 
 def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe) -> Buchplanung:
-    """Korrigiert Titel, Verlag und Preise eines Buchs - in der Datei, nicht in IServ.
+    """Ändert Titel, Verlag, Preise und leihbar eines Buchs - in der Datei, nicht in IServ.
 
-    Die Datei kennt zu jedem korrigierten Feld den Wert aus IServ
-    (``Buch.iserv``, in der Mappe als Kommentar an der Zelle); zu jedem
-    anderen ist der heutige Wert der aus IServ. Damit gilt je Feld: gleicht
-    die Eingabe dem IServ-Wert, ist das Feld nicht (mehr) korrigiert, sonst
-    gilt die Eingabe. Ein leerer Preis setzt auf IServ zurück.
-
-    Ein von Hand angelegtes Buch (``von_hand``) hat keinen IServ-Wert: dort
-    gilt die Eingabe einfach, und ein leerer Preis ist leer.
+    Die Datei ist das Soll: die Eingabe gilt, wie sie ist, und ein leerer Preis
+    ist leer. Was IServ davon abweichend nennt, zeigt der Vergleich auf den
+    Seiten. Bis 2026-09-25 merkte sich die Datei zu jedem geänderten Feld den
+    IServ-Wert als Kommentar, und ein leerer Preis hieß „wie in IServ“.
     """
     buch = _geprueftes_buch(stand, isbn)
     titel, verlag = _gepruefte_buchreihe(eingabe)
-    if buch.von_hand:
-        neues_buch = replace(
-            buch, titel=titel, verlag=verlag,
-            neupreis=_cent(eingabe.neupreis), leihgebuehr=_cent(eingabe.leihgebuehr),
-            leihbar=buch.leihbar if eingabe.leihbar is None else eingabe.leihbar,
-        )
-        return _ersetzt(
-            stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
-        )
-
-    # Erst zurück auf IServ, dann die Eingabe darüber: so entscheidet
-    # _mit_korrekturen an einer Stelle, was als Korrektur gilt - hier genauso
-    # wie beim Abgleich.
-    zurueck: dict[str, Any] = buch.korrigiert
-    aus_iserv = replace(buch, iserv=(), **zurueck)
-    eingegeben: dict[str, object] = {"titel": titel, "verlag": verlag}
-    for feld, betrag in (("neupreis", eingabe.neupreis), ("leihgebuehr", eingabe.leihgebuehr)):
-        if betrag is not None:
-            eingegeben[feld] = round(betrag, 2)
-    if eingabe.leihbar is not None:
-        eingegeben["leihbar"] = eingabe.leihbar
-    neues_buch = _mit_korrekturen(aus_iserv, eingegeben)
+    neues_buch = replace(
+        buch, titel=titel, verlag=verlag,
+        neupreis=_cent(eingabe.neupreis), leihgebuehr=_cent(eingabe.leihgebuehr),
+        leihbar=buch.leihbar if eingabe.leihbar is None else eingabe.leihbar,
+    )
     return _ersetzt(
         stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
     )
@@ -499,10 +445,10 @@ def fuege_buch_hinzu(
 
     * Die ISBN steht schon in der Datei - das Buch gehört zu einem anderen Fach
       oder stand im Vorjahr auf einer Liste. Titel, Verlag und Preise sind dann
-      die bekannten; was davon abweicht, ist eine Korrektur wie im
-      Bearbeiten-Menü (:func:`setze_buchreihe`).
-    * Die ISBN ist neu. Das Buch wird von Hand angelegt (``von_hand``) und bleibt
-      beim Abgleich, bis IServ es selbst führt.
+      die bekannten; was davon abweicht, gilt wie im Bearbeiten-Menü
+      (:func:`setze_buchreihe`).
+    * Die ISBN ist neu. Das Buch steht dann nur in der Datei und bleibt beim
+      Abgleich, solange es einen Jahrgang hat.
 
     In das Fach kommt es über seine Jahrgänge. Jeder braucht deshalb ein
     Schuljahr der Einführung: eine Zeile, auf der nichts eingetragen ist,
@@ -533,7 +479,7 @@ def fuege_buch_hinzu(
         neu = _ersetzt(stand, buecher=stand.buecher + (Buch(
             isbn=isbn, titel=titel, verlag=verlag,
             neupreis=_cent(buchreihe.neupreis), leihgebuehr=_cent(buchreihe.leihgebuehr),
-            leihbar=bool(buchreihe.leihbar), von_hand=True,
+            leihbar=bool(buchreihe.leihbar),
         ),))
     else:
         if fach in buch.faecher or any(

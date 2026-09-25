@@ -460,14 +460,16 @@ wurde, und das Kürzel bleibt. Wird ein Buch dagegen ab sofort eingeführt oder
 ist es ab sofort weg, fällt die Bestätigung dieser Zeile — die
 Fachkonferenzleitung hat diese Liste nie gesehen.
 
-**Das Blatt `Fächer & Jahrgang` sagt, woher eine Zeile stammt.** Die Spalte
-`in der Bücherliste` trennt die (Fach, Jahrgang)-Paare aus IServ von denen, die
-nur geplant sind. Ohne sie wären beide nach dem ersten Speichern nicht mehr zu
-unterscheiden — das Blatt trägt sie nebeneinander, und beim Lesen sähen sie
-gleich aus. Zwei Dinge hängen daran: das Menü lässt die Einführung eines
-laufenden Jahrgangs nicht ändern (daran ist nichts mehr zu entscheiden), und
-eine geleerte Planungszeile verschwindet wirklich, statt als leere Zeile
-zurückzukommen.
+**Die Einführung sagt, ob ein Jahrgang eingeführt oder geplant ist.** Eine
+Zeile auf `Fächer & Jahrgang` ohne Einführung ist eingeführt — so kommen die
+Paare aus den Bücherlisten an —, eine mit Einführung ist geplant. Zwei Dinge
+hängen daran: das Menü lässt die Einführung eines eingeführten Jahrgangs nicht
+ändern (daran ist nichts mehr zu entscheiden) und verlangt sie für einen
+geplanten, und ein entfernter geplanter Jahrgang verschwindet wirklich, statt
+als leere Zeile zurückzukommen. Bis 2026-09-25 stand das in einer eigenen
+Spalte `in der Bücherliste`; eine zweite Spalte `in IServ` auf `Buchreihen`
+markierte von Hand angelegte Bücher und ist ebenfalls entfernt, seit die Datei
+IServ-Werte nicht mehr festhält (siehe unten).
 
 **In der Datei steht das laufende Schuljahr und aus dem Vorjahr, was leihbar
 war.** Ein Kaufbuch, das aus der Bücherliste verschwindet, liegt in keinem
@@ -545,13 +547,18 @@ Leihgebühr), nachgebaut nach dem IServ-Dialog „Buchreihe bearbeiten“.
 Gespeichert wird in der Buchplanungs-Datei, **nicht** in IServ: ein
 Schreibzugriff dort wäre der erste des Dashboards und stünde gegen die
 Nur-GET-Regel der Ausleihe-API. Die ISBN ist der Schlüssel und im Menü nur zu
-lesen (grau, `readonly`). Deshalb braucht die Korrektur kein eigenes Blatt: sie
-steht auf `Buchreihen` in der Zeile des Buchs, die Zelle hell hinterlegt, der
-IServ-Wert als Kommentar. Der Kommentar ist die Markierung, an der der
-Abgleich eine Korrektur von einem veralteten IServ-Wert unterscheidet
-(`abgleich.py::_mit_korrekturen`). Auf Seiten und PDF wirkt sie an **einer**
-Stelle: `buecherlisten/core/daten.py::wende_korrekturen_an` bzw.
-`korrigiere_eintrag` legen sie auf die Rohdaten jeder Bücherliste, bevor
+lesen (grau, `readonly`). Deshalb braucht die Änderung kein eigenes Blatt: sie
+steht auf `Buchreihen` in der Zeile des Buchs.
+
+Seit 2026-09-25 hält die Datei **keine IServ-Werte** mehr fest. Bis dahin trug
+eine geänderte Zelle den IServ-Wert als Kommentar, und an ihm unterschied der
+Abgleich eine Korrektur von einem veralteten Wert. Seit die Datei das Soll ist
+und die Seiten bei jedem Öffnen live gegen IServ vergleichen, war der
+Kommentar nur noch eine zweite, schnell veraltete Kopie dessen, was der
+Vergleich ohnehin zeigt. Die Eingabe gilt jetzt, wie sie ist; ein leerer Preis
+ist leer. Im PDF wirken die Werte der Datei an **einer** Stelle:
+`buecherlisten/core/daten.py::wende_korrekturen_an` bzw. `korrigiere_eintrag`
+legen sie für jedes Buch der Datei auf die Rohdaten jeder Bücherliste, bevor
 irgendetwas sie auswertet - auch das Gruppieren nach Verlag. Die
 Verlagsvorschläge im Feld „Verlag“ filtern auf
 „beginnt mit“ und sind ein eigenes kleines Typeahead: `<datalist>` filtert in

@@ -79,7 +79,7 @@ def _hinweis(request: Request, titel: str, meldung: str, status: int) -> Respons
 
 
 def _korrekturen(request: Request) -> Callable[[str], Korrekturen | None]:
-    """Die korrigierten Angaben der Buchreihen, je Schuljahr aus der Buchplanung.
+    """Die Angaben der Buchreihen, je Schuljahr aus der Buchplanung (dem Soll).
 
     Sie wirken auf jeder Bücherlisten-Seite und in jedem PDF. Fehlt die Datei
     oder ist sie unlesbar, gilt IServ unverändert - eine kaputte Datei darf
@@ -156,12 +156,12 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
             zeile = planung.planungszeile(buch.isbn, fach, jahrgang)
             je_fach.setdefault(fach, []).append({
                 "jahrgang": jahrgang,
-                # ``aktuell`` heißt: dieses (Fach, Jahrgang) steht in einer
-                # Bücherliste - in der dieses Schuljahrs oder der des Vorjahrs,
-                # denn beide stehen in der Datei. Das Buch ist dort eingeführt;
-                # zu entscheiden ist nur noch die Ausmusterung. Ein bloß
-                # geplanter Jahrgang steht in keiner Liste und lässt sich
-                # deshalb ganz ändern und wieder entfernen.
+                # ``aktuell`` heißt: in der Datei steht zu diesem (Fach,
+                # Jahrgang) keine Einführung. Das Buch ist dort schon
+                # eingeführt - so kommen die Paare aus den Bücherlisten dieses
+                # Schuljahrs und des Vorjahrs an; zu entscheiden ist nur noch
+                # die Ausmusterung. Ein geplanter Jahrgang trägt eine
+                # Einführung und lässt sich deshalb ganz ändern und entfernen.
                 "aktuell": (fach, jahrgang) in buch.kombinationen,
                 "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
                 "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
@@ -194,7 +194,6 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
             "titel": altes.titel, "verlag": altes.verlag, "isbn": altes.isbn,
             "isbn_anzeige": format_isbn(altes.isbn), "leihbar": altes.leihbar,
             "neupreis": altes.neupreis, "leihgebuehr": altes.leihgebuehr,
-            "iserv": altes.iserv,
             "jahrgaenge": [],
         })
         eintrag["jahrgaenge"].append(zeile.jahrgang)

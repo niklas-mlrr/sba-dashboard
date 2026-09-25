@@ -27,8 +27,8 @@ alles andere darunter.
 ## Die Datei: ein Bücher-Blatt, zwei Tabellen daneben
 
 | Blatt | Schlüssel | eintragbar |
-| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis, leihbar als Korrektur (mit Kommentar) |
-| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung (dazu `in der Bücherliste`, gesetzt) |
+| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis, leihbar (das Soll, ohne Kommentar) |
+| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
@@ -59,7 +59,7 @@ gesehen hatte. Seitdem ist es umgekehrt:
   Eine Zeile, die nur IServ führt, zeigt die Werte aus IServ und hat kein
   Planungsmenü. Die Übersichten markieren jede Gruppe, in der etwas abweicht.
   Ohne Datei zeigen die Seiten IServ wie vorher. Die PDFs bleiben beim Stand
-  aus IServ mit den Korrekturen der Datei.
+  aus IServ, mit Titel, Verlag, Preisen und leihbar aus der Datei.
 * **Gleich** ist ein Buch, wenn es in der Datei und in einer Bücherliste
   dieses Schuljahrs steht, Titel, Verlag, Neupreis, Leihgebühr und leihbar
   übereinstimmen und seine (Fach, Jahrgang)-Paare in IServ genau die sind, in
@@ -70,11 +70,11 @@ gesehen hatte. Seitdem ist es umgekehrt:
 * **Der Abgleich** legt die Datei an und nimmt danach neue ISBNs auf, samt
   der Ausmusterung nach dem Vorjahr für ihre weggefallenen Paare. Ein Buch,
   das aus IServ verschwindet, bleibt mit allem, was dazu eingetragen ist; es
-  ist eine Abweichung, kein Aufräumen. Bei den übrigen Büchern schreibt der
-  Abgleich nur den frischen IServ-Wert als Kommentar an jede abweichende Zelle.
+  ist eine Abweichung, kein Aufräumen. Die übrigen Bücher lässt der Abgleich,
+  wie sie sind.
 * **Wer in Excel einen Titel oder Preis überschreibt, ändert damit das
-  Soll.** Der nächste Abgleich lässt den Wert stehen und hängt den IServ-Wert
-  als Kommentar daran.
+  Soll.** Der nächste Abgleich lässt den Wert stehen; was IServ sagt, zeigt
+  der Vergleich beim Öffnen der Seite. Die Datei selbst nennt IServ nicht.
 
 Die eintragbaren Spalten sind in der Datei hell hinterlegt. Die übrigen Blätter
 (`Info`, die Zusammenfassung `Fach`/`Jahrgang` auf `Buchreihen`) werden bei
@@ -167,22 +167,31 @@ Der Gedanke dahinter: die Fachkonferenzleitung hat eine Liste bestätigt. Was
 erst in drei Jahren greift, ändert diese Liste nicht. Was das laufende Jahr
 betrifft, schon — und diese Liste hat sie nie gesehen.
 
-### Welche Zeilen aus IServ stammen
+### Eingeführt oder geplant
 
 `Fächer & Jahrgang` trägt beide Arten von Zeile nebeneinander: die (Fach,
-Jahrgang)-Paare aus den Bücherlisten und die, für die nur etwas geplant ist.
-Die Spalte `in der Bücherliste` (`ja`/`nein`) hält fest, welche welche ist —
-beim Lesen sähen sie sonst gleich aus, und der Unterschied wäre nach dem ersten
-Speichern verloren. Daran hängen zwei Dinge:
+Jahrgang)-Paare, in denen das Buch schon eingeführt ist, und die, für die eine
+Einführung geplant ist. Unterschieden werden sie an der **Einführung**: eine
+Zeile ohne ist eingeführt (so kommen die Paare aus den Bücherlisten an), eine
+Zeile mit ist geplant — auch dann, wenn ihr Schuljahr schon erreicht ist.
+Daran hängen zwei Dinge:
 
-* Das Planungsmenü lässt die **Einführung** eines Jahrgangs, in dem das Buch
-  schon geführt wird, nicht ändern — daran ist nichts mehr zu entscheiden,
-  offen ist nur die Ausmusterung.
-* Eine geleerte Planungszeile verschwindet wirklich, statt beim nächsten Lesen
-  als leere Zeile zurückzukommen.
+* Das Planungsmenü lässt die Einführung eines eingeführten Jahrgangs nicht
+  ändern und ihn nicht entfernen — offen ist nur die Ausmusterung. Ein
+  geplanter Jahrgang ist ganz offen, braucht aber eine Einführung: ein
+  geleertes Feld würde ihn sonst still zu einem eingeführten machen.
+* Ein entfernter geplanter Jahrgang verschwindet wirklich, statt beim nächsten
+  Lesen als leere Zeile zurückzukommen.
 
-Eine Datei aus der Zeit vor dieser Spalte hat sie nicht; dort zählt wie früher
-jede Zeile als Vorkommen.
+Ob ein Buch zu Recht in einem Jahrgang steht, sagt nicht die Datei, sondern
+der Vergleich mit IServ (`vergleich.py`).
+
+Bis 2026-09-25 hielt eine Spalte `in der Bücherliste` (`ja`/`nein`) fest,
+welche Zeile aus IServ stammt, und auf `Buchreihen` eine Spalte `in IServ`,
+welches Buch von Hand angelegt ist. Die erste folgt aus der Einführung, die
+zweite braucht es nicht mehr, seit die Datei IServ nicht mehr nennt; eine
+ältere Datei wird gelesen, als hätte sie sie nicht, und verliert sie beim
+nächsten Speichern.
 
 ## Status werden gerechnet, nie eingetragen
 
@@ -206,10 +215,10 @@ und `Datum` und in der Verlags-Ansicht die Knöpfe „prüfen" und „Preise
 bestätigen". Sie sind entfernt: der Preis gilt, wie er in IServ steht. Übrig
 ist die Spalte `Bemerkung` je Buch.
 
-## Korrekturen an den Angaben aus IServ
+## Die Angaben der Buchreihe ändern
 
 Seit 2026-09-24 lassen sich Titel, Verlag, Neupreis und Leihgebühr eines
-Buchs im Planungsmenü korrigieren, im Block „Buchreihe“ vor Einführung und
+Buchs im Planungsmenü ändern, im Block „Buchreihe“ vor Einführung und
 Ausmusterung. Der Block ist dem IServ-Dialog „Buchreihe bearbeiten“
 nachgebaut. Die ISBN steht dort nur zum Lesen, grau hinterlegt: sie ist der
 Schlüssel des Buchs. **Gespeichert wird in dieser Datei, nicht in IServ**: das
@@ -217,35 +226,28 @@ Dashboard bleibt dort nur-lesend.
 
 Seit 2026-09-25 gehört auch „Leihbar“ dazu, als Häkchen unter den Preisen und
 vor Einführung und Ausmusterung. In IServ ist das kein Feld der Buchreihe,
-sondern eines jeden Listeneintrags (`borrowable`). Die Korrektur gilt für das
-Buch in allen Listen, und `korrigiere_eintrag` setzt sie auf den Eintrag. Der
-Kommentar lautet „in IServ: ja“ oder „in IServ: nein“. Ein korrigiertes
-„leihbar“ entscheidet auch, ob eine Rücklage möglich ist.
+sondern eines jeden Listeneintrags (`borrowable`); `korrigiere_eintrag` setzt
+es auf den Eintrag. „Leihbar“ entscheidet auch, ob eine Rücklage möglich ist.
 
-* **Die Korrektur steht in der Zeile des Buchs.** Auf `Buchreihen` trägt die
-  Zelle den korrigierten Wert, hell hinterlegt, und als Kommentar den Wert aus
-  IServ („in IServ: 22,50 €“). Ein eigenes Blatt dafür gab es nur am
-  2026-09-24 für einige Stunden; seit die ISBN nicht mehr änderbar ist, hat
-  jede Korrektur ihre Zeile schon.
-* **Der Kommentar nennt IServ.** Beim Abgleich behält jede Zelle ihren Wert
-  (die Datei ist das Soll, siehe oben). Weicht IServ davon ab, bekommt sie
-  als Kommentar den frischen IServ-Wert; nennt IServ selbst den Wert der
-  Datei, fällt der Kommentar weg. Bis 2026-09-25 bekam eine Zelle **ohne**
-  Kommentar beim Abgleich den Wert aus IServ.
-* **Die Korrektur wirkt überall.** Die Seiten zeigen ohnehin die Datei. Für
-  das PDF legt `wende_korrekturen_an` in `../core/daten.py` die Korrekturen
-  auf die Rohdaten jeder Bücherliste, bevor sie ausgewertet werden.
-* **Zurück auf IServ.** Die Datei kennt zu jedem korrigierten Feld den
-  IServ-Wert (`Buch.iserv`), zu jedem anderen ist der heutige Wert der aus
-  IServ. `setze_buchreihe` entscheidet daran: gleicht die Eingabe dem
-  IServ-Wert, fällt die Korrektur weg. Ein leerer Preis heißt ebenfalls
-  „wie in IServ“.
+* **Die Eingabe gilt, wie sie ist.** Auf `Buchreihen` steht der eingegebene
+  Wert, ohne Kommentar. Ein leerer Preis ist leer.
+* **IServ nennt der Vergleich, nicht die Datei.** Weicht IServ ab, markiert
+  die Seite die Zelle gelb, und im Menü steht klein darunter „in IServ: …“ -
+  beides live beim Öffnen gerechnet (`app/buecherlisten.py`).
+* **Die Werte wirken überall.** Die Seiten zeigen ohnehin die Datei. Für das
+  PDF legt `wende_korrekturen_an` in `../core/daten.py` die Werte der Datei
+  auf die Rohdaten jeder Bücherliste, für jedes Buch, das die Datei kennt.
+
+Bis 2026-09-25 trug eine im Menü geänderte Zelle den IServ-Wert als
+Kommentar („in IServ: 22,50 €“), nur diese Zellen wirkten im PDF, und ein
+leerer Preis hieß „wie in IServ“. Ein alter Kommentar wird nicht mehr gelesen
+und fällt beim nächsten Speichern weg.
 
 Fächer und Jahrgänge, die IServ im selben Dialog führt, lassen sich hier nicht
 ändern: sie kommen aus den Bücherlisten, nicht aus der Buchreihe.
 
 Die Datei gilt je Schuljahr. Eine neue Datei für das nächste Schuljahr bringt
-die Korrekturen des Vorjahrs **nicht** mit (`docs/roadmap.md`).
+die geänderten Angaben des Vorjahrs **nicht** mit (`docs/roadmap.md`).
 
 ## Ein Buch hinzufügen
 
@@ -256,15 +258,18 @@ und jeder Jahrgang braucht ein Schuljahr der Einführung, weil eine leere
 Planungszeile verschwindet.
 
 * **Bekannte ISBN** (anderes Fach, Vorjahr): Es bleibt dasselbe Buch. Weicht
-  die Buchreihe ab, ist das eine Korrektur wie oben.
+  die Buchreihe ab, gilt die Eingabe wie oben.
 * **Neue ISBN**: Sie muss eine gültige ISBN-10 oder -13 sein und wird als
-  ISBN-13 gespeichert. Das Buch wird von Hand angelegt (`Buch.von_hand`, auf
-  `Buchreihen` die Spalte `in IServ` = „nein“). Titel, Verlag und Preise sind
-  dann keine Korrektur, sondern die einzige Quelle. Der Abgleich behält das
-  Buch, solange es eine Planungszeile hat. Führt IServ die ISBN selbst, ist es
-  nicht mehr „von Hand“; seine Werte und die Planung bleiben die der Datei,
-  Abweichungen zu IServ werden markiert. Werden im Menü alle Jahrgänge
-  entfernt, fällt das Buch aus der Datei.
+  ISBN-13 gespeichert. Das Buch steht dann nur in der Datei. Der Abgleich
+  behält es, solange es einen Jahrgang hat. Führt IServ die ISBN selbst,
+  bleiben seine Werte und die Planung die der Datei, und Abweichungen zu IServ
+  werden markiert. Den Hinweis „nicht in IServ“ auf den Seiten prüft das
+  Dashboard live.
+
+Werden im Menü alle Jahrgänge eines Buchs entfernt, fällt es aus der Datei -
+das gilt für jedes Buch ohne Jahrgang. Ein Buch aus IServ trifft das nur, wenn
+all seine Jahrgänge eine Einführung tragen; eingeführte lassen sich im Menü
+nicht entfernen.
 
 Die Fach-Seite zeigt solche Bücher in ihrer Liste, weil sie aus der Datei
 kommt (`gruppen_nach_fach_aus_datei` in `app/buecherlisten.py`); ein erst
