@@ -1076,7 +1076,6 @@ def test_ohne_abweichung_stimmt_die_seite_mit_iserv_ueberein(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     assert not _markiert(text)
     assert not re.search(r"reihe-(neu|weg)", text)
-    assert "weicht von IServ ab" not in seiten.get("/buecherliste/fach").text
 
 
 def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
@@ -1093,11 +1092,8 @@ def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
     # Graue Hinweiskästen gibt es auf den Bücherlisten nicht.
     assert 'class="hinweis"' not in text
 
-    uebersicht = seiten.get("/buecherliste/fach").text
-    deutsch = uebersicht.split(">Deutsch</a>")[1].split("</td>")[0]
-    latein = uebersicht.split(">Latein</a>")[1].split("</td>")[0]
-    assert "weicht von IServ ab" in deutsch
-    assert "weicht von IServ ab" not in latein
+    # Die Übersicht trägt keinen Hinweis auf die Abweichung.
+    assert "weicht von IServ ab" not in seiten.get("/buecherliste/fach").text
     # Auch Verlag und Jahrgang zeigen die Datei.
     assert "22,50" in _zeile_von(seiten.get("/buecherliste/verlag/Cornelsen").text, DEUTSCH)
     assert "22,50" in _zeile_von(seiten.get("/buecherliste/jahrgang/5").text, DEUTSCH)

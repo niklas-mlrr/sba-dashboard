@@ -387,17 +387,6 @@ def uebersicht(request: Request, ansicht: str) -> Response:
     kontext, stand = _planungskontext(request, daten.kennung)
     vergleich = vergleiche_mit_iserv(daten, stand) if stand else None
     gruppen = aus_datei(vergleich) if vergleich and aus_datei else iserv_gruppen
-    # Die Gruppen (bei Jahrgang: die Listen), in denen etwas von IServ abweicht.
-    if vergleich is None:
-        abweichend: set[Any] = set()
-    elif ansicht == "jahrgang":
-        abweichend = {
-            liste.id for liste in daten.listen
-            for neu, fehlend in (liste_aus_datei(vergleich, liste),)
-            if fehlend or any(b.abweichend for b in neu.alle_buecher)
-        }
-    else:
-        abweichend = {g.name for g in gruppen if any(b.abweichend for b in g.buecher)}
     return _seite(request, "buecherliste_uebersicht.html", {
         "planung": kontext,
         # Was hinter "nicht bestätigte" im Druckmenü steckt: die Fächer ohne
@@ -415,7 +404,6 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         "listen": daten.listen,
         "gruppen": gruppen,
         "druck_gruppen": druck_gruppen,
-        "abweichend": abweichend,
     })
 
 

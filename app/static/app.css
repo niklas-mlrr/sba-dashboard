@@ -549,7 +549,6 @@ td.frisch {
 .label-status { background-color: #777; }
 .klein { font-size: 85%; }
 /* Abweichungen zu IServ (Vorlage: buecherliste_gruppe.html). */
-.label-abweichung { background-color: var(--ausmusterung-strich); }
 tr.reihe-neu > td { background: var(--einfuehrung-reihe); }
 tr.reihe-weg > td { background: var(--ausmusterung-reihe); }
 .iserv-tabelle td.aenderung { background: var(--aenderung-grund); color: var(--aenderung); }
