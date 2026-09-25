@@ -210,6 +210,8 @@
   (``zum_schuljahr_ausgemustert``); die normale Liste oben führt sie nicht.
   Die Rücklagen stehen mit dabei: was aus den Regalen geht, ist genau das,
   wovon die Fachschaft noch etwas behalten will.
+  Die Spalten sind die der normalen Liste; wann ein Jahrgang ausläuft, steht
+  wie dort als „(bis …)“ an jedem Jahrgang.
 #}
 {% set mit_ruecklagen = bp.ruecklagen_vorhanden(planung, ausgemustert, gruppe.name) | trim %}
 <h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
@@ -221,7 +223,9 @@
       <th data-sort="text">Jahrgang</th>
       <th data-sort="text">Verlag</th>
       <th data-sort="text">ISBN</th>
-      <th data-sort="text">Ausgemustert nach</th>
+      <th data-sort="zahl">Neupreis</th>
+      <th data-sort="zahl">Leihgebühr</th>
+      <th data-sort="zahl">Leihbar</th>
       {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
     </tr>
   </thead>
@@ -230,6 +234,10 @@
     {#- Führt IServ das Buch hier noch, ist die Ausmusterung dort nicht erledigt: rot. -#}
     {% set in_iserv, ganz = (ausmusterung_in_iserv | default({})).get(e.isbn, ([], false)) %}
     {% set jahrgaenge = (e.jahrgaenge + in_iserv) | unique | sort | list %}
+    {% set zusatz = {} %}
+    {% for zeile in planung.planung_je_isbn_und_fach.get(e.isbn, {}).get(gruppe.name, []) if zeile.zusatz %}
+      {%- set _ = zusatz.update({zeile.jahrgang: zeile.zusatz}) -%}
+    {% endfor %}
     <tr data-isbn="{{ e.isbn }}" class="aufklappbar
       {%- if in_iserv %} zeile-ausmusterung{% endif %}{% if ganz %} reihe-weg{% endif %}" data-planung="aufklappen"
       data-fach="{{ gruppe.name }}" role="button" tabindex="0"
@@ -238,11 +246,15 @@
       <td data-wert="{{ jahrgaenge | join(', ') }}"{% if in_iserv %} class="ausmusterung"
         title="Ausmusterung, in IServ noch: {{ gruppe.name }} Jg. {{ in_iserv | join(', ') }}"{% endif %}>
         {%- for jahrgang in jahrgaenge -%}
-        {%- if jahrgang in in_iserv %}<span class="wert-ausmusterung">{{ jahrgang }}</span>{% else %}{{ jahrgang }}{% endif %}{{ ", " if not loop.last }}
+        {%- if jahrgang in in_iserv %}<span class="wert-ausmusterung">{{ jahrgang }}</span>{% else %}{{ jahrgang }}{% endif %}
+        {%- if jahrgang in e.jahrgaenge %} ({{ zusatz.get(jahrgang) or "bis " ~ planung.vorjahr }}){% endif %}{{ ", " if not loop.last }}
         {%- endfor %}</td>
       <td>{{ e.verlag }}</td>
       <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
-      <td>{{ planung.vorjahr }}</td>
+      <td data-wert="{{ e.neupreis if e.neupreis is not none else '' }}">{{ euro(e.neupreis) }}</td>
+      <td data-wert="{{ e.leihgebuehr if e.leihgebuehr is not none else '' }}">{{ euro(e.leihgebuehr) }}</td>
+      <td data-wert="{{ 1 if e.leihbar else 0 }}"><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
+        {% if e.leihbar %}checked{% endif %} aria-label="leihbar"></td>
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, e, gruppe.name) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
     </tr>

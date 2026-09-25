@@ -785,6 +785,10 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
     # Weil IServ es in Erdkunde Jg. 6 noch führt, ist die Ausmusterung rot markiert.
     assert 'zeile-ausmusterung' in tabelle
     assert '<span class="wert-ausmusterung">6</span>' in tabelle
+    # Dieselben Spalten wie die normale Liste, das Ende steht am Jahrgang.
+    assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
+        "Titel", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Leihbar", "Rücklagen"]
+    assert "5 (bis 2025/2026), 6 (bis 2025/2026)" in _ohne_tags(tabelle)
 
 
 def test_buch_das_in_einem_anderen_fach_bleibt_kommt_trotzdem_zur_ausmusterung(
