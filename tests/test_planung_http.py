@@ -825,3 +825,97 @@ def test_leerer_titel_wird_mit_einem_satz_abgewiesen(
     })
     assert antwort.status_code == 400
     assert antwort.json()["fehler"] == "Bitte einen Titel eintragen."
+
+
+# ── Ein Buch hinzufügen ──────────────────────────────────────────────────────
+
+NEU = "9783161484100"
+
+
+def _hinzufuegen(seiten: TestClient, mtime: float, isbn: str, fach: str = "Deutsch",
+                 **buchreihe) -> object:
+    return seiten.post("/api/buchplanung/buch/neu", json={
+        "schuljahr": "2026/2027", "isbn": isbn, "fach": fach,
+        "zeilen": [{"jahrgang": 7, "eingefuehrt_ab": "2027/2028"}],
+        "buchreihe": {**_buchreihe("Terra 5/6", "Klett", 25.0), **buchreihe},
+        "mtime": mtime,
+    })
+
+
+def test_fachseite_bietet_buch_hinzufuegen_mit_vorschlaegen_aus_anderen_faechern(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    assert 'data-planung="buch-neu"' in text
+    vorlage = text.split('id="planung-neu-vorlage"')[1].split("</template>")[0]
+    # Dasselbe Menü, aber die ISBN ist frei und schlägt vor.
+    isbn_feld = vorlage.split('data-buchreihe-feld="isbn"')[1].split(">")[0]
+    assert "disabled" not in isbn_feld
+    assert 'data-vorschlag="isbn"' in isbn_feld
+    assert 'data-vorschlag="titel"' in vorlage
+    assert "Rücklage" not in vorlage
+    vorschlaege = json.loads(text.split('id="planung-buecher">')[1].split("</script>")[0])
+    isbns = {buch["isbn"] for buch in vorschlaege}
+    # Die Bücher anderer Fächer (auch des Vorjahrs), nicht das eigene.
+    assert isbns == {TERRA, ALT, KAUF}
+    terra = next(buch for buch in vorschlaege if buch["isbn"] == TERRA)
+    assert terra["titel"] == "Terra 5/6"
+    assert terra["faecher"] == ["Erdkunde", "Politik"]
+    assert terra["neupreis"] == 25.0
+
+    # Nur in der Fach-Ansicht, und erst mit Datei.
+    assert 'data-planung="buch-neu"' not in seiten.get("/buecherliste/verlag/Klett").text
+
+
+def test_ein_hinzugefuegtes_buch_steht_danach_in_der_liste(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    antwort = _hinzufuegen(seiten, abgeglichen["mtime"], "978-3-12-100056-2")
+    assert antwort.status_code == 200, antwort.text
+
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = text.split(f'<tr data-isbn="{TERRA}"')[1].split("</tr>")[0]
+    assert "Terra 5/6" in zeile
+    assert "7 (ab 2027/2028)" in zeile
+    assert 'data-planung="aufklappen"' in zeile
+    # Und es lässt sich öffnen wie jede andere Zeile.
+    assert f'data-isbn="{TERRA}" data-fach="Deutsch">' in text
+    # Aus den Vorschlägen ist es verschwunden.
+    vorschlaege = json.loads(text.split('id="planung-buecher">')[1].split("</script>")[0])
+    assert TERRA not in {buch["isbn"] for buch in vorschlaege}
+    # In Erdkunde bleibt alles, wie es war.
+    assert "7 (ab" not in seiten.get("/buecherliste/fach/Erdkunde").text
+
+
+def test_eine_neue_isbn_steht_als_nicht_in_iserv_in_der_liste_und_bleibt(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _hinzufuegen(seiten, abgeglichen["mtime"], NEU, titel="Neues Deutschbuch 7",
+                         verlag="Cornelsen").json()
+    buch = next(b for b in stand["planung"]["buecher"] if b["isbn"] == NEU)
+    assert buch["von_hand"] is True
+
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = text.split(f'<tr data-isbn="{NEU}"')[1].split("</tr>")[0]
+    assert "Neues Deutschbuch 7" in zeile
+    assert "nicht in IServ" in zeile
+    assert "Dieses Buch steht nicht in IServ" in text
+
+    neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
+    assert any(b["isbn"] == NEU for b in neu["planung"]["buecher"])
+    assert not neu["planung"]["warnungen"]
+
+
+def test_hinzufuegen_meldet_fehler_als_satz(seiten: TestClient, abgeglichen: dict) -> None:
+    antwort = _hinzufuegen(seiten, abgeglichen["mtime"], DEUTSCH)
+    assert antwort.status_code == 400
+    assert "gehört schon zum Fach Deutsch" in antwort.json()["fehler"]
+
+    antwort = _hinzufuegen(seiten, abgeglichen["mtime"], "12345")
+    assert antwort.status_code == 400
+    assert "keine gültige ISBN" in antwort.json()["fehler"]
+
+
+def test_hinzufuegen_mit_veralteter_mtime_ist_409(seiten: TestClient, abgeglichen: dict) -> None:
+    assert _hinzufuegen(seiten, abgeglichen["mtime"], TERRA).status_code == 200
+    assert _hinzufuegen(seiten, abgeglichen["mtime"], NEU).status_code == 409

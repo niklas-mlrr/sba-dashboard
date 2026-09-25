@@ -854,8 +854,12 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .iserv-modal .preiszeile + .buchreihe-iserv { margin-top: -10px; margin-bottom: 15px; text-align: right; }
 
 /* Der Verlag schlägt beim Tippen die Verlage vor, die mit der Eingabe
-   anfangen - die Liste sieht aus wie das twitter-typeahead in IServ
-   (.tt-menu / .tt-suggestion). */
+   anfangen, beim Hinzufügen auch ISBN und Titel die Bücher anderer Fächer -
+   die Liste sieht aus wie das twitter-typeahead in IServ
+   (.tt-menu / .tt-suggestion). Hinter einem Buch steht grau, woher es kommt;
+   es darf abgeschnitten werden, der Titel davor nicht. */
+.iserv-modal .tt-suggestion { overflow: hidden; text-overflow: ellipsis; }
+.iserv-modal .tt-zusatz { color: #777; font-size: 85%; }
 .iserv-modal .typeahead { position: relative; display: block; }
 .iserv-modal .tt-menu {
   position: absolute;

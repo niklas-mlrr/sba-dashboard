@@ -207,48 +207,78 @@
 {%- endif -%}
 {%- endmacro %}
 
+{#
+  ``buch`` ist ``none`` im Menü „+ Buch hinzufügen“ (``neuvorlage``): dort ist
+  die ISBN frei, und ISBN wie Titel schlagen beim Tippen die Bücher anderer
+  Fächer vor (``static/buchplanung.js``). Ein Treffer füllt die übrigen Felder.
+#}
 {% macro buchreihe(buch) %}
-{% set iserv = dict(buch.iserv or ()) %}
+{% set neu = buch is none %}
+{% set iserv = {} if neu else dict(buch.iserv or ()) %}
 <div class="planung-block buchreihe-form" data-buchreihe>
   <h4>Buchreihe</h4>
   <div class="form-group">
     <label class="control-label">ISBN</label>
+    {% if neu %}
+    <span class="typeahead"><input class="form-control" data-buchreihe-feld="isbn"
+      data-vorschlag="isbn" required aria-label="ISBN" autocomplete="off" spellcheck="false"
+      inputmode="numeric" role="combobox" aria-autocomplete="list" aria-expanded="false"></span>
+    {% else %}
     {# Gesperrt (Entscheidung 2026-09-24): die ISBN ist der Schlüssel des Buchs
        und wird im Menü nicht geändert. ``disabled`` wie die Felder eines
        archivierten Schuljahrs in IServ: grau, nicht anklickbar. Mitgeschickt
        wird sie nicht. #}
     <input class="form-control" data-buchreihe-feld="isbn" value="{{ buch.isbn_anzeige }}"
       disabled aria-label="ISBN" autocomplete="off" spellcheck="false">
+    {% endif %}
   </div>
   <div class="form-group">
     <label class="control-label">Titel</label>
+    {% if neu %}
+    <span class="typeahead"><input class="form-control" data-buchreihe-feld="titel"
+      data-vorschlag="titel" required aria-label="Titel" autocomplete="off"
+      role="combobox" aria-autocomplete="list" aria-expanded="false"></span>
+    {% else %}
     <input class="form-control" data-buchreihe-feld="titel" value="{{ buch.titel }}"
       required aria-label="Titel" autocomplete="off">
+    {% endif %}
     {{ in_iserv(iserv, "titel") }}
   </div>
   <div class="form-group">
     <label class="control-label">Verlag</label>
     <span class="typeahead"><input class="form-control" data-buchreihe-feld="verlag"
-      value="{{ buch.verlag }}" required aria-label="Verlag" autocomplete="off"
+      data-vorschlag="verlag" value="{{ '' if neu else buch.verlag }}" required
+      aria-label="Verlag" autocomplete="off"
       role="combobox" aria-autocomplete="list" aria-expanded="false"></span>
     {{ in_iserv(iserv, "verlag") }}
   </div>
   <div class="form-group preiszeile">
     <label class="control-label">Neupreis</label>
     <div class="input-group"><input class="form-control text-right" type="number"
-      data-buchreihe-feld="neupreis" min="0" step="0.01" value="{{ preisfeld(buch.neupreis) }}"
+      data-buchreihe-feld="neupreis" min="0" step="0.01"
+      value="{{ '' if neu else preisfeld(buch.neupreis) }}"
       aria-label="Neupreis"><div class="input-group-addon">€</div></div>
   </div>
   {{ in_iserv(iserv, "neupreis", preis=true) }}
   <div class="form-group preiszeile">
     <label class="control-label">Leihgebühr</label>
     <div class="input-group"><input class="form-control text-right" type="number"
-      data-buchreihe-feld="leihgebuehr" min="0" step="0.01" value="{{ preisfeld(buch.leihgebuehr) }}"
+      data-buchreihe-feld="leihgebuehr" min="0" step="0.01"
+      value="{{ '' if neu else preisfeld(buch.leihgebuehr) }}"
       aria-label="Leihgebühr"><div class="input-group-addon">€</div></div>
   </div>
   {{ in_iserv(iserv, "leihgebuehr", preis=true) }}
+  {% if neu %}
+  <p class="small help-block">ISBN oder Titel eintippen: Bücher aus anderen Fächern werden
+    vorgeschlagen und bringen Titel, Verlag und Preise mit. Eine neue ISBN legt das Buch nur
+    im Dashboard an - in IServ ändert sich nichts.</p>
+  {% elif buch.von_hand %}
+  <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
+    hinzugefügt. Titel, Verlag und Preise gelten, wie sie hier stehen.</p>
+  {% else %}
   <p class="small help-block">Die Korrektur gilt im Dashboard - in den Bücherlisten, im
     PDF und in der Planungsdatei. In IServ selbst ändert sich nichts.</p>
+  {% endif %}
 </div>
 {% endmacro %}
 
@@ -337,8 +367,48 @@
   dieser oder der vorigen Bücherliste vorkommen, samt korrigierter. Einmal je
   Seite, als JSON - das Skript filtert sie, der Server wählt sie aus.
 #}
-{% macro planungsmenue(verlage=()) %}
+{#
+  Das Menü „+ Buch hinzufügen“ - dieselben Blöcke wie ``planungsvorlage``,
+  aber ohne Buch: die ISBN ist frei, die Jahrgangs-Tabelle beginnt mit einer
+  leeren Zeile (das Skript fügt sie beim Öffnen an), und eine Rücklage gibt es
+  nicht - zurückgelegt wird, was die Schule schon besitzt, nicht was sie erst
+  einführt. ``data-neu`` sagt dem Skript, wohin gespeichert wird.
+#}
+{% macro neuvorlage(planung, fach) %}
+<template id="planung-neu-vorlage" data-fach="{{ fach }}">
+  <div class="modal-header">
+    <h3 class="modal-title">Buch hinzufügen<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
+  </div>
+  <div class="modal-body">
+    {{ buchreihe(none) }}
+    <div class="planung-block">
+      <h4>Einführung und Ausmusterung</h4>
+      <div class="planung-tabellenrahmen">
+        <table class="planung-tabelle">
+          <thead><tr><th>Jahrgang</th><th>Einführung<br>zum Schuljahr</th>
+            <th>Ausmusterung<br>nach Schuljahr</th><th>Bemerkung</th><th></th></tr></thead>
+          <tbody data-planung-zeilen></tbody>
+        </table>
+      </div>
+      <p class="planung-anfuegen">
+        <button type="button" class="btn btn-default" data-planung="jahrgang-anfuegen">+ Jahrgang</button>
+      </p>
+      <p class="small help-block">Je Jahrgang das Schuljahr, ab dem das Buch dort eingeführt
+        wird.</p>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
+    <button type="button" class="btn btn-default" data-planung="abbrechen">Abbrechen</button>
+    <button type="button" class="btn btn-primary" data-planung="speichern">Speichern</button>
+  </div>
+</template>
+{% endmacro %}
+
+{% macro planungsmenue(verlage=(), buecher=()) %}
 <script type="application/json" id="planung-verlage">{{ verlage | list | tojson }}</script>
+{# Die Bücher, die „+ Buch hinzufügen“ bei ISBN und Titel vorschlägt. #}
+<script type="application/json" id="planung-buecher">{{ buecher | list | tojson }}</script>
 <template id="planung-leerzeile">
   <tr data-planung-zeile>
     <td class="planung-spalte-jahrgang"><input type="number"

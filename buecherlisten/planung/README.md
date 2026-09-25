@@ -215,6 +215,28 @@ Fächer und Jahrgänge, die IServ im selben Dialog führt, lassen sich hier nich
 Die Datei gilt je Schuljahr. Eine neue Datei für das nächste Schuljahr bringt
 die Korrekturen des Vorjahrs **nicht** mit (`docs/roadmap.md`).
 
+## Ein Buch hinzufügen
+
+Unter der Fach-Liste steht „+ Buch hinzufügen“: dasselbe Menü, aber die ISBN
+ist frei. ISBN und Titel schlagen die Bücher der Datei vor, die zu diesem Fach
+noch nicht gehören. `fuege_buch_hinzu` nimmt das Buch über seine Jahrgänge auf,
+und jeder Jahrgang braucht ein Schuljahr der Einführung, weil eine leere
+Planungszeile verschwindet.
+
+* **Bekannte ISBN** (anderes Fach, Vorjahr): Es bleibt dasselbe Buch. Weicht
+  die Buchreihe ab, ist das eine Korrektur wie oben.
+* **Neue ISBN**: Sie muss eine gültige ISBN-10 oder -13 sein und wird als
+  ISBN-13 gespeichert. Das Buch wird von Hand angelegt (`Buch.von_hand`, auf
+  `Buchreihen` die Spalte `in IServ` = „nein“). Titel, Verlag und Preise sind
+  dann keine Korrektur, sondern die einzige Quelle. Der Abgleich behält das
+  Buch, solange es eine Planungszeile hat. Führt IServ die ISBN selbst, gilt
+  von da an IServ, und die Planung bleibt. Werden im Menü alle Jahrgänge
+  entfernt, fällt das Buch aus der Datei.
+
+Die Fach-Seite hängt solche Bücher an ihre Liste an
+(`app/api/buecherliste.py`, `zusaetze_je_fach`). Das PDF bleibt beim Stand
+aus IServ.
+
 ## Aufbau des Pakets
 
 | Modul | Inhalt |

@@ -32,6 +32,7 @@ from buecherlisten.planung import (
 from .. import buchplanung as domaene
 from ..modelle import (
     AbgleichAnfrage,
+    BuchHinzufuegenAnfrage,
     BuchplanungsAnfrage,
     FachbestaetigungAnfrage,
     PlanungsAnfrage,
@@ -57,6 +58,7 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
             "isbn": buch.isbn,
             # Korrigiertes Feld -> Wert in IServ.
             "iserv": buch.korrigiert,
+            "von_hand": buch.von_hand,
             "titel": buch.titel,
             "verlag": buch.verlag,
             "faecher": list(buch.faecher),
@@ -198,6 +200,28 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
             titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
             neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
         ),
+        mtime=anfrage.mtime,
+    )
+    return _antwort(stand)
+
+
+@router.post("/api/buchplanung/buch/neu")
+def api_buch_neu(request: Request, anfrage: BuchHinzufuegenAnfrage) -> JSONResponse:
+    """„+ Buch hinzufügen“ unter der Fach-Liste: Buchreihe und Jahrgänge in einem Zug."""
+    stand = domaene.schreibe_neues_buch(
+        aktuelle_einstellungen(request),
+        schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
+        buchreihe=Buchreiheneingabe(
+            titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
+            neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
+        ),
+        zeilen=[
+            Jahrgangseingabe(
+                jahrgang=zeile.jahrgang, eingefuehrt_ab=zeile.eingefuehrt_ab,
+                ausgemustert_nach=zeile.ausgemustert_nach, bemerkung=zeile.bemerkung,
+            )
+            for zeile in anfrage.zeilen
+        ],
         mtime=anfrage.mtime,
     )
     return _antwort(stand)

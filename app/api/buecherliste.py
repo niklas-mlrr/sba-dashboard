@@ -24,14 +24,17 @@ from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schu
 from buecherlisten.planung import (
     FACH_BESTAETIGT,
     OHNE_VERLAG,
+    PLANUNG_AUSGEMUSTERT,
     fach_bestaetigung,
     fach_status,
     planungs_status,
 )
 
 from .. import buchplanung as planungsdomaene
+from ..buecherlisten import Buch as ListenBuch
 from ..buecherlisten import (
     Buecherlisten,
+    Gruppe,
     finde_gruppe,
     gruppen_nach_fach,
     gruppen_nach_verlag,
@@ -115,7 +118,7 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {}, "ausmusterungen_je_fach": {}, "vorjahr": "",
-        "verlage": [],
+        "verlage": [], "zusaetze_je_fach": {}, "buecher": [],
     }
     try:
         stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
@@ -187,6 +190,34 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         for eintrag in eintraege:
             eintrag["jahrgaenge"].sort()
 
+    # Was im Planungsmenü in ein Fach aufgenommen wurde, aber in keiner
+    # Bücherliste dieses Fachs steht - ein Buch aus einem anderen Fach oder
+    # eines, das es in IServ noch gar nicht gibt. Die Fach-Seite hängt es an
+    # ihre Liste an; die Jahrgang-Spalte zeigt dazu „(ab …)“.
+    zusaetze: dict[str, dict[str, ListenBuch]] = {}
+    for zeile in planung.planung:
+        geplant = planung.buch(zeile.isbn)
+        if geplant is None or (zeile.fach, zeile.jahrgang) in geplant.kombinationen \
+                or planungs_status(zeile, planung.schuljahr) == PLANUNG_AUSGEMUSTERT:
+            continue
+        zusaetze.setdefault(zeile.fach, {})[geplant.isbn] = ListenBuch(
+            isbn=geplant.isbn, titel=geplant.titel, faecher=geplant.faecher, verlag=geplant.verlag,
+            neupreis=geplant.neupreis, leihgebuehr=geplant.leihgebuehr, leihbar=geplant.leihbar,
+            jahrgaenge=(), iserv=geplant.iserv, von_hand=geplant.von_hand,
+        )
+
+    # Die Vorschläge für „+ Buch hinzufügen“: jedes Buch der Datei, mit dem,
+    # was das Menü bei einem Treffer übernimmt.
+    buecher = [
+        {"isbn": buch.isbn, "isbn_anzeige": format_isbn(buch.isbn), "titel": buch.titel,
+         "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
+         "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
+         "faecher": sorted({fach for fach, _ in buch.kombinationen}
+                           | {z.fach for z in planung.planung if z.isbn == buch.isbn},
+                           key=str.casefold)}
+        for buch in sorted(planung.buecher, key=lambda b: b.titel.casefold())
+    ]
+
     faecher: dict[str, dict[str, Any]] = {}
     for fach in planung.faecher:
         status, hinweis = fach_status(planung, fach)
@@ -206,6 +237,8 @@ def _planungskontext(request: Request, schuljahr: str) -> dict[str, Any]:
         "ausmusterungen_je_fach": ausgemustert,
         "vorjahr": planung.vorjahr,
         "verlage": [v for v in planung.verlage if v != OHNE_VERLAG],
+        "zusaetze_je_fach": {fach: list(je_isbn.values()) for fach, je_isbn in zusaetze.items()},
+        "buecher": buecher,
     }
 
 
@@ -402,5 +435,16 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     if gefunden is None:
         return _hinweis(request, "Nicht gefunden",
                         f"„{name}“ kommt in keiner Bücherliste vor.", 404)
+    if ansicht == "fach":
+        # Hinzugefügte Bücher stehen hinter denen aus IServ, in derselben Tabelle.
+        # Die Vorschläge des Hinzufügen-Menüs sind die Bücher, die es hier noch
+        # nicht gibt - ein Buch, das schon dasteht, wird in seiner Zeile bearbeitet.
+        vorhanden = {buch.isbn for buch in gefunden.buecher}
+        dazu = [buch for buch in planung["zusaetze_je_fach"].get(name, [])
+                if buch.isbn not in vorhanden]
+        gefunden = Gruppe(name=gefunden.name, buecher=gefunden.buecher + tuple(dazu))
+        vorhanden |= {buch.isbn for buch in dazu}
+        werte["vorschlaege"] = [buch for buch in planung["buecher"]
+                                if buch["isbn"] not in vorhanden and name not in buch["faecher"]]
     return _seite(request, "buecherliste_gruppe.html",
                   {**werte, "titel": gefunden.name, "gruppe": gefunden})

@@ -87,7 +87,7 @@
     <tr data-isbn="{{ buch.isbn }}"{% if planbar %} class="aufklappbar"
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
-      <td>{{ buch.titel }}</td>
+      <td>{{ buch.titel }}{% if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif %}</td>
       {% if mit_jahrgang %}{{ bp.jahrgangsspalte(planung, buch, fach) }}{% endif %}
       {% if ohne != "fach" %}<td>{{ buch.fach_anzeige }}</td>{% endif %}
       {% if ohne != "verlag" %}<td>{{ buch.verlag }}</td>{% endif %}
@@ -138,6 +138,16 @@
 {% else %}
   {{ buchtabelle(gruppe.buecher, true, ohne=ansicht,
                  fach=gruppe.name if ansicht == "fach" else none) }}
+  {#
+    „+ Buch hinzufügen“ öffnet dasselbe Menü wie eine Buchzeile, nur mit
+    freier ISBN. Das Buch steht danach als Zeile in dieser Tabelle, auch wenn
+    es in keiner Bücherliste aus IServ steht.
+  #}
+  {% if ansicht == "fach" and planung.mtime is not none %}
+  <p class="planung-anfuegen"><button type="button" class="btn btn-default"
+    data-planung="buch-neu" data-fach="{{ gruppe.name }}">+ Buch hinzufügen</button></p>
+  {{ bp.neuvorlage(planung, gruppe.name) }}
+  {% endif %}
 {% endif %}
 {% if ansicht == "fach" and planung.mtime is not none %}
 {% set ausgemustert = planung.ausmusterungen_je_fach.get(gruppe.name, []) %}
@@ -173,7 +183,7 @@
 {% else %}
 <p class="hinweis">Keine Ausmusterungen zum Schuljahr {{ planung.schuljahr }}.</p>
 {% endif %}
-{{ bp.planungsmenue(verlage) }}{% endif %}
+{{ bp.planungsmenue(verlage, vorschlaege | default([])) }}{% endif %}
 {% if druckbar %}
 {% with druck_ansicht = ansicht, druck_gruppen = none,
         druck_gruppe = ("Jahrgang " ~ liste.jahrgang) if liste else gruppe.name %}

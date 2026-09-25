@@ -557,6 +557,16 @@ Verlagsvorschläge im Feld „Verlag“ filtern auf
 „beginnt mit“ und sind ein eigenes kleines Typeahead: `<datalist>` filtert in
 Chrome auf „enthält“ und lässt sich nicht wie IServ gestalten.
 
+**Bücher hinzufügen (2026-09-25).** Mit „+ Buch hinzufügen“ unter der
+Fach-Liste öffnet sich dasselbe Menü mit freier ISBN
+(`POST /api/buchplanung/buch/neu`, `abgleich.py::fuege_buch_hinzu`).
+Dasselbe Typeahead schlägt bei ISBN und Titel die Bücher anderer Fächer vor,
+und ein Treffer füllt die Buchreihe. Eine unbekannte ISBN legt ein Buch an, das
+nur in der Datei steht: auf `Buchreihen` hat es „in IServ: nein“. Ohne diese
+Markierung verwürfe der nächste Abgleich es als verschwunden. Auf der Fach-Seite
+steht es als normale Zeile mit „(ab …)“ im Jahrgang. Die Seite ist sonst live
+aus IServ, deshalb hängt `_planungskontext` diese Zeilen an.
+
 ## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 
 `POST /api/anmeldung` prüft die Zugangsdaten **synchron** (`AusleiheClient(...)`,

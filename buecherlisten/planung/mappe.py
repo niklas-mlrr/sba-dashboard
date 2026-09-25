@@ -109,6 +109,11 @@ SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
 # laufenden Jahrgangs nicht ändern, und eine geleerte Planungszeile
 # verschwindet wirklich, statt als leere Zeile wiederzukommen.
 SPALTE_IN_LISTE = "in der Bücherliste"
+# Auf "Buchreihen": steht das Buch in IServ, oder wurde es im Dashboard von
+# Hand hinzugefügt ("nein")? Ohne diese Spalte verwürfe der nächste Abgleich
+# ein von Hand angelegtes Buch als verschwunden. Eine Datei aus der Zeit davor
+# hat sie nicht; dort stammt jedes Buch aus IServ.
+SPALTE_IN_ISERV = "in IServ"
 
 _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
     BLATT_BUECHER: (
@@ -120,6 +125,7 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Neupreis", 12, False),
         ("Leihpreis", 12, False),
         ("leihbar", 9, False),
+        (SPALTE_IN_ISERV, 10, False),
         ("Bemerkung", 30, True),
     ),
     BLATT_FACH_JAHRGANG: (
@@ -342,6 +348,7 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             neupreis=_zahl(zeile.get("Neupreis")),
             leihgebuehr=_zahl(zeile.get("Leihpreis")),
             iserv=_korrekturen(zeile),
+            von_hand=_text(zeile.get(SPALTE_IN_ISERV)).casefold() == _NEIN,
         )
         for zeile in buch_roh
         for isbn in (_text(zeile.get("ISBN")),) if isbn
@@ -471,6 +478,7 @@ def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "Neupreis": buch.neupreis,
             "Leihpreis": buch.leihgebuehr,
             "leihbar": _JA if buch.leihbar else _NEIN,
+            SPALTE_IN_ISERV: _NEIN if buch.von_hand else _JA,
             "Bemerkung": eintrag.bemerkung if eintrag else "",
             _KOMMENTARE: {
                 _KORRIGIERBAR[feld]: _iserv_kommentar(original, feld in _PREISFELDER)
@@ -566,10 +574,13 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     zeile(8, "Korrekturen", "Auf „Buchreihen“ im Planungsmenü korrigierte Titel, Verlage "
                             "und Preise: hell hinterlegt, der Wert aus IServ steht im "
                             "Kommentar. IServ selbst bleibt unverändert.")
-    zeile(9, "Legende", "", fett=True)
+    zeile(9, "Neue Bücher", "Im Planungsmenü hinzugefügte Bücher, die (noch) nicht in "
+                            "IServ stehen, tragen auf „Buchreihen“ „in IServ: nein“. Sie "
+                            "bleiben beim Abgleich, solange sie eine Planungszeile haben.")
+    zeile(10, "Legende", "", fett=True)
     for versatz, (marke, text) in enumerate(LEGENDE):
-        zeile(10 + versatz, marke, text)
-    naechste = 10 + len(LEGENDE) + 1
+        zeile(11 + versatz, marke, text)
+    naechste = 11 + len(LEGENDE) + 1
     for versatz, warnung in enumerate(stand.warnungen):
         zeile(naechste + versatz, "Hinweis" if versatz == 0 else "", warnung)
 

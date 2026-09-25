@@ -70,6 +70,9 @@ class Buch:
     # stehen oben die korrigierten Werte und hier die IServ-Werte der
     # korrigierten Felder. Das Planungsmenü zeigt sie als „in IServ: …“.
     iserv: tuple[tuple[str, Any], ...] = ()
+    # Im Planungsmenü hinzugefügt und (noch) nicht in IServ - die Zeile kommt
+    # aus der Buchplanung, nicht aus einer Bücherliste.
+    von_hand: bool = False
 
     @property
     def isbn_anzeige(self) -> str:

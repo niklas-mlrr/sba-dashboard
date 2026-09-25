@@ -226,6 +226,20 @@ class BuchplanungsAnfrage(_BuchplanungAnfrage):
     buchreihe: BuchreiheEingabe | None = None
 
 
+class BuchHinzufuegenAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/buch/neu`` - ein Buch in die Liste eines Fachs aufnehmen.
+
+    Anders als im Bearbeiten-Menü ist die ISBN hier eine Eingabe: sie wählt ein
+    Buch aus einem anderen Fach oder legt ein neues an. Die Prüfung, ob sie
+    eine ISBN ist, steht im Kern (``fuege_buch_hinzu``) - hier nur, dass sie da ist.
+    """
+
+    isbn: NichtLeer
+    fach: NichtLeer
+    zeilen: list[JahrgangEingabe] = []
+    buchreihe: BuchreiheEingabe
+
+
 class RuecklageAnfrage(_BuchplanungAnfrage):
     """``POST /api/buchplanung/ruecklage`` - der Wunsch einer Fachschaft."""
 

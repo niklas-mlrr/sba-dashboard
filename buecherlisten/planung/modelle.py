@@ -138,6 +138,12 @@ class Buch:
     # korrigierten Wert. In der Datei steht der IServ-Wert als Kommentar an
     # der Zelle - so erkennt der nächste Abgleich die Korrektur wieder.
     iserv: tuple[tuple[str, object], ...] = ()
+    # Im Dashboard von Hand angelegt, nicht aus IServ: ein Buch, das an der
+    # Schule erst eingeführt wird. Titel, Verlag und Preise sind dann keine
+    # Korrektur, sondern die einzige Quelle. Der Abgleich behält das Buch,
+    # solange es eine Planungszeile hat, und übergibt es an IServ, sobald die
+    # ISBN dort auftaucht.
+    von_hand: bool = False
 
     @property
     def korrigiert(self) -> dict[str, object]:

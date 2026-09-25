@@ -16,6 +16,9 @@
 //      dieses Buchs in diesem Fach.
 //      Gespeichert wird alles auf einmal - ein Menü, ein Knopf, eine Anfrage
 //      (POST /api/buchplanung/buch). Abbrechen verwirft.
+//   4. „+ Buch hinzufügen“ unter der Fach-Liste: dasselbe Menü mit freier
+//      ISBN, deren Vorschläge die Bücher anderer Fächer sind
+//      (POST /api/buchplanung/buch/neu).
 //
 // Der Menü-Inhalt wird NICHT hier gebaut: er steht je Buch fertig gerendert in
 // einem <template class="planung-vorlage"> (templates/_buchplanung.html) und
@@ -121,14 +124,36 @@
       '.planung-vorlage[data-isbn="' + CSS.escape(zeile.dataset.isbn) + '"]' +
       '[data-fach="' + CSS.escape(zeile.dataset.fach) + '"]');
     if (!vorlage) return;
-    menue.replaceChildren(vorlage.content.cloneNode(true));
+    zeigeMenue(vorlage);
     menue.dataset.isbn = zeile.dataset.isbn;
     menue.dataset.fach = zeile.dataset.fach;
-    const titel = menue.querySelector(".modal-title");
-    if (titel) titel.id = "planungsmenue-titel";
+    delete menue.dataset.neu;
     menue.showModal();
     // Erst jetzt messen: in einem geschlossenen <dialog> hat nichts eine Höhe.
     messeBemerkungen(menue);
+  }
+
+  function zeigeMenue(vorlage) {
+    menue.replaceChildren(vorlage.content.cloneNode(true));
+    const titel = menue.querySelector(".modal-title");
+    if (titel) titel.id = "planungsmenue-titel";
+  }
+
+  // „+ Buch hinzufügen“: dasselbe Menü, ohne Buch. Die ISBN kommt beim
+  // Speichern aus dem Feld, nicht aus der Zeile; eine erste leere
+  // Jahrgangszeile steht schon da, denn ohne Jahrgang gibt es nichts zu speichern.
+  function oeffneNeu(knopf) {
+    const vorlage = document.getElementById("planung-neu-vorlage");
+    if (!menue || !vorlage) return;
+    zeigeMenue(vorlage);
+    delete menue.dataset.isbn;
+    menue.dataset.fach = knopf.dataset.fach;
+    menue.dataset.neu = "1";
+    menue.showModal();
+    const koerper = menue.querySelector("[data-planung-zeilen]");
+    if (koerper && leerzeile) koerper.appendChild(leerzeile.content.cloneNode(true));
+    messeBemerkungen(menue);
+    menue.querySelector('[data-buchreihe-feld="isbn"]').focus();
   }
 
   function fuegeJahrgangAn(knopf) {
@@ -195,6 +220,22 @@
     const werte = block ? felder(block) : {};
     const reihe = buchreihe();
     if (reihe === undefined) return;
+    if (menue.dataset.neu) {
+      if (!zeilen.length) {
+        zeige("Bitte mindestens einen Jahrgang eintragen.", "fehlerhaft");
+        return;
+      }
+      const isbn = reihe.isbn;
+      delete reihe.isbn;
+      sende("/api/buchplanung/buch/neu", {
+        isbn: isbn,
+        fach: menue.dataset.fach,
+        zeilen: zeilen,
+        buchreihe: reihe,
+      }, () => "Das Buch wurde hinzugefügt.");
+      return;
+    }
+    delete reihe.isbn;
     sende("/api/buchplanung/buch", {
       isbn: menue.dataset.isbn,
       fach: menue.dataset.fach,
@@ -227,7 +268,10 @@
       }
       werte[feld.dataset.buchreiheFeld] = feld.value.trim();
     }
-    for (const [name, text] of [["titel", "den Titel"], ["verlag", "den Verlag"]]) {
+    const pflicht = [["titel", "den Titel"], ["verlag", "den Verlag"]];
+    // Beim Hinzufügen ist die ISBN eine Eingabe; ob sie gültig ist, prüft der Server.
+    if (menue.dataset.neu) pflicht.unshift(["isbn", "die ISBN"]);
+    for (const [name, text] of pflicht) {
       if (!werte[name]) {
         zeige("Bitte " + text + " eintragen.", "fehlerhaft");
         return undefined;
@@ -235,29 +279,40 @@
     }
     const preis = (text) => (text === "" ? null : Number(text));
     return {
-      titel: werte.titel, verlag: werte.verlag,
+      isbn: werte.isbn, titel: werte.titel, verlag: werte.verlag,
       neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
     };
   }
 
-  // ── Der Verlag: Vorschläge beim Tippen ────────────────────────────────────
+  // ── Vorschläge beim Tippen: Verlag, und beim Hinzufügen ISBN und Titel ────
   //
-  // Wie das Typeahead in IServ: ab dem ersten Buchstaben stehen unter dem Feld
-  // alle bekannten Verlage, die mit der Eingabe **anfangen**. Ein Klick (oder
-  // ↑/↓ und Enter) übernimmt einen; ein Verlag, den es noch nicht gibt, wird
-  // einfach eingetippt. Kein <datalist>: Chrome sucht dort nach "enthält"
-  // statt "beginnt mit", und die Liste lässt sich nicht wie IServ gestalten.
-  const verlage = (() => {
-    const quelle = document.getElementById("planung-verlage");
+  // Wie das Typeahead in IServ: unter dem Feld stehen die Treffer, der
+  // getippte Teil fett. Ein Klick (oder ↑/↓ und Enter) übernimmt einen; was es
+  // noch nicht gibt, wird einfach eingetippt. Kein <datalist>: Chrome sucht
+  // dort nach "enthält" statt "beginnt mit", und die Liste lässt sich nicht wie
+  // IServ gestalten.
+  //
+  // Welche Liste ein Feld vorschlägt, sagt sein ``data-vorschlag``:
+  //   verlag - die bekannten Verlage, die mit der Eingabe anfangen;
+  //   isbn   - die Bücher anderer Fächer, deren ISBN so anfängt
+  //            (Bindestriche zählen nicht);
+  //   titel  - die Bücher anderer Fächer, deren Titel die Eingabe enthält.
+  // Ein Buch zu übernehmen füllt ISBN, Titel, Verlag und Preise auf einmal.
+  function liesJson(id) {
+    const quelle = document.getElementById(id);
     try {
       return quelle ? JSON.parse(quelle.textContent) : [];
     } catch (fehler) {
       return [];
     }
-  })();
+  }
+  const verlage = liesJson("planung-verlage");
+  const buecher = liesJson("planung-buecher");
+  // Mehr passt nicht sinnvoll unter ein Feld; wer weitertippt, grenzt ein.
+  const HOECHSTENS = 12;
 
-  function istVerlagsfeld(ziel) {
-    return ziel instanceof HTMLInputElement && ziel.dataset.buchreiheFeld === "verlag";
+  function istVorschlagsfeld(ziel) {
+    return ziel instanceof HTMLInputElement && Boolean(ziel.dataset.vorschlag);
   }
 
   function vorschlagsliste(feld) {
@@ -270,25 +325,61 @@
     feld.setAttribute("aria-expanded", "false");
   }
 
+  const klein = (text) => text.toLocaleLowerCase("de");
+  const ziffern = (text) => text.replace(/[^0-9Xx]/g, "").toUpperCase();
+
+  // Die Treffer eines Felds: je Treffer der Text, die fett gesetzte Stelle
+  // darin, eine graue Zeile dazu und, bei einem Buch, seine Nummer in ``buecher``.
+  function treffer(feld) {
+    const art = feld.dataset.vorschlag;
+    const eingabe = feld.value.trim();
+    if (art === "verlag") {
+      if (!eingabe) return [];
+      return verlage
+        .filter((name) => klein(name).startsWith(klein(eingabe)))
+        .map((name) => ({ text: name, ab: 0, bis: eingabe.length }));
+    }
+    const liste = [];
+    buecher.forEach((buch, nummer) => {
+      const zusatz = [buch.faecher.join(", ")];
+      if (art === "isbn") {
+        const gesucht = ziffern(eingabe);
+        if (!gesucht || !ziffern(buch.isbn).startsWith(gesucht)) return;
+        liste.push({ text: buch.isbn_anzeige, ab: 0, bis: 0,
+                     zusatz: [buch.titel].concat(zusatz), buch: nummer });
+      } else if (art === "titel") {
+        if (eingabe.length < 2) return;
+        const ab = klein(buch.titel).indexOf(klein(eingabe));
+        if (ab < 0) return;
+        liste.push({ text: buch.titel, ab: ab, bis: ab + eingabe.length,
+                     zusatz: [buch.isbn_anzeige].concat(zusatz), buch: nummer });
+      }
+    });
+    return liste;
+  }
+
   function zeigeVorschlaege(feld) {
-    const eingabe = feld.value.trim().toLocaleLowerCase("de");
-    const treffer = eingabe
-      ? verlage.filter((name) => name.toLocaleLowerCase("de").startsWith(eingabe))
-      : [];
+    const gefunden = treffer(feld).slice(0, HOECHSTENS);
     schliesseVorschlaege(feld);
-    if (!treffer.length) return;
+    if (!gefunden.length) return;
     const liste = document.createElement("div");
     liste.className = "tt-menu";
     liste.setAttribute("role", "listbox");
-    for (const name of treffer) {
+    for (const eins of gefunden) {
       const eintrag = document.createElement("div");
       eintrag.className = "tt-suggestion";
       eintrag.setAttribute("role", "option");
-      eintrag.dataset.wert = name;
-      // Der getippte Anfang fett, wie in IServ.
-      const anfang = document.createElement("strong");
-      anfang.textContent = name.slice(0, eingabe.length);
-      eintrag.append(anfang, name.slice(eingabe.length));
+      eintrag.dataset.wert = eins.text;
+      if (eins.buch !== undefined) eintrag.dataset.buch = eins.buch;
+      const fett = document.createElement("strong");
+      fett.textContent = eins.text.slice(eins.ab, eins.bis);
+      eintrag.append(eins.text.slice(0, eins.ab), fett, eins.text.slice(eins.bis));
+      if (eins.zusatz) {
+        const grau = document.createElement("small");
+        grau.className = "tt-zusatz";
+        grau.textContent = eins.zusatz.filter(Boolean).join(" · ");
+        eintrag.append(" ", grau);
+      }
       liste.appendChild(eintrag);
     }
     feld.parentElement.appendChild(liste);
@@ -296,13 +387,31 @@
   }
 
   function uebernimm(feld, eintrag) {
-    feld.value = eintrag.dataset.wert;
     schliesseVorschlaege(feld);
-    feld.focus();
+    if (eintrag.dataset.buch === undefined) {
+      feld.value = eintrag.dataset.wert;
+      feld.focus();
+      return;
+    }
+    const buch = buecher[Number(eintrag.dataset.buch)];
+    const bereich = feld.closest("[data-buchreihe]");
+    const setze = (name, wert) => {
+      const ziel = bereich.querySelector('[data-buchreihe-feld="' + name + '"]');
+      if (ziel) ziel.value = wert;
+    };
+    const preis = (wert) => (wert === null || wert === undefined ? "" : Number(wert).toFixed(2));
+    setze("isbn", buch.isbn_anzeige);
+    setze("titel", buch.titel);
+    setze("verlag", buch.verlag);
+    setze("neupreis", preis(buch.neupreis));
+    setze("leihgebuehr", preis(buch.leihgebuehr));
+    // Weiter geht es mit den Jahrgängen - die Buchreihe ist vollständig.
+    const jahrgang = menue.querySelector('[data-planung-zeile] [data-planung-feld="jahrgang"]');
+    (jahrgang || feld).focus();
   }
 
   document.addEventListener("input", (ereignis) => {
-    if (istVerlagsfeld(ereignis.target)) zeigeVorschlaege(ereignis.target);
+    if (istVorschlagsfeld(ereignis.target)) zeigeVorschlaege(ereignis.target);
   });
 
   // mousedown statt click: sonst verliert das Feld zuerst den Fokus, die
@@ -311,17 +420,17 @@
     const eintrag = ereignis.target.closest && ereignis.target.closest(".tt-suggestion");
     if (!eintrag) return;
     ereignis.preventDefault();
-    const feld = eintrag.closest(".typeahead").querySelector("[data-buchreihe-feld]");
+    const feld = eintrag.closest(".typeahead").querySelector("[data-vorschlag]");
     uebernimm(feld, eintrag);
   });
 
   document.addEventListener("focusout", (ereignis) => {
-    if (istVerlagsfeld(ereignis.target)) schliesseVorschlaege(ereignis.target);
+    if (istVorschlagsfeld(ereignis.target)) schliesseVorschlaege(ereignis.target);
   });
 
   document.addEventListener("keydown", (ereignis) => {
     const feld = ereignis.target;
-    if (!istVerlagsfeld(feld)) return;
+    if (!istVorschlagsfeld(feld)) return;
     const liste = vorschlagsliste(feld);
     if (!liste) {
       if (ereignis.key === "ArrowDown") zeigeVorschlaege(feld);
@@ -360,6 +469,7 @@
       oeffne(knopf);
       return;
     }
+    if (art === "buch-neu") { oeffneNeu(knopf); return; }
     if (art === "jahrgang-anfuegen") { fuegeJahrgangAn(knopf); return; }
     if (art === "jahrgang-entfernen") { knopf.closest("[data-planung-zeile]").remove(); return; }
     if (art === "abbrechen") { menue.close(); return; }

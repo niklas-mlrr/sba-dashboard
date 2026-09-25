@@ -32,6 +32,7 @@ from buecherlisten.planung import (
     UngueltigeEingabe,
     bestaetige_fach,
     fach_status,
+    fuege_buch_hinzu,
     lade_schnappschuss,
     lies_datei,
     planungs_status,
@@ -652,3 +653,122 @@ def test_die_alte_korrekturen_mappe_verliert_ihr_blatt(tmp_path, stand):
 
     schreibe_datei(pfad, lies_datei(pfad))
     assert "Korrekturen" not in load_workbook(str(pfad)).sheetnames
+
+
+# ── Ein Buch in ein Fach aufnehmen ───────────────────────────────────────────
+
+NEU = "9783161484100"
+
+
+def _einfuehrung(*jahrgaenge: int, ab: str = "2027/2028") -> list[Jahrgangseingabe]:
+    return [Jahrgangseingabe(jahrgang=j, eingefuehrt_ab=ab) for j in jahrgaenge]
+
+
+def test_ein_buch_aus_einem_anderen_fach_kommt_ueber_seine_jahrgaenge_dazu(stand):
+    terra = stand.buch(TERRA)
+    neu = fuege_buch_hinzu(stand, isbn="978-3-12-100056-2", fach="Deutsch",
+                           buchreihe=_reihe(terra), zeilen=_einfuehrung(7, 8))
+
+    assert [b.isbn for b in neu.buecher_je_fach("Deutsch")] == [DEUTSCH, TERRA]
+    assert neu.planungszeile(TERRA, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
+    assert planungs_status(neu.planungszeile(TERRA, "Deutsch", 8), neu.schuljahr) \
+        == PLANUNG_GEPLANT
+    # Dasselbe Buch, keine Kopie: IServ-Werte, keine Korrektur.
+    assert len(neu.buecher) == len(stand.buecher)
+    assert not neu.buch(TERRA).von_hand
+    assert neu.buch(TERRA).korrigiert == {}
+    # Die neue Zeile ist unbestätigt, das Fach damit nicht mehr ganz bestätigt.
+    bestaetigt, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
+    nachher = fuege_buch_hinzu(bestaetigt, isbn=TERRA, fach="Deutsch",
+                               buchreihe=_reihe(terra), zeilen=_einfuehrung(7))
+    assert fach_status(nachher, "Deutsch")[0] == FACH_TEILWEISE
+
+
+def test_eine_abweichende_buchreihe_ist_eine_korrektur(stand):
+    terra = stand.buch(TERRA)
+    neu = fuege_buch_hinzu(stand, isbn=TERRA, fach="Deutsch",
+                           buchreihe=_reihe(terra, neupreis=26.0), zeilen=_einfuehrung(7))
+    assert neu.buch(TERRA).korrigiert == {"neupreis": 25.0}
+
+
+def test_eine_neue_isbn_legt_das_buch_von_hand_an(stand):
+    neu = fuege_buch_hinzu(
+        stand, isbn="3-16-148410-X", fach="Deutsch",
+        buchreihe=Buchreiheneingabe(titel="Neues Deutschbuch 7", verlag="Klett",
+                                    neupreis=24.999, leihgebuehr=None),
+        zeilen=_einfuehrung(7),
+    )
+    buch = neu.buch(NEU)          # als ISBN-13
+    assert buch is not None and buch.von_hand
+    assert (buch.titel, buch.verlag, buch.neupreis, buch.leihgebuehr) == (
+        "Neues Deutschbuch 7", "Klett", 25.0, None)
+    assert buch.kombinationen == ()
+    assert NEU in [b.isbn for b in neu.buecher_je_fach("Deutsch")]
+
+    # Bearbeitet wird es danach ohne IServ-Kommentar: es gibt keinen IServ-Wert.
+    geaendert = setze_buchreihe(neu, isbn=NEU, eingabe=_reihe(buch, titel="Deutschbuch 7"))
+    assert geaendert.buch(NEU).titel == "Deutschbuch 7"
+    assert geaendert.buch(NEU).korrigiert == {}
+
+
+@pytest.mark.parametrize(("isbn", "zeilen", "teil"), [
+    (NEU, [], "mindestens einen Jahrgang"),
+    (NEU, [Jahrgangseingabe(jahrgang=7)], "Schuljahr der Einführung"),
+    (NEU, _einfuehrung(7, 7), "zweimal"),
+    (NEU, _einfuehrung(20), "kein Jahrgang"),
+    (NEU, _einfuehrung(7, ab="2027"), "keine Schuljahresangabe"),
+    ("9783161484101", _einfuehrung(7), "keine gültige ISBN"),
+    ("", _einfuehrung(7), "Bitte die ISBN"),
+    (DEUTSCH, _einfuehrung(7), "gehört schon zum Fach Deutsch"),
+])
+def test_ungueltiges_hinzufuegen_wird_abgelehnt(stand, isbn, zeilen, teil):
+    with pytest.raises(UngueltigeEingabe, match=teil):
+        fuege_buch_hinzu(stand, isbn=isbn, fach="Deutsch",
+                         buchreihe=Buchreiheneingabe(titel="X", verlag="Y"), zeilen=zeilen)
+
+
+def test_ein_von_hand_angelegtes_buch_uebersteht_datei_und_abgleich(tmp_path, stand):
+    stand = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
+                             buchreihe=Buchreiheneingabe(titel="Neu 7", verlag="Klett"),
+                             zeilen=_einfuehrung(7))
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    gelesen = lies_datei(pfad)
+    assert gelesen.buch(NEU).von_hand
+    assert not gelesen.buch(DEUTSCH).von_hand
+
+    neu = zusammenfuehren(gelesen, _schnappschuss())
+    assert neu.buch(NEU).von_hand
+    assert neu.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
+    assert not neu.warnungen
+
+    # Führt IServ das Buch inzwischen selbst, gilt IServ - die Planung bleibt.
+    aus_iserv = Buch(isbn=NEU, titel="Neu 7 (IServ)", verlag="Klett",
+                     kombinationen=(("Deutsch", 7),), leihbar=True)
+    uebergeben = zusammenfuehren(neu, _schnappschuss(_buecher() + (aus_iserv,)))
+    assert not uebergeben.buch(NEU).von_hand
+    assert uebergeben.buch(NEU).titel == "Neu 7 (IServ)"
+    assert uebergeben.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
+
+
+def test_ein_von_hand_angelegtes_buch_ohne_jahrgang_verschwindet(stand):
+    stand = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
+                             buchreihe=Buchreiheneingabe(titel="Neu 7", verlag="Klett"),
+                             zeilen=_einfuehrung(7))
+    ohne = setze_buchplanung(stand, isbn=NEU, fach="Deutsch", zeilen=[])
+    assert ohne.buch(NEU) is None
+    # Ein Buch aus IServ bleibt dagegen, auch ohne Planung.
+    assert setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[]).buch(DEUTSCH)
+
+
+def test_eine_alte_datei_ohne_spalte_kennt_nur_buecher_aus_iserv(tmp_path, stand):
+    from openpyxl import load_workbook
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    wb = load_workbook(str(pfad))
+    ws = wb["Buchreihen"]
+    spalte = next(z.column for z in ws[1] if z.value == "in IServ")
+    ws.delete_cols(spalte)
+    wb.save(str(pfad))
+    assert not any(b.von_hand for b in lies_datei(pfad).buecher)

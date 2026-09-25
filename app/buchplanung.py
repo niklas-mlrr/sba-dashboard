@@ -39,6 +39,7 @@ from buecherlisten.planung import (
     UnbekanntesBuch,
     UngueltigeEingabe,
     bestaetige_fach,
+    fuege_buch_hinzu,
     lade_schnappschuss,
     lies_datei,
     lies_mappe,
@@ -233,6 +234,16 @@ def schreibe_buchplanung(
         )
 
     return _aendere(einstellungen, schuljahr, mtime, aenderung)
+
+
+def schreibe_neues_buch(
+    einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str,
+    buchreihe: Buchreiheneingabe, zeilen: Sequence[Jahrgangseingabe], mtime: float,
+) -> Stand:
+    """Nimmt ein Buch in die Liste eines Fachs auf - aus einem anderen Fach oder neu."""
+    return _aendere(einstellungen, schuljahr, mtime, lambda stand: fuege_buch_hinzu(
+        stand, isbn=isbn, fach=fach, buchreihe=buchreihe, zeilen=zeilen,
+    ))
 
 
 def schreibe_ruecklage(

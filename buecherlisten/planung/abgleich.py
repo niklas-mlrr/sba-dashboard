@@ -19,11 +19,14 @@ Dashboard.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from math import isfinite
 from typing import Any, TypeVar
+
+import isbnlib
 
 from .laden import Schnappschuss
 from .modelle import (
@@ -69,7 +72,14 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
     in keiner Bücherliste gibt.
     """
     alt = vorher or Buchplanung()
-    bekannt = {buch.isbn for buch in schnappschuss.buecher}
+    aus_iserv = {buch.isbn for buch in schnappschuss.buecher}
+    # Ein von Hand hinzugefügtes Buch steht in keiner Bücherliste und bleibt
+    # trotzdem - solange es noch irgendwo geplant ist. Taucht seine ISBN in
+    # IServ auf, gilt von da an IServ; die Planung hängt an der ISBN und bleibt.
+    geplant = {zeile.isbn for zeile in alt.planung}
+    von_hand = tuple(buch for buch in alt.buecher
+                     if buch.von_hand and buch.isbn not in aus_iserv and buch.isbn in geplant)
+    bekannt = aus_iserv | {buch.isbn for buch in von_hand}
     warnungen: list[str] = list(schnappschuss.warnungen)
 
     def verloren(was: str, isbn: str) -> None:
@@ -121,6 +131,7 @@ def zusammenfuehren(vorher: Buchplanung | None, schnappschuss: Schnappschuss) ->
         altes = alt.buch(buch.isbn)
         korrigiert = {feld: getattr(altes, feld) for feld in altes.korrigiert} if altes else {}
         buecher.append(_mit_korrekturen(buch, korrigiert))
+    buecher.extend(von_hand)
     for altes in alt.buecher:
         if altes.korrigiert and altes.isbn not in bekannt:
             verloren("Die Korrektur", altes.isbn)
@@ -227,6 +238,21 @@ def setze_planung(
     """
     buch = _geprueftes_buch(stand, isbn)
     _geprueftes_fach(stand, buch, fach)
+    return _setze_zeile(stand, isbn=isbn, fach=fach, jahrgang=jahrgang,
+                        eingefuehrt_ab=eingefuehrt_ab, ausgemustert_nach=ausgemustert_nach,
+                        kuerzel=kuerzel, datum=datum, bemerkung=bemerkung)
+
+
+def _setze_zeile(
+    stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, eingefuehrt_ab: str = "",
+    ausgemustert_nach: str = "", kuerzel: str = "", datum: date | None = None,
+    bemerkung: str = "",
+) -> Buchplanung:
+    """:func:`setze_planung` ohne die Frage, ob das Buch zum Fach gehört.
+
+    Die stellt :func:`fuege_buch_hinzu` gerade andersherum: dort kommt das Buch
+    mit dieser Zeile überhaupt erst in das Fach.
+    """
     if not _JAHRGANG_VON <= jahrgang <= _JAHRGANG_BIS:
         raise UngueltigeEingabe(
             f"„{jahrgang}“ ist kein Jahrgang. Erwartet wird eine Zahl zwischen "
@@ -357,7 +383,25 @@ def setze_buchplanung(
             datum=vorher_r.datum if vorher_r else None,
             bemerkung=ruecklage.bemerkung,
         )
-    return neu
+    return _ohne_verwaiste(neu, isbn)
+
+
+def _ohne_verwaiste(stand: Buchplanung, isbn: str) -> Buchplanung:
+    """Ein von Hand angelegtes Buch ohne jede Planungszeile fällt aus der Datei.
+
+    Es steht in keiner Bücherliste; ohne Planung gehört es zu keinem Fach
+    mehr und wäre nur noch eine Zeile, die niemand mehr öffnen kann. Der
+    Abgleich verwirft es aus demselben Grund (:func:`zusammenfuehren`).
+    """
+    buch = stand.buch(isbn)
+    if buch is None or not buch.von_hand or any(z.isbn == isbn for z in stand.planung):
+        return stand
+    return _ersetzt(
+        stand,
+        buecher=tuple(b for b in stand.buecher if b.isbn != isbn),
+        bemerkungen=tuple(b for b in stand.bemerkungen if b.isbn != isbn),
+        ruecklagen=tuple(r for r in stand.ruecklagen if r.isbn != isbn),
+    )
 
 
 @dataclass(frozen=True)
@@ -379,16 +423,8 @@ class Buchreiheneingabe:
 _PREIS_BIS = 10_000.0
 
 
-def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe) -> Buchplanung:
-    """Korrigiert Titel, Verlag und Preise eines Buchs - in der Datei, nicht in IServ.
-
-    Die Datei kennt zu jedem korrigierten Feld den Wert aus IServ
-    (``Buch.iserv``, in der Mappe als Kommentar an der Zelle); zu jedem
-    anderen ist der heutige Wert der aus IServ. Damit gilt je Feld: gleicht
-    die Eingabe dem IServ-Wert, ist das Feld nicht (mehr) korrigiert, sonst
-    gilt die Eingabe. Ein leerer Preis setzt auf IServ zurück.
-    """
-    buch = _geprueftes_buch(stand, isbn)
+def _gepruefte_buchreihe(eingabe: Buchreiheneingabe) -> tuple[str, str]:
+    """Titel und Verlag, beschnitten - nach den Pflichtfeldern des IServ-Dialogs."""
     titel, verlag = eingabe.titel.strip(), eingabe.verlag.strip()
     if not titel:
         raise UngueltigeEingabe("Bitte einen Titel eintragen.")
@@ -400,6 +436,35 @@ def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe
                 f"„{betrag}“ ist kein gültiger {name}. Erwartet wird ein Betrag "
                 f"zwischen 0 und {_PREIS_BIS:.0f} €."
             )
+    return titel, verlag
+
+
+def _cent(betrag: float | None) -> float | None:
+    return None if betrag is None else round(betrag, 2)
+
+
+def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe) -> Buchplanung:
+    """Korrigiert Titel, Verlag und Preise eines Buchs - in der Datei, nicht in IServ.
+
+    Die Datei kennt zu jedem korrigierten Feld den Wert aus IServ
+    (``Buch.iserv``, in der Mappe als Kommentar an der Zelle); zu jedem
+    anderen ist der heutige Wert der aus IServ. Damit gilt je Feld: gleicht
+    die Eingabe dem IServ-Wert, ist das Feld nicht (mehr) korrigiert, sonst
+    gilt die Eingabe. Ein leerer Preis setzt auf IServ zurück.
+
+    Ein von Hand angelegtes Buch (``von_hand``) hat keinen IServ-Wert: dort
+    gilt die Eingabe einfach, und ein leerer Preis ist leer.
+    """
+    buch = _geprueftes_buch(stand, isbn)
+    titel, verlag = _gepruefte_buchreihe(eingabe)
+    if buch.von_hand:
+        neues_buch = replace(
+            buch, titel=titel, verlag=verlag,
+            neupreis=_cent(eingabe.neupreis), leihgebuehr=_cent(eingabe.leihgebuehr),
+        )
+        return _ersetzt(
+            stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
+        )
 
     # Erst zurück auf IServ, dann die Eingabe darüber: so entscheidet
     # _mit_korrekturen an einer Stelle, was als Korrektur gilt - hier genauso
@@ -414,6 +479,95 @@ def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe
     return _ersetzt(
         stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
     )
+
+
+def _gepruefte_isbn(stand: Buchplanung, eingabe: str) -> str:
+    """Die ISBN, so wie die Datei sie führt - oder als ISBN-13, wenn sie neu ist.
+
+    Verglichen wird ohne Bindestriche und Leerzeichen: „978-3-06-000000-5“ ist
+    dasselbe Buch wie „9783060000005“. Eine neue ISBN muss eine gültige sein -
+    ein Zahlendreher ergäbe sonst ein zweites Buch neben dem richtigen.
+    """
+    if not (eingabe or "").strip():
+        raise UngueltigeEingabe("Bitte die ISBN eintragen.")
+    # Nicht isbnlib.canonical: das gibt bei einer zu kurzen Eingabe "" zurück,
+    # und der Satz hieße dann „bitte eintragen“ statt „ungültig“.
+    roh = re.sub(r"[^0-9X]", "", eingabe.upper())
+    for buch in stand.buecher:
+        if re.sub(r"[^0-9X]", "", buch.isbn.upper()) in (roh, isbnlib.to_isbn13(roh) or roh):
+            return buch.isbn
+    if isbnlib.is_isbn10(roh):
+        return isbnlib.to_isbn13(roh)
+    if isbnlib.is_isbn13(roh):
+        return roh
+    raise UngueltigeEingabe(
+        f"„{eingabe.strip()}“ ist keine gültige ISBN. Bitte die 13 (oder 10) Ziffern "
+        "vom Buchrücken prüfen."
+    )
+
+
+def fuege_buch_hinzu(
+    stand: Buchplanung, *, isbn: str, fach: str, buchreihe: Buchreiheneingabe,
+    zeilen: Sequence[Jahrgangseingabe],
+) -> Buchplanung:
+    """Nimmt ein Buch in die Bücherliste eines Fachs auf, in dem es noch nicht steht.
+
+    Zwei Fälle, ein Menü:
+
+    * Die ISBN steht schon in der Datei - das Buch gehört zu einem anderen Fach
+      oder stand im Vorjahr auf einer Liste. Titel, Verlag und Preise sind dann
+      die bekannten; was davon abweicht, ist eine Korrektur wie im
+      Bearbeiten-Menü (:func:`setze_buchreihe`).
+    * Die ISBN ist neu. Das Buch wird von Hand angelegt (``von_hand``) und bleibt
+      beim Abgleich, bis IServ es selbst führt.
+
+    In das Fach kommt es über seine Jahrgänge. Jeder braucht deshalb ein
+    Schuljahr der Einführung: eine Zeile, auf der nichts eingetragen ist,
+    verschwindet in :func:`setze_planung` - und mit ihr das Buch aus dem Fach.
+    """
+    isbn = _gepruefte_isbn(stand, isbn)
+    titel, verlag = _gepruefte_buchreihe(buchreihe)
+    if not zeilen:
+        raise UngueltigeEingabe(
+            "Bitte mindestens einen Jahrgang eintragen, in dem das Buch eingeführt wird."
+        )
+    gesehen: set[int] = set()
+    for eingabe in zeilen:
+        if eingabe.jahrgang in gesehen:
+            raise UngueltigeEingabe(
+                f"Jahrgang {eingabe.jahrgang} steht zweimal in der Liste. Jeder "
+                "Jahrgang darf nur einmal vorkommen."
+            )
+        gesehen.add(eingabe.jahrgang)
+        if not eingabe.eingefuehrt_ab.strip():
+            raise UngueltigeEingabe(
+                f"Bitte für Jahrgang {eingabe.jahrgang} das Schuljahr der Einführung "
+                "eintragen."
+            )
+
+    buch = stand.buch(isbn)
+    if buch is None:
+        neu = _ersetzt(stand, buecher=stand.buecher + (Buch(
+            isbn=isbn, titel=titel, verlag=verlag,
+            neupreis=_cent(buchreihe.neupreis), leihgebuehr=_cent(buchreihe.leihgebuehr),
+            von_hand=True,
+        ),))
+    else:
+        if fach in buch.faecher or any(
+                z.isbn == isbn and z.fach == fach for z in stand.planung):
+            raise UngueltigeEingabe(
+                f"„{buch.titel}“ gehört schon zum Fach {fach} - in der Bücherliste oder "
+                "unter den Ausmusterungen. Bitte dort in seiner Zeile bearbeiten."
+            )
+        neu = setze_buchreihe(stand, isbn=isbn, eingabe=buchreihe)
+
+    for eingabe in zeilen:
+        neu = _setze_zeile(
+            neu, isbn=isbn, fach=fach, jahrgang=eingabe.jahrgang,
+            eingefuehrt_ab=eingabe.eingefuehrt_ab,
+            ausgemustert_nach=eingabe.ausgemustert_nach, bemerkung=eingabe.bemerkung,
+        )
+    return neu
 
 
 def bestaetige_fach(
