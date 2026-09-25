@@ -308,8 +308,6 @@
   }
   const verlage = liesJson("planung-verlage");
   const buecher = liesJson("planung-buecher");
-  // Mehr passt nicht sinnvoll unter ein Feld; wer weitertippt, grenzt ein.
-  const HOECHSTENS = 12;
 
   function istVorschlagsfeld(ziel) {
     return ziel instanceof HTMLInputElement && Boolean(ziel.dataset.vorschlag);
@@ -359,7 +357,8 @@
   }
 
   function zeigeVorschlaege(feld) {
-    const gefunden = treffer(feld).slice(0, HOECHSTENS);
+    // Alle Treffer: die Liste ist höchstens 240 px hoch und rollt (.tt-menu in app.css).
+    const gefunden = treffer(feld);
     schliesseVorschlaege(feld);
     if (!gefunden.length) return;
     const liste = document.createElement("div");
