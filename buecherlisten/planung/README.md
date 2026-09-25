@@ -56,6 +56,11 @@ gesehen hatte. Seitdem ist es umgekehrt:
   auch unter „Ausmusterungen zu diesem Schuljahr“). Die Zeile hat vorn einen
   Strich in der Farbe, die Zelle ist hell hinterlegt, der Wert farbig. Ist die
   ganze Buchreihe neu oder ganz ausgemustert, ist die ganze Zeile hinterlegt.
+  Bei einer neuen Reihe entscheidet das IServ-Inventar (`GET /series`,
+  `_mit_inventar` in `app/api/buecherliste.py`): gibt es die Buchreihe dort
+  noch nicht, ist die ganze Zeile einheitlich kräftig blau; gibt es sie schon,
+  ist die Zeile nicht hinterlegt - Fach und Jahrgang blau, und was die Datei
+  bei Titel, Verlag und Preisen anders führt als die Buchreihe, gelb.
   Eine Zeile, die nur IServ führt, zeigt die Werte aus IServ und hat kein
   Planungsmenü. Die Übersichten markieren jede Gruppe, in der etwas abweicht.
   Ohne Datei zeigen die Seiten IServ wie vorher. Die PDFs bleiben beim Stand

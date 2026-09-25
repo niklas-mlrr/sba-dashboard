@@ -11,6 +11,7 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Callable, cast
 from urllib.parse import quote
 
@@ -41,6 +42,7 @@ from buecherlisten.planung import (
 
 from .. import buchplanung as planungsdomaene
 from ..buecherlisten import (
+    Buch,
     Buecherlisten,
     Vergleich,
     finde_gruppe,
@@ -112,6 +114,58 @@ def _laden(request: Request) -> Buecherlisten | Response:
             request, "IServ nicht erreichbar",
             f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502,
         )
+
+
+def _abweichungen_zur_buchreihe(buch: Buch, serie: Any) -> tuple[tuple[str, Any], ...]:
+    """Die Felder, in denen die Datei von der Buchreihe im Inventar abweicht.
+
+    Wie beim Vergleich mit den Listen: Preise auf den Cent, Texte ohne
+    Randleerzeichen. „Leihbar“ fehlt - in IServ gehört es zum Listeneintrag,
+    nicht zur Buchreihe, und ein Buch ohne Liste hat keinen.
+    """
+    def gleich(eigen: Any, fremd: Any) -> bool:
+        if isinstance(eigen, (int, float)) and isinstance(fremd, (int, float)):
+            return round(float(eigen), 2) == round(float(fremd), 2)
+        return str(eigen if eigen is not None else "").strip() \
+            == str(fremd if fremd is not None else "").strip()
+
+    felder = (("titel", buch.titel, serie.title), ("verlag", buch.verlag, serie.publisher),
+              ("neupreis", buch.neupreis, serie.price),
+              ("leihgebuehr", buch.leihgebuehr, serie.fee))
+    return tuple((feld, fremd) for feld, eigen, fremd in felder if not gleich(eigen, fremd))
+
+
+def _mit_inventar(request: Request, buecher: tuple[Buch, ...]) -> tuple[Buch, ...]:
+    """Neue Reihen - in keiner IServ-Bücherliste (``reihe == "neu"``) - gegen das Inventar.
+
+    * **Die Buchreihe gibt es im Inventar noch nicht:** sie muss in IServ erst
+      angelegt werden; die ganze Zeile ist einheitlich kräftig blau
+      (``reihe-unbekannt``).
+    * **Es gibt sie schon**, nur in keiner Liste: die Zeile ist nicht
+      hinterlegt. Fach und Jahrgang sind blau wie jede Einführung, und was die
+      Datei bei Titel, Verlag und Preisen anders führt als die Buchreihe, ist
+      gelb.
+
+    Das Inventar wird nur geholt, wenn die Seite eine neue Reihe hat; ist es
+    nicht zu bekommen, bleibt die Zeile, wie sie ist.
+    """
+    if not any(buch.reihe == "neu" for buch in buecher):
+        return buecher
+    try:
+        client = request.app.state.anmeldung.client()
+        inventar = {serie.isbn: serie for serie in client.series.get_all()}
+    except Exception:  # noqa: BLE001 - ohne Inventar bleibt die Zeile, wie sie ist
+        return buecher
+
+    def mit(buch: Buch) -> Buch:
+        if buch.reihe != "neu":
+            return buch
+        serie = inventar.get(buch.isbn)
+        if serie is None:
+            return replace(buch, reihe="unbekannt")
+        return replace(buch, reihe="", iserv=_abweichungen_zur_buchreihe(buch, serie))
+
+    return tuple(mit(buch) for buch in buecher)
 
 
 def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], Buchplanung | None]:
@@ -436,6 +490,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         fehlend: tuple = ()
         if vergleich is not None:
             liste, fehlend = liste_aus_datei(vergleich, liste)
+            fehlend = _mit_inventar(request, fehlend)
         return _seite(request, "buecherliste_gruppe.html", {
             **werte, "titel": liste.titel, "liste": liste, "fehlend": fehlend,
         })
@@ -444,6 +499,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     if gefunden is None:
         return _hinweis(request, "Nicht gefunden",
                         f"„{name}“ kommt in keiner Bücherliste vor.", 404)
+    gefunden = replace(gefunden, buecher=_mit_inventar(request, gefunden.buecher))
     if ansicht == "fach":
         # Die Vorschläge des Hinzufügen-Menüs sind die Bücher, die es hier noch
         # nicht gibt - ein Buch, das schon dasteht, wird in seiner Zeile bearbeitet.

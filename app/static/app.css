@@ -553,6 +553,9 @@ td.frisch {
    sonst auf transparent setzt - "tr.reihe-weg > td" allein kam nie an. */
 .iserv-tabelle > tbody > tr.reihe-neu > td { background: var(--einfuehrung-reihe); }
 .iserv-tabelle > tbody > tr.reihe-weg > td { background: var(--ausmusterung-reihe); }
+/* Neue Reihe ohne Buchreihe im IServ-Inventar: die ganze Zeile im Blau von
+   Fach und Jahrgang, einheitlich. */
+.iserv-tabelle > tbody > tr.reihe-unbekannt > td { background: var(--einfuehrung-grund); }
 /* Die Zelle geht vor der Zeile: gleich spezifisch, aber später. */
 .iserv-tabelle > tbody > tr > td.aenderung { background: var(--aenderung-grund); color: var(--aenderung); }
 .iserv-tabelle > tbody > tr > td.einfuehrung { background: var(--einfuehrung-grund); }

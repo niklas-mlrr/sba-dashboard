@@ -22,6 +22,7 @@ import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -77,8 +78,18 @@ class _Schuljahre:
         return {"sections": [{"options": [{"items": items}]}]}
 
 
+class _Serien:
+    """Das Inventar: jede Buchreihe, die in irgendeiner Liste steht."""
+
+    def get_all(self, detailed: bool = False) -> list[SimpleNamespace]:
+        return [SimpleNamespace(isbn=isbn, title=titel, publisher=verlag, price=preis, fee=5.0)
+                for jahr in _BUECHER.values() for liste in jahr.values()
+                for isbn, titel, _, verlag, preis, _ in liste]
+
+
 class FakeClient:
     schoolyears = _Schuljahre()
+    series = _Serien()
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         pass
@@ -1133,15 +1144,44 @@ def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
     _iserv_aendern(monkeypatch, 5, [
         (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    # In keiner IServ-Liste mehr: eine neue Reihe, blau und ganz hinterlegt.
-    assert "zeile-einfuehrung reihe-neu" in zeile
+    # In keiner IServ-Liste mehr, die Buchreihe gibt es aber im Inventar: die
+    # Zeile ist nicht hinterlegt, nur der Jahrgang blau.
+    assert "zeile-einfuehrung" in zeile and "reihe-" not in zeile
     assert '<span class="wert-einfuehrung">5</span>' in zeile
+    assert 'class="aenderung"' not in zeile
     # Das Menü bleibt: das Buch steht in der Datei.
     assert "aufklappbar" in zeile
 
     jahrgang = seiten.get("/buecherliste/jahrgang/5").text
     assert "Nicht in IServ" in jahrgang
-    assert "zeile-einfuehrung reihe-neu" in jahrgang.split("Nicht in IServ")[1]
+    fehlend = _zeile_von(jahrgang.split("Nicht in IServ")[1], DEUTSCH)
+    assert "zeile-einfuehrung" in fehlend and "reihe-" not in fehlend
+
+    # Weicht die Datei von der Buchreihe im Inventar ab, ist das gelb.
+    _korrigiere_deutsch(seiten, abgeglichen["mtime"], titel="Deutschbuch 5 NRW")
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert 'class="aenderung"' in zeile and "In IServ: Deutschbuch 5" in zeile
+
+
+def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Die ISBN gibt es in IServ gar nicht: einheitlich kräftig blau.
+
+    Deutschbuch 5 aus dem vorigen Test steht dagegen im Inventar und bleibt
+    hell blau mit kräftigem Fach und Jahrgang (``reihe-neu``).
+    """
+    antwort = seiten.post("/api/buchplanung/buch/neu", json={
+        "schuljahr": "2026/2027", "isbn": NEU, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "eingefuehrt_ab": "2026/2027"}],
+        "buchreihe": _buchreihe("Neues Deutschbuch", "Cornelsen"),
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
+    assert "reihe-unbekannt" in zeile and "reihe-neu" not in zeile
+    fehlend = seiten.get("/buecherliste/jahrgang/5").text.split("Nicht in IServ")[1]
+    assert "reihe-unbekannt" in _zeile_von(fehlend, NEU)
 
 
 def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
