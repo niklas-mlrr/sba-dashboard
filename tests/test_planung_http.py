@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -1166,3 +1167,42 @@ def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
     assert "22,50" in zeile and "In IServ: 24,00 €" in zeile
 
+
+
+class _Zellen(HTMLParser):
+    """Zählt je Tabelle die Spaltenköpfe und je Zeile die Zellen."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tabellen: list[tuple[list[int], list[tuple[str | None, int]]]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "table":
+            self.tabellen.append(([0], []))
+        elif not self.tabellen:
+            return
+        elif tag == "th":
+            self.tabellen[-1][0][0] += 1
+        elif tag == "tr":
+            self.tabellen[-1][1].append((dict(attrs).get("data-isbn"), 0))
+        elif tag == "td":
+            isbn, anzahl = self.tabellen[-1][1][-1]
+            self.tabellen[-1][1][-1] = (isbn, anzahl + 1)
+
+
+@pytest.mark.parametrize("ansicht", ["fach/Deutsch", "verlag/Cornelsen", "jahrgang/5"])
+def test_markierte_zeilen_haben_alle_zellen(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch, ansicht: str,
+) -> None:
+    """Eine markierte Zelle darf ihre Nachbarn nicht verschlucken: ``<tdclass=…>``
+    ist für den Browser keine Zelle, und alles dahinter rückt eine Spalte vor."""
+    _iserv_aendern(monkeypatch, 5, [
+        (DEUTSCH, "Deutschbuch 5 (alt)", ["Deutsch"], "Cornelsen", 24.0, False),
+        (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
+    text = seiten.get(f"/buecherliste/{ansicht}").text
+    assert "<tdclass" not in text
+    zellen = _Zellen()
+    zellen.feed(text)
+    for (koepfe,), zeilen in zellen.tabellen:
+        for isbn, anzahl in zeilen:
+            assert anzahl in (0, koepfe), f"{isbn}: {anzahl} Zellen, {koepfe} Spalten"

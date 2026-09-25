@@ -154,7 +154,7 @@
 {%- endmacro %}
 {% macro feldabweichung(iserv, feld) -%}
 {%- if feld in iserv -%}
-{%- set wert = iserv[feld] -%}
+{%- set wert = iserv[feld] %}
  class="aenderung" title="In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}"
 {%- endif -%}
 {%- endmacro %}
