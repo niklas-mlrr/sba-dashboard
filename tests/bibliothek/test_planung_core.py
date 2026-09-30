@@ -877,6 +877,21 @@ def test_die_aenderungsliste_nimmt_einfuehrungen_ab_jetzt_und_ausmusterungen_ab_
     assert liste[0].titel == "Deutschbuch 5"
 
 
+def test_die_aenderungsliste_ist_nach_buch_sortiert(stand):
+    """Nach Titel, nicht nach Fach: die Anträge eines Buchs stehen beisammen."""
+    stand = setze_planung(stand, isbn=TERRA, fach="Politik", jahrgang=5,
+                          ausgemustert_nach="2026/2027")
+    stand = setze_planung(stand, isbn=ALT, fach="Chemie", jahrgang=9,
+                          ausgemustert_nach="2026/2027")
+    stand = setze_planung(stand, isbn=TERRA, fach="Erdkunde", jahrgang=6,
+                          ausgemustert_nach="2026/2027")
+    assert [(a.titel, a.fach, a.jahrgang) for a in aenderungen_im_schuljahr(stand)] == [
+        ("Chemie heute 9", "Chemie", 9),
+        ("Terra 5/6", "Erdkunde", 6),
+        ("Terra 5/6", "Politik", 5),
+    ]
+
+
 def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(tmp_path, stand):
     stand = entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", jahrgang=9,
                               art=ART_AUSMUSTERUNG, ergebnis="Genehmigt", kuerzel=" MÜ ",

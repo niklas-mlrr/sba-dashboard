@@ -4,7 +4,8 @@
 // was die Seite bequemer macht und nirgends ankommt:
 //
 //   1. Die Filter über der Tabelle blenden Zeilen nach Entscheidung und Art
-//      aus. Beide gelten zugleich; "" heißt alle.
+//      aus. Beide gelten zugleich; "" heißt alle. Die verbundenen Zellen
+//      eines Buchs gehen dabei mit.
 //   2. Das Kürzel bleibt in diesem Browser stehen, damit es nicht bei jedem
 //      Neuladen fehlt. Ohne Speicher (privates Fenster) ist das Feld leer.
 //   3. Wer eine Begründung ändert, bekommt daneben den Knopf „Speichern“.
@@ -12,11 +13,24 @@
   const tabelle = document.getElementById("aenderungen");
   const filter = { status: "", art: "" };
 
+  // Je Buch ein <tbody>; Titel, Verlag und ISBN stehen als verbundene Zellen
+  // (.buch-zelle) vorn in seiner ersten Zeile. Fällt die weg, wandern sie in
+  // die erste sichtbare, und rowspan zählt nur die sichtbaren Zeilen - sonst
+  // verschöbe sich jede Zeile darunter um drei Spalten.
   function wendeAn() {
     if (!tabelle) return;
-    for (const zeile of tabelle.tBodies[0].rows) {
-      zeile.hidden = (filter.status && zeile.dataset.status !== filter.status)
-        || (filter.art && zeile.dataset.antrag !== filter.art);
+    for (const buch of tabelle.tBodies) {
+      const zeilen = Array.from(buch.rows);
+      for (const zeile of zeilen) {
+        zeile.hidden = Boolean((filter.status && zeile.dataset.status !== filter.status)
+          || (filter.art && zeile.dataset.antrag !== filter.art));
+      }
+      const sichtbar = zeilen.filter((zeile) => !zeile.hidden);
+      buch.hidden = sichtbar.length === 0;
+      if (!sichtbar.length) continue;
+      const zellen = Array.from(buch.querySelectorAll(".buch-zelle"));
+      sichtbar[0].prepend(...zellen);
+      for (const zelle of zellen) zelle.rowSpan = sichtbar.length;
     }
   }
 

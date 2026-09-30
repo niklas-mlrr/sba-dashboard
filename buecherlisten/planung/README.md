@@ -209,6 +209,10 @@ den entschieden wird. Die Seite „Änderungen“ im Menü „Bücherlisten“
   das Buch fehlt schon in der Liste dieses Schuljahrs.
 
 Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) steht zweimal da.
+Die Liste ist nach **Buch** sortiert (Titel, dann Fach und Jahrgang). Titel,
+Verlag und ISBN stehen einmal, in verbundenen Zellen über alle Anträge des
+Buchs. Per Klick auf die Überschrift sortieren lässt sich diese Tabelle
+deshalb nicht.
 Gerechnet wird das in `aenderungen_im_schuljahr` (`modelle.py`), entschieden
 in `entscheide_antrag` (`abgleich.py`).
 

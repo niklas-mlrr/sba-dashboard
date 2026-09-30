@@ -356,6 +356,15 @@ def aenderungen(request: Request) -> Response:
         }
         for a in (aenderungen_im_schuljahr(stand) if stand else ())
     ]
+    # Je Buch eine Gruppe: Titel, Verlag und ISBN stehen einmal, in
+    # verbundenen Zellen über alle seine Anträge. Die Einträge kommen schon
+    # nach Buch sortiert.
+    buecher: list[dict[str, Any]] = []
+    for eintrag in eintraege:
+        if not buecher or buecher[-1]["isbn"] != eintrag["isbn"]:
+            buecher.append({key: eintrag[key] for key in
+                            ("isbn", "isbn_anzeige", "titel", "verlag")} | {"antraege": []})
+        buecher[-1]["antraege"].append(eintrag)
     zaehler = {
         status: sum(1 for e in eintraege if e["status"] == status)
         for status in (ANTRAG_OFFEN, ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT)
@@ -366,7 +375,8 @@ def aenderungen(request: Request) -> Response:
     })
     return _seite(request, "buecherliste_aenderungen.html", {
         "planung": planung, "schuljahr": aktuell.get("name") or kennung,
-        "eintraege": eintraege, "zaehler": zaehler, "heute": date.today(),
+        "eintraege": eintraege, "buecher": buecher, "zaehler": zaehler,
+        "heute": date.today(),
     })
 
 

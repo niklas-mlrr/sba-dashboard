@@ -6,8 +6,8 @@
 {#
   Die Änderungsliste: jede Einführung ab diesem Schuljahr und jede
   Ausmusterung nach dem Vorjahr oder später, je Buch, Fach und Jahrgang
-  (``aenderungen_im_schuljahr`` in buecherlisten/planung/modelle.py). Jede
-  Zeile ist ein Antrag, der genehmigt oder abgelehnt wird.
+  (``aenderungen_im_schuljahr`` in buecherlisten/planung/modelle.py), nach
+  Buch sortiert. Jede Zeile ist ein Antrag, der genehmigt oder abgelehnt wird.
 
   Kürzel und Datum stehen **einmal** oben und gelten für jeden Klick - wer die
   Liste durchgeht, entscheidet mit demselben Kürzel. Die Begründung gilt für
@@ -58,42 +58,52 @@
     <button type="button" class="btn btn-default" data-filter="art" data-wert="ausmusterung" aria-pressed="false">Ausmusterungen ({{ zaehler.ausmusterung }})</button>
   </span>
 </div>
+{#
+  Je Buch ein <tbody>: Titel, Verlag und ISBN stehen in der ersten Zeile, als
+  verbundene Zellen über alle Anträge des Buchs. Deshalb ist die Tabelle nicht
+  per Klick sortierbar (static/sortieren.js greift über den Spaltenindex, und
+  den verschieben die verbundenen Zellen); sie kommt nach Buch sortiert. Blendet
+  ein Filter Zeilen aus, setzt static/aenderungen.js die verbundenen Zellen in
+  die erste sichtbare Zeile und passt ``rowspan`` an.
+#}
 <div class="tabellenrahmen">
-<table class="iserv-tabelle sortierbar" id="aenderungen">
+<table class="iserv-tabelle aenderungen-tabelle" id="aenderungen">
   <thead>
     <tr>
-      <th data-sort="text">Art</th>
-      <th data-sort="text">Titel</th>
-      <th data-sort="text">Fach</th>
-      <th data-sort="zahl">Jahrgang</th>
-      <th data-sort="text">Schuljahr</th>
-      <th data-sort="text">Verlag</th>
-      <th data-sort="text">ISBN</th>
-      <th data-sort="text">Entscheidung</th>
-      <th data-sort="text">Begründung</th>
-      <th data-sort="text">Entscheiden</th>
+      <th>Titel</th>
+      <th>Verlag</th>
+      <th>ISBN</th>
+      <th>Art</th>
+      <th>Fach</th>
+      <th>Jahrgang</th>
+      <th>Schuljahr</th>
+      <th>Entscheidung</th>
+      <th>Begründung</th>
+      <th>Entscheiden</th>
     </tr>
   </thead>
-  <tbody>
-    {% for e in eintraege %}
+  {% for buch in buecher %}
+  <tbody data-buch="{{ buch.isbn }}">
+    {% for e in buch.antraege %}
     <tr data-antrag="{{ e.art }}" data-status="{{ e.status }}" data-isbn="{{ e.isbn }}"
       data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}">
-      <td data-wert="{{ 'Einführung' if e.einfuehrung else 'Ausmusterung' }}"><span
-        class="label {{ 'label-info' if e.einfuehrung else 'label-danger' }}">{{ "Einführung" if e.einfuehrung else "Ausmusterung" }}</span></td>
-      <td>{{ e.titel }}</td>
+      {% if loop.first %}{% set zeilen = buch.antraege | length %}
+      <td class="buch-zelle" rowspan="{{ zeilen }}">{{ buch.titel }}</td>
+      <td class="buch-zelle" rowspan="{{ zeilen }}">{{ buch.verlag }}</td>
+      <td class="buch-zelle" rowspan="{{ zeilen }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
+      {% endif %}
+      <td><span class="label {{ 'label-info' if e.einfuehrung else 'label-danger' }}">{{ "Einführung" if e.einfuehrung else "Ausmusterung" }}</span></td>
       <td><a href="/buecherliste/fach/{{ e.fach | urlencode }}">{{ e.fach }}</a></td>
-      <td data-wert="{{ e.jahrgang }}">{{ e.jahrgang }}</td>
-      <td data-wert="{{ e.schuljahr }}">{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</td>
-      <td>{{ e.verlag }}</td>
-      <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
-      <td data-wert="{{ e.status }}">{{ bp.statuslabel(e.status) }}
+      <td>{{ e.jahrgang }}</td>
+      <td>{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</td>
+      <td>{{ bp.statuslabel(e.status) }}
         {%- if e.kuerzel or e.datum %}<br><span class="klein grau">{{ e.kuerzel }}{% if e.kuerzel and e.datum %}, {% endif %}{{ e.datum.strftime("%d.%m.%Y") if e.datum else "" }}</span>{% endif %}</td>
-      <td data-wert="{{ e.begruendung }}" class="aenderungen-begruendung"><span class="planung-bemerkung-rahmen"><textarea
+      <td class="aenderungen-begruendung"><span class="planung-bemerkung-rahmen"><textarea
         class="planung-feld planung-bemerkung" rows="1" data-antrag-feld="begruendung"
         aria-label="Begründung">{{ e.begruendung }}</textarea></span>
         <button type="button" class="btn btn-default knopf-klein" data-planung="antrag" hidden
           data-antrag-speichern title="Nur die Begründung speichern">Speichern</button></td>
-      <td data-wert="{{ e.status }}" class="aenderungen-knoepfe">
+      <td class="aenderungen-knoepfe">
         {%- if e.status != "genehmigt" %}<button type="button" class="btn btn-default" data-planung="antrag"
           data-ergebnis="genehmigt">Genehmigen</button>{% endif %}
         {%- if e.status != "abgelehnt" %}<button type="button" class="btn btn-default" data-planung="antrag"
@@ -103,11 +113,11 @@
     </tr>
     {% endfor %}
   </tbody>
+  {% endfor %}
 </table>
 </div>
 {% endif %}
 {% endblock %}
 
-{% block skripte %}<script src="/static/sortieren.js"></script>
-<script src="/static/buchplanung.js"></script>
+{% block skripte %}<script src="/static/buchplanung.js"></script>
 <script src="/static/aenderungen.js"></script>{% endblock %}

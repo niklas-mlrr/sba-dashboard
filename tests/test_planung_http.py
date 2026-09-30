@@ -1355,17 +1355,44 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text
 
 
-def test_die_aenderungsliste_ist_sortierbar_und_vollstaendig(
+class _Buchgruppen(HTMLParser):
+    """Je <tbody> der Änderungsliste: Zeilen, Zellen je Zeile, rowspans der Buchzellen."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.koepfe = 0
+        self.gruppen: list[dict] = []
+
+    def handle_starttag(self, tag, attrs):
+        werte = dict(attrs)
+        if tag == "th":
+            self.koepfe += 1
+        elif tag == "tbody":
+            self.gruppen.append({"isbn": werte.get("data-buch"), "zeilen": [], "rowspans": []})
+        elif tag == "tr" and self.gruppen:
+            self.gruppen[-1]["zeilen"].append(0)
+        elif tag == "td" and self.gruppen:
+            self.gruppen[-1]["zeilen"][-1] += 1
+            if "buch-zelle" in (werte.get("class") or ""):
+                self.gruppen[-1]["rowspans"].append(int(werte["rowspan"]))
+
+
+def test_die_aenderungsliste_verbindet_die_zellen_eines_buchs(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    from test_buecherlisten import _Tabellen
-
+    """Nach Buch sortiert, und Titel, Verlag, ISBN stehen einmal über allen Anträgen."""
     _mit_einfuehrung(seiten, abgeglichen)
-    sammler = _Tabellen()
-    sammler.feed(seiten.get("/buecherliste/aenderungen").text)
-    (tabelle,) = sammler.tabellen
-    assert all(k.get("data-sort") in {"text", "zahl"} for k in tabelle["koepfe"])
-    assert all(len(zeile) == len(tabelle["koepfe"]) for zeile in tabelle["zeilen"])
+    text = seiten.get("/buecherliste/aenderungen").text
+    assert "sortierbar" not in text
+    sammler = _Buchgruppen()
+    sammler.feed(text)
+    # Chemie heute 9, Deutschbuch 5, Terra 5/6 - nach Titel, nicht nach Fach.
+    assert [g["isbn"] for g in sammler.gruppen] == [ALT, DEUTSCH, TERRA]
+    terra = sammler.gruppen[2]
+    assert terra["rowspans"] == [2, 2, 2]  # Erdkunde 5 und Politik 5
+    # Die erste Zeile trägt die drei Buchzellen, die weiteren nur ihre eigenen.
+    assert terra["zeilen"] == [sammler.koepfe, sammler.koepfe - 3]
+    assert text.index("Erdkunde</a>") < text.index("Politik</a>")
 
 
 def test_die_aenderungsliste_ohne_anmeldung_zeigt_einen_hinweis(seiten: TestClient) -> None:
