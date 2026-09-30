@@ -281,7 +281,7 @@
     return {
       isbn: werte.isbn, titel: werte.titel, verlag: werte.verlag,
       neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
-      leihbar: Boolean(werte.leihbar),
+      leihbar: Boolean(werte.leihbar), bemerkung: werte.bemerkung || "",
     };
   }
 
@@ -405,6 +405,8 @@
     setze("verlag", buch.verlag);
     setze("neupreis", preis(buch.neupreis));
     setze("leihgebuehr", preis(buch.leihgebuehr));
+    setze("bemerkung", buch.bemerkung || "");
+    messeBemerkungen(bereich);
     const leihbar = bereich.querySelector('[data-buchreihe-feld="leihbar"]');
     if (leihbar) leihbar.checked = Boolean(buch.leihbar);
     // Weiter geht es mit den Jahrgängen - die Buchreihe ist vollständig.

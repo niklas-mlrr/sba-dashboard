@@ -196,7 +196,7 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
         buchreihe=None if anfrage.buchreihe is None else Buchreiheneingabe(
             titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
             neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
-            leihbar=anfrage.buchreihe.leihbar,
+            leihbar=anfrage.buchreihe.leihbar, bemerkung=anfrage.buchreihe.bemerkung,
         ),
         mtime=anfrage.mtime,
     )
@@ -212,7 +212,7 @@ def api_buch_neu(request: Request, anfrage: BuchHinzufuegenAnfrage) -> JSONRespo
         buchreihe=Buchreiheneingabe(
             titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
             neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
-            leihbar=anfrage.buchreihe.leihbar,
+            leihbar=anfrage.buchreihe.leihbar, bemerkung=anfrage.buchreihe.bemerkung,
         ),
         zeilen=[
             Jahrgangseingabe(

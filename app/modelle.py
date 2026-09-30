@@ -205,6 +205,7 @@ class BuchreiheEingabe(BaseModel):
     neupreis: float | None = None
     leihgebuehr: float | None = None
     leihbar: bool | None = None
+    bemerkung: str | None = None
 
 
 class BuchplanungsAnfrage(_BuchplanungAnfrage):

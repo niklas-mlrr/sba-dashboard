@@ -882,8 +882,7 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 }
 .iserv-modal .buchreihe-form .preisfeld { flex: 0 0 33.33333333%; padding: 0 15px; }
 .iserv-modal .buchreihe-leihbar .checkbox { margin: 0; }
-.iserv-modal .buchreihe-leihbar .checkbox label { font-weight: 700; cursor: pointer; }
-.iserv-modal .input-group { display: flex; }
+.iserv-modal .buchreihe-leihbar .checkbox label { font-weight: 700; cursor: pointer; }.iserv-modal .input-group { display: flex; }
 .iserv-modal .input-group .form-control {
   flex: 1 1 auto;
   min-width: 0;

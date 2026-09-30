@@ -24,6 +24,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 
+import openpyxl
 import pytest
 from fastapi.testclient import TestClient
 
@@ -1070,6 +1071,66 @@ def test_korrigiertes_leihbar_steht_in_der_liste(seiten: TestClient, abgeglichen
     assert "in IServ: nein" in text
     # Jetzt gibt es auch den Rücklage-Block.
     assert "Rücklage für die Fachschaft Latein" in text
+
+
+def _deutsch_vorlage(seiten: TestClient) -> str:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    return text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
+
+
+def test_das_menue_fragt_unter_leihbar_nach_der_bemerkung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    vorlage = _deutsch_vorlage(seiten)
+    assert vorlage.index('data-buchreihe-feld="leihbar"') \
+        < vorlage.index('data-buchreihe-feld="bemerkung"') \
+        < vorlage.index("Einführung und Ausmusterung")
+    neu = seiten.get("/buecherliste/fach/Deutsch").text \
+        .split('id="planung-neu-vorlage"')[1].split("</template>")[0]
+    assert 'data-buchreihe-feld="bemerkung"' in neu
+
+
+def test_bemerkung_zum_buch_steht_in_der_datei_und_im_menue(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _korrigiere_deutsch(seiten, abgeglichen["mtime"], bemerkung="  Neuauflage 2027  ")
+    buch = next(b for b in stand["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert buch["bemerkung"] == "Neuauflage 2027"
+    wb = openpyxl.load_workbook(stand["datei"])
+    ws = wb["Buchreihen"]
+    kopf = [zelle.value for zelle in ws[1]]
+    zeile = next(z for z in ws.iter_rows(min_row=2, values_only=True)
+                 if z[kopf.index("ISBN")] == DEUTSCH)
+    assert zeile[kopf.index("Bemerkung")] == "Neuauflage 2027"
+    assert ">Neuauflage 2027</textarea>" in _deutsch_vorlage(seiten)
+
+    # Ohne ``bemerkung`` im Körper bleibt sie; leer löscht sie.
+    stand = _korrigiere_deutsch(seiten, stand["mtime"])
+    assert next(b for b in stand["planung"]["buecher"]
+                if b["isbn"] == DEUTSCH)["bemerkung"] == "Neuauflage 2027"
+    stand = _korrigiere_deutsch(seiten, stand["mtime"], bemerkung="")
+    assert next(b for b in stand["planung"]["buecher"]
+                if b["isbn"] == DEUTSCH)["bemerkung"] == ""
+
+
+def test_bemerkung_zum_buch_uebersteht_den_abgleich(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    _korrigiere_deutsch(seiten, abgeglichen["mtime"], bemerkung="Neuauflage 2027")
+    neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
+    buch = next(b for b in neu["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert buch["bemerkung"] == "Neuauflage 2027"
+
+
+def test_neues_buch_bringt_seine_bemerkung_mit(seiten: TestClient, abgeglichen: dict) -> None:
+    antwort = _hinzufuegen(seiten, abgeglichen["mtime"], NEU, bemerkung="nur Klassensatz")
+    assert antwort.status_code == 200, antwort.text
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == NEU)
+    assert buch["bemerkung"] == "nur Klassensatz"
+    # Und „+ Buch hinzufügen“ schlägt sie in anderen Fächern mit vor.
+    text = seiten.get("/buecherliste/fach/Latein").text
+    vorschlaege = json.loads(text.split('id="planung-buecher">')[1].split("</script>")[0])
+    assert next(b for b in vorschlaege if b["isbn"] == NEU)["bemerkung"] == "nur Klassensatz"
 
 
 # ── Die Datei als Soll, IServ als Vergleich ──────────────────────────────────

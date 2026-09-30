@@ -32,6 +32,7 @@ from .modelle import (
     RUECKLAGE_GEWUENSCHT,
     RUECKLAGE_STATUS,
     Buch,
+    Buchbemerkung,
     Buchplanung,
     Planungszeile,
     Ruecklage,
@@ -363,6 +364,9 @@ class Buchreiheneingabe:
     leihgebuehr: float | None = None
     # ``None`` heißt: bleibt, wie es in der Datei steht.
     leihbar: bool | None = None
+    # Die Spalte ``Bemerkung`` auf ``Buchreihen`` - eine je Buch, für alle
+    # Fächer. ``None`` heißt wie bei ``leihbar``: bleibt, wie es dasteht.
+    bemerkung: str | None = None
 
 
 # Ein Preis, den es für ein Schulbuch geben kann. Geprüft wird wie beim
@@ -390,8 +394,19 @@ def _cent(betrag: float | None) -> float | None:
     return None if betrag is None else round(betrag, 2)
 
 
+def _mit_bemerkung(stand: Buchplanung, isbn: str, bemerkung: str | None) -> Buchplanung:
+    """Setzt die Bemerkung eines Buchs; eine leere fällt aus der Liste."""
+    if bemerkung is None:
+        return stand
+    andere = tuple(b for b in stand.bemerkungen if b.isbn != isbn)
+    text = bemerkung.strip()
+    return _ersetzt(
+        stand, bemerkungen=andere + ((Buchbemerkung(isbn=isbn, bemerkung=text),) if text else ()),
+    )
+
+
 def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe) -> Buchplanung:
-    """Ändert Titel, Verlag, Preise und leihbar eines Buchs - in der Datei, nicht in IServ.
+    """Ändert Titel, Verlag, Preise, leihbar und Bemerkung eines Buchs - in der Datei, nicht in IServ.
 
     Die Datei ist das Soll: die Eingabe gilt, wie sie ist, und ein leerer Preis
     ist leer. Was IServ davon abweichend nennt, zeigt der Vergleich auf den
@@ -405,9 +420,10 @@ def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe
         neupreis=_cent(eingabe.neupreis), leihgebuehr=_cent(eingabe.leihgebuehr),
         leihbar=buch.leihbar if eingabe.leihbar is None else eingabe.leihbar,
     )
-    return _ersetzt(
+    neu = _ersetzt(
         stand, buecher=tuple(neues_buch if b.isbn == isbn else b for b in stand.buecher),
     )
+    return _mit_bemerkung(neu, isbn, eingabe.bemerkung)
 
 
 def _gepruefte_isbn(stand: Buchplanung, eingabe: str) -> str:
@@ -481,6 +497,7 @@ def fuege_buch_hinzu(
             neupreis=_cent(buchreihe.neupreis), leihgebuehr=_cent(buchreihe.leihgebuehr),
             leihbar=bool(buchreihe.leihbar),
         ),))
+        neu = _mit_bemerkung(neu, isbn, buchreihe.bemerkung)
     else:
         if fach in buch.faecher or any(
                 z.isbn == isbn and z.fach == fach for z in stand.planung):

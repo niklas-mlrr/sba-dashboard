@@ -188,7 +188,8 @@
 {% endmacro %}
 
 {#
-  Der Block "Buchreihe" - ISBN, Titel, Verlag, Neupreis, Leihgebühr, Leihbar. Aufbau
+  Der Block "Buchreihe" - ISBN, Titel, Verlag, Neupreis, Leihgebühr, Leihbar,
+  Bemerkung. Aufbau
   nach dem IServ-Dialog "Buchreihe bearbeiten" (partials/stock/
   modal_series_edit.html): Beschriftung über dem Feld, die Preise mit "€"
   dahinter. Fächer und Jahrgänge, die IServ dort ebenfalls führt, fehlen:
@@ -215,7 +216,12 @@
   die ISBN frei, und ISBN wie Titel schlagen beim Tippen die Bücher anderer
   Fächer vor (``static/buchplanung.js``). Ein Treffer füllt die übrigen Felder.
 #}
-{% macro buchreihe(buch) %}
+{#
+  ``bemerkung`` ist die Spalte „Bemerkung“ auf „Buchreihen“: ein Freitext je
+  Buch, derselbe in jedem Fach. IServ kennt sie nicht, deshalb steht darunter
+  kein Vergleich.
+#}
+{% macro buchreihe(buch, bemerkung="") %}
 {% set neu = buch is none %}
 {% set iserv = {} if neu else dict(buch.iserv or ()) %}
 <div class="planung-block buchreihe-form" data-buchreihe>
@@ -284,9 +290,17 @@
       {% if not neu and buch.leihbar %}checked{% endif %}> Leihbar</label></div>
     {{ in_iserv(iserv, "leihbar") }}
   </div>
+  <div class="form-group">
+    <label class="control-label">Bemerkung</label>
+    {# Dasselbe Feld wie die Bemerkung je Jahrgang: eine Zeile, beim Anklicken
+       so hoch wie ihr Text (static/buchplanung.js). #}
+    <span class="planung-bemerkung-rahmen"><textarea class="planung-feld planung-bemerkung"
+      rows="1" data-buchreihe-feld="bemerkung" placeholder="Bemerkung"
+      aria-label="Bemerkung zum Buch">{{ bemerkung }}</textarea></span>
+  </div>
   {% if neu %}
   <p class="small help-block">ISBN oder Titel eintippen: Bücher aus anderen Fächern werden
-    vorgeschlagen und bringen Titel, Verlag, Preise und „Leihbar“ mit. Eine neue ISBN legt das Buch nur
+    vorgeschlagen und bringen Titel, Verlag, Preise, „Leihbar“ und die Bemerkung mit. Eine neue ISBN legt das Buch nur
     im Dashboard an - in IServ ändert sich nichts.</p>
   {% elif buch.von_hand %}
   <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
@@ -306,7 +320,7 @@
     <h3 class="modal-title">Buchreihe bearbeiten<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
   </div>
   <div class="modal-body">
-    {{ buchreihe(buch) }}
+    {{ buchreihe(buch, planung.bemerkung_je_isbn.get(buch.isbn, "")) }}
     <div class="planung-block">
       <h4>Einführung und Ausmusterung</h4>
       {#

@@ -189,7 +189,8 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
     leer: dict[str, Any] = {
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
-        "ruecklage_je_isbn": {}, "ausmusterungen_je_fach": {}, "vorjahr": "",
+        "ruecklage_je_isbn": {}, "bemerkung_je_isbn": {}, "ausmusterungen_je_fach": {},
+        "vorjahr": "",
         "verlage": [], "buecher": [], "isbns": set(),
     }
     try:
@@ -261,10 +262,12 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
 
     # Die Vorschläge für „+ Buch hinzufügen“: jedes Buch der Datei, mit dem,
     # was das Menü bei einem Treffer übernimmt.
+    bemerkungen = {b.isbn: b.bemerkung for b in planung.bemerkungen}
     buecher = [
         {"isbn": buch.isbn, "isbn_anzeige": format_isbn(buch.isbn), "titel": buch.titel,
          "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
          "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr, "leihbar": buch.leihbar,
+         "bemerkung": bemerkungen.get(buch.isbn, ""),
          "faecher": sorted({fach for fach, _ in buch.kombinationen}
                            | {z.fach for z in planung.planung if z.isbn == buch.isbn},
                            key=str.casefold)}
@@ -287,6 +290,8 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         "fach_je_name": faecher,
         "planung_je_isbn_und_fach": zeilen,
         "ruecklage_je_isbn": ruecklagen,
+        # Die Spalte „Bemerkung“ auf „Buchreihen“ - eine je Buch.
+        "bemerkung_je_isbn": bemerkungen,
         "ausmusterungen_je_fach": ausgemustert,
         "vorjahr": planung.vorjahr,
         "verlage": [v for v in planung.verlage if v != OHNE_VERLAG],
