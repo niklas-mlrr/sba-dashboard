@@ -17,7 +17,7 @@ Die sieben Router hier sind nach dem geschnitten, was ein Leser sucht:
 * :mod:`~app.api.buecherliste` - die Bücherlisten nach Fach, Verlag und
   Jahrgang, aus der Buchplanungs-Datei, verglichen mit IServ live (HTML).
 * :mod:`~app.api.buchplanung` - der gespeicherte Stand eines Schuljahrs:
-  Preisprüfung, Fachbestätigung, Planung und Rücklagen (nur API; eingetragen
+  Fachbestätigung, Planung, Rücklagen und Anträge (nur API; eingetragen
   wird in den Bücherlisten-Ansichten).
 * :mod:`~app.api.mehrjahresbaende` - die Übersicht, welche Bücher am
   Schuljahreswechsel abzugeben sind (HTML plus drei API-Routen).

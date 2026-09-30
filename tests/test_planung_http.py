@@ -1324,3 +1324,116 @@ def test_markierte_zeilen_haben_alle_zellen(
     for (koepfe,), zeilen in zellen.tabellen:
         for isbn, anzahl in zeilen:
             assert anzahl in (0, koepfe), f"{isbn}: {anzahl} Zellen, {koepfe} Spalten"
+
+
+# ── Die Änderungsliste ───────────────────────────────────────────────────────
+
+
+def _mit_einfuehrung(seiten: TestClient, abgeglichen: dict) -> dict:
+    """Nach dem Abgleich: eine Einführung zu den Ausmusterungen des Vorjahrs."""
+    antwort = seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "eingefuehrt_ab": "2027/2028", "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    return antwort.json()
+
+
+def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    _mit_einfuehrung(seiten, abgeglichen)
+    text = seiten.get("/buecherliste/aenderungen").text
+    assert 'href="/buecherliste/aenderungen"' in text
+    assert 'data-schuljahr="2026/2027"' in text
+    assert 'id="antrag-kuerzel"' in text
+    # Deutsch 7 ab 2027/2028, und aus dem Abgleich: Chemie 9, Erdkunde 5, Politik 5
+    # nach 2025/2026.
+    assert text.count('data-antrag="einfuehrung"') == 1
+    assert text.count('data-antrag="ausmusterung"') == 3
+    assert "ab 2027/2028" in text and "nach 2025/2026" in text
+    assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text
+
+
+def test_die_aenderungsliste_ist_sortierbar_und_vollstaendig(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    from test_buecherlisten import _Tabellen
+
+    _mit_einfuehrung(seiten, abgeglichen)
+    sammler = _Tabellen()
+    sammler.feed(seiten.get("/buecherliste/aenderungen").text)
+    (tabelle,) = sammler.tabellen
+    assert all(k.get("data-sort") in {"text", "zahl"} for k in tabelle["koepfe"])
+    assert all(len(zeile) == len(tabelle["koepfe"]) for zeile in tabelle["zeilen"])
+
+
+def test_die_aenderungsliste_ohne_anmeldung_zeigt_einen_hinweis(seiten: TestClient) -> None:
+    antwort = seiten.get("/buecherliste/aenderungen")
+    assert antwort.status_code == 401
+    assert "Nicht angemeldet" in antwort.text
+
+
+def test_die_aenderungsliste_ohne_datei_bietet_den_abgleich_an(seiten: TestClient) -> None:
+    _anmelden(seiten)
+    text = seiten.get("/buecherliste/aenderungen").text
+    assert 'data-planung="abgleich"' in text
+    assert "<table" not in text
+
+
+def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _mit_einfuehrung(seiten, abgeglichen)
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": "einfuehrung", "ergebnis": "genehmigt", "kuerzel": "MÜ",
+        "datum": "2026-09-30", "begruendung": "neuer Lehrplan", "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    zeile = next(z for z in buch["planung"] if z["jahrgang"] == 7)
+    assert zeile["antrag_einfuehrung"] == {
+        "ergebnis": "genehmigt", "kuerzel": "MÜ", "datum": "2026-09-30"}
+    assert zeile["antrag_ausmusterung"]["ergebnis"] == "offen"
+    assert zeile["begruendung"] == "neuer Lehrplan"
+
+    text = seiten.get("/buecherliste/aenderungen").text
+    assert 'data-status="genehmigt"' in text and "neuer Lehrplan" in text
+    assert "MÜ, 30.09.2026" in text
+    # Das Planungsmenü zeigt die Entscheidung mit, nur zum Lesen.
+    assert "planung-antrag" in seiten.get("/buecherliste/fach/Deutsch").text
+
+    zurueck = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": "einfuehrung", "ergebnis": "", "mtime": antwort.json()["mtime"],
+    })
+    assert zurueck.status_code == 200, zurueck.text
+    buch = next(b for b in zurueck.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    zeile = next(z for z in buch["planung"] if z["jahrgang"] == 7)
+    assert zeile["antrag_einfuehrung"]["ergebnis"] == "offen"
+    assert zeile["begruendung"] == "neuer Lehrplan"
+
+
+def test_ein_antrag_ohne_kuerzel_wird_mit_einem_satz_abgelehnt(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _mit_einfuehrung(seiten, abgeglichen)
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": "einfuehrung", "ergebnis": "genehmigt", "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert "Kürzel" in antwort.json()["fehler"]
+
+
+def test_ein_antrag_auf_eine_alte_fassung_ist_409(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    _mit_einfuehrung(seiten, abgeglichen)
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": "einfuehrung", "ergebnis": "genehmigt", "kuerzel": "MÜ",
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 409

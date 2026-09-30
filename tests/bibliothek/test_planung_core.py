@@ -16,6 +16,11 @@ from datetime import date
 import pytest
 
 from buecherlisten.planung import (
+    ANTRAG_ABGELEHNT,
+    ANTRAG_GENEHMIGT,
+    ANTRAG_OFFEN,
+    ART_AUSMUSTERUNG,
+    ART_EINFUEHRUNG,
     FACH_BESTAETIGT,
     FACH_OFFEN,
     FACH_TEILWEISE,
@@ -30,7 +35,9 @@ from buecherlisten.planung import (
     Schnappschuss,
     UnbekanntesBuch,
     UngueltigeEingabe,
+    aenderungen_im_schuljahr,
     bestaetige_fach,
+    entscheide_antrag,
     fach_status,
     fuege_buch_hinzu,
     lade_schnappschuss,
@@ -838,3 +845,179 @@ def test_ein_neues_buch_nimmt_leihbar_aus_dem_menue(stand):
                            buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett", leihbar=True),
                            zeilen=_einfuehrung(7))
     assert neu.buch(NEU).leihbar
+
+
+# ── Die Änderungsliste: Anträge genehmigen oder ablehnen ────────────────────
+
+
+def _mit_antraegen(stand: Buchplanung) -> Buchplanung:
+    """Je eine Einführung und Ausmusterung an und hinter den Grenzen der Liste."""
+    for jahrgang, ab, nach in (
+            (7, "2026/2027", ""),           # Einführung im laufenden Jahr: drin
+            (8, "2025/2026", ""),           # Einführung im Vorjahr: vollzogen, raus
+            (9, "2027/2028", "2027/2028"),  # beides: zwei Anträge
+    ):
+        stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=jahrgang,
+                              eingefuehrt_ab=ab, ausgemustert_nach=nach)
+    stand = setze_planung(stand, isbn=TERRA, fach="Erdkunde", jahrgang=5,
+                          ausgemustert_nach="2025/2026")  # nach dem Vorjahr: drin
+    return setze_planung(stand, isbn=TERRA, fach="Erdkunde", jahrgang=6,
+                         ausgemustert_nach="2024/2025")   # vorvoriges Jahr: raus
+
+
+def test_die_aenderungsliste_nimmt_einfuehrungen_ab_jetzt_und_ausmusterungen_ab_vorjahr(stand):
+    liste = aenderungen_im_schuljahr(_mit_antraegen(stand))
+    assert [(a.fach, a.jahrgang, a.art, a.schuljahr) for a in liste] == [
+        ("Deutsch", 7, ART_EINFUEHRUNG, "2026/2027"),
+        ("Deutsch", 9, ART_EINFUEHRUNG, "2027/2028"),
+        ("Deutsch", 9, ART_AUSMUSTERUNG, "2027/2028"),
+        ("Erdkunde", 5, ART_AUSMUSTERUNG, "2025/2026"),
+    ]
+    assert all(a.status == ANTRAG_OFFEN for a in liste)
+    assert liste[0].titel == "Deutschbuch 5"
+
+
+def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(tmp_path, stand):
+    stand = entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", jahrgang=9,
+                              art=ART_AUSMUSTERUNG, ergebnis="Genehmigt", kuerzel=" MÜ ",
+                              begruendung="Nur ein Jahr gebraucht", heute=date(2026, 9, 30))
+    zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
+    assert zeile.antrag_ausmusterung.status == ANTRAG_GENEHMIGT
+    assert (zeile.antrag_ausmusterung.kuerzel, zeile.antrag_ausmusterung.datum) \
+        == ("MÜ", date(2026, 9, 30))
+    # Die Einführung derselben Zeile ist ein eigener Antrag.
+    assert zeile.antrag_einfuehrung.status == ANTRAG_OFFEN
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    from openpyxl import load_workbook
+    ws = load_workbook(str(pfad))["Fächer & Jahrgang"]
+    kopf = [z.value for z in ws[1]]
+    assert kopf[3:12] == [
+        "Einführung", "Antrag Einführung", "Antrag Einführung Kürzel",
+        "Antrag Einführung Datum", "Ausmusterung nach Schuljahr", "Antrag Ausmusterung",
+        "Antrag Ausmusterung Kürzel", "Antrag Ausmusterung Datum", "Begründung",
+    ]
+    gelesen = lies_datei(pfad).planungszeile(DEUTSCH, "Deutsch", 9)
+    assert gelesen == zeile
+
+
+def test_ablehnen_und_zuruecksetzen(stand):
+    stand = _mit_antraegen(stand)
+    stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                              art=ART_EINFUEHRUNG, ergebnis="abgelehnt", kuerzel="MÜ")
+    assert stand.planungszeile(DEUTSCH, "Deutsch", 7).antrag_einfuehrung.status \
+        == ANTRAG_ABGELEHNT
+    stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                              art=ART_EINFUEHRUNG, ergebnis="")
+    assert stand.planungszeile(DEUTSCH, "Deutsch", 7).antrag_einfuehrung.leer
+
+
+def test_nur_die_begruendung_laesst_die_entscheidung_stehen(stand):
+    stand = entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", kuerzel="MÜ")
+    stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                              art=ART_EINFUEHRUNG, ergebnis=None, begruendung="neuer Lehrplan")
+    zeile = stand.planungszeile(DEUTSCH, "Deutsch", 7)
+    assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
+    assert zeile.begruendung == "neuer Lehrplan"
+
+
+@pytest.mark.parametrize(("felder", "teil"), [
+    ({"jahrgang": 7, "art": ART_EINFUEHRUNG, "ergebnis": "genehmigt"}, "Kürzel"),
+    ({"jahrgang": 7, "art": ART_EINFUEHRUNG, "ergebnis": "vielleicht", "kuerzel": "MÜ"},
+     "keine Entscheidung"),
+    ({"jahrgang": 7, "art": ART_AUSMUSTERUNG, "ergebnis": "genehmigt", "kuerzel": "MÜ"},
+     "keine Ausmusterung"),
+    ({"jahrgang": 5, "art": ART_EINFUEHRUNG, "ergebnis": "genehmigt", "kuerzel": "MÜ"},
+     "keine Einführung"),
+    ({"jahrgang": 7, "art": "umbenennung", "ergebnis": "genehmigt", "kuerzel": "MÜ"},
+     "keine Art"),
+])
+def test_ungueltige_entscheidung_wird_abgelehnt(stand, felder, teil):
+    with pytest.raises(UngueltigeEingabe, match=teil):
+        entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", **felder)
+
+
+def _genehmigt(stand: Buchplanung) -> Buchplanung:
+    stand = _mit_antraegen(stand)
+    for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG):
+        stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=9, art=art,
+                                  ergebnis="genehmigt", kuerzel="MÜ", begruendung="Grund")
+    return stand
+
+
+def test_ein_geaendertes_schuljahr_setzt_nur_seinen_antrag_zurueck(stand):
+    stand = setze_buchplanung(_genehmigt(stand), isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(5),
+        Jahrgangseingabe(7, eingefuehrt_ab="2026/2027"),
+        Jahrgangseingabe(8, eingefuehrt_ab="2025/2026"),
+        Jahrgangseingabe(9, eingefuehrt_ab="2027/28", ausgemustert_nach="2028/2029"),
+    ])
+    zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
+    # "2027/28" ist dasselbe Schuljahr wie "2027/2028": die Einführung bleibt genehmigt.
+    assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
+    assert zeile.antrag_ausmusterung.leer
+    assert zeile.begruendung == "Grund"
+
+
+def test_bemerkung_und_listenbestaetigung_lassen_die_entscheidung_stehen(stand):
+    stand = setze_buchplanung(_genehmigt(stand), isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(5),
+        Jahrgangseingabe(7, eingefuehrt_ab="2026/2027"),
+        Jahrgangseingabe(8, eingefuehrt_ab="2025/2026"),
+        Jahrgangseingabe(9, eingefuehrt_ab="2027/2028", ausgemustert_nach="2027/2028",
+                         bemerkung="neu"),
+    ])
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="FK", datum=date(2026, 10, 1))
+    zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
+    assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
+    assert zeile.antrag_ausmusterung.status == ANTRAG_GENEHMIGT
+    assert (zeile.kuerzel, zeile.bemerkung, zeile.begruendung) == ("FK", "neu", "Grund")
+
+
+def test_ein_im_menue_entfernter_jahrgang_nimmt_seine_begruendung_mit(stand):
+    stand = setze_buchplanung(_genehmigt(stand), isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(5),
+        Jahrgangseingabe(7, eingefuehrt_ab="2026/2027"),
+        Jahrgangseingabe(8, eingefuehrt_ab="2025/2026"),
+    ])
+    assert stand.planungszeile(DEUTSCH, "Deutsch", 9) is None
+
+
+def test_eine_datei_ohne_antragsspalten_liest_alles_als_offen(tmp_path, stand):
+    from openpyxl import load_workbook
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, _mit_antraegen(stand))
+    wb = load_workbook(str(pfad))
+    ws = wb["Fächer & Jahrgang"]
+    for spalte in range(ws.max_column, 0, -1):
+        if str(ws.cell(1, spalte).value).startswith("Antrag") \
+                or ws.cell(1, spalte).value == "Begründung":
+            ws.delete_cols(spalte)
+    wb.save(str(pfad))
+
+    gelesen = lies_datei(pfad)
+    assert len(aenderungen_im_schuljahr(gelesen)) == 4
+    assert all(a.status == ANTRAG_OFFEN for a in aenderungen_im_schuljahr(gelesen))
+    schreibe_datei(pfad, gelesen)
+    assert "Antrag Einführung" in [z.value for z in load_workbook(str(pfad))["Fächer & Jahrgang"][1]]
+
+
+def test_ein_unbekannter_text_in_der_antragsspalte_bleibt_und_gilt_als_offen(tmp_path, stand):
+    from openpyxl import load_workbook
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, _mit_antraegen(stand))
+    wb = load_workbook(str(pfad))
+    ws = wb["Fächer & Jahrgang"]
+    kopf = [z.value for z in ws[1]]
+    for zeile in range(2, ws.max_row + 1):
+        if ws.cell(zeile, 1).value == DEUTSCH and ws.cell(zeile, 3).value == 7:
+            ws.cell(zeile, kopf.index("Antrag Einführung") + 1).value = "vertagt"
+    wb.save(str(pfad))
+
+    gelesen = lies_datei(pfad)
+    antrag = gelesen.planungszeile(DEUTSCH, "Deutsch", 7).antrag_einfuehrung
+    assert (antrag.ergebnis, antrag.status) == ("vertagt", ANTRAG_OFFEN)

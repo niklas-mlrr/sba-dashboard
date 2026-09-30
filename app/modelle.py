@@ -254,6 +254,25 @@ class RuecklageAnfrage(_BuchplanungAnfrage):
     bemerkung: str = ""
 
 
+class AntragAnfrage(_BuchplanungAnfrage):
+    """``POST /api/buchplanung/antrag`` - eine Zeile der Änderungsliste entscheiden.
+
+    ``art`` ist ``einfuehrung`` oder ``ausmusterung``. ``ergebnis`` ist
+    ``genehmigt``, ``abgelehnt`` oder leer (zurück auf offen); ``None`` lässt
+    die Entscheidung stehen und speichert nur die ``begruendung``. Die Werte
+    prüft der Kern (``entscheide_antrag``), nicht dieses Modell.
+    """
+
+    isbn: NichtLeer
+    fach: NichtLeer
+    jahrgang: int
+    art: NichtLeer
+    ergebnis: str | None = None
+    kuerzel: str = ""
+    datum: date | None = None
+    begruendung: str | None = None
+
+
 class AnmeldeAnfrage(BaseModel):
     """``POST /api/anmeldung`` - die Zugangsdaten, die das Programmfenster sendet.
 
@@ -282,6 +301,7 @@ MELDUNGEN: dict[str, str] = {
     "spalte": erlaubte_spalten_satz(),
     "mtime": "Es fehlt eine gültige Änderungszeit der geladenen Datei.",
     "jahrgang": "Es fehlt der Jahrgang der Zeile.",
+    "art": "Es fehlt, ob über die Einführung oder die Ausmusterung entschieden wird.",
     "fach": "Es fehlt das Fach der Spalte.",
     "isbn": "Es fehlt die ISBN des Buchs.",
     "verlag": "Es fehlt der Verlag.",

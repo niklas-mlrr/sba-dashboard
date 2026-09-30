@@ -28,7 +28,7 @@ alles andere darunter.
 
 | Blatt | Schlüssel | eintragbar |
 | `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis, leihbar (das Soll, ohne Kommentar) |
-| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, Kürzel, Datum, Bemerkung |
+| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, je Antrag Entscheidung/Kürzel/Datum, Begründung, Kürzel, Datum, Bemerkung |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
@@ -197,6 +197,47 @@ welches Buch von Hand angelegt ist. Die erste folgt aus der Einführung, die
 zweite braucht es nicht mehr, seit die Datei IServ nicht mehr nennt; eine
 ältere Datei wird gelesen, als hätte sie sie nicht, und verliert sie beim
 nächsten Speichern.
+
+## Anträge: Einführung und Ausmusterung genehmigen
+
+Seit 2026-09-30 ist jede Einführung und jede Ausmusterung ein **Antrag**, über
+den entschieden wird. Die Seite „Änderungen“ im Menü „Bücherlisten“
+(`GET /buecherliste/aenderungen`) listet dazu je (Buch, Fach, Jahrgang) auf:
+
+* jede **Einführung** ab dem laufenden Schuljahr oder später,
+* jede **Ausmusterung** nach dem Vorjahr oder später - nach dem Vorjahr heißt,
+  das Buch fehlt schon in der Liste dieses Schuljahrs.
+
+Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) steht zweimal da.
+Gerechnet wird das in `aenderungen_im_schuljahr` (`modelle.py`), entschieden
+in `entscheide_antrag` (`abgleich.py`).
+
+Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
+„Ausmusterung nach Schuljahr“ je drei Spalten, dahinter eine gemeinsame:
+
+| Spalte | Inhalt |
+|--------|--------|
+| `Antrag Einführung` / `Antrag Ausmusterung` | `genehmigt` oder `abgelehnt`; leer ist offen |
+| `… Kürzel`, `… Datum` | wer wann entschieden hat |
+| `Begründung` | Freitext, **eine** für beide Anträge der Zeile |
+
+* **Entschieden wird mit Kürzel.** Kürzel und Datum stehen einmal oben auf der
+  Seite und gelten für jeden Klick; ohne Datum gilt heute. „Zurücksetzen“
+  macht den Antrag wieder offen.
+* **Die Entscheidung gilt dem Schuljahr, über das entschieden wurde.** Ändert
+  es sich - im Planungsmenü oder in Excel -, fällt sie beim nächsten Speichern
+  weg (`_setze_zeile`), die Begründung bleibt. Jede andere Eintragung
+  (Bemerkung, „Liste bestätigen“, Abgleich) lässt sie stehen. „2027/28“ und
+  „2027/2028“ sind dasselbe Schuljahr.
+* **„Abgelehnt“ ändert nichts von selbst.** Das Buch bleibt geplant, bis
+  jemand die Planung im Menü ändert; die Entscheidung ist ein Vermerk, keine
+  Löschung. Die Bücherlisten und PDFs bleiben, wie sie sind.
+* Was in `Antrag …` weder `genehmigt` noch `abgelehnt` heißt, bleibt in der
+  Datei stehen und gilt als offen. Eine Datei ohne die Spalten liest sich als
+  „alles offen“ und bekommt sie beim nächsten Speichern.
+
+Das Planungsmenü zeigt die Entscheidung klein unter dem Schuljahr und die
+Begründung unter der Bemerkung, nur zum Lesen.
 
 ## Status werden gerechnet, nie eingetragen
 

@@ -12,6 +12,10 @@ eigenen Schlüssel - genau den seines Blatts in der Arbeitsmappe:
   (Jg. 7 ab 2027/28, Jg. 8 ab 2028/29) sind damit zwei Zeilen statt einer
   Bemerkung im Freitext, und die Fachkonferenzleitung bestätigt ihre eigenen
   Zeilen, nicht die eines anderen Fachs.
+* **Anträge** - jede Einführung und Ausmusterung einer Planungszeile wird
+  genehmigt oder abgelehnt (:class:`Antragsentscheidung`), mit einer
+  gemeinsamen Begründung. Die Änderungsliste rechnet
+  :func:`aenderungen_im_schuljahr`.
 * **Rücklage** - eine Fachschaft möchte von einem Buch Exemplare behalten,
   statt sie wegzuwerfen. Schlüssel ist (ISBN, Fach): ein Buch kann zu mehreren
   Fächern gehören, und der Wunsch gehört der Fachschaft.
@@ -58,6 +62,21 @@ RUECKLAGE_STATUS: tuple[str, ...] = (
     RUECKLAGE_ZURUECKGELEGT,
 )
 
+# ── Entscheidung über einen Antrag ───────────────────────────────────────────
+#
+# Jede Einführung und jede Ausmusterung ist ein Antrag, über den entschieden
+# wird - je (Buch, Fach, Jahrgang) und für beide Arten getrennt. "offen" wird
+# nie gespeichert: es ist die leere Zelle.
+
+ANTRAG_OFFEN = "offen"
+ANTRAG_GENEHMIGT = "genehmigt"
+ANTRAG_ABGELEHNT = "abgelehnt"
+
+ANTRAG_ERGEBNISSE: tuple[str, ...] = (ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT)
+
+ART_EINFUEHRUNG = "einfuehrung"
+ART_AUSMUSTERUNG = "ausmusterung"
+
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
 
@@ -85,6 +104,9 @@ LEGENDE: tuple[tuple[str, str], ...] = (
     (PLANUNG_IM_EINSATZ, "wird hier geführt"),
     (PLANUNG_LAEUFT_AUS, "wird nach dem angegebenen Schuljahr ausgemustert"),
     (PLANUNG_AUSGEMUSTERT, "ist hier bereits ausgemustert"),
+    (ANTRAG_OFFEN, "über den Antrag auf Einführung oder Ausmusterung ist noch nicht entschieden"),
+    (ANTRAG_GENEHMIGT, "der Antrag auf Einführung oder Ausmusterung ist genehmigt"),
+    (ANTRAG_ABGELEHNT, "der Antrag auf Einführung oder Ausmusterung ist abgelehnt"),
     (RUECKLAGE_GEWUENSCHT, "die Fachschaft hat Exemplare zum Zurücklegen erbeten"),
     (RUECKLAGE_ZUGESAGT, "die Rücklage ist zugesagt, aber noch nicht erfolgt"),
     (RUECKLAGE_ZURUECKGELEGT, "die Exemplare liegen bei der Fachschaft"),
@@ -179,6 +201,31 @@ class Buchbemerkung:
 
 
 @dataclass(frozen=True)
+class Antragsentscheidung:
+    """Genehmigt oder abgelehnt, von wem und wann - für **einen** Antrag.
+
+    Eine Planungszeile trägt zwei davon, eine für die Einführung und eine für
+    die Ausmusterung. Sie gilt dem Schuljahr, das beim Entscheiden in der Zeile
+    stand: ändert es sich, fällt sie weg (``_setze_zeile`` in ``abgleich.py``).
+    ``ergebnis`` wird gespeichert, wie es in der Datei steht; was nicht
+    ``genehmigt`` oder ``abgelehnt`` heißt, gilt als offen (:attr:`status`).
+    """
+
+    ergebnis: str = ""
+    kuerzel: str = ""
+    datum: date | None = None
+
+    @property
+    def leer(self) -> bool:
+        return not self.ergebnis and not self.kuerzel and self.datum is None
+
+    @property
+    def status(self) -> str:
+        ergebnis = self.ergebnis.strip().casefold()
+        return ergebnis if ergebnis in ANTRAG_ERGEBNISSE else ANTRAG_OFFEN
+
+
+@dataclass(frozen=True)
 class Planungszeile:
     """Ein Buch in **einem** Fach und **einem** Jahrgang.
 
@@ -197,11 +244,23 @@ class Planungszeile:
     kuerzel: str = ""
     datum: date | None = None
     bemerkung: str = ""
+    antrag_einfuehrung: Antragsentscheidung = field(default_factory=Antragsentscheidung)
+    antrag_ausmusterung: Antragsentscheidung = field(default_factory=Antragsentscheidung)
+    # Eine Begründung für beide Anträge der Zeile.
+    begruendung: str = ""
 
     @property
     def leer(self) -> bool:
         return not any((self.eingefuehrt_ab, self.ausgemustert_nach,
-                        self.kuerzel, self.bemerkung)) and self.datum is None
+                        self.kuerzel, self.bemerkung, self.begruendung)) \
+            and self.datum is None \
+            and self.antrag_einfuehrung.leer and self.antrag_ausmusterung.leer
+
+    def antrag(self, art: str) -> Antragsentscheidung:
+        return self.antrag_einfuehrung if art == ART_EINFUEHRUNG else self.antrag_ausmusterung
+
+    def schuljahr_des_antrags(self, art: str) -> str:
+        return self.eingefuehrt_ab if art == ART_EINFUEHRUNG else self.ausgemustert_nach
 
     @property
     def bestaetigt(self) -> bool:
@@ -490,3 +549,62 @@ def zum_schuljahr_ausgemustert(stand: Buchplanung, buch: Buch, fach: str) -> boo
     return bool(zeilen) \
         and all(planungs_status(z, stand.schuljahr) == PLANUNG_AUSGEMUSTERT for z in zeilen) \
         and any(endet_mit_vorjahr(z, stand.schuljahr) for z in zeilen)
+
+
+# ── Die Änderungsliste ───────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Aenderung:
+    """Ein Antrag auf der Änderungsliste: ein Buch, ein Fach, ein Jahrgang, eine Art."""
+
+    isbn: str
+    titel: str
+    verlag: str
+    fach: str
+    jahrgang: int
+    art: str
+    schuljahr: str
+    entscheidung: Antragsentscheidung
+    begruendung: str = ""
+
+    @property
+    def status(self) -> str:
+        return self.entscheidung.status
+
+
+def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
+    """Alle Einführungen und Ausmusterungen, die dieses Schuljahr zu entscheiden sind.
+
+    * **Einführungen** ab dem laufenden Schuljahr oder später - eine längst
+      vollzogene Einführung ist keine Änderung mehr.
+    * **Ausmusterungen** nach dem Vorjahr oder später: nach dem Vorjahr heißt,
+      das Buch fehlt schon in der Liste dieses Schuljahrs.
+
+    Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) ergibt zwei
+    Anträge. Eine unlesbare Schuljahresangabe wird übersprungen, wie in
+    :func:`planungs_status`.
+    """
+    try:
+        jetzt = schuljahr_zahl(stand.schuljahr)
+    except UngueltigesSchuljahr:
+        return ()
+    heraus: list[Aenderung] = []
+    for zeile in stand.planung:
+        buch = stand.buch(zeile.isbn)
+        for art, ab_jahr in ((ART_EINFUEHRUNG, jetzt), (ART_AUSMUSTERUNG, jetzt - 1)):
+            angabe = zeile.schuljahr_des_antrags(art)
+            try:
+                if not angabe or schuljahr_zahl(angabe) < ab_jahr:
+                    continue
+            except UngueltigesSchuljahr:
+                continue
+            heraus.append(Aenderung(
+                isbn=zeile.isbn,
+                titel=buch.titel if buch else zeile.isbn,
+                verlag=buch.verlag if buch else "",
+                fach=zeile.fach, jahrgang=zeile.jahrgang, art=art, schuljahr=angabe,
+                entscheidung=zeile.antrag(art), begruendung=zeile.begruendung,
+            ))
+    return tuple(sorted(heraus, key=lambda a: (
+        a.fach.casefold(), a.titel.casefold(), a.jahrgang, a.art != ART_EINFUEHRUNG)))

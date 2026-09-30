@@ -1,4 +1,4 @@
-"""Die Buchplanung als API: lesen, abgleichen und fünf Arten einzutragen.
+"""Die Buchplanung als API: lesen, abgleichen und sechs Arten einzutragen.
 
 Es gibt hier **keine eigene Seite**. Eingetragen wird dort, wo die Bücher
 ohnehin stehen - in der Verlags- und der Fach-Ansicht der Bücherlisten
@@ -20,6 +20,9 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from buecherlisten.planung import (
+    ART_AUSMUSTERUNG,
+    ART_EINFUEHRUNG,
+    Antragsentscheidung,
     Buchplanung,
     Buchreiheneingabe,
     Jahrgangseingabe,
@@ -32,6 +35,7 @@ from buecherlisten.planung import (
 from .. import buchplanung as domaene
 from ..modelle import (
     AbgleichAnfrage,
+    AntragAnfrage,
     BuchHinzufuegenAnfrage,
     BuchplanungsAnfrage,
     FachbestaetigungAnfrage,
@@ -74,6 +78,16 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
                     "datum": zeile.datum.isoformat() if zeile and zeile.datum else None,
                     "bemerkung": zeile.bemerkung if zeile else "",
                     "status": planungs_status(zeile, stand.schuljahr),
+                    **{
+                        f"antrag_{art}": {
+                            "ergebnis": antrag.status,
+                            "kuerzel": antrag.kuerzel,
+                            "datum": antrag.datum.isoformat() if antrag.datum else None,
+                        }
+                        for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
+                        for antrag in ((zeile.antrag(art) if zeile else Antragsentscheidung()),)
+                    },
+                    "begruendung": zeile.begruendung if zeile else "",
                 }
                 for fach, jahrgang in stand.zeilen_des_buchs(buch)
                 for zeile in (stand.planungszeile(buch.isbn, fach, jahrgang),)
@@ -235,6 +249,19 @@ def api_planung(request: Request, anfrage: PlanungsAnfrage) -> JSONResponse:
         jahrgang=anfrage.jahrgang, eingefuehrt_ab=anfrage.eingefuehrt_ab,
         ausgemustert_nach=anfrage.ausgemustert_nach, kuerzel=anfrage.kuerzel,
         datum=anfrage.datum, bemerkung=anfrage.bemerkung, mtime=anfrage.mtime,
+    )
+    return _antwort(stand)
+
+
+@router.post("/api/buchplanung/antrag")
+def api_antrag(request: Request, anfrage: AntragAnfrage) -> JSONResponse:
+    """Eine Zeile der Änderungsliste: genehmigen, ablehnen, zurücksetzen, begründen."""
+    stand = domaene.schreibe_antrag(
+        aktuelle_einstellungen(request),
+        schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
+        jahrgang=anfrage.jahrgang, art=anfrage.art, ergebnis=anfrage.ergebnis,
+        kuerzel=anfrage.kuerzel, datum=anfrage.datum, begruendung=anfrage.begruendung,
+        mtime=anfrage.mtime,
     )
     return _antwort(stand)
 

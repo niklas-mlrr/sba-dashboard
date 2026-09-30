@@ -9,7 +9,7 @@ eingetragen wird in den Bücherlisten-Seiten. Dieses Modul verbindet beides:
   eigene (``app/settings.py``, ``buchplanung_pfad``).
 * **Abgleichen** - beide Schuljahre aus IServ holen, mit dem Eingetragenen
   zusammenführen und schreiben.
-* **Eintragen** - Preis, Fachbestätigung, Planung, Rücklage; jedes Mal mit
+* **Eintragen** - Fachbestätigung, Planung, Rücklage, Anträge; jedes Mal mit
   derselben Kette wie der Schreibpfad der Bestandsmappe: Schloss,
   ``mtime``-Vergleich, atomar speichern, Sicherung. Warum es diese Kette
   braucht, steht in ``docs/architektur.md``; hier steht nur, dass sie auch für
@@ -39,6 +39,7 @@ from buecherlisten.planung import (
     UnbekanntesBuch,
     UngueltigeEingabe,
     bestaetige_fach,
+    entscheide_antrag,
     fuege_buch_hinzu,
     lade_schnappschuss,
     lies_datei,
@@ -243,6 +244,18 @@ def schreibe_neues_buch(
     """Nimmt ein Buch in die Liste eines Fachs auf - aus einem anderen Fach oder neu."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: fuege_buch_hinzu(
         stand, isbn=isbn, fach=fach, buchreihe=buchreihe, zeilen=zeilen,
+    ))
+
+
+def schreibe_antrag(
+    einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
+    art: str, ergebnis: str | None, kuerzel: str = "", datum: date | None = None,
+    begruendung: str | None = None, mtime: float,
+) -> Stand:
+    """Genehmigt oder lehnt eine Einführung oder Ausmusterung ab - die Änderungsliste."""
+    return _aendere(einstellungen, schuljahr, mtime, lambda stand: entscheide_antrag(
+        stand, isbn=isbn, fach=fach, jahrgang=jahrgang, art=art, ergebnis=ergebnis,
+        kuerzel=kuerzel, datum=datum, begruendung=begruendung,
     ))
 
 

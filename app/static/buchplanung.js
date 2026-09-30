@@ -19,6 +19,9 @@
 //   4. „+ Buch hinzufügen“ unter der Fach-Liste: dasselbe Menü mit freier
 //      ISBN, deren Vorschläge die Bücher anderer Fächer sind
 //      (POST /api/buchplanung/buch/neu).
+//   5. Die Änderungsliste: Genehmigen, Ablehnen, Zurücksetzen und die
+//      Begründung einer Zeile (POST /api/buchplanung/antrag). Kürzel und
+//      Datum stehen einmal oben auf der Seite.
 //
 // Der Menü-Inhalt wird NICHT hier gebaut: er steht je Buch fertig gerendert in
 // einem <template class="planung-vorlage"> (templates/_buchplanung.html) und
@@ -497,6 +500,25 @@
       return;
     }
 
+    if (art === "antrag") {
+      const zeile = knopf.closest("[data-antrag]");
+      const formular = document.getElementById("antrag-formular");
+      const werte = formular ? felder(formular) : {};
+      const begruendung = zeile.querySelector('[data-antrag-feld="begruendung"]');
+      // Ohne data-ergebnis (der Knopf „Speichern“ an der Begründung) bleibt
+      // die Entscheidung, wie sie ist: null statt "".
+      const ergebnis = "ergebnis" in knopf.dataset ? knopf.dataset.ergebnis : null;
+      sende("/api/buchplanung/antrag", {
+        isbn: zeile.dataset.isbn, fach: zeile.dataset.fach,
+        jahrgang: Number(zeile.dataset.jahrgang), art: zeile.dataset.antrag,
+        ergebnis: ergebnis, kuerzel: werte.kuerzel || "", datum: werte.datum || null,
+        begruendung: begruendung ? begruendung.value.trim() : null,
+      }, () => ergebnis === null ? "Die Begründung wurde gespeichert."
+          : ergebnis ? "Der Antrag ist " + ergebnis + "."
+          : "Der Antrag steht wieder auf offen.");
+      return;
+    }
+
     const kopf = knopf.closest(".planung-formular");
 
     if (art === "fach") {
@@ -522,6 +544,11 @@
   document.addEventListener("input", (ereignis) => {
     if (ereignis.target.classList.contains("planung-bemerkung")) passeHoeheAn(ereignis.target);
   });
+
+  // Bemerkungen, die gleich auf der Seite stehen (die Begründungen der
+  // Änderungsliste), bekommen ihre Vorschau schon beim Laden. Die in den
+  // Menü-Vorlagen sind inert und werden hier nicht gefunden.
+  messeBemerkungen(document);
 
   // Die Zeile ist ein Knopf (role="button"), also öffnet sie auch mit der
   // Tastatur. Die Leertaste würde sonst die Seite scrollen.

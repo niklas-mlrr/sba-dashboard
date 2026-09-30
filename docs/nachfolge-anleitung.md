@@ -283,6 +283,29 @@ Weicht IServ ab, steht unter dem Feld klein, was IServ dazu sagt. Das rechnet
 das Programm bei jedem Öffnen der Seite neu. Wer den IServ-Wert wieder
 einträgt, gleicht die Angabe an IServ an. Ein geleerter Preis bleibt leer.
 
+### Schritt 3: Änderungen genehmigen (Menü „Bücherlisten" → „Änderungen")
+
+Hier stehen alle Bücher, die ab diesem Schuljahr oder später **eingeführt**
+werden, und alle, die nach dem letzten Schuljahr oder später **ausgemustert**
+werden, je Fach und Jahrgang in einer Zeile.
+
+1. Tragen Sie oben Ihr **Kürzel** ein. Das Datum steht schon auf heute. Das
+   Kürzel merkt sich der Browser für das nächste Mal.
+2. Klicken Sie in der Zeile auf **„Genehmigen"** oder **„Ablehnen"**. Die
+   Entscheidung steht danach mit Kürzel und Datum in der Spalte
+   „Entscheidung". **„Zurücksetzen"** macht sie wieder offen.
+3. Die **Begründung** gilt für Einführung und Ausmusterung derselben Zeile.
+   Sie wird bei jedem Klick mitgespeichert. Wenn Sie nur sie ändern, erscheint
+   daneben „Speichern".
+
+Mit den Knöpfen über der Tabelle zeigen Sie nur offene, genehmigte oder
+abgelehnte Anträge an, nur Einführungen oder nur Ausmusterungen.
+
+Wird später das Schuljahr einer Einführung oder Ausmusterung geändert, ist
+der Antrag wieder offen, denn über das neue Schuljahr hat noch niemand
+entschieden. „Abgelehnt" ändert an der Planung selbst nichts. Das Buch bleibt
+eingetragen, bis jemand es im Planungsmenü ändert.
+
 ### Was in der Datei steht
 
 Vier Blätter:
@@ -292,7 +315,9 @@ Vier Blätter:
   Verlag, Preise und „leihbar“ gelten, wie sie hier stehen. Was IServ anders
   führt, zeigt das Programm auf den Bücherlisten-Seiten, nicht in der Datei.
 * **Fächer & Jahrgang** — eine Zeile je Buch, Fach und Jahrgang, mit
-  Einführung, Ausmusterung und der Bestätigung der Fachkonferenzleitung. Den
+  Einführung, Ausmusterung, der Entscheidung über beide (Spalten „Antrag …",
+  mit Kürzel und Datum), einer Begründung und der Bestätigung der
+  Fachkonferenzleitung. Den
   Titel schlagen Sie auf „Buchreihen" nach; hier steht nur die ISBN.
 * **Rücklage** — eine Zeile je Buch und Fach, mit Anzahl und Stand.
 * **Info** — Schuljahr, Vorjahr, Stand und die Legende aller Status.

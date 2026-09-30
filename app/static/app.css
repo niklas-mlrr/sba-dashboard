@@ -1095,3 +1095,45 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-ruecklage { display: flex; align-items: center; gap: .5rem; font-size: .875rem; }
 .planung-bemerkungszeile { display: block; margin-top: .6rem; font-size: .875rem; }
 .planung-bemerkungszeile .planung-bemerkung-rahmen { margin-top: .2rem; }
+
+/* ── Änderungsliste ────────────────────────────────────────────
+   Jede Einführung und Ausmusterung des Schuljahrs als Antrag, mit den
+   Knöpfen zum Entscheiden in der letzten Spalte. */
+
+.aenderungen-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem 1.2rem;
+  margin: 0 0 .8rem;
+}
+/* Wie eine btn-group bei Bootstrap: die Knöpfe stoßen aneinander. */
+.btn-gruppe { display: inline-flex; }
+.btn-gruppe > .btn { border-radius: 0; }
+.btn-gruppe > .btn + .btn { margin-left: -1px; }
+.btn-gruppe > .btn:first-child { border-radius: 4px 0 0 4px; }
+.btn-gruppe > .btn:last-child { border-radius: 0 4px 4px 0; }
+.btn-gruppe > .btn[aria-pressed="true"] {
+  background-color: #e6e6e6;
+  border-color: #adadad;
+  box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);
+}
+
+.aenderungen-knoepfe { white-space: nowrap; }
+.aenderungen-knoepfe .btn { padding: 2px 8px; font-size: 13px; }
+.aenderungen-knoepfe .btn + .btn { margin-left: 4px; }
+.aenderungen-begruendung { min-width: 14rem; }
+.aenderungen-begruendung .knopf-klein { margin: .25rem 0 0; }
+/* `.btn` setzt `display` und schlüge sonst das `hidden` des Knopfs. */
+.aenderungen-begruendung .btn[hidden] { display: none; }
+/* Im Planungsmenü: die Entscheidung der Änderungsliste unter dem Schuljahr. */
+.planung-antrag {
+  display: block;
+  max-width: 16rem;
+  margin-top: .2rem;
+  overflow: hidden;
+  color: #777;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.planung-antrag .label { font-size: 10px; }

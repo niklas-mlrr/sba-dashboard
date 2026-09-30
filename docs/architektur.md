@@ -434,8 +434,8 @@ sind, hätte den Fehler mitgetragen.
 
 **Ein Bücher-Blatt, zwei Schlüsseltabellen daneben.** `Buchreihen` trägt jeden
 Titel **einmal**, mit einer Bemerkung je Buch; `Fächer & Jahrgang` hat eine Zeile je
-(ISBN, Fach, Jahrgang) mit Einführung, Ausmusterung und der Bestätigung der
-Fachkonferenzleitung; `Rücklage` eine Zeile je (ISBN, Fach). Dazu `Info` mit
+(ISBN, Fach, Jahrgang) mit Einführung, Ausmusterung, der Entscheidung über
+beide Anträge (Änderungsliste) und der Bestätigung der Fachkonferenzleitung; `Rücklage` eine Zeile je (ISBN, Fach). Dazu `Info` mit
 Schuljahr, Stand und Legende. Bis 2026-09-20 standen die Bücher dreimal in der
 Mappe, einmal je Achse (Verlag, Fach, Jahrgang), dazu ein eigenes Blatt für die
 Fachbestätigung — dieselben Titel an drei Stellen, und wer die Datei öffnete,

@@ -12,6 +12,7 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 from typing import Any, Callable, cast
 from urllib.parse import quote
 
@@ -28,10 +29,16 @@ from buecherlisten.core.daten import (
 )
 from buecherlisten.core.erzeugen import erzeuge_buecherlisten_pdfs, erzeuge_schuelerlisten_pdfs
 from buecherlisten.planung import (
+    ANTRAG_ABGELEHNT,
+    ANTRAG_GENEHMIGT,
+    ANTRAG_OFFEN,
+    ART_AUSMUSTERUNG,
+    ART_EINFUEHRUNG,
     FACH_BESTAETIGT,
     NUR_ISERV,
     OHNE_VERLAG,
     Buchplanung,
+    aenderungen_im_schuljahr,
     endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
@@ -225,6 +232,15 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
                 "bemerkung": zeile.bemerkung if zeile else "",
                 "status": planungs_status(zeile, planung.schuljahr),
                 "zusatz": planungs_zusatz(zeile, planung.schuljahr),
+                # Die Entscheidungen der Änderungsliste - im Menü nur zum Lesen.
+                **{
+                    f"antrag_{art}": {"status": antrag.status, "kuerzel": antrag.kuerzel,
+                                      "datum": antrag.datum}
+                    for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
+                    if zeile and zeile.schuljahr_des_antrags(art)
+                    for antrag in (zeile.antrag(art),)
+                },
+                "begruendung": zeile.begruendung if zeile else "",
             })
         zeilen[buch.isbn] = je_fach
     for wunsch in planung.ruecklagen:
@@ -303,6 +319,55 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
 
 def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
     return _hinweis(request, "Unbekannte Ansicht", f"Es gibt keine Ansicht „{ansicht}“.", 404)
+
+
+@router.get("/buecherliste/aenderungen")
+def aenderungen(request: Request) -> Response:
+    """Die Änderungsliste: jede Einführung und Ausmusterung dieses Schuljahrs, zum Entscheiden.
+
+    Steht vor ``/buecherliste/{ansicht}``, sonst hielte die „aenderungen“ für
+    eine Ansicht. Gelesen wird nur die Datei; IServ liefert allein, welches
+    Schuljahr das laufende ist - eine Anfrage statt aller Bücherlisten.
+    """
+    try:
+        client = request.app.state.anmeldung.client()
+    except (NichtAngemeldet, Abgelaufen) as exc:
+        return _hinweis(
+            request, "Nicht angemeldet",
+            f"{exc} Das laufende Schuljahr kommt aus IServ; danach diese Seite neu laden.",
+            401,
+        )
+    try:
+        aktuell = client.schoolyears.get_current()
+    except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
+        return _hinweis(request, "IServ nicht erreichbar",
+                        f"Das laufende Schuljahr konnte nicht geladen werden: {exc}", 502)
+    kennung = str(aktuell["id"])
+    planung, stand = _planungskontext(request, kennung)
+    eintraege = [
+        {
+            "isbn": a.isbn, "isbn_anzeige": format_isbn(a.isbn), "titel": a.titel,
+            "verlag": "" if a.verlag == OHNE_VERLAG else a.verlag,
+            "fach": a.fach, "jahrgang": a.jahrgang, "art": a.art,
+            "einfuehrung": a.art == ART_EINFUEHRUNG,
+            "schuljahr": a.schuljahr, "status": a.status,
+            "kuerzel": a.entscheidung.kuerzel, "datum": a.entscheidung.datum,
+            "begruendung": a.begruendung,
+        }
+        for a in (aenderungen_im_schuljahr(stand) if stand else ())
+    ]
+    zaehler = {
+        status: sum(1 for e in eintraege if e["status"] == status)
+        for status in (ANTRAG_OFFEN, ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT)
+    }
+    zaehler.update({
+        art: sum(1 for e in eintraege if e["art"] == art)
+        for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
+    })
+    return _seite(request, "buecherliste_aenderungen.html", {
+        "planung": planung, "schuljahr": aktuell.get("name") or kennung,
+        "eintraege": eintraege, "zaehler": zaehler, "heute": date.today(),
+    })
 
 
 # Wie die Auswahl einer Ansicht im Druckmenü und damit in der PDF-URL heißt.

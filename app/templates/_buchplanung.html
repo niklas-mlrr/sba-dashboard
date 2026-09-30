@@ -17,7 +17,8 @@
 {%- set klasse = {"bestätigt": "label-success",
                   "teilweise": "label-warning", "offen": "label-status",
                   "geplant": "label-info", "läuft aus": "label-warning",
-                  "ausgemustert": "label-default", "im Einsatz": "label-success"}.get(status, "label-status") -%}
+                  "ausgemustert": "label-default", "im Einsatz": "label-success",
+                  "genehmigt": "label-success", "abgelehnt": "label-danger"}.get(status, "label-status") -%}
 <span class="label {{ klasse }}">{{ status }}</span>
 {%- endmacro %}
 
@@ -143,6 +144,19 @@
 {%- for buch in buecher -%}{{- ruecklage_anzahl(planung, buch, fach) | trim -}}{%- endfor -%}
 {% endmacro %}
 
+{#
+  Was die Änderungsliste über das Schuljahr daneben entschieden hat - hier nur
+  zum Lesen. Ändert sich das Schuljahr beim Speichern, steht der Antrag danach
+  wieder auf offen.
+#}
+{% macro antragshinweis(antrag) -%}
+{%- if antrag -%}
+<span class="planung-antrag">Antrag {{ statuslabel(antrag.status) }}
+{%- if antrag.kuerzel %} {{ antrag.kuerzel }}{% endif %}
+{%- if antrag.datum %}, {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}</span>
+{%- endif -%}
+{%- endmacro %}
+
 {% macro jahrgangszeile(planung, buch, zeile) %}
 {#
   Ein Jahrgang ohne Einführung (``zeile.aktuell``) ist eingeführt - daran
@@ -165,6 +179,7 @@
     {% else %}<input type="text" class="planung-feld planung-feld-schuljahr"
       data-planung-feld="eingefuehrt_ab" value="{{ zeile.eingefuehrt_ab }}"
       placeholder="JJJJ/JJJJ" aria-label="eingeführt zum Schuljahr">{% endif %}
+    {{ antragshinweis(zeile.antrag_einfuehrung) }}
   </td>
   {#
     Ausgemustert wird auch ein Kaufbuch: ausgemustert wird die Bücherliste,
@@ -175,10 +190,12 @@
   #}
   <td><input type="text" class="planung-feld planung-feld-schuljahr"
     data-planung-feld="ausgemustert_nach" value="{{ zeile.ausgemustert_nach }}"
-    placeholder="JJJJ/JJJJ" aria-label="ausgemustert nach Schuljahr"></td>
+    placeholder="JJJJ/JJJJ" aria-label="ausgemustert nach Schuljahr">
+    {{ antragshinweis(zeile.antrag_ausmusterung) }}</td>
   <td class="planung-spalte-bemerkung"><span class="planung-bemerkung-rahmen"><textarea
     class="planung-feld planung-bemerkung" rows="1" data-planung-feld="bemerkung"
-    placeholder="Bemerkung" aria-label="Bemerkung zu diesem Jahrgang">{{ zeile.bemerkung }}</textarea></span></td>
+    placeholder="Bemerkung" aria-label="Bemerkung zu diesem Jahrgang">{{ zeile.bemerkung }}</textarea></span>
+    {%- if zeile.begruendung %}<span class="planung-antrag" title="{{ zeile.begruendung }}">Begründung: {{ zeile.begruendung }}</span>{% endif %}</td>
   <td class="planung-zeilenende">{{ statuslabel(zeile.status) }}
     {% if not zeile.aktuell %}<button type="button" class="knopf-klein"
       data-planung="jahrgang-entfernen" title="Diesen Jahrgang entfernen"

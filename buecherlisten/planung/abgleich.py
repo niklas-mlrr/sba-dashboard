@@ -28,9 +28,13 @@ import isbnlib
 
 from .laden import Schnappschuss
 from .modelle import (
+    ANTRAG_ERGEBNISSE,
+    ART_AUSMUSTERUNG,
+    ART_EINFUEHRUNG,
     OHNE_FACH,
     RUECKLAGE_GEWUENSCHT,
     RUECKLAGE_STATUS,
+    Antragsentscheidung,
     Buch,
     Buchbemerkung,
     Buchplanung,
@@ -155,7 +159,8 @@ def _geprueftes_fach(stand: Buchplanung, buch: Buch, fach: str) -> None:
 def setze_planung(
     stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, eingefuehrt_ab: str = "",
     ausgemustert_nach: str = "", kuerzel: str = "", datum: date | None = None,
-    bemerkung: str = "",
+    bemerkung: str = "", antrag_einfuehrung: Antragsentscheidung | None = None,
+    antrag_ausmusterung: Antragsentscheidung | None = None, begruendung: str | None = None,
 ) -> Buchplanung:
     """Trägt für **ein** Buch in **einem** Fach und Jahrgang die Zeile ein.
 
@@ -176,18 +181,36 @@ def setze_planung(
     _geprueftes_fach(stand, buch, fach)
     return _setze_zeile(stand, isbn=isbn, fach=fach, jahrgang=jahrgang,
                         eingefuehrt_ab=eingefuehrt_ab, ausgemustert_nach=ausgemustert_nach,
-                        kuerzel=kuerzel, datum=datum, bemerkung=bemerkung)
+                        kuerzel=kuerzel, datum=datum, bemerkung=bemerkung,
+                        antrag_einfuehrung=antrag_einfuehrung,
+                        antrag_ausmusterung=antrag_ausmusterung, begruendung=begruendung)
+
+
+def _gleiches_schuljahr(eins: str, anderes: str) -> bool:
+    """"2027/2028" und "2027/28" sind dasselbe Schuljahr; sonst zählt der Text."""
+    try:
+        return schuljahr_zahl(eins) == schuljahr_zahl(anderes)
+    except UngueltigesSchuljahr:
+        return eins.strip() == anderes.strip()
 
 
 def _setze_zeile(
     stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, eingefuehrt_ab: str = "",
     ausgemustert_nach: str = "", kuerzel: str = "", datum: date | None = None,
-    bemerkung: str = "",
+    bemerkung: str = "", antrag_einfuehrung: Antragsentscheidung | None = None,
+    antrag_ausmusterung: Antragsentscheidung | None = None, begruendung: str | None = None,
 ) -> Buchplanung:
     """:func:`setze_planung` ohne die Frage, ob das Buch zum Fach gehört.
 
     Die stellt :func:`fuege_buch_hinzu` gerade andersherum: dort kommt das Buch
     mit dieser Zeile überhaupt erst in das Fach.
+
+    Die Entscheidungen über die Anträge und die Begründung kommen, wenn sie
+    nicht mitgegeben werden (``None``), aus der bisherigen Zeile - so behält
+    jede Eintragung sie, ohne sie zu kennen: das Planungsmenü, „Liste
+    bestätigen“, der Abgleich. Eine Entscheidung gilt aber nur dem Schuljahr,
+    über das entschieden wurde. Ändert es sich, fällt sie weg: über das neue
+    hat niemand entschieden.
     """
     if not _JAHRGANG_VON <= jahrgang <= _JAHRGANG_BIS:
         raise UngueltigeEingabe(
@@ -207,9 +230,25 @@ def _setze_zeile(
             f"ab {ab} eingeführt wird."
         )
 
-    zeile = Planungszeile(isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=ab,
-                          ausgemustert_nach=nach, kuerzel=kuerzel.strip(), datum=datum,
-                          bemerkung=bemerkung.strip())
+    bisher = stand.planungszeile(isbn, fach, jahrgang)
+
+    def behalten(art: str, neues_schuljahr: str) -> Antragsentscheidung:
+        if bisher is None or not _gleiches_schuljahr(
+                bisher.schuljahr_des_antrags(art), neues_schuljahr):
+            return Antragsentscheidung()
+        return bisher.antrag(art)
+
+    zeile = Planungszeile(
+        isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=ab,
+        ausgemustert_nach=nach, kuerzel=kuerzel.strip(), datum=datum,
+        bemerkung=bemerkung.strip(),
+        antrag_einfuehrung=behalten(ART_EINFUEHRUNG, ab)
+        if antrag_einfuehrung is None else antrag_einfuehrung,
+        antrag_ausmusterung=behalten(ART_AUSMUSTERUNG, nach)
+        if antrag_ausmusterung is None else antrag_ausmusterung,
+        begruendung=(bisher.begruendung if bisher else "")
+        if begruendung is None else begruendung.strip(),
+    )
     neuer = None if zeile.leer else zeile
     return _ersetzt(
         stand,
@@ -315,8 +354,10 @@ def setze_buchplanung(
 
     for zeile in stand.planung:
         if zeile.isbn == isbn and zeile.fach == fach and zeile.jahrgang not in gesehen:
-            # Alles leer heißt in setze_planung: die Zeile verschwindet.
-            neu = setze_planung(neu, isbn=isbn, fach=fach, jahrgang=zeile.jahrgang)
+            # Alles leer heißt in setze_planung: die Zeile verschwindet - auch
+            # die Begründung, die sonst aus der bisherigen Zeile bliebe.
+            neu = setze_planung(neu, isbn=isbn, fach=fach, jahrgang=zeile.jahrgang,
+                                begruendung="")
 
     if ruecklage is not None:
         vorher_r = stand.ruecklage(isbn, fach)
@@ -546,6 +587,66 @@ def bestaetige_fach(
             )
             geaendert += 1
     return neu, geaendert
+
+
+def entscheide_antrag(
+    stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, art: str,
+    ergebnis: str | None, kuerzel: str = "", datum: date | None = None,
+    begruendung: str | None = None, heute: date | None = None,
+) -> Buchplanung:
+    """Genehmigt oder lehnt den Antrag auf Einführung oder Ausmusterung einer Zeile ab.
+
+    ``ergebnis`` ist ``genehmigt``, ``abgelehnt`` oder leer - leer setzt den
+    Antrag zurück auf offen. ``None`` lässt die Entscheidung stehen; so
+    speichert die Änderungsliste auch nur die Begründung. ``begruendung``
+    ``None`` lässt sie ebenso stehen.
+
+    Entschieden wird mit Kürzel; ein fehlendes Datum ist heute. Alles andere an
+    der Zeile - Schuljahre, Bestätigung der Fachkonferenzleitung, Bemerkung -
+    bleibt, wie es ist.
+    """
+    if art not in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG):
+        raise UngueltigeEingabe(
+            f"„{art}“ ist keine Art von Antrag. Möglich sind: Einführung, Ausmusterung."
+        )
+    buch = _geprueftes_buch(stand, isbn)
+    zeile = stand.planungszeile(isbn, fach, jahrgang)
+    wort = "Einführung" if art == ART_EINFUEHRUNG else "Ausmusterung"
+    if zeile is None or not zeile.schuljahr_des_antrags(art):
+        raise UngueltigeEingabe(
+            f"Für „{buch.titel}“ ist in {fach}, Jahrgang {jahrgang} keine {wort} "
+            "eingetragen. Bitte die Seite neu laden."
+        )
+
+    entscheidung = zeile.antrag(art)
+    if ergebnis is not None:
+        ergebnis = ergebnis.strip().casefold()
+        if not ergebnis:
+            entscheidung = Antragsentscheidung()
+        elif ergebnis not in ANTRAG_ERGEBNISSE:
+            raise UngueltigeEingabe(
+                f"„{ergebnis}“ ist keine Entscheidung. Möglich sind: "
+                + ", ".join(ANTRAG_ERGEBNISSE) + "."
+            )
+        elif not kuerzel.strip():
+            raise UngueltigeEingabe(
+                "Bitte oben das Kürzel eintragen, mit dem entschieden wird."
+            )
+        else:
+            entscheidung = Antragsentscheidung(
+                ergebnis=ergebnis, kuerzel=kuerzel.strip(),
+                datum=datum or heute or date.today(),
+            )
+
+    neue_zeile = replace(
+        zeile,
+        antrag_einfuehrung=entscheidung if art == ART_EINFUEHRUNG else zeile.antrag_einfuehrung,
+        antrag_ausmusterung=entscheidung if art == ART_AUSMUSTERUNG
+        else zeile.antrag_ausmusterung,
+        begruendung=zeile.begruendung if begruendung is None else begruendung.strip(),
+    )
+    return _ersetzt(stand, planung=tuple(
+        neue_zeile if z is zeile else z for z in stand.planung))
 
 
 def setze_ruecklage(

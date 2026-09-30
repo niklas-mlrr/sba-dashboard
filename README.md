@@ -27,7 +27,11 @@ Verlag (mit Vorschlägen beim Tippen), Neupreis und Leihgebühr lassen sich
 korrigieren; die ISBN steht grau hinterlegt darüber und bleibt, wie sie ist. Die Korrektur steht in der Planungsdatei und gilt in allen
 Bücherlisten und PDFs. IServ selbst bleibt unverändert.
 Bestätigt wird weiterhin die Liste als Ganzes, über „Liste bestätigen“ oben auf
-der Seite. Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
+der Seite. Seit 2026-09-30 steht im Menü „Bücherlisten“ die **Änderungsliste**:
+jede Einführung ab diesem Schuljahr und jede Ausmusterung nach dem Vorjahr
+oder später, je Buch, Fach und Jahrgang, zum Genehmigen oder Ablehnen mit
+Kürzel, Datum und Begründung (Spalten „Antrag …“ und „Begründung“ auf
+„Fächer & Jahrgang“). Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
 die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
 welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher
 (`mehrjahresbaende/`, [`docs/architektur.md`](docs/architektur.md#die-mehrjahresbände-übersicht)). Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
@@ -53,6 +57,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 |-------|-------|
 | `GET /` | Tabellenansicht (serverseitig gerendert) |
 | `GET /buecherliste/{fach,verlag,jahrgang}` | Bücherlisten-Übersicht aus der Buchplanungs-Datei, Abweichungen zu IServ markiert (braucht Anmeldung) |
+| `GET /buecherliste/aenderungen` | Änderungsliste: Einführungen und Ausmusterungen dieses Schuljahrs zum Genehmigen oder Ablehnen (aus der Datei, braucht Anmeldung für das laufende Schuljahr) |
 | `GET /buecherliste/{ansicht}/{name}` | Bücher eines Fachs, Verlags oder Jahrgangs |
 | `GET /buecherliste/{ansicht}/pdf` | Bücherlisten mehrerer Fächer, Verlage oder Jahrgänge als PDF (Druckmenü, Optionen in der URL, Antwort `inline`) |
 | `GET /buecherliste/{ansicht}/{name}/pdf` | Bücherliste eines Fachs, Verlags oder Jahrgangs als PDF |
@@ -62,6 +67,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 | `POST /api/buchplanung/fach` | Freigabe der Fachkonferenzleitung: `{schuljahr, fach, kuerzel, datum, mtime}` → 200/400/409/423/503 |
 | `POST /api/buchplanung/buch` | Das Planungsmenü eines Buchs in einem Fach, in einem Zug: `{schuljahr, isbn, fach, zeilen: [{jahrgang, eingefuehrt_ab, ausgemustert_nach, bemerkung}], ruecklage, buchreihe, mtime}` — `zeilen` ist der ganze Stand, ein fehlender Jahrgang wird gelöscht; `buchreihe` `{titel, verlag, neupreis, leihgebuehr, leihbar}` setzt die Angaben der Buchreihe in der Datei (auf „Buchreihen“, ohne Kommentar; ein leerer Preis ist leer) |
 | `POST /api/buchplanung/planung` | Eine einzelne Zeile: `{schuljahr, isbn, fach, jahrgang, eingefuehrt_ab, ausgemustert_nach, kuerzel, datum, mtime}` |
+| `POST /api/buchplanung/antrag` | Einen Antrag entscheiden: `{schuljahr, isbn, fach, jahrgang, art: "einfuehrung"\|"ausmusterung", ergebnis: "genehmigt"\|"abgelehnt"\|""\|null, kuerzel, datum, begruendung, mtime}` — `""` setzt auf offen zurück, `null` lässt die Entscheidung stehen → 200/400/409/423/503 |
 | `POST /api/buchplanung/ruecklage` | Rücklage einer Fachschaft: `{schuljahr, isbn, fach, anzahl, status, mtime}` |
 | `GET /api/mehrjahresbaende` | dieselbe Übersicht als JSON |
 | `POST /api/mehrjahresbaende/erzeugen` | Aus zwei Schuljahren neu rechnen und die Datei schreiben: `{schuljahr?, vorjahr?}` → 200/400/401/423/502/503 |

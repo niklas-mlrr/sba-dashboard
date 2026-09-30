@@ -11,6 +11,10 @@ wird in den Bücherlisten-Seiten selbst, und die Daten kommen aus
 ``buecherlisten.core.daten``. Hier steht der Kern - keine HTTP-Schicht, keine
 Einstellungen, keine Sperren; das ist ``app/buchplanung.py``.
 
+Dazu die Änderungsliste: jede Einführung und Ausmusterung ist ein Antrag,
+der genehmigt oder abgelehnt wird (:func:`aenderungen_im_schuljahr`,
+:func:`entscheide_antrag`).
+
 Aufbau: :mod:`~buecherlisten.planung.modelle` die Begriffe und die gerechneten
 Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
 :mod:`~buecherlisten.planung.laden` die beiden Schuljahre aus IServ,
@@ -24,6 +28,7 @@ from .abgleich import (
     UnbekanntesBuch,
     UngueltigeEingabe,
     bestaetige_fach,
+    entscheide_antrag,
     fuege_buch_hinzu,
     setze_buchplanung,
     setze_buchreihe,
@@ -42,6 +47,12 @@ from .mappe import (
     schreibe_mappe,
 )
 from .modelle import (
+    ANTRAG_ABGELEHNT,
+    ANTRAG_ERGEBNISSE,
+    ANTRAG_GENEHMIGT,
+    ANTRAG_OFFEN,
+    ART_AUSMUSTERUNG,
+    ART_EINFUEHRUNG,
     FACH_BESTAETIGT,
     FACH_OFFEN,
     FACH_TEILWEISE,
@@ -54,12 +65,15 @@ from .modelle import (
     PLANUNG_IM_EINSATZ,
     PLANUNG_LAEUFT_AUS,
     RUECKLAGE_STATUS,
+    Aenderung,
+    Antragsentscheidung,
     Buch,
     Buchbemerkung,
     Buchplanung,
     Planungszeile,
     Ruecklage,
     UngueltigesSchuljahr,
+    aenderungen_im_schuljahr,
     endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
@@ -88,6 +102,16 @@ __all__ = [
     "aktive_paare",
     "vergleiche",
     "BLAETTER",
+    "ANTRAG_ABGELEHNT",
+    "ANTRAG_ERGEBNISSE",
+    "ANTRAG_GENEHMIGT",
+    "ANTRAG_OFFEN",
+    "ART_AUSMUSTERUNG",
+    "ART_EINFUEHRUNG",
+    "Aenderung",
+    "Antragsentscheidung",
+    "aenderungen_im_schuljahr",
+    "entscheide_antrag",
     "FACH_BESTAETIGT",
     "FACH_OFFEN",
     "FACH_TEILWEISE",

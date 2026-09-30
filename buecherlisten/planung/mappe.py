@@ -10,7 +10,10 @@ Blatt                   Schlüssel                   eintragbar
 ======================  ==========================  =========================
 ``Buchreihen``          ISBN                        Bemerkung
 ``Fächer & Jahrgang``   (ISBN, Fach, Jahrgang)      Einführung, Ausmusterung,
-                                                    Kürzel, Datum, Bemerkung
+                                                    je Antrag Entscheidung,
+                                                    Kürzel, Datum;
+                                                    Begründung, Kürzel,
+                                                    Datum, Bemerkung
 ``Rücklage``            (ISBN, Fach)                Anzahl, Kürzel, Datum,
                                                     Status, Bemerkung
 ``Info``                -                           nichts
@@ -61,6 +64,7 @@ from .modelle import (
     LEGENDE,
     OHNE_FACH,
     OHNE_VERLAG,
+    Antragsentscheidung,
     Buch,
     Buchbemerkung,
     Buchplanung,
@@ -99,6 +103,9 @@ class MappeUnlesbar(ValueError):
 
 SPALTE_EINFUEHRUNG = "Einführung"
 SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
+SPALTE_ANTRAG_EINFUEHRUNG = "Antrag Einführung"
+SPALTE_ANTRAG_AUSMUSTERUNG = "Antrag Ausmusterung"
+SPALTE_BEGRUENDUNG = "Begründung"
 
 _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
     BLATT_BUECHER: (
@@ -117,7 +124,16 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Fach", 22, False),
         ("Jahrgang", 10, False),
         (SPALTE_EINFUEHRUNG, 13, True),
+        # Je Antrag drei Spalten, direkt hinter dem Schuljahr, über das
+        # entschieden wird: Entscheidung, Kürzel, Datum.
+        (SPALTE_ANTRAG_EINFUEHRUNG, 17, True),
+        (f"{SPALTE_ANTRAG_EINFUEHRUNG} Kürzel", 12, True),
+        (f"{SPALTE_ANTRAG_EINFUEHRUNG} Datum", 12, True),
         (SPALTE_AUSMUSTERUNG, 24, True),
+        (SPALTE_ANTRAG_AUSMUSTERUNG, 19, True),
+        (f"{SPALTE_ANTRAG_AUSMUSTERUNG} Kürzel", 12, True),
+        (f"{SPALTE_ANTRAG_AUSMUSTERUNG} Datum", 12, True),
+        (SPALTE_BEGRUENDUNG, 30, True),
         ("Kürzel", 10, True),
         ("Datum", 12, True),
         ("Bemerkung", 30, True),
@@ -273,6 +289,9 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             kuerzel=_text(zeile.get("Kürzel")),
             datum=_datum(zeile.get("Datum")),
             bemerkung=_text(zeile.get("Bemerkung")),
+            antrag_einfuehrung=_lies_antrag(zeile, SPALTE_ANTRAG_EINFUEHRUNG),
+            antrag_ausmusterung=_lies_antrag(zeile, SPALTE_ANTRAG_AUSMUSTERUNG),
+            begruendung=_text(zeile.get(SPALTE_BEGRUENDUNG)),
         )
         if not eintrag.leer:
             planung.append(eintrag)
@@ -322,6 +341,22 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
         schuljahr=schuljahr, vorjahr=vorjahr, stand=stand, buecher=buecher,
         bemerkungen=bemerkungen, planung=tuple(planung), ruecklagen=ruecklagen,
     )
+
+
+def _lies_antrag(zeile: dict[str, object], spalte: str) -> Antragsentscheidung:
+    """Entscheidung, Kürzel und Datum eines Antrags - fehlen die Spalten, ist er offen."""
+    return Antragsentscheidung(
+        ergebnis=_text(zeile.get(spalte)),
+        kuerzel=_text(zeile.get(f"{spalte} Kürzel")),
+        datum=_datum(zeile.get(f"{spalte} Datum")),
+    )
+
+
+def _schreibe_antrag(spalte: str, antrag: Antragsentscheidung | None) -> dict[str, object]:
+    if antrag is None:
+        return {spalte: "", f"{spalte} Kürzel": "", f"{spalte} Datum": None}
+    return {spalte: antrag.ergebnis, f"{spalte} Kürzel": antrag.kuerzel,
+            f"{spalte} Datum": antrag.datum}
 
 
 def _lies_info(wb: Workbook) -> tuple[str, str, date | None]:
@@ -433,7 +468,12 @@ def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "Fach": fach,
             "Jahrgang": jahrgang,
             SPALTE_EINFUEHRUNG: zeile.eingefuehrt_ab if zeile else "",
+            **_schreibe_antrag(SPALTE_ANTRAG_EINFUEHRUNG,
+                               zeile.antrag_einfuehrung if zeile else None),
             SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach if zeile else "",
+            **_schreibe_antrag(SPALTE_ANTRAG_AUSMUSTERUNG,
+                               zeile.antrag_ausmusterung if zeile else None),
+            SPALTE_BEGRUENDUNG: zeile.begruendung if zeile else "",
             "Kürzel": zeile.kuerzel if zeile else "",
             "Datum": zeile.datum if zeile else None,
             "Bemerkung": zeile.bemerkung if zeile else "",
@@ -494,10 +534,14 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
                              "bleibt unverändert.")
     zeile(9, "Jahrgänge", "Ohne Einführung ist ein Jahrgang eingeführt, mit Einführung "
                           "geplant. Ein Buch ohne jeden Jahrgang fällt aus der Datei.")
-    zeile(10, "Legende", "", fett=True)
+    zeile(10, "Anträge", "Jede Einführung und Ausmusterung ist ein Antrag: „genehmigt“ "
+                         "oder „abgelehnt“ mit Kürzel und Datum, leer heißt offen. Ändert "
+                         "sich das Schuljahr, fällt die Entscheidung weg. Die Begründung "
+                         "gilt für beide Anträge der Zeile.")
+    zeile(11, "Legende", "", fett=True)
     for versatz, (marke, text) in enumerate(LEGENDE):
-        zeile(11 + versatz, marke, text)
-    naechste = 11 + len(LEGENDE) + 1
+        zeile(12 + versatz, marke, text)
+    naechste = 12 + len(LEGENDE) + 1
     for versatz, warnung in enumerate(stand.warnungen):
         zeile(naechste + versatz, "Hinweis" if versatz == 0 else "", warnung)
 
