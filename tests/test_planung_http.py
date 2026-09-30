@@ -1355,8 +1355,8 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text
 
 
-class _Buchgruppen(HTMLParser):
-    """Je <tbody> der Änderungsliste: Zeilen, Zellen je Zeile, rowspans der Buchzellen."""
+class _Fachgruppen(HTMLParser):
+    """Je <tbody> der Änderungsliste: Zellen je Zeile und die verbundenen Zellen."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -1365,34 +1365,43 @@ class _Buchgruppen(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         werte = dict(attrs)
+        klasse = werte.get("class") or ""
         if tag == "th":
             self.koepfe += 1
         elif tag == "tbody":
-            self.gruppen.append({"isbn": werte.get("data-buch"), "zeilen": [], "rowspans": []})
+            self.gruppen.append({"fach": werte.get("data-fach"), "zeilen": [],
+                                 "fach_rowspan": [], "buch_rowspans": []})
         elif tag == "tr" and self.gruppen:
             self.gruppen[-1]["zeilen"].append(0)
         elif tag == "td" and self.gruppen:
             self.gruppen[-1]["zeilen"][-1] += 1
-            if "buch-zelle" in (werte.get("class") or ""):
-                self.gruppen[-1]["rowspans"].append(int(werte["rowspan"]))
+            if "fach-zelle" in klasse:
+                self.gruppen[-1]["fach_rowspan"].append(int(werte["rowspan"]))
+            elif "buch-zelle" in klasse:
+                self.gruppen[-1]["buch_rowspans"].append(int(werte["rowspan"]))
 
 
-def test_die_aenderungsliste_verbindet_die_zellen_eines_buchs(
+def test_die_aenderungsliste_verbindet_fach_und_buch(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Nach Buch sortiert, und Titel, Verlag, ISBN stehen einmal über allen Anträgen."""
-    _mit_einfuehrung(seiten, abgeglichen)
+    """Nach Fach, darin nach Buch; Fach und Buch stehen je einmal über ihren Anträgen."""
+    stand = _mit_einfuehrung(seiten, abgeglichen)
+    antwort = seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 8,
+        "eingefuehrt_ab": "2028/2029", "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
     text = seiten.get("/buecherliste/aenderungen").text
     assert "sortierbar" not in text
-    sammler = _Buchgruppen()
+    sammler = _Fachgruppen()
     sammler.feed(text)
-    # Chemie heute 9, Deutschbuch 5, Terra 5/6 - nach Titel, nicht nach Fach.
-    assert [g["isbn"] for g in sammler.gruppen] == [ALT, DEUTSCH, TERRA]
-    terra = sammler.gruppen[2]
-    assert terra["rowspans"] == [2, 2, 2]  # Erdkunde 5 und Politik 5
-    # Die erste Zeile trägt die drei Buchzellen, die weiteren nur ihre eigenen.
-    assert terra["zeilen"] == [sammler.koepfe, sammler.koepfe - 3]
-    assert text.index("Erdkunde</a>") < text.index("Politik</a>")
+    # Terra 5/6 gehört zu Erdkunde und Politik und steht unter beiden.
+    assert [g["fach"] for g in sammler.gruppen] == ["Chemie", "Deutsch", "Erdkunde", "Politik"]
+    deutsch = sammler.gruppen[1]
+    assert deutsch["fach_rowspan"] == [2]
+    assert deutsch["buch_rowspans"] == [2, 2, 2]  # Jg. 7 und 8, ein Buch
+    # Die erste Zeile trägt Fach und Buch, die zweite nur ihre eigenen Zellen.
+    assert deutsch["zeilen"] == [sammler.koepfe, sammler.koepfe - 4]
 
 
 def test_die_aenderungsliste_ohne_anmeldung_zeigt_einen_hinweis(seiten: TestClient) -> None:

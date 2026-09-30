@@ -877,18 +877,21 @@ def test_die_aenderungsliste_nimmt_einfuehrungen_ab_jetzt_und_ausmusterungen_ab_
     assert liste[0].titel == "Deutschbuch 5"
 
 
-def test_die_aenderungsliste_ist_nach_buch_sortiert(stand):
-    """Nach Titel, nicht nach Fach: die Anträge eines Buchs stehen beisammen."""
+def test_die_aenderungsliste_ist_nach_fach_und_darin_nach_buch_sortiert(stand):
+    """Ein Buch in zwei Fächern steht unter beiden, mit den Anträgen des Fachs."""
     stand = setze_planung(stand, isbn=TERRA, fach="Politik", jahrgang=5,
                           ausgemustert_nach="2026/2027")
     stand = setze_planung(stand, isbn=ALT, fach="Chemie", jahrgang=9,
                           ausgemustert_nach="2026/2027")
     stand = setze_planung(stand, isbn=TERRA, fach="Erdkunde", jahrgang=6,
                           ausgemustert_nach="2026/2027")
-    assert [(a.titel, a.fach, a.jahrgang) for a in aenderungen_im_schuljahr(stand)] == [
-        ("Chemie heute 9", "Chemie", 9),
-        ("Terra 5/6", "Erdkunde", 6),
-        ("Terra 5/6", "Politik", 5),
+    stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                          eingefuehrt_ab="2027/2028")
+    assert [(a.fach, a.titel, a.jahrgang) for a in aenderungen_im_schuljahr(stand)] == [
+        ("Chemie", "Chemie heute 9", 9),
+        ("Deutsch", "Deutschbuch 5", 7),
+        ("Erdkunde", "Terra 5/6", 6),
+        ("Politik", "Terra 5/6", 5),
     ]
 
 

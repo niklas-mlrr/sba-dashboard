@@ -585,9 +585,11 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
     Anträge. Eine unlesbare Schuljahresangabe wird übersprungen, wie in
     :func:`planungs_status`.
 
-    Sortiert nach **Buch** (Titel, ISBN), darin nach Fach, Jahrgang und
-    Einführung vor Ausmusterung: die Seite fasst die Anträge eines Buchs mit
-    verbundenen Zellen zusammen, und die gehören untereinander.
+    Sortiert nach **Fach**, darin nach Buch (Titel, ISBN), dann Jahrgang und
+    Einführung vor Ausmusterung: die Seite fasst die Anträge eines Fachs und
+    darin die eines Buchs mit verbundenen Zellen zusammen, und die gehören
+    untereinander. Ein Buch in zwei Fächern steht unter beiden, jeweils mit
+    den Anträgen dieses Fachs.
     """
     try:
         jetzt = schuljahr_zahl(stand.schuljahr)
@@ -611,4 +613,4 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
                 entscheidung=zeile.antrag(art), begruendung=zeile.begruendung,
             ))
     return tuple(sorted(heraus, key=lambda a: (
-        a.titel.casefold(), a.isbn, a.fach.casefold(), a.jahrgang, a.art != ART_EINFUEHRUNG)))
+        a.fach.casefold(), a.titel.casefold(), a.isbn, a.jahrgang, a.art != ART_EINFUEHRUNG)))

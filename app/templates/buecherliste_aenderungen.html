@@ -7,7 +7,7 @@
   Die Änderungsliste: jede Einführung ab diesem Schuljahr und jede
   Ausmusterung nach dem Vorjahr oder später, je Buch, Fach und Jahrgang
   (``aenderungen_im_schuljahr`` in buecherlisten/planung/modelle.py), nach
-  Buch sortiert. Jede Zeile ist ein Antrag, der genehmigt oder abgelehnt wird.
+  Fach und darin nach Buch sortiert. Jede Zeile ist ein Antrag, der genehmigt oder abgelehnt wird.
 
   Kürzel und Datum stehen **einmal** oben und gelten für jeden Klick - wer die
   Liste durchgeht, entscheidet mit demselben Kürzel. Die Begründung gilt für
@@ -59,22 +59,24 @@
   </span>
 </div>
 {#
-  Je Buch ein <tbody>: Titel, Verlag und ISBN stehen in der ersten Zeile, als
-  verbundene Zellen über alle Anträge des Buchs. Deshalb ist die Tabelle nicht
-  per Klick sortierbar (static/sortieren.js greift über den Spaltenindex, und
-  den verschieben die verbundenen Zellen); sie kommt nach Buch sortiert. Blendet
-  ein Filter Zeilen aus, setzt static/aenderungen.js die verbundenen Zellen in
-  die erste sichtbare Zeile und passt ``rowspan`` an.
+  Je Fach ein <tbody>, darin die Bücher nach Titel. Das Fach steht in der
+  ersten Zeile als verbundene Zelle über alle Anträge des Fachs, Titel, Verlag
+  und ISBN in der ersten Zeile jedes Buchs über dessen Anträge. Ein Buch in
+  zwei Fächern steht unter beiden. Per Klick sortierbar ist die Tabelle
+  deshalb nicht (static/sortieren.js greift über den Spaltenindex, und den
+  verschieben die verbundenen Zellen). Blendet ein Filter Zeilen aus, setzt
+  static/aenderungen.js die verbundenen Zellen in die erste sichtbare Zeile
+  und passt ``rowspan`` an.
 #}
 <div class="tabellenrahmen">
 <table class="iserv-tabelle aenderungen-tabelle" id="aenderungen">
   <thead>
     <tr>
+      <th>Fach</th>
       <th>Titel</th>
       <th>Verlag</th>
       <th>ISBN</th>
       <th>Art</th>
-      <th>Fach</th>
       <th>Jahrgang</th>
       <th>Schuljahr</th>
       <th>Entscheidung</th>
@@ -82,18 +84,22 @@
       <th>Entscheiden</th>
     </tr>
   </thead>
-  {% for buch in buecher %}
-  <tbody data-buch="{{ buch.isbn }}">
+  {% for gruppe in faecher %}
+  <tbody data-fach="{{ gruppe.fach }}">
+    {% for buch in gruppe.buecher %}
+    {% set buch_erste = loop.first %}
     {% for e in buch.antraege %}
     <tr data-antrag="{{ e.art }}" data-status="{{ e.status }}" data-isbn="{{ e.isbn }}"
-      data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}">
+      data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}"{% if loop.first and not buch_erste %} class="buch-anfang"{% endif %}>
+      {% if loop.first and buch_erste %}
+      <td class="fach-zelle" rowspan="{{ gruppe.zeilen }}"><a href="/buecherliste/fach/{{ gruppe.fach | urlencode }}">{{ gruppe.fach }}</a></td>
+      {% endif %}
       {% if loop.first %}{% set zeilen = buch.antraege | length %}
       <td class="buch-zelle" rowspan="{{ zeilen }}">{{ buch.titel }}</td>
       <td class="buch-zelle" rowspan="{{ zeilen }}">{{ buch.verlag }}</td>
       <td class="buch-zelle" rowspan="{{ zeilen }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
       {% endif %}
       <td><span class="label {{ 'label-info' if e.einfuehrung else 'label-danger' }}">{{ "Einführung" if e.einfuehrung else "Ausmusterung" }}</span></td>
-      <td><a href="/buecherliste/fach/{{ e.fach | urlencode }}">{{ e.fach }}</a></td>
       <td>{{ e.jahrgang }}</td>
       <td>{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</td>
       <td>{{ bp.statuslabel(e.status) }}
@@ -111,6 +117,7 @@
         {%- if e.status != "offen" %}<button type="button" class="btn btn-default" data-planung="antrag"
           data-ergebnis="" title="Wieder auf offen setzen">Zurücksetzen</button>{% endif %}</td>
     </tr>
+    {% endfor %}
     {% endfor %}
   </tbody>
   {% endfor %}

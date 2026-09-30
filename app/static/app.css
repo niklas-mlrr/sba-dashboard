@@ -1137,9 +1137,13 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   text-overflow: ellipsis;
 }
 .planung-antrag .label { font-size: 10px; }
-/* Je Buch ein <tbody>: ein kräftigerer Strich trennt die Bücher, und die
-   verbundenen Zellen stehen oben. Sortiert wird hier nicht per Klick. */
+/* Je Fach ein <tbody>: ein kräftigerer Strich trennt die Fächer, ein
+   dunklerer die Bücher darin, und die verbundenen Zellen stehen oben.
+   Sortiert wird hier nicht per Klick. */
 .aenderungen-tabelle > thead > tr > th { cursor: default; }
-.aenderungen-tabelle > tbody + tbody { border-top: 2px solid #ddd; }
+.aenderungen-tabelle > tbody + tbody { border-top: 2px solid #bbb; }
+.aenderungen-tabelle > tbody > tr.buch-anfang > td { border-top-color: #bbb; }
+.aenderungen-tabelle > tbody > tr > td.fach-zelle,
 .aenderungen-tabelle > tbody > tr > td.buch-zelle { background: var(--flaeche); }
+.aenderungen-tabelle > tbody > tr > td.fach-zelle { font-weight: 700; }
 .aenderungen-tabelle > tbody[hidden] { display: none; }

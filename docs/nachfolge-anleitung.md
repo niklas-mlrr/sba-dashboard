@@ -287,8 +287,10 @@ einträgt, gleicht die Angabe an IServ an. Ein geleerter Preis bleibt leer.
 
 Hier stehen alle Bücher, die ab diesem Schuljahr oder später **eingeführt**
 werden, und alle, die nach dem letzten Schuljahr oder später **ausgemustert**
-werden, je Fach und Jahrgang in einer Zeile. Sortiert ist nach Buch: Titel,
-Verlag und ISBN stehen einmal links, über alle Zeilen desselben Buchs.
+werden, je Fach und Jahrgang in einer Zeile. Sortiert ist nach Fach und darin
+nach Buch: Das Fach steht einmal links über allen seinen Zeilen, daneben Titel,
+Verlag und ISBN einmal über allen Zeilen desselben Buchs. Gehört ein Buch zu
+zwei Fächern, steht es unter beiden.
 
 1. Tragen Sie oben Ihr **Kürzel** ein. Das Datum steht schon auf heute. Das
    Kürzel merkt sich der Browser für das nächste Mal.

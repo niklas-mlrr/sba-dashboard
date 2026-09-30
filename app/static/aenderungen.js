@@ -13,24 +13,47 @@
   const tabelle = document.getElementById("aenderungen");
   const filter = { status: "", art: "" };
 
-  // Je Buch ein <tbody>; Titel, Verlag und ISBN stehen als verbundene Zellen
-  // (.buch-zelle) vorn in seiner ersten Zeile. Fällt die weg, wandern sie in
-  // die erste sichtbare, und rowspan zählt nur die sichtbaren Zeilen - sonst
-  // verschöbe sich jede Zeile darunter um drei Spalten.
+  // Je Fach ein <tbody>. Das Fach steht als verbundene Zelle (.fach-zelle)
+  // vorn in seiner ersten Zeile, Titel, Verlag und ISBN (.buch-zelle) vorn in
+  // der ersten Zeile jedes Buchs. Fällt eine solche Zeile weg, wandern die
+  // Zellen in die erste sichtbare, und rowspan zählt nur die sichtbaren
+  // Zeilen - sonst verschöbe sich jede Zeile darunter.
+  //
+  // Erst die Buchzellen, dann die Fachzelle voranstellen: so steht das Fach
+  // immer ganz vorn, auch wenn beide in dieselbe Zeile wandern.
+  function verbinde(zeilen, zellen) {
+    const sichtbar = zeilen.filter((zeile) => !zeile.hidden);
+    if (!sichtbar.length) return;
+    sichtbar[0].prepend(...zellen);
+    for (const zelle of zellen) zelle.rowSpan = sichtbar.length;
+  }
+
   function wendeAn() {
     if (!tabelle) return;
-    for (const buch of tabelle.tBodies) {
-      const zeilen = Array.from(buch.rows);
+    for (const fach of tabelle.tBodies) {
+      const zeilen = Array.from(fach.rows);
       for (const zeile of zeilen) {
         zeile.hidden = Boolean((filter.status && zeile.dataset.status !== filter.status)
           || (filter.art && zeile.dataset.antrag !== filter.art));
       }
-      const sichtbar = zeilen.filter((zeile) => !zeile.hidden);
-      buch.hidden = sichtbar.length === 0;
-      if (!sichtbar.length) continue;
-      const zellen = Array.from(buch.querySelectorAll(".buch-zelle"));
-      sichtbar[0].prepend(...zellen);
-      for (const zelle of zellen) zelle.rowSpan = sichtbar.length;
+      fach.hidden = zeilen.every((zeile) => zeile.hidden);
+      const buecher = new Map();
+      for (const zeile of zeilen) {
+        if (!buecher.has(zeile.dataset.isbn)) buecher.set(zeile.dataset.isbn, []);
+        buecher.get(zeile.dataset.isbn).push(zeile);
+      }
+      for (const buch of buecher.values()) {
+        verbinde(buch, Array.from(fach.querySelectorAll(".buch-zelle"))
+          .filter((zelle) => zelle.parentElement.dataset.isbn === buch[0].dataset.isbn));
+      }
+      verbinde(zeilen, Array.from(fach.querySelectorAll(".fach-zelle")));
+      // Der Strich über einem Buch gehört an seine erste sichtbare Zeile.
+      let vorige = null;
+      for (const zeile of zeilen.filter((z) => !z.hidden)) {
+        zeile.classList.toggle("buch-anfang",
+          vorige !== null && vorige !== zeile.dataset.isbn);
+        vorige = zeile.dataset.isbn;
+      }
     }
   }
 
