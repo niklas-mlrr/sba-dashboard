@@ -1004,9 +1004,8 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-zeilenende { white-space: nowrap; text-align: right; }
 
 /* Die Bemerkung: eingeklappt eine Zeile, beim Anklicken so hoch, wie ihr Text
-   braucht (static/buchplanung.js setzt die Höhe). Passt der Text nicht in die
-   eine Zeile, endet sie mit "…" - sonst sähe eine lange Bemerkung aus wie eine
-   kurze. */
+   braucht (static/buchplanung.js setzt die Höhe). Eingeklappt steht der Text
+   als Vorschau darüber, siehe `.planung-bemerkung-vorschau`. */
 .planung-bemerkung {
   display: block;
   width: 100%;
@@ -1023,16 +1022,27 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   height: calc(1.4em + .5rem + 2px);
 }
 .planung-bemerkung-rahmen { position: relative; display: block; }
-.planung-bemerkung-rahmen.hat-mehr::after {
-  content: "…";
+/* Eingeklappt zeigt nicht das Textfeld seinen Text, sondern eine Vorschau
+   darüber: der ganze Text in **einer** Zeile, Umbrüche als Leerzeichen
+   (static/buchplanung.js). Im Textfeld selbst endete die erste Zeile am
+   ersten Umbruch oder am letzten ganzen Wort, und bis zum "…" am rechten Rand
+   blieb eine Lücke. Das "…" setzt jetzt `text-overflow` genau dort, wo der
+   Text abgeschnitten wird - und nur, wenn er abgeschnitten wird. Das Feld
+   bleibt darunter anklickbar; im Fokus verschwindet die Vorschau. Ohne
+   Skript gibt es keine Vorschau, und das Feld zeigt seinen Text wie vorher. */
+.planung-bemerkung-rahmen.mit-vorschau > .planung-bemerkung:not(:focus) { color: transparent; }
+.planung-bemerkung-vorschau {
   position: absolute;
-  right: 1px;
-  bottom: 1px;
-  padding: 0 .3rem 0 .6rem;
-  color: var(--text-leise);
-  background: linear-gradient(to right, transparent, var(--flaeche) 45%);
+  inset: 1px;
+  padding: .25rem .4rem;
+  font-size: .875rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
 }
+.planung-bemerkung:focus + .planung-bemerkung-vorschau { display: none; }
 
 .planung-anfuegen { margin: 1.2rem 0 .4rem; }
 

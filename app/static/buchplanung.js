@@ -167,10 +167,11 @@
 
   // ── Die Bemerkung: eine Zeile hoch, beim Tippen so hoch wie ihr Text ──────
   //
-  // Eingeklappt ist sie eine Zeile hoch und endet mit "…", wenn mehr darin
-  // steht (die Klasse setzt das CSS um). Beim Anklicken wächst sie nach unten,
-  // damit man den ganzen Text liest; beim Verlassen klappt sie wieder ein.
-  // Ohne das wäre eine lange Bemerkung von einer kurzen nicht zu unterscheiden.
+  // Eingeklappt ist sie eine Zeile hoch und zeigt eine Vorschau: den Text ohne
+  // Umbrüche, mit "…", wenn er nicht in die Zeile passt (das CSS legt sie über
+  // das Feld). Beim Anklicken wächst sie nach unten, damit man den ganzen Text
+  // liest; beim Verlassen klappt sie wieder ein. Ohne das "…" wäre eine lange
+  // Bemerkung von einer kurzen nicht zu unterscheiden.
   // `scrollHeight` ist Inhalt samt Innenabstand, aber ohne Rand; `offsetHeight
   // - clientHeight` ist genau dieser Rand. Ohne ihn bliebe das Feld zwei Pixel
   // zu kurz, und die letzte Zeile ließe sich um zwei Pixel scrollen.
@@ -183,7 +184,17 @@
   function klappeEin(feld) {
     feld.style.height = "";
     const rahmen = feld.closest(".planung-bemerkung-rahmen");
-    if (rahmen) rahmen.classList.toggle("hat-mehr", feld.scrollHeight > feld.clientHeight + 1);
+    if (!rahmen) return;
+    let vorschau = rahmen.querySelector(".planung-bemerkung-vorschau");
+    if (!vorschau) {
+      vorschau = document.createElement("span");
+      vorschau.className = "planung-bemerkung-vorschau";
+      vorschau.setAttribute("aria-hidden", "true");
+      rahmen.appendChild(vorschau);
+      rahmen.classList.add("mit-vorschau");
+    }
+    // Nur die Anzeige: gespeichert wird der Wert des Feldes, samt Umbrüchen.
+    vorschau.textContent = feld.value.replace(/\s+/g, " ").trim();
   }
 
   function messeBemerkungen(bereich) {
@@ -503,10 +514,7 @@
   // "focusin"/"focusout" statt focus/blur: die steigen auf und kommen deshalb
   // auch an Feldern an, die erst später im Dialog stehen.
   document.addEventListener("focusin", (ereignis) => {
-    if (ereignis.target.classList.contains("planung-bemerkung")) {
-      ereignis.target.closest(".planung-bemerkung-rahmen").classList.remove("hat-mehr");
-      passeHoeheAn(ereignis.target);
-    }
+    if (ereignis.target.classList.contains("planung-bemerkung")) passeHoeheAn(ereignis.target);
   });
   document.addEventListener("focusout", (ereignis) => {
     if (ereignis.target.classList.contains("planung-bemerkung")) klappeEin(ereignis.target);
