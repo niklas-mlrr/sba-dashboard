@@ -38,6 +38,7 @@ from buecherlisten.planung import (
     aenderungen_im_schuljahr,
     bestaetige_fach,
     entscheide_antrag,
+    ersetzungen_im_schuljahr,
     fach_status,
     fuege_buch_hinzu,
     lade_schnappschuss,
@@ -893,6 +894,102 @@ def test_die_aenderungsliste_ist_nach_fach_und_darin_nach_buch_sortiert(stand):
         ("Erdkunde", "Terra 5/6", 6),
         ("Politik", "Terra 5/6", 5),
     ]
+
+
+LS5, LS6, NEU5, NEU56, NEU57, HEFT, ATLAS = (f"97831200001{n:02d}" for n in range(7))
+
+
+def _mathe() -> Buchplanung:
+    """Mathematik mit alten Bänden für Jg. 5 und 6 und Kandidaten für neue.
+
+    Jedes Buch gehört schon zum Fach (Jg. 10 steht nur dafür da), sonst nähme
+    ``setze_planung`` es dort nicht an.
+    """
+    def buch(isbn, titel, *jahrgaenge, leihbar=True):
+        return Buch(isbn=isbn, titel=titel, verlag="Klett", leihbar=leihbar, neupreis=25.0,
+                    kombinationen=tuple(("Mathematik", j) for j in jahrgaenge or (10,)))
+    return zusammenfuehren(None, _schnappschuss(buecher=(
+        buch(LS5, "Lambacher 5", 5), buch(LS6, "Lambacher 6", 6),
+        buch(NEU5, "Neu 5"), buch(NEU56, "Neu 5/6"), buch(NEU57, "Neu 5-7"),
+        buch(HEFT, "Arbeitsheft 5"),
+        # Ein Kaufbuch, dessen Titel vor den anderen stünde.
+        buch(ATLAS, "Atlas", leihbar=False),
+    )))
+
+
+def _plane(stand, isbn, *jahrgaenge, ab="", nach=""):
+    for jahrgang in jahrgaenge:
+        stand = setze_planung(stand, isbn=isbn, fach="Mathematik", jahrgang=jahrgang,
+                              eingefuehrt_ab=ab, ausgemustert_nach=nach)
+    return stand
+
+
+def _abschnitte(stand, **nach):
+    """(Jahrgang, Wechsel, was geht, was kommt) je Abschnitt der Änderungsliste."""
+    return [(a.jahrgang, a.wechsel, [x.titel for x in a.ausmusterungen],
+             [x.titel for x in a.einfuehrungen])
+            for a in ersetzungen_im_schuljahr(stand, **nach)]
+
+
+def _gruppen(stand, **nach):
+    return [(a.gruppe_anfang, a.gruppe_ende) for a in ersetzungen_im_schuljahr(stand, **nach)]
+
+
+def test_eine_ersetzung_ist_was_vor_dem_wechsel_geht_und_mit_ihm_kommt():
+    stand = _plane(_mathe(), LS5, 5, nach="2026/2027")
+    stand = _plane(stand, NEU5, 5, ab="2027/2028")
+    # Ein Jahr später: ein anderer Wechsel, also keine Ersetzung von Lambacher 5.
+    stand = _plane(stand, NEU56, 5, ab="2028/2029")
+    assert _abschnitte(stand) == [
+        (5, "2027/2028", ["Lambacher 5"], ["Neu 5"]),
+        (5, "2028/2029", [], ["Neu 5/6"]),
+    ]
+    erster, zweiter = ersetzungen_im_schuljahr(stand)
+    assert erster.ersetzung.mit_partner and not zweiter.ersetzung.mit_partner
+
+
+def test_mehrere_buecher_einer_seite_stehen_leihbar_zuerst_in_einer_ersetzung():
+    stand = _plane(_mathe(), LS5, 5, nach="2026/2027")
+    stand = _plane(stand, ATLAS, 5, nach="2026/2027")
+    stand = _plane(stand, NEU5, 5, ab="2027/2028")
+    # Das Kaufbuch steht trotz „A“ hinter dem Leihbuch.
+    assert _abschnitte(stand) == [(5, "2027/2028", ["Lambacher 5", "Atlas"], ["Neu 5"])]
+
+
+def test_ein_buch_steht_mit_allen_jahrgaengen_zusammen_kurze_spannen_zuerst():
+    """In Jg. 5 erst das Buch nur für 5, dann 5 bis 6, dann 5 bis 7 (mit Lücke)."""
+    stand = _plane(_mathe(), NEU57, 5, 7, ab="2027/2028")
+    stand = _plane(stand, NEU56, 5, 6, ab="2027/2028")
+    stand = _plane(stand, NEU5, 5, ab="2027/2028")
+    stand = _plane(stand, LS5, 5, nach="2026/2027")
+    stand = _plane(stand, LS6, 6, nach="2026/2027")
+    assert _abschnitte(stand) == [
+        # Neu 5 und Neu 5/6 stehen direkt untereinander und teilen sich
+        # deshalb einen Abschnitt - und damit das alte Buch.
+        (5, "2027/2028", ["Lambacher 5"], ["Neu 5", "Neu 5/6"]),
+        (6, "2027/2028", ["Lambacher 6"], ["Neu 5/6"]),
+        # Neu 5-7 steht nicht mehr darunter: Lambacher 5 steht noch einmal da.
+        (5, "2027/2028", ["Lambacher 5"], ["Neu 5-7"]),
+        (7, "2027/2028", [], ["Neu 5-7"]),
+    ]
+    # Die Buchgruppen: Neu 5 ist 0, Neu 5/6 ist 1, Neu 5-7 ist 2. Zwischen dem
+    # ersten und dem zweiten Abschnitt beginnt kein neues Buch.
+    assert _gruppen(stand) == [(0, 1), (1, 1), (2, 2), (2, 2)]
+
+
+def test_nach_der_ausmusterung_sortiert_bildet_das_alte_buch_die_gruppe():
+    stand = _plane(_mathe(), HEFT, 5, 6, nach="2026/2027")
+    stand = _plane(stand, NEU5, 5, ab="2027/2028")
+    stand = _plane(stand, NEU56, 6, ab="2027/2028")
+    erwartet = [
+        (5, "2027/2028", ["Arbeitsheft 5"], ["Neu 5"]),
+        (6, "2027/2028", ["Arbeitsheft 5"], ["Neu 5/6"]),
+    ]
+    assert _abschnitte(stand) == erwartet
+    assert _abschnitte(stand, nach=ART_AUSMUSTERUNG) == erwartet
+    # Nach der Einführung zwei Bücher, nach der Ausmusterung eines.
+    assert _gruppen(stand) == [(0, 0), (1, 1)]
+    assert _gruppen(stand, nach=ART_AUSMUSTERUNG) == [(0, 0), (0, 0)]
 
 
 def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(tmp_path, stand):

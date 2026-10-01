@@ -1348,60 +1348,103 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     assert 'data-schuljahr="2026/2027"' in text
     assert 'id="antrag-kuerzel"' in text
     # Deutsch 7 ab 2027/2028, und aus dem Abgleich: Chemie 9, Erdkunde 5, Politik 5
-    # nach 2025/2026.
-    assert text.count('data-antrag="einfuehrung"') == 1
-    assert text.count('data-antrag="ausmusterung"') == 3
+    # nach 2025/2026 - je ein Buch in der Tabelle und ein Buchmenü.
+    assert text.count('class="aenderung-seite-ein"') == 1
+    assert text.count('class="aenderung-seite-aus"') == 3
+    assert text.count('<template id="antrag-') == 4
     assert "ab 2027/2028" in text and "nach 2025/2026" in text
     assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text
+    # Deutsch 7 kommt ohne Vorgänger (links leer), Chemie heute geht ersatzlos.
+    assert re.search(r'class="aenderung-leer"[^>]*>kein Vorgänger</td>\s*<td class="aenderung-pfeil"', text)
+    assert re.search(r'</td>\s*<td class="aenderung-leer"[^>]*>kein Nachfolger</td>', text)
 
 
-class _Fachgruppen(HTMLParser):
-    """Je <tbody> der Änderungsliste: Zellen je Zeile und die verbundenen Zellen."""
+class _Abschnitte(HTMLParser):
+    """Je <tbody> der Änderungsliste: Fach, Strich, Gruppen und die Zellen mit rowspan."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.koepfe = 0
-        self.gruppen: list[dict] = []
+        self.faecher: list[str] = []
+        self.abschnitte: list[dict] = []
 
     def handle_starttag(self, tag, attrs):
         werte = dict(attrs)
-        klasse = werte.get("class") or ""
-        if tag == "th":
-            self.koepfe += 1
+        klasse = (werte.get("class") or "").split()
+        if tag == "tbody" and "aenderungen-fach" in klasse:
+            self.faecher.append(werte["data-fach"])
         elif tag == "tbody":
-            self.gruppen.append({"fach": werte.get("data-fach"), "zeilen": [],
-                                 "fach_rowspan": [], "buch_rowspans": []})
-        elif tag == "tr" and self.gruppen:
-            self.gruppen[-1]["zeilen"].append(0)
-        elif tag == "td" and self.gruppen:
-            self.gruppen[-1]["zeilen"][-1] += 1
-            if "fach-zelle" in klasse:
-                self.gruppen[-1]["fach_rowspan"].append(int(werte["rowspan"]))
-            elif "buch-zelle" in klasse:
-                self.gruppen[-1]["buch_rowspans"].append(int(werte["rowspan"]))
+            self.abschnitte.append({
+                "fach": werte["data-fach"], "strich": "strich" in klasse,
+                "gruppen": (werte["data-gruppe-anfang"], werte["data-gruppe-ende"]),
+                "zellen": [],
+            })
+        elif tag == "td" and self.abschnitte and klasse:
+            self.abschnitte[-1]["zellen"].append((klasse[0], int(werte.get("rowspan", 1))))
 
 
-def test_die_aenderungsliste_verbindet_fach_und_buch(
+def test_die_aenderungsliste_stellt_ein_buch_mit_allen_jahrgaengen_zusammen(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Nach Fach, darin nach Buch; Fach und Buch stehen je einmal über ihren Anträgen."""
     stand = _mit_einfuehrung(seiten, abgeglichen)
     antwort = seiten.post("/api/buchplanung/planung", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 8,
         "eingefuehrt_ab": "2028/2029", "mtime": stand["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
-    text = seiten.get("/buecherliste/aenderungen").text
-    assert "sortierbar" not in text
-    sammler = _Fachgruppen()
-    sammler.feed(text)
+    sammler = _Abschnitte()
+    sammler.feed(seiten.get("/buecherliste/aenderungen").text)
     # Terra 5/6 gehört zu Erdkunde und Politik und steht unter beiden.
-    assert [g["fach"] for g in sammler.gruppen] == ["Chemie", "Deutsch", "Erdkunde", "Politik"]
-    deutsch = sammler.gruppen[1]
-    assert deutsch["fach_rowspan"] == [2]
-    assert deutsch["buch_rowspans"] == [2, 2, 2]  # Jg. 7 und 8, ein Buch
-    # Die erste Zeile trägt Fach und Buch, die zweite nur ihre eigenen Zellen.
-    assert deutsch["zeilen"] == [sammler.koepfe, sammler.koepfe - 4]
+    assert sammler.faecher == ["Chemie", "Deutsch", "Erdkunde", "Politik"]
+    deutsch = [a for a in sammler.abschnitte if a["fach"] == "Deutsch"]
+    # Jg. 7 und 8 sind dasselbe Buch: eine Gruppe, kein Strich dazwischen.
+    assert [a["strich"] for a in deutsch] == [False, False]
+    assert deutsch[0]["gruppen"][1] == deutsch[1]["gruppen"][0]
+
+
+def test_die_kuerzere_seite_einer_ersetzung_reicht_bis_unten(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Chemie heute 9 geht, zwei Bücher kommen: der alte Kasten ist zwei Zeilen hoch."""
+    mtime = abgeglichen["mtime"]
+    for isbn, titel, leihbar in ((NEU, "Elemente Chemie", True), (KAUF, "Arbeitsheft Chemie", False)):
+        antwort = seiten.post("/api/buchplanung/buch/neu", json={
+            "schuljahr": "2026/2027", "isbn": isbn, "fach": "Chemie",
+            "zeilen": [{"jahrgang": 9, "eingefuehrt_ab": "2026/2027"}],
+            "buchreihe": {**_buchreihe(titel, "Klett"), "leihbar": leihbar},
+            "mtime": mtime,
+        })
+        assert antwort.status_code == 200, antwort.text
+        mtime = antwort.json()["mtime"]
+    text = seiten.get("/buecherliste/aenderungen").text
+    sammler = _Abschnitte()
+    sammler.feed(text)
+    chemie = [a for a in sammler.abschnitte if a["fach"] == "Chemie"]
+    assert len(chemie) == 1
+    assert chemie[0]["zellen"] == [
+        ("aenderung-jahrgang", 2), ("aenderung-seite-aus", 2), ("aenderung-pfeil", 2),
+        ("aenderung-seite-ein", 1), ("aenderung-seite-ein", 1),
+    ]
+    # Das Leihbuch steht vor dem Kaufbuch, und das Menü des alten Buchs nennt beide.
+    tabelle = text.split('id="aenderungen"')[1].split("</table>")[0]
+    assert tabelle.index("Elemente Chemie") < tabelle.index("Arbeitsheft Chemie")
+    menue = next(teil for teil in text.split("<template ")[1:] if "Chemie heute 9" in
+                 teil.split("modal-title")[1][:80])
+    assert "Ersetzt durch" in menue
+    assert "Elemente Chemie" in menue and "Arbeitsheft Chemie" in menue
+
+
+def test_die_aenderungsliste_sortiert_auf_wunsch_nach_der_ausmusterung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    _mit_einfuehrung(seiten, abgeglichen)
+    standard = seiten.get("/buecherliste/aenderungen").text
+    assert 'class="aenderungen-kopf-einfuehrung" data-sort aria-sort="ascending"' in standard
+    text = seiten.get("/buecherliste/aenderungen?sortierung=ausmusterung").text
+    assert 'class="aenderungen-kopf-ausmusterung" data-sort aria-sort="ascending"' in text
+    assert 'href="?sortierung=einfuehrung"' in text
+    # Was die Seite nicht kennt, ist die Einführung.
+    unbekannt = seiten.get("/buecherliste/aenderungen?sortierung=quatsch").text
+    assert 'class="aenderungen-kopf-einfuehrung" data-sort aria-sort="ascending"' in unbekannt
 
 
 def test_die_aenderungsliste_ohne_anmeldung_zeigt_einen_hinweis(seiten: TestClient) -> None:

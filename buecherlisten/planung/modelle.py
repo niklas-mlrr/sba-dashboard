@@ -567,10 +567,31 @@ class Aenderung:
     schuljahr: str
     entscheidung: Antragsentscheidung
     begruendung: str = ""
+    # Aus der Buchreihe: leihbare Bücher stehen in einer Ersetzung zuerst, und
+    # der Neupreis ist, was eine Einführung kostet (je Exemplar).
+    leihbar: bool = False
+    neupreis: float | None = None
+    # Seit wann die Planungszeile das Buch führt - bei einer Ausmusterung, wie
+    # lange es im Einsatz war. Leer für alles, was vor der Planung schon da war.
+    eingefuehrt_ab: str = ""
 
     @property
     def status(self) -> str:
         return self.entscheidung.status
+
+    @property
+    def einfuehrung(self) -> bool:
+        return self.art == ART_EINFUEHRUNG
+
+    @property
+    def wechsel(self) -> int:
+        """Das Schuljahr (Jahresanfang), ab dem das Neue gilt.
+
+        Eine Einführung „ab 2027/2028“ und eine Ausmusterung „nach 2026/2027“
+        gehören beide zum Wechsel 2027 - genau sie bilden eine Ersetzung.
+        """
+        jahr = schuljahr_zahl(self.schuljahr)
+        return jahr if self.einfuehrung else jahr + 1
 
 
 def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
@@ -586,10 +607,9 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
     :func:`planungs_status`.
 
     Sortiert nach **Fach**, darin nach Buch (Titel, ISBN), dann Jahrgang und
-    Einführung vor Ausmusterung: die Seite fasst die Anträge eines Fachs und
-    darin die eines Buchs mit verbundenen Zellen zusammen, und die gehören
-    untereinander. Ein Buch in zwei Fächern steht unter beiden, jeweils mit
-    den Anträgen dieses Fachs.
+    Einführung vor Ausmusterung. Ein Buch in zwei Fächern steht unter beiden,
+    jeweils mit den Anträgen dieses Fachs. Die Seite ordnet die Anträge
+    selbst noch einmal, als Ersetzungen (:func:`ersetzungen_im_schuljahr`).
     """
     try:
         jetzt = schuljahr_zahl(stand.schuljahr)
@@ -611,6 +631,151 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
                 verlag=buch.verlag if buch else "",
                 fach=zeile.fach, jahrgang=zeile.jahrgang, art=art, schuljahr=angabe,
                 entscheidung=zeile.antrag(art), begruendung=zeile.begruendung,
+                leihbar=buch.leihbar if buch else False,
+                neupreis=buch.neupreis if buch else None,
+                eingefuehrt_ab=zeile.eingefuehrt_ab,
             ))
     return tuple(sorted(heraus, key=lambda a: (
         a.fach.casefold(), a.titel.casefold(), a.isbn, a.jahrgang, a.art != ART_EINFUEHRUNG)))
+
+
+@dataclass(frozen=True)
+class Ersetzung:
+    """Alles, was in **einem** Fach und Jahrgang zu **einem** Wechsel geht und kommt.
+
+    Wird ein Buch nach dem Schuljahr davor ausgemustert und eines ab diesem
+    Schuljahr eingeführt, ersetzt das eine das andere. Gehen zwei (Buch und
+    Arbeitsheft) und kommt eines, sind es drei Anträge in einer Ersetzung.
+    Fehlt eine Seite, ist es eine Einführung ohne Vorgänger oder eine
+    Ausmusterung ohne Nachfolger. Jeder Antrag wird für sich entschieden.
+
+    Je Seite stehen die leihbaren Bücher zuerst, dann nach Titel.
+    """
+
+    fach: str
+    jahrgang: int
+    wechsel: str
+    ausmusterungen: tuple[Aenderung, ...] = ()
+    einfuehrungen: tuple[Aenderung, ...] = ()
+
+    @property
+    def antraege(self) -> tuple[Aenderung, ...]:
+        return self.ausmusterungen + self.einfuehrungen
+
+    @property
+    def mit_partner(self) -> bool:
+        return bool(self.ausmusterungen and self.einfuehrungen)
+
+    def seite(self, art: str) -> tuple[Aenderung, ...]:
+        return self.einfuehrungen if art == ART_EINFUEHRUNG else self.ausmusterungen
+
+
+def _buchreihenfolge(antrag: Aenderung) -> tuple[bool, str, str]:
+    return (not antrag.leihbar, antrag.titel.casefold(), antrag.isbn)
+
+
+@dataclass(frozen=True)
+class Abschnitt:
+    """Ein Block der Änderungsliste: Bücher **einer** Ersetzung, die untereinander stehen.
+
+    Die Seite, nach der sortiert wird (``nach`` in
+    :func:`ersetzungen_im_schuljahr`), hat hier nur die Bücher dieses Blocks;
+    die andere Seite hat alle der Ersetzung. Stehen zwei Bücher derselben
+    Ersetzung nicht direkt untereinander, steht die andere Seite in beiden
+    Blöcken.
+
+    ``gruppe_anfang`` und ``gruppe_ende`` sind die Nummern der Buchgruppen des
+    ersten und des letzten Buchs der Sortierseite - wo sie von Block zu Block
+    wechseln, beginnt ein neues Buch.
+    """
+
+    ersetzung: Ersetzung
+    ausmusterungen: tuple[Aenderung, ...]
+    einfuehrungen: tuple[Aenderung, ...]
+    gruppe_anfang: int
+    gruppe_ende: int
+
+    @property
+    def fach(self) -> str:
+        return self.ersetzung.fach
+
+    @property
+    def jahrgang(self) -> int:
+        return self.ersetzung.jahrgang
+
+    @property
+    def wechsel(self) -> str:
+        return self.ersetzung.wechsel
+
+
+def ersetzungen_im_schuljahr(
+    stand: Buchplanung, *, nach: str = ART_EINFUEHRUNG,
+) -> tuple[Abschnitt, ...]:
+    """Die Änderungsliste als Ersetzungen, in der Reihenfolge der Seite.
+
+    Die Anträge aus :func:`aenderungen_im_schuljahr` werden je (Fach, Jahrgang,
+    Wechsel) zu einer :class:`Ersetzung` zusammengefasst: was nach dem
+    Vorjahr des Wechsels geht und was ab ihm kommt.
+
+    Sortiert wird nach den Büchern der Seite ``nach`` (Einführung oder
+    Ausmusterung); eine Ersetzung ohne Buch auf dieser Seite zählt mit denen
+    der anderen. Ein Buch steht mit **allen** seinen Jahrgängen zusammen.
+    Die Bücher eines Fachs stehen nach ihrem **ersten** und ihrem **letzten**
+    Jahrgang: in Jg. 5 erst die nur für 5, dann die für 5 bis 6, dann die für
+    5 bis 7 - Lücken zählen nicht, ein Buch für 5 und 7 reicht von 5 bis 7.
+    Bei gleicher Spanne die leihbaren zuerst, dann nach Titel.
+
+    Aufeinanderfolgende Bücher derselben Ersetzung bilden einen
+    :class:`Abschnitt`; die andere Seite steht dort einmal für alle.
+    """
+    sammlung: dict[tuple[str, int, int], dict[str, list[Aenderung]]] = {}
+    for antrag in aenderungen_im_schuljahr(stand):
+        seiten = sammlung.setdefault((antrag.fach, antrag.jahrgang, antrag.wechsel),
+                                     {ART_EINFUEHRUNG: [], ART_AUSMUSTERUNG: []})
+        seiten[antrag.art].append(antrag)
+    ersetzungen = [
+        Ersetzung(
+            fach=fach, jahrgang=jahrgang, wechsel=f"{wechsel}/{wechsel + 1}",
+            ausmusterungen=tuple(sorted(seiten[ART_AUSMUSTERUNG], key=_buchreihenfolge)),
+            einfuehrungen=tuple(sorted(seiten[ART_EINFUEHRUNG], key=_buchreihenfolge)),
+        )
+        for (fach, jahrgang, wechsel), seiten in sammlung.items()
+    ]
+    andere = ART_AUSMUSTERUNG if nach == ART_EINFUEHRUNG else ART_EINFUEHRUNG
+
+    # Ein Buch je Fach mit allen seinen Ersetzungen; jede Ersetzung, in der es
+    # auf der Sortierseite steht (oder, ist die leer, auf der anderen).
+    buecher: dict[tuple[str, str], list[tuple[Aenderung, Ersetzung]]] = {}
+    for ersetzung in ersetzungen:
+        for antrag in ersetzung.seite(nach) or ersetzung.seite(andere):
+            buecher.setdefault((ersetzung.fach, antrag.isbn), []).append((antrag, ersetzung))
+
+    def spanne(eintraege: list[tuple[Aenderung, Ersetzung]]) -> tuple:
+        jahrgaenge = [e.jahrgang for _, e in eintraege]
+        antrag = eintraege[0][0]
+        return (antrag.fach.casefold(), min(jahrgaenge), max(jahrgaenge),
+                not antrag.leihbar, antrag.titel.casefold(), antrag.isbn)
+
+    folge: list[tuple[int, Aenderung, Ersetzung]] = []
+    for nummer, eintraege in enumerate(sorted(buecher.values(), key=spanne)):
+        for antrag, ersetzung in sorted(eintraege, key=lambda t: (t[1].jahrgang, t[1].wechsel)):
+            folge.append((nummer, antrag, ersetzung))
+
+    abschnitte: list[Abschnitt] = []
+    while folge:
+        gruppe, antrag, ersetzung = folge.pop(0)
+        eigene = [antrag]
+        ende = gruppe
+        while folge and folge[0][2] is ersetzung:
+            ende, naechster, _ = folge.pop(0)
+            eigene.append(naechster)
+        anzeige: dict[str, tuple[Aenderung, ...]]
+        if ersetzung.seite(nach):
+            anzeige = {nach: tuple(eigene), andere: ersetzung.seite(andere)}
+        else:
+            anzeige = {nach: (), andere: tuple(eigene)}
+        abschnitte.append(Abschnitt(
+            ersetzung=ersetzung, ausmusterungen=anzeige[ART_AUSMUSTERUNG],
+            einfuehrungen=anzeige[ART_EINFUEHRUNG], gruppe_anfang=gruppe, gruppe_ende=ende,
+        ))
+    return tuple(abschnitte)

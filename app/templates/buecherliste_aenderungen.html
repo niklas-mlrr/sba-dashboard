@@ -5,14 +5,16 @@
 {% block ueberschrift %}Änderungen<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
 {#
   Die Änderungsliste: jede Einführung ab diesem Schuljahr und jede
-  Ausmusterung nach dem Vorjahr oder später, je Buch, Fach und Jahrgang
-  (``aenderungen_im_schuljahr`` in buecherlisten/planung/modelle.py), nach
-  Fach und darin nach Buch sortiert. Jede Zeile ist ein Antrag, der genehmigt oder abgelehnt wird.
+  Ausmusterung nach dem Vorjahr oder später, als **Ersetzungen**
+  (``ersetzungen_im_schuljahr`` in buecherlisten/planung/modelle.py): je Fach,
+  Jahrgang und Wechsel links, was geht, rechts, was kommt. Jedes Buch ist ein
+  Antrag, der für sich genehmigt oder abgelehnt wird - im Buchmenü, das ein
+  Klick auf das Buch öffnet.
 
   Kürzel und Datum stehen **einmal** oben und gelten für jeden Klick - wer die
   Liste durchgeht, entscheidet mit demselben Kürzel. Die Begründung gilt für
   beide Anträge einer Planungszeile; steht ein Buch nur für ein Schuljahr in
-  einem Jahrgang, erscheint es zweimal, mit derselben Begründung.
+  einem Jahrgang, hat es zwei Anträge mit derselben Begründung.
 
   Die Entscheidung gilt dem Schuljahr, das beim Entscheiden in der Zeile
   stand. Ändert es sich im Planungsmenü, steht der Antrag wieder auf offen.
@@ -34,6 +36,91 @@
 {{ bp.hinweise(planung, "aenderungen", none) }}
 {% endblock %}
 
+{% macro schuljahr_kurz(kennung) -%}
+{{ kennung[:5] ~ kennung[-2:] if kennung | length == 9 else kennung }}
+{%- endmacro %}
+
+{#
+  Ein Buch in der Tabelle: Titel, Entscheidung und eine Zeile mit dem
+  Wichtigsten. Alles Weitere steht im Buchmenü (Vorlage ``antrag-N``).
+#}
+{% macro buchzelle(zelle, seite) %}
+{% if zelle.leer %}
+{# Links leer: das neue Buch ersetzt nichts. Rechts leer: das alte geht ersatzlos. #}
+<td class="aenderung-leer" rowspan="{{ zelle.rowspan }}">{{ "kein Vorgänger" if seite == "aus" else "kein Nachfolger" }}</td>
+{% else %}{% set e = zelle.eintrag %}
+<td class="aenderung-seite-{{ seite }}" rowspan="{{ zelle.rowspan }}" data-antrag="{{ e.art }}"
+  data-status="{{ e.status }}">
+  <button type="button" class="aenderung-buch" data-planung="antrag-menue" data-vorlage="antrag-{{ e.nummer }}">
+    <span class="aenderung-titel">{{ e.titel }}</span>{{ bp.statuslabel(e.status) }}
+    <span class="aenderung-fakt">
+      {%- set fakten = [] -%}
+      {%- if e.verlag %}{% set _ = fakten.append(e.verlag) %}{% endif -%}
+      {%- if e.einfuehrung and e.neupreis %}{% set _ = fakten.append(e.neupreis) %}{% endif -%}
+      {%- if not e.einfuehrung and e.eingefuehrt_ab %}{% set _ = fakten.append("seit " ~ schuljahr_kurz(e.eingefuehrt_ab)) %}{% endif -%}
+      {%- if not e.leihbar %}{% set _ = fakten.append("nicht leihbar") %}{% endif -%}
+      {{ fakten | join(" · ") }}
+      {%- if e.begruendung %} · <span title="{{ e.begruendung }}" aria-label="mit Begründung">¶</span>{% endif -%}
+    </span>
+  </button>
+</td>
+{% endif %}
+{% endmacro %}
+
+{#
+  Das Buchmenü eines Antrags. Es wird beim Klick in den Dialog der Seite
+  geklont (static/buchplanung.js, „antrag-menue“). Die Wurzel trägt, was
+  POST /api/buchplanung/antrag braucht; die Knöpfe sind dieselben wie
+  vorher in der Tabelle.
+#}
+{% macro antragsmenue(e) %}
+<template id="antrag-{{ e.nummer }}">
+  <div class="antrag-menue" data-antrag="{{ e.art }}" data-isbn="{{ e.isbn }}"
+    data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}">
+  <div class="modal-header">
+    <span class="antrag-art antrag-art-{{ e.art }}">{{ "Einführung" if e.einfuehrung else "Ausmusterung" }}
+      · {{ e.fach }} · Jahrgang {{ e.jahrgang }}</span>
+    <h3 class="modal-title">{{ e.titel }}</h3>
+  </div>
+  <div class="modal-body">
+    <dl class="antrag-angaben">
+      <dt>Verlag</dt><dd>{{ e.verlag or "–" }}</dd>
+      <dt>ISBN</dt><dd><samp>{{ e.isbn_anzeige }}</samp></dd>
+      <dt>Schuljahr</dt><dd>{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</dd>
+      <dt>Leihbar</dt><dd>{{ "ja" if e.leihbar else "nein" }}</dd>
+      {% if e.einfuehrung %}
+      <dt>Neupreis</dt><dd>{{ e.neupreis or "–" }}</dd>
+      {% elif e.eingefuehrt_ab %}
+      <dt>Eingeführt</dt><dd>ab {{ e.eingefuehrt_ab }}</dd>
+      {% endif %}
+      <dt>{{ "Ersetzt" if e.einfuehrung else "Ersetzt durch" }}</dt>
+      <dd>{% for p in e.partner %}<button type="button" class="antrag-partner" data-planung="antrag-menue"
+          data-vorlage="antrag-{{ p.nummer }}">{{ p.titel }}</button> {{ bp.statuslabel(p.status) }}{% if not loop.last %}<br>{% endif %}
+        {%- else %}<span class="grau">{{ "kein Vorgänger" if e.einfuehrung else "kein Nachfolger" }}</span>{% endfor %}</dd>
+      <dt>Entscheidung</dt>
+      <dd>{{ bp.statuslabel(e.status) }}
+        {%- if e.kuerzel or e.datum %} <span class="grau">{{ e.kuerzel }}{% if e.kuerzel and e.datum %}, {% endif %}{{ e.datum.strftime("%d.%m.%Y") if e.datum else "" }}</span>{% endif %}</dd>
+    </dl>
+    <label class="antrag-begruendung">Begründung
+      <textarea class="form-control" rows="3" data-antrag-feld="begruendung">{{ e.begruendung }}</textarea>
+    </label>
+  </div>
+  <div class="modal-footer">
+    <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
+    {% if e.status != "offen" %}<button type="button" class="btn btn-default" data-planung="antrag"
+      data-ergebnis="" title="Wieder auf offen setzen">Zurücksetzen</button>{% endif %}
+    <button type="button" class="btn btn-default" data-planung="abbrechen">Schließen</button>
+    <button type="button" class="btn btn-default" data-planung="antrag"
+      title="Nur die Begründung speichern, die Entscheidung bleibt">Begründung speichern</button>
+    {% if e.status != "abgelehnt" %}<button type="button" class="btn btn-danger" data-planung="antrag"
+      data-ergebnis="abgelehnt">Ablehnen</button>{% endif %}
+    {% if e.status != "genehmigt" %}<button type="button" class="btn btn-success" data-planung="antrag"
+      data-ergebnis="genehmigt">Genehmigen</button>{% endif %}
+  </div>
+  </div>
+</template>
+{% endmacro %}
+
 {% block inhalt %}
 {% if planung.mtime is none %}
 <p class="hinweis">Für dieses Schuljahr ist noch nichts gespeichert. „Aus IServ aktualisieren“
@@ -42,7 +129,7 @@
 <p class="hinweis">Für dieses Schuljahr ist keine Einführung und keine Ausmusterung eingetragen.</p>
 {% else %}
 {#
-  Die Filter blenden nur Zeilen aus (static/aenderungen.js); die Zahlen
+  Die Filter dimmen und verstecken nur (static/aenderungen.js); die Zahlen
   dahinter rechnet der Server.
 #}
 <div class="aenderungen-filter">
@@ -54,75 +141,67 @@
   </span>
   <span class="btn-gruppe" role="group" aria-label="Nach Art filtern">
     <button type="button" class="btn btn-default" data-filter="art" data-wert="" aria-pressed="true">Beide</button>
-    <button type="button" class="btn btn-default" data-filter="art" data-wert="einfuehrung" aria-pressed="false">Einführungen ({{ zaehler.einfuehrung }})</button>
     <button type="button" class="btn btn-default" data-filter="art" data-wert="ausmusterung" aria-pressed="false">Ausmusterungen ({{ zaehler.ausmusterung }})</button>
+    <button type="button" class="btn btn-default" data-filter="art" data-wert="einfuehrung" aria-pressed="false">Einführungen ({{ zaehler.einfuehrung }})</button>
+  </span>
+  <span class="btn-gruppe" role="group" aria-label="Nach Ersetzung filtern">
+    <button type="button" class="btn btn-default" data-filter="partner" data-wert="" aria-pressed="true">Alle Zeilen</button>
+    <button type="button" class="btn btn-default" data-filter="partner" data-wert="ja" aria-pressed="false">Ersetzungen ({{ zaehler.mit_partner }})</button>
+    <button type="button" class="btn btn-default" data-filter="partner" data-wert="nein" aria-pressed="false">Ohne Partner ({{ zaehler.ohne_partner }})</button>
   </span>
 </div>
 {#
-  Je Fach ein <tbody>, darin die Bücher nach Titel. Das Fach steht in der
-  ersten Zeile als verbundene Zelle über alle Anträge des Fachs, Titel, Verlag
-  und ISBN in der ersten Zeile jedes Buchs über dessen Anträge. Ein Buch in
-  zwei Fächern steht unter beiden. Per Klick sortierbar ist die Tabelle
-  deshalb nicht (static/sortieren.js greift über den Spaltenindex, und den
-  verschieben die verbundenen Zellen). Blendet ein Filter Zeilen aus, setzt
-  static/aenderungen.js die verbundenen Zellen in die erste sichtbare Zeile
-  und passt ``rowspan`` an.
+  Je Fach ein <tbody class="aenderungen-fach"> mit dem Fachnamen, je
+  Ersetzung ein <tbody> mit so vielen Zeilen, wie die längere Seite Bücher
+  hat; die kürzere Seite reicht mit rowspan bis unten. ``strich`` trennt
+  die Bücher (``data-gruppe-anfang``/``-ende``: welche Buchgruppe oben und
+  unten im Abschnitt steht) - die Jahrgänge eines Buchs stehen ohne Strich
+  untereinander.
+
+  Die Köpfe „Ausmusterung“ und „Einführung“ wählen, welche Seite die Gruppen
+  bildet (``?sortierung=``). Sortiert wird auf dem Server, nicht per
+  static/sortieren.js: die verbundenen Zellen vertragen kein Umstellen.
 #}
 <div class="tabellenrahmen">
 <table class="iserv-tabelle aenderungen-tabelle" id="aenderungen">
+  <colgroup><col class="spalte-jahrgang"><col><col class="spalte-pfeil"><col></colgroup>
   <thead>
     <tr>
-      <th>Fach</th>
-      <th>Titel</th>
-      <th>Verlag</th>
-      <th>ISBN</th>
-      <th>Art</th>
-      <th>Jahrgang</th>
-      <th>Schuljahr</th>
-      <th>Entscheidung</th>
-      <th>Begründung</th>
-      <th>Entscheiden</th>
+      <th>Jg.</th>
+      {% for art, name in (("ausmusterung", "Ausmusterung"), ("einfuehrung", "Einführung")) %}
+      {% if not loop.first %}<th aria-hidden="true"></th>{% endif %}
+      <th class="aenderungen-kopf-{{ art }}" data-sort{% if sortierung == art %} aria-sort="ascending"{% endif %}>
+        <a href="?sortierung={{ art }}" title="Bücher mit mehreren Jahrgängen nach der {{ name }} zusammenfassen">{{ name }}</a></th>
+      {% endfor %}
     </tr>
   </thead>
-  {% for gruppe in faecher %}
-  <tbody data-fach="{{ gruppe.fach }}">
-    {% for buch in gruppe.buecher %}
-    {% set buch_erste = loop.first %}
-    {% for e in buch.antraege %}
-    <tr data-antrag="{{ e.art }}" data-status="{{ e.status }}" data-isbn="{{ e.isbn }}"
-      data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}"{% if loop.first and not buch_erste %} class="buch-anfang"{% endif %}>
-      {% if loop.first and buch_erste %}
-      <td class="fach-zelle" rowspan="{{ gruppe.zeilen }}"><a href="/buecherliste/fach/{{ gruppe.fach | urlencode }}">{{ gruppe.fach }}</a></td>
+  {% for fach in faecher %}
+  <tbody class="aenderungen-fach" data-fach="{{ fach.fach }}">
+    <tr><td colspan="4"><a href="/buecherliste/fach/{{ fach.fach | urlencode }}">{{ fach.fach }}</a></td></tr>
+  </tbody>
+  {% for ersetzung in fach.ersetzungen %}
+  <tbody class="aenderungen-ersetzung{% if ersetzung.strich %} strich{% endif %}" data-gruppe-anfang="{{ ersetzung.gruppe_anfang }}" data-gruppe-ende="{{ ersetzung.gruppe_ende }}"
+    data-fach="{{ fach.fach }}" data-partner="{{ 'ja' if ersetzung.mit_partner else 'nein' }}">
+    {% for zeile in ersetzung.zeilen %}
+    <tr>
+      {% if loop.first %}
+      <td class="aenderung-jahrgang" rowspan="{{ ersetzung.hoehe }}">Jg. <b>{{ ersetzung.jahrgang }}</b>
+        <span class="klein grau">zu {{ schuljahr_kurz(ersetzung.wechsel) }}</span></td>
       {% endif %}
-      {% if loop.first %}{% set zeilen = buch.antraege | length %}
-      <td class="buch-zelle" rowspan="{{ zeilen }}">{{ buch.titel }}</td>
-      <td class="buch-zelle" rowspan="{{ zeilen }}">{{ buch.verlag }}</td>
-      <td class="buch-zelle" rowspan="{{ zeilen }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
+      {% if zeile.aus %}{{ buchzelle(zeile.aus, "aus") }}{% endif %}
+      {% if loop.first %}
+      <td class="aenderung-pfeil" rowspan="{{ ersetzung.hoehe }}" aria-hidden="true">{{ "→" if ersetzung.mit_partner else "" }}</td>
       {% endif %}
-      <td><span class="label {{ 'label-info' if e.einfuehrung else 'label-danger' }}">{{ "Einführung" if e.einfuehrung else "Ausmusterung" }}</span></td>
-      <td>{{ e.jahrgang }}</td>
-      <td>{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</td>
-      <td>{{ bp.statuslabel(e.status) }}
-        {%- if e.kuerzel or e.datum %}<br><span class="klein grau">{{ e.kuerzel }}{% if e.kuerzel and e.datum %}, {% endif %}{{ e.datum.strftime("%d.%m.%Y") if e.datum else "" }}</span>{% endif %}</td>
-      <td class="aenderungen-begruendung"><span class="planung-bemerkung-rahmen"><textarea
-        class="planung-feld planung-bemerkung" rows="1" data-antrag-feld="begruendung"
-        aria-label="Begründung">{{ e.begruendung }}</textarea></span>
-        <button type="button" class="btn btn-default knopf-klein" data-planung="antrag" hidden
-          data-antrag-speichern title="Nur die Begründung speichern">Speichern</button></td>
-      <td class="aenderungen-knoepfe">
-        {%- if e.status != "genehmigt" %}<button type="button" class="btn btn-default" data-planung="antrag"
-          data-ergebnis="genehmigt">Genehmigen</button>{% endif %}
-        {%- if e.status != "abgelehnt" %}<button type="button" class="btn btn-default" data-planung="antrag"
-          data-ergebnis="abgelehnt">Ablehnen</button>{% endif %}
-        {%- if e.status != "offen" %}<button type="button" class="btn btn-default" data-planung="antrag"
-          data-ergebnis="" title="Wieder auf offen setzen">Zurücksetzen</button>{% endif %}</td>
+      {% if zeile.ein %}{{ buchzelle(zeile.ein, "ein") }}{% endif %}
     </tr>
-    {% endfor %}
     {% endfor %}
   </tbody>
   {% endfor %}
+  {% endfor %}
 </table>
 </div>
+{% for e in eintraege %}{{ antragsmenue(e) }}{% endfor %}
+<dialog id="planungsmenue" class="iserv-modal" aria-labelledby="planungsmenue-titel"></dialog>
 {% endif %}
 {% endblock %}
 

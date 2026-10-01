@@ -208,14 +208,23 @@ den entschieden wird. Die Seite „Änderungen“ im Menü „Bücherlisten“
 * jede **Ausmusterung** nach dem Vorjahr oder später - nach dem Vorjahr heißt,
   das Buch fehlt schon in der Liste dieses Schuljahrs.
 
-Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) steht zweimal da.
-Die Liste ist nach **Fach** sortiert, darin nach Buch (Titel), dann nach
-Jahrgang. Das Fach steht einmal über allen seinen Anträgen, Titel, Verlag
-und ISBN einmal über allen Anträgen des Buchs in diesem Fach, jeweils in
-verbundenen Zellen. Ein Buch in zwei Fächern steht unter beiden. Per Klick
-auf die Überschrift sortieren lässt sich diese Tabelle deshalb nicht.
+Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) ergibt zwei Anträge.
 Gerechnet wird das in `aenderungen_im_schuljahr` (`modelle.py`), entschieden
 in `entscheide_antrag` (`abgleich.py`).
+
+Seit 2026-10-01 zeigt die Seite die Anträge als **Ersetzungen**
+(`ersetzungen_im_schuljahr`): je Fach, Jahrgang und Wechsel links, was nach
+dem Schuljahr davor geht, rechts, was ab dem Wechsel kommt. Mehrere Bücher
+einer Seite stehen untereinander, leihbare zuerst; die kürzere Seite reicht
+per `rowspan` bis unten. Sortiert wird nach Fach, dann nach den Büchern der
+Sortierseite (Standard: Einführung, `?sortierung=ausmusterung` die andere):
+ein Buch steht mit allen seinen Jahrgängen zusammen, die Bücher nach ihrem
+ersten und letzten Jahrgang (erst nur Jg. 5, dann 5 bis 6, dann 5 bis 7;
+Lücken zählen nicht), dann leihbar zuerst und nach Titel. Stehen zwei
+Bücher derselben Ersetzung direkt untereinander, teilen sie sich einen
+**Abschnitt** und damit den Kasten der anderen Seite; sonst steht die andere
+Seite in beiden. Entschieden wird jeder Antrag für sich, im Buchmenü, das ein
+Klick auf das Buch öffnet.
 
 Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
 „Ausmusterung nach Schuljahr“ je drei Spalten, dahinter eine gemeinsame:

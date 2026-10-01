@@ -23,6 +23,7 @@ from starlette.responses import Response
 from buecherlisten.core.daten import (
     Ansicht,
     Korrekturen,
+    fmt_price,
     format_isbn,
     lade_buecherdaten,
     waehle_gruppen,
@@ -37,9 +38,10 @@ from buecherlisten.planung import (
     FACH_BESTAETIGT,
     NUR_ISERV,
     OHNE_VERLAG,
+    Aenderung,
     Buchplanung,
-    aenderungen_im_schuljahr,
     endet_mit_vorjahr,
+    ersetzungen_im_schuljahr,
     fach_bestaetigung,
     fach_status,
     planungs_status,
@@ -322,13 +324,18 @@ def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
 
 
 @router.get("/buecherliste/aenderungen")
-def aenderungen(request: Request) -> Response:
+def aenderungen(request: Request, sortierung: str = ART_EINFUEHRUNG) -> Response:
     """Die Änderungsliste: jede Einführung und Ausmusterung dieses Schuljahrs, zum Entscheiden.
 
     Steht vor ``/buecherliste/{ansicht}``, sonst hielte die „aenderungen“ für
     eine Ansicht. Gelesen wird nur die Datei; IServ liefert allein, welches
     Schuljahr das laufende ist - eine Anfrage statt aller Bücherlisten.
+
+    ``sortierung`` sagt, welche Seite einer Ersetzung die Gruppen bildet
+    (:func:`ersetzungen_im_schuljahr`): die Einführung, sonst die Ausmusterung.
     """
+    if sortierung != ART_AUSMUSTERUNG:
+        sortierung = ART_EINFUEHRUNG
     try:
         client = request.app.state.anmeldung.client()
     except (NichtAngemeldet, Abgelaufen) as exc:
@@ -344,31 +351,67 @@ def aenderungen(request: Request) -> Response:
                         f"Das laufende Schuljahr konnte nicht geladen werden: {exc}", 502)
     kennung = str(aktuell["id"])
     planung, stand = _planungskontext(request, kennung)
-    eintraege = [
-        {
-            "isbn": a.isbn, "isbn_anzeige": format_isbn(a.isbn), "titel": a.titel,
-            "verlag": "" if a.verlag == OHNE_VERLAG else a.verlag,
-            "fach": a.fach, "jahrgang": a.jahrgang, "art": a.art,
-            "einfuehrung": a.art == ART_EINFUEHRUNG,
-            "schuljahr": a.schuljahr, "status": a.status,
-            "kuerzel": a.entscheidung.kuerzel, "datum": a.entscheidung.datum,
-            "begruendung": a.begruendung,
-        }
-        for a in (aenderungen_im_schuljahr(stand) if stand else ())
-    ]
-    # Je Fach eine Gruppe, darin je Buch eine: Fach sowie Titel, Verlag und
-    # ISBN stehen einmal, in verbundenen Zellen. Die Einträge kommen schon
-    # nach Fach und Buch sortiert; ein Buch in zwei Fächern steht unter beiden.
+    abschnitte = ersetzungen_im_schuljahr(stand, nach=sortierung) if stand else ()
+
+    # Jeder Antrag bekommt eine Nummer: sie verbindet seine Zelle mit seinem
+    # Menü (<template id="antrag-N">) und das Menü mit denen seiner Partner.
+    # Steht ein Antrag in zwei Abschnitten (die andere Seite einer Ersetzung,
+    # deren Bücher nicht untereinander stehen), hat er trotzdem ein Menü.
+    eintraege: list[dict[str, Any]] = []
+    nummer: dict[int, dict[str, Any]] = {}
+
+    def eintrag(a: Aenderung) -> dict[str, Any]:
+        if id(a) not in nummer:
+            nummer[id(a)] = {
+                "nummer": len(eintraege),
+                "isbn": a.isbn, "isbn_anzeige": format_isbn(a.isbn), "titel": a.titel,
+                "verlag": "" if a.verlag == OHNE_VERLAG else a.verlag,
+                "fach": a.fach, "jahrgang": a.jahrgang, "art": a.art,
+                "einfuehrung": a.einfuehrung, "schuljahr": a.schuljahr, "status": a.status,
+                "kuerzel": a.entscheidung.kuerzel, "datum": a.entscheidung.datum,
+                "begruendung": a.begruendung, "leihbar": a.leihbar,
+                "neupreis": fmt_price(a.neupreis) if a.neupreis else "",
+                "eingefuehrt_ab": a.eingefuehrt_ab, "partner": [],
+            }
+            eintraege.append(nummer[id(a)])
+        return nummer[id(a)]
+
+    # Je Abschnitt n Zeilen, n = die längere Seite. Die letzte Zelle der
+    # kürzeren Seite reicht bis unten, damit beide Seiten bündig enden; eine
+    # leere Seite ist eine Zelle über alle n Zeilen.
     faecher: list[dict[str, Any]] = []
-    for eintrag in eintraege:
-        if not faecher or faecher[-1]["fach"] != eintrag["fach"]:
-            faecher.append({"fach": eintrag["fach"], "zeilen": 0, "buecher": []})
-        buecher = faecher[-1]["buecher"]
-        if not buecher or buecher[-1]["isbn"] != eintrag["isbn"]:
-            buecher.append({key: eintrag[key] for key in
-                            ("isbn", "isbn_anzeige", "titel", "verlag")} | {"antraege": []})
-        buecher[-1]["antraege"].append(eintrag)
-        faecher[-1]["zeilen"] += 1
+    for abschnitt in abschnitte:
+        ersetzung = abschnitt.ersetzung
+        for eigene, andere in ((ersetzung.ausmusterungen, ersetzung.einfuehrungen),
+                               (ersetzung.einfuehrungen, ersetzung.ausmusterungen)):
+            for a in eigene:
+                eintrag(a)["partner"] = [eintrag(p) for p in andere]
+        seiten = [[eintrag(a) for a in antraege]
+                  for antraege in (abschnitt.ausmusterungen, abschnitt.einfuehrungen)]
+        hoehe = max(1, *(len(seite) for seite in seiten))
+        zeilen: list[dict[str, Any]] = [{"aus": None, "ein": None} for _ in range(hoehe)]
+        for schluessel, seite in zip(("aus", "ein"), seiten):
+            if not seite:
+                zeilen[0][schluessel] = {"leer": True, "rowspan": hoehe}
+            for i, buch in enumerate(seite):
+                rowspan = hoehe - i if i == len(seite) - 1 else 1
+                zeilen[i][schluessel] = {"eintrag": buch, "rowspan": rowspan}
+        neues_fach = not faecher or faecher[-1]["fach"] != abschnitt.fach
+        if neues_fach:
+            faecher.append({"fach": abschnitt.fach, "ersetzungen": []})
+        vorige = faecher[-1]["ersetzungen"][-1] if not neues_fach else None
+        # Ein Strich trennt die Bücher, nicht aber die Jahrgänge eines Buchs
+        # und nicht den ersten Abschnitt vom Fachnamen.
+        faecher[-1]["ersetzungen"].append({
+            "jahrgang": abschnitt.jahrgang, "wechsel": abschnitt.wechsel,
+            "mit_partner": ersetzung.mit_partner,
+            "gruppe_anfang": abschnitt.gruppe_anfang, "gruppe_ende": abschnitt.gruppe_ende,
+            "strich": vorige is not None and vorige["gruppe_ende"] != abschnitt.gruppe_anfang,
+            "hoehe": hoehe, "zeilen": zeilen,
+        })
+    # Gezählt werden Ersetzungen, nicht Abschnitte: eine Ersetzung kann in
+    # zweien stehen.
+    ersetzungen = list({id(a.ersetzung): a.ersetzung for a in abschnitte}.values())
     zaehler = {
         status: sum(1 for e in eintraege if e["status"] == status)
         for status in (ANTRAG_OFFEN, ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT)
@@ -377,10 +420,12 @@ def aenderungen(request: Request) -> Response:
         art: sum(1 for e in eintraege if e["art"] == art)
         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
     })
+    zaehler["mit_partner"] = sum(1 for e in ersetzungen if e.mit_partner)
+    zaehler["ohne_partner"] = len(ersetzungen) - zaehler["mit_partner"]
     return _seite(request, "buecherliste_aenderungen.html", {
         "planung": planung, "schuljahr": aktuell.get("name") or kennung,
         "eintraege": eintraege, "faecher": faecher, "zaehler": zaehler,
-        "heute": date.today(),
+        "sortierung": sortierung, "heute": date.today(),
     })
 
 

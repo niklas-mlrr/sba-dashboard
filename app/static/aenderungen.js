@@ -1,59 +1,53 @@
 // Die Änderungsliste - was nicht gespeichert wird.
 //
-// Entschieden wird über buchplanung.js (data-planung="antrag"). Hier steht nur,
-// was die Seite bequemer macht und nirgends ankommt:
+// Entschieden wird über buchplanung.js (das Buchmenü, data-planung="antrag").
+// Hier steht nur, was die Seite bequemer macht und nirgends ankommt:
 //
-//   1. Die Filter über der Tabelle blenden Zeilen nach Entscheidung und Art
-//      aus. Beide gelten zugleich; "" heißt alle. Die verbundenen Zellen
-//      eines Buchs gehen dabei mit.
+//   1. Die Filter über der Tabelle: nach Entscheidung, nach Art und danach,
+//      ob eine Ersetzung beide Seiten hat. Alle gelten zugleich; "" heißt alle.
+//      Ein Buch, das nicht passt, wird gedimmt, nicht ausgeblendet - sonst
+//      stimmten die verbundenen Zellen (rowspan) nicht mehr. Eine Ersetzung
+//      ohne passendes Buch verschwindet ganz, ein Fach ohne sichtbare
+//      Ersetzung ebenso.
 //   2. Das Kürzel bleibt in diesem Browser stehen, damit es nicht bei jedem
 //      Neuladen fehlt. Ohne Speicher (privates Fenster) ist das Feld leer.
-//   3. Wer eine Begründung ändert, bekommt daneben den Knopf „Speichern“.
 (function () {
   const tabelle = document.getElementById("aenderungen");
-  const filter = { status: "", art: "" };
+  const filter = { status: "", art: "", partner: "" };
 
-  // Je Fach ein <tbody>. Das Fach steht als verbundene Zelle (.fach-zelle)
-  // vorn in seiner ersten Zeile, Titel, Verlag und ISBN (.buch-zelle) vorn in
-  // der ersten Zeile jedes Buchs. Fällt eine solche Zeile weg, wandern die
-  // Zellen in die erste sichtbare, und rowspan zählt nur die sichtbaren
-  // Zeilen - sonst verschöbe sich jede Zeile darunter.
-  //
-  // Erst die Buchzellen, dann die Fachzelle voranstellen: so steht das Fach
-  // immer ganz vorn, auch wenn beide in dieselbe Zeile wandern.
-  function verbinde(zeilen, zellen) {
-    const sichtbar = zeilen.filter((zeile) => !zeile.hidden);
-    if (!sichtbar.length) return;
-    sichtbar[0].prepend(...zellen);
-    for (const zelle of zellen) zelle.rowSpan = sichtbar.length;
+  function passt(zelle) {
+    return (!filter.status || zelle.dataset.status === filter.status)
+      && (!filter.art || zelle.dataset.antrag === filter.art);
   }
 
   function wendeAn() {
     if (!tabelle) return;
-    for (const fach of tabelle.tBodies) {
-      const zeilen = Array.from(fach.rows);
-      for (const zeile of zeilen) {
-        zeile.hidden = Boolean((filter.status && zeile.dataset.status !== filter.status)
-          || (filter.art && zeile.dataset.antrag !== filter.art));
+    let vorigeSichtbar = null;
+    for (const teil of tabelle.tBodies) {
+      if (teil.classList.contains("aenderungen-fach")) {
+        vorigeSichtbar = null;
+        continue;
       }
-      fach.hidden = zeilen.every((zeile) => zeile.hidden);
-      const buecher = new Map();
-      for (const zeile of zeilen) {
-        if (!buecher.has(zeile.dataset.isbn)) buecher.set(zeile.dataset.isbn, []);
-        buecher.get(zeile.dataset.isbn).push(zeile);
+      let eine = false;
+      for (const zelle of teil.querySelectorAll("td[data-antrag]")) {
+        const ja = passt(zelle);
+        zelle.classList.toggle("gedimmt", !ja);
+        eine = eine || ja;
       }
-      for (const buch of buecher.values()) {
-        verbinde(buch, Array.from(fach.querySelectorAll(".buch-zelle"))
-          .filter((zelle) => zelle.parentElement.dataset.isbn === buch[0].dataset.isbn));
+      teil.hidden = !eine || Boolean(filter.partner && teil.dataset.partner !== filter.partner);
+      // Der Strich über einem Buch gehört an seinen ersten sichtbaren
+      // Abschnitt; der erste unter dem Fachnamen braucht keinen.
+      if (!teil.hidden) {
+        teil.classList.toggle("strich", vorigeSichtbar !== null
+          && vorigeSichtbar.dataset.gruppeEnde !== teil.dataset.gruppeAnfang);
+        vorigeSichtbar = teil;
       }
-      verbinde(zeilen, Array.from(fach.querySelectorAll(".fach-zelle")));
-      // Der Strich über einem Buch gehört an seine erste sichtbare Zeile.
-      let vorige = null;
-      for (const zeile of zeilen.filter((z) => !z.hidden)) {
-        zeile.classList.toggle("buch-anfang",
-          vorige !== null && vorige !== zeile.dataset.isbn);
-        vorige = zeile.dataset.isbn;
-      }
+    }
+    // Ein Fach ohne sichtbare Ersetzung verliert auch seine Kopfzeile.
+    for (const kopf of tabelle.querySelectorAll("tbody.aenderungen-fach")) {
+      const eigene = tabelle.querySelectorAll(
+        'tbody.aenderungen-ersetzung[data-fach="' + CSS.escape(kopf.dataset.fach) + '"]');
+      kopf.hidden = Array.from(eigene).every((teil) => teil.hidden);
     }
   }
 
@@ -79,9 +73,5 @@
     });
   }
 
-  document.addEventListener("input", (ereignis) => {
-    if (!ereignis.target.matches('[data-antrag-feld="begruendung"]')) return;
-    const knopf = ereignis.target.closest("td").querySelector("[data-antrag-speichern]");
-    if (knopf) knopf.hidden = false;
-  });
+  wendeAn();
 })();

@@ -287,22 +287,37 @@ einträgt, gleicht die Angabe an IServ an. Ein geleerter Preis bleibt leer.
 
 Hier stehen alle Bücher, die ab diesem Schuljahr oder später **eingeführt**
 werden, und alle, die nach dem letzten Schuljahr oder später **ausgemustert**
-werden, je Fach und Jahrgang in einer Zeile. Sortiert ist nach Fach und darin
-nach Buch: Das Fach steht einmal links über allen seinen Zeilen, daneben Titel,
-Verlag und ISBN einmal über allen Zeilen desselben Buchs. Gehört ein Buch zu
-zwei Fächern, steht es unter beiden.
+werden. Links steht, was geht, rechts, was kommt: Wird in einem Fach und
+Jahrgang ein Buch nach einem Schuljahr ausgemustert und ein anderes ab dem
+nächsten eingeführt, ersetzt das neue das alte und beide stehen in einer
+Zeile. Gehen oder kommen mehrere Bücher, stehen sie untereinander, Leihbücher
+zuerst; der Kasten der anderen Seite reicht dann über alle. Eine leere Seite
+heißt „kein Vorgänger“ oder „kein Nachfolger“.
+
+Sortiert ist nach Fach, darin nach Jahrgang. Ein Buch für mehrere Jahrgänge
+steht mit allen seinen Jahrgängen zusammen: in Jg. 5 erst die Bücher nur für
+Jg. 5, dann die für Jg. 5 bis 6, dann 5 bis 7 und so weiter. Ein Klick auf
+die Spaltenköpfe „Einführung“ (so ist es eingestellt) oder „Ausmusterung“
+bestimmt, ob die neuen oder die alten Bücher so zusammengefasst werden.
+Gehört ein Buch zu zwei Fächern, steht es unter beiden.
 
 1. Tragen Sie oben Ihr **Kürzel** ein. Das Datum steht schon auf heute. Das
    Kürzel merkt sich der Browser für das nächste Mal.
-2. Klicken Sie in der Zeile auf **„Genehmigen"** oder **„Ablehnen"**. Die
-   Entscheidung steht danach mit Kürzel und Datum in der Spalte
-   „Entscheidung". **„Zurücksetzen"** macht sie wieder offen.
-3. Die **Begründung** gilt für Einführung und Ausmusterung derselben Zeile.
-   Sie wird bei jedem Klick mitgespeichert. Wenn Sie nur sie ändern, erscheint
-   daneben „Speichern".
+2. Klicken Sie auf ein **Buch**. Es öffnet sich ein Menü mit Verlag, ISBN,
+   Schuljahr, Neupreis und Begründung.
+3. Klicken Sie dort auf **„Genehmigen"** oder **„Ablehnen"**. Jedes Buch
+   wird für sich entschieden; die Entscheidung steht danach mit Kürzel und
+   Datum im Menü und als Etikett in der Tabelle. **„Zurücksetzen"** macht sie
+   wieder offen. Unter „Ersetzt durch“ bzw. „Ersetzt“ kommen Sie mit einem
+   Klick zum Menü des anderen Buchs.
+4. Die **Begründung** gilt für Einführung und Ausmusterung desselben Buchs in
+   diesem Jahrgang. Sie wird bei jedem Klick mitgespeichert; „Begründung
+   speichern“ speichert nur sie. Ein „¶“ in der Tabelle zeigt, dass eine
+   Begründung eingetragen ist.
 
 Mit den Knöpfen über der Tabelle zeigen Sie nur offene, genehmigte oder
-abgelehnte Anträge an, nur Einführungen oder nur Ausmusterungen.
+abgelehnte Anträge an, nur Einführungen oder nur Ausmusterungen, nur
+Ersetzungen oder nur Bücher ohne Partner. Was nicht passt, wird blass.
 
 Wird später das Schuljahr einer Einführung oder Ausmusterung geändert, ist
 der Antrag wieder offen, denn über das neue Schuljahr hat noch niemand

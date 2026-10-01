@@ -1097,8 +1097,9 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-bemerkungszeile .planung-bemerkung-rahmen { margin-top: .2rem; }
 
 /* ── Änderungsliste ────────────────────────────────────────────
-   Jede Einführung und Ausmusterung des Schuljahrs als Antrag, mit den
-   Knöpfen zum Entscheiden in der letzten Spalte. */
+   Jede Einführung und Ausmusterung des Schuljahrs als Antrag, je Fach und
+   Jahrgang als Ersetzung: links, was geht, rechts, was kommt. Entschieden
+   wird im Buchmenü, das ein Klick auf das Buch öffnet. */
 
 .aenderungen-filter {
   display: flex;
@@ -1118,13 +1119,6 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);
 }
 
-.aenderungen-knoepfe { white-space: nowrap; }
-.aenderungen-knoepfe .btn { padding: 2px 8px; font-size: 13px; }
-.aenderungen-knoepfe .btn + .btn { margin-left: 4px; }
-.aenderungen-begruendung { min-width: 14rem; }
-.aenderungen-begruendung .knopf-klein { margin: .25rem 0 0; }
-/* `.btn` setzt `display` und schlüge sonst das `hidden` des Knopfs. */
-.aenderungen-begruendung .btn[hidden] { display: none; }
 /* Im Planungsmenü: die Entscheidung der Änderungsliste unter dem Schuljahr. */
 .planung-antrag {
   display: block;
@@ -1137,13 +1131,90 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   text-overflow: ellipsis;
 }
 .planung-antrag .label { font-size: 10px; }
-/* Je Fach ein <tbody>: ein kräftigerer Strich trennt die Fächer, ein
-   dunklerer die Bücher darin, und die verbundenen Zellen stehen oben.
-   Sortiert wird hier nicht per Klick. */
+/* Die Tabelle nimmt die ganze Breite; Ausmusterung und Einführung teilen
+   sich, was Jahrgang und Pfeil übrig lassen, zu gleichen Teilen. */
+.aenderungen-tabelle { table-layout: fixed; }
+.aenderungen-tabelle .spalte-jahrgang { width: 6.5rem; }
+.aenderungen-tabelle .spalte-pfeil { width: 2rem; }
 .aenderungen-tabelle > thead > tr > th { cursor: default; }
-.aenderungen-tabelle > tbody + tbody { border-top: 2px solid #bbb; }
-.aenderungen-tabelle > tbody > tr.buch-anfang > td { border-top-color: #bbb; }
-.aenderungen-tabelle > tbody > tr > td.fach-zelle,
-.aenderungen-tabelle > tbody > tr > td.buch-zelle { background: var(--flaeche); }
-.aenderungen-tabelle > tbody > tr > td.fach-zelle { font-weight: 700; }
+.aenderungen-tabelle > thead > tr > th a { color: inherit; }
+.aenderungen-tabelle > thead > tr > th.aenderungen-kopf-ausmusterung { border-bottom-color: var(--ausmusterung-strich); }
+.aenderungen-tabelle > thead > tr > th.aenderungen-kopf-einfuehrung { border-bottom-color: var(--einfuehrung-strich); }
 .aenderungen-tabelle > tbody[hidden] { display: none; }
+/* Fachname über seinen Ersetzungen; ein kräftiger Strich trennt die Fächer,
+   ein dunklerer die Gruppen darin (.strich), ein heller die Ersetzungen
+   einer Gruppe. */
+.aenderungen-tabelle > tbody.aenderungen-fach > tr > td {
+  padding-top: 14px;
+  border-top: 2px solid #bbb;
+  font-size: 15px;
+  font-weight: 700;
+}
+.aenderungen-tabelle > tbody.aenderungen-fach a { color: inherit; }
+.aenderungen-tabelle > tbody.aenderungen-fach + tbody > tr:first-child > td { border-top: 0; }
+.aenderungen-tabelle > tbody.strich > tr:first-child > td { border-top-color: #999; }
+/* Mehrere Bücher einer Seite: ein schmaler weißer Spalt trennt die Kästen. */
+.aenderungen-tabelle > tbody > tr + tr > td { border-top: 2px solid var(--grund); }
+.aenderungen-tabelle > tbody > tr > td.aenderung-jahrgang { color: #777; white-space: nowrap; }
+.aenderungen-tabelle > tbody > tr > td.aenderung-jahrgang b { color: var(--iserv-text); font-size: 15px; }
+.aenderungen-tabelle > tbody > tr > td.aenderung-jahrgang .klein { display: block; }
+.aenderungen-tabelle > tbody > tr > td.aenderung-pfeil { color: #aaa; text-align: center; vertical-align: middle; }
+.aenderungen-tabelle > tbody > tr > td.aenderung-seite-aus {
+  background: var(--ausmusterung-reihe);
+  box-shadow: inset 3px 0 0 var(--ausmusterung-strich);
+}
+.aenderungen-tabelle > tbody > tr > td.aenderung-seite-ein {
+  background: var(--einfuehrung-reihe);
+  box-shadow: inset 3px 0 0 var(--einfuehrung-strich);
+}
+.aenderungen-tabelle > tbody > tr > td.aenderung-leer { color: #777; font-style: italic; vertical-align: middle; }
+.aenderungen-tabelle > tbody > tr > td.gedimmt { opacity: .4; }
+/* Das Buch ist ein Knopf: Titel und Entscheidung oben, darunter eine Zeile
+   mit dem Wichtigsten. Bei mehreren Zeilen steht es oben im Kasten. */
+.aenderung-buch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px .8rem;
+  align-items: baseline;
+  width: 100%;
+  margin: 0;
+  padding: 0 0 0 4px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.aenderung-buch:focus-visible { outline: 2px solid #66afe9; outline-offset: 2px; }
+.aenderung-titel { color: #337ab7; font-weight: 600; }
+.aenderung-buch:hover .aenderung-titel { color: #23527c; text-decoration: underline; }
+.aenderung-fakt { grid-column: 1 / -1; color: #777; font-size: 12px; }
+
+/* Das Buchmenü eines Antrags. */
+.btn-success { color: #fff; background-color: #5cb85c; border-color: #4cae4c; }
+.btn-success:hover:not(:disabled) { background-color: #449d44; border-color: #398439; }
+.btn-danger { color: #fff; background-color: #d9534f; border-color: #d43f3a; }
+.btn-danger:hover:not(:disabled) { background-color: #c9302c; border-color: #ac2925; }
+.antrag-menue .modal-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; }
+.antrag-menue .modal-footer .btn + .btn { margin-left: 0; }
+.antrag-art { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.antrag-art-ausmusterung { color: var(--ausmusterung); }
+.antrag-art-einfuehrung { color: var(--einfuehrung); }
+.antrag-angaben {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 6px 15px;
+  margin: 0 0 15px;
+}
+.antrag-angaben dt { font-weight: 700; text-align: right; }
+.antrag-angaben dd { margin: 0; }
+.antrag-partner { padding: 0; font: inherit; color: #337ab7; text-align: left; background: none; border: 0; cursor: pointer; }
+.antrag-partner:hover, .antrag-partner:focus-visible { color: #23527c; text-decoration: underline; }
+.antrag-begruendung { display: block; font-weight: 700; }
+.antrag-begruendung .form-control { display: block; width: 100%; margin-top: 5px; font-weight: 400; resize: vertical; }
+@media (max-width: 520px) {
+  .antrag-angaben { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .antrag-angaben dt { text-align: left; }
+  .antrag-angaben dd { margin-bottom: 6px; }
+}

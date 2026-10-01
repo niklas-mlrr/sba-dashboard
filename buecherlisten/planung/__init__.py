@@ -13,7 +13,9 @@ Einstellungen, keine Sperren; das ist ``app/buchplanung.py``.
 
 Dazu die Änderungsliste: jede Einführung und Ausmusterung ist ein Antrag,
 der genehmigt oder abgelehnt wird (:func:`aenderungen_im_schuljahr`,
-:func:`entscheide_antrag`).
+:func:`entscheide_antrag`). Auf der Seite stehen die Anträge als Ersetzungen
+(:func:`ersetzungen_im_schuljahr`): was in einem Fach und Jahrgang geht und
+was dafür kommt.
 
 Aufbau: :mod:`~buecherlisten.planung.modelle` die Begriffe und die gerechneten
 Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
@@ -65,16 +67,19 @@ from .modelle import (
     PLANUNG_IM_EINSATZ,
     PLANUNG_LAEUFT_AUS,
     RUECKLAGE_STATUS,
+    Abschnitt,
     Aenderung,
     Antragsentscheidung,
     Buch,
     Buchbemerkung,
     Buchplanung,
+    Ersetzung,
     Planungszeile,
     Ruecklage,
     UngueltigesSchuljahr,
     aenderungen_im_schuljahr,
     endet_mit_vorjahr,
+    ersetzungen_im_schuljahr,
     fach_bestaetigung,
     fach_status,
     planungs_status,
@@ -108,9 +113,12 @@ __all__ = [
     "ANTRAG_OFFEN",
     "ART_AUSMUSTERUNG",
     "ART_EINFUEHRUNG",
+    "Abschnitt",
     "Aenderung",
     "Antragsentscheidung",
     "aenderungen_im_schuljahr",
+    "Ersetzung",
+    "ersetzungen_im_schuljahr",
     "entscheide_antrag",
     "FACH_BESTAETIGT",
     "FACH_OFFEN",

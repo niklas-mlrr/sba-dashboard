@@ -19,9 +19,11 @@
 //   4. „+ Buch hinzufügen“ unter der Fach-Liste: dasselbe Menü mit freier
 //      ISBN, deren Vorschläge die Bücher anderer Fächer sind
 //      (POST /api/buchplanung/buch/neu).
-//   5. Die Änderungsliste: Genehmigen, Ablehnen, Zurücksetzen und die
-//      Begründung einer Zeile (POST /api/buchplanung/antrag). Kürzel und
-//      Datum stehen einmal oben auf der Seite.
+//   5. Die Änderungsliste: ein Klick auf ein Buch öffnet sein Buchmenü
+//      (<template id="antrag-N">); darin Genehmigen, Ablehnen, Zurücksetzen
+//      und die Begründung (POST /api/buchplanung/antrag). Kürzel und Datum
+//      stehen einmal oben auf der Seite. „Ersetzt durch …“ im Menü wechselt
+//      zum Menü des Partners, ohne den Dialog zu schließen.
 //
 // Der Menü-Inhalt wird NICHT hier gebaut: er steht je Buch fertig gerendert in
 // einem <template class="planung-vorlage"> (templates/_buchplanung.html) und
@@ -140,6 +142,16 @@
     menue.replaceChildren(vorlage.content.cloneNode(true));
     const titel = menue.querySelector(".modal-title");
     if (titel) titel.id = "planungsmenue-titel";
+  }
+
+  // Das Buchmenü der Änderungsliste. Steht der Dialog schon offen (Sprung zum
+  // Partner), wird nur sein Inhalt getauscht - showModal() auf einen offenen
+  // Dialog wirft.
+  function oeffneAntrag(knopf) {
+    const vorlage = document.getElementById(knopf.dataset.vorlage);
+    if (!menue || !vorlage) return;
+    zeigeMenue(vorlage);
+    if (!menue.open) menue.showModal();
   }
 
   // „+ Buch hinzufügen“: dasselbe Menü, ohne Buch. Die ISBN kommt beim
@@ -488,6 +500,7 @@
       return;
     }
     if (art === "buch-neu") { oeffneNeu(knopf); return; }
+    if (art === "antrag-menue") { oeffneAntrag(knopf); return; }
     if (art === "jahrgang-anfuegen") { fuegeJahrgangAn(knopf); return; }
     if (art === "jahrgang-entfernen") { knopf.closest("[data-planung-zeile]").remove(); return; }
     if (art === "abbrechen") { menue.close(); return; }
