@@ -178,7 +178,14 @@ rem ist mit der Zusammenlegung entfallen, ohne die Regel zu brechen: bestand\
 rem und buecherlisten\ liegen jetzt neben app\ im Arbeitsverzeichnis, aus dem
 rem der Start unten laeuft - sie werden von dort importiert wie app selbst und
 rem haengen damit an genau derselben einen Kopie, nicht an einem Nachbarordner.
+rem
+rem Dazu die Frage an das venv selbst, ob es den Client hat. Nur nach robocopy
+rem und VENV_NEU zu gehen reichte nicht: brach ein Start nach dem Spiegeln,
+rem aber vor diesem Schritt ab (pip ohne Internet), meldete robocopy beim
+rem naechsten Mal "nichts geaendert", der Install wurde uebersprungen, und das
+rem Anmeldefenster endete mit "No module named 'ausleihe'".
 if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"
+"%VENV%\Scripts\python.exe" -c "import ausleihe" >nul 2>&1 || set "GESCHWISTER_NEU=1"
 if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig
 echo   Bibliothek wird eingerichtet...
 "%VENV%\Scripts\python.exe" -m pip install --no-build-isolation --no-deps --quiet "%CODE%\ausleihe-api"

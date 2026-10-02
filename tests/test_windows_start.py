@@ -178,6 +178,16 @@ def test_start_installiert_die_geschwister_nur_bei_geaenderten_quellen():
     assert inhalt.count('if errorlevel 1 set "GESCHWISTER_NEU=1"') == 1
     assert 'if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"' in inhalt
     assert 'if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig' in inhalt
+    # Ein abgebrochener Start hinterliess ein venv ohne Client, und robocopy
+    # meldete danach nichts Neues. Gefragt wird deshalb auch das venv selbst.
+    pruefung = (
+        '"%VENV%\\Scripts\\python.exe" -c "import ausleihe" >nul 2>&1 '
+        '|| set "GESCHWISTER_NEU=1"'
+    )
+    assert pruefung in inhalt
+    assert inhalt.index(pruefung) < inhalt.index(
+        'if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig'
+    )
     # Ein Kopierfehler bleibt ein Kopierfehler: die 8er-Pruefung steht davor.
     assert inhalt.index("if errorlevel 8 goto :kopierfehler") < inhalt.index(
         'if errorlevel 1 set "GESCHWISTER_NEU=1"'
