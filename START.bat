@@ -37,11 +37,25 @@ rem "embeddable"-Paket von python.org und manches Python, das ein anderes
 rem Programm in den PATH legt, haben beides nicht; frueher wurde so eines
 rem genommen, und die Einrichtung endete mit "No module named venv". Solche
 rem Kandidaten werden uebersprungen und nur fuer die Fehlermeldung gemerkt.
+rem
+rem Gesucht wird nicht nur das erste "python" im PATH. Auf den Schulrechnern
+rem liegt dort ein Python 2.7 (ohne venv), waehrend ein Python 3 ohne
+rem py-Launcher daneben installiert ist. Deshalb: jeder Treffer im PATH, dann
+rem die Registry (PEP 514, wo der Installer jedes Python 3 eintraegt), dann
+rem die ueblichen Installationsordner. Der erste brauchbare gewinnt.
 set "PYEXE="
 set "PY_OHNE_VENV="
+set "PY_OHNE_VENV_VERSION="
 if exist "%~dp0python\python.exe" call :pruefe_python "%~dp0python\python.exe"
-if not defined PYEXE call :pruefe_python py -3
-if not defined PYEXE call :pruefe_python python
+call :pruefe_python py -3
+call :pruefe_python python3
+for /f "delims=" %%P in ('where python 2^>nul') do call :pruefe_python "%%P"
+for %%R in (HKCU\Software HKLM\SOFTWARE HKLM\SOFTWARE\WOW6432Node) do (
+    for /f "tokens=2,*" %%A in ('reg query "%%R\Python\PythonCore" /s /v ExecutablePath 2^>nul ^| findstr /i "ExecutablePath"') do call :pruefe_python "%%B"
+)
+for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "%SystemDrive%\Python3*") do (
+    if exist "%%D\python.exe" call :pruefe_python "%%D\python.exe"
+)
 if defined PYEXE goto :python_da
 if defined PY_OHNE_VENV goto :python_unvollstaendig
 
@@ -176,24 +190,30 @@ goto :ende
 
 rem Prueft einen Python-Kandidaten (Befehl samt Argumenten in %*). Ohne
 rem Klammerblock, weil ein Pfad wie "Program Files (x86)" ihn aufbraeche.
+rem Verlangt Python 3.10+ mit venv und ensurepip; Python 2 scheitert schon am
+rem Import. Ist schon eines gefunden, wird nichts mehr geprueft.
 :pruefe_python
+if defined PYEXE exit /b 0
 %* --version >nul 2>&1
 if errorlevel 1 exit /b 0
-%* -c "import venv, ensurepip" >nul 2>&1
+%* -c "import sys, venv, ensurepip; sys.exit(sys.version_info < (3, 10))" >nul 2>&1
 if errorlevel 1 goto :pruefe_python_ohne_venv
 set "PYEXE=%*"
 exit /b 0
 :pruefe_python_ohne_venv
-if not defined PY_OHNE_VENV set "PY_OHNE_VENV=%*"
+if defined PY_OHNE_VENV exit /b 0
+set "PY_OHNE_VENV=%*"
+rem Python 2 schreibt seine Version nach stderr, daher 2^>^&1.
+for /f "delims=" %%V in ('%* --version 2^>^&1') do set "PY_OHNE_VENV_VERSION=%%V"
 exit /b 0
 
 :python_unvollstaendig
-echo   PYTHON IST UNVOLLSTAENDIG.
+echo   KEIN PASSENDES PYTHON GEFUNDEN.
 echo.
-echo   Gefunden wurde: %PY_OHNE_VENV%
-echo   Diesem Python fehlt das Modul "venv". Das ist meist das
-echo   "embeddable"-Paket oder ein Python, das ein anderes Programm
-echo   mitbringt. Damit laesst sich das Programm nicht einrichten.
+echo   Gefunden wurde nur: %PY_OHNE_VENV% (%PY_OHNE_VENV_VERSION%)
+echo   Gebraucht wird Python 3.10 oder neuer mit dem Modul "venv".
+echo   Python 2 hat es nicht, ebenso wenig das "embeddable"-Paket oder
+echo   ein Python, das ein anderes Programm mitbringt.
 echo.
 echo   So bekommen Sie ein vollstaendiges, ohne Administrator zu sein:
 echo.

@@ -204,10 +204,32 @@ def test_start_nimmt_nur_ein_python_mit_venv():
     """
     inhalt = START.read_text(encoding="utf-8")
 
-    assert '%* -c "import venv, ensurepip" >nul 2>&1' in inhalt
-    for kandidat in ('"%~dp0python\\python.exe"', "py -3", "python"):
+    assert (
+        '%* -c "import sys, venv, ensurepip; '
+        'sys.exit(sys.version_info < (3, 10))" >nul 2>&1'
+    ) in inhalt
+    for kandidat in ('"%~dp0python\\python.exe"', "py -3", "python3"):
         assert f"call :pruefe_python {kandidat}" in inhalt, kandidat
     assert "if defined PY_OHNE_VENV goto :python_unvollstaendig" in inhalt
+    # Ein gefundenes Python wird von spaeteren Kandidaten nicht ueberschrieben.
+    assert ":pruefe_python\nif defined PYEXE exit /b 0" in inhalt
+
+
+def test_start_sucht_python_3_auch_hinter_einem_python_2():
+    """Auf den Schulrechnern ist "python" im PATH ein Python 2.7.
+
+    Ein Python 3 liegt daneben, aber ohne py-Launcher. Die Suche nur nach dem
+    ersten "python" fand deshalb immer das 2.7 und brach ab. Gesucht wird
+    jetzt in jedem PATH-Treffer, in der Registry und in den Standardordnern.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert "('where python 2^>nul') do call :pruefe_python \"%%P\"" in inhalt
+    assert 'reg query "%%R\\Python\\PythonCore" /s /v ExecutablePath' in inhalt
+    for ort in ("HKCU\\Software", "HKLM\\SOFTWARE", "HKLM\\SOFTWARE\\WOW6432Node"):
+        assert ort in inhalt, ort
+    assert '"%LOCALAPPDATA%\\Programs\\Python\\Python3*"' in inhalt
+    assert '"%ProgramFiles%\\Python3*"' in inhalt
     # Die Pruefung muss vor dem ersten venv-Aufruf entschieden sein.
     assert inhalt.index("goto :python_unvollstaendig") < inhalt.index(
         '%PYEXE% -m venv "%VENV%"'
