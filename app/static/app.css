@@ -1193,7 +1193,7 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .aenderungen-tabelle .kasten.ausmusterung { background: var(--ausmusterung-reihe); border-left: 4px solid var(--ausmusterung-strich); }
 .aenderungen-tabelle .kasten.einfuehrung { background: var(--einfuehrung-reihe); border-left: 4px solid var(--einfuehrung-strich); }
 /* Dasselbe Buch an jeder Stelle (static/aenderungen.js). */
-.aenderungen-tabelle .kasten.verknuepft { background: #fff8c4; box-shadow: inset 0 0 0 2px #e0c65a; }
+.aenderungen-tabelle .kasten.verknuepft { background: #fff8c4; }
 .aenderungen-tabelle .kopfzeile { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; padding-bottom: 2px; }
 .aenderungen-tabelle .kopfzeile .titel { font-weight: 600; }
 .aenderungen-tabelle .kopfzeile .meta { color: #777; font-size: 12px; }
