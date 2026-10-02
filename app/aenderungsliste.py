@@ -6,9 +6,11 @@ nur noch ausgibt:
 
 * Je Abschnitt (Fach, Jahrgang, Wechsel) stehen links die Ausmusterungen,
   rechts die Einführungen, Platz i neben Platz i. Je Platz gibt es eine
-  **Titelzeile**, falls links oder rechts ein Buch dort zum ersten Mal im
-  Fach steht, und eine **Jahrgangszeile**. Den Titel trägt ein Buch nur an
-  seiner obersten Stelle im Fach; weiter unten steht nur die Jahrgangszeile.
+  **Titelzeile**, falls links oder rechts ein Buch dort zum ersten Mal in
+  seiner Spalte des Fachs steht, und eine **Jahrgangszeile**. Den Titel trägt
+  ein Buch nur an seiner obersten Stelle in der Spalte des Fachs; weiter
+  unten steht nur die Jahrgangszeile. Wird ein Buch ausgemustert und
+  eingeführt, hat es also links und rechts je einen Titel.
 * Je Seite ist jedes Buch **eine** Zelle über seine Zeilen. Das letzte Buch
   einer Seite reicht bis zum Ende des Abschnitts (``gestreckt``); eine leere
   Seite ist eine Zelle über den ganzen Abschnitt.
@@ -128,7 +130,7 @@ def baue_tabelle(abschnitte: Sequence[Abschnitt], rang: Rang,
 
 def _zerlege(teile: list[_Teil], eintrag: Callable[[Aenderung], Any]) -> None:
     """Zeilen und Zellen je Abschnitt, Stufen und Trennung je Seite des Fachs."""
-    gesehen: set[str] = set()
+    gesehen: dict[str, set[str]] = {art: set() for art in SEITEN}
     stufen: dict[str, dict[str, int]] = {art: {} for art in SEITEN}
     for teil in teile:
         ab = teil.abschnitt
@@ -137,7 +139,7 @@ def _zerlege(teile: list[_Teil], eintrag: Callable[[Aenderung], Any]) -> None:
         titel_bei: set[tuple[str, int]] = set()
         for platz in range(plaetze):
             neue = [art for art in SEITEN
-                    if platz < len(ab.seite(art)) and _buch(ab.seite(art)[platz]) not in gesehen]
+                    if platz < len(ab.seite(art)) and _buch(ab.seite(art)[platz]) not in gesehen[art]]
             for art in SEITEN:
                 if platz < len(ab.seite(art)):
                     stufen[art].setdefault(_buch(ab.seite(art)[platz]), len(stufen[art]))
@@ -145,7 +147,7 @@ def _zerlege(teile: list[_Teil], eintrag: Callable[[Aenderung], Any]) -> None:
                 reihen.append(platz)  # Titelzeile
             reihen.append(platz)      # Jahrgangszeile
             for art in neue:
-                gesehen.add(_buch(ab.seite(art)[platz]))
+                gesehen[art].add(_buch(ab.seite(art)[platz]))
                 titel_bei.add((art, platz))
         teil.zeilen = [Zeile(teil=0) for _ in reihen]
         for art in SEITEN:

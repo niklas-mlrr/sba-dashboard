@@ -8,6 +8,8 @@ einer gestreckten.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.aenderungsliste import FachBlock, Zelle, baue_tabelle
 from buecherlisten.planung import (
     ART_AUSMUSTERUNG,
@@ -111,12 +113,22 @@ def test_biologie_ein_getrenntes_buch_rueckt_nur_seine_spalte_ein():
     assert "leer(2) | 6[2027] | 2:#Bio Arbeitsheft 6 Jg6(2)" in ansicht
 
 
-def test_chemie_das_uebergangsheft_steht_als_ausmusterung_ohne_titel():
+def test_ein_buch_auf_beiden_seiten_hat_in_jeder_spalte_seinen_titel():
     ansicht = _ansicht(_tabelle(), "Chemie")
     # Jg. 10 hat zwei Wechsel: eine Gruppe, der Jahrgang steht einmal.
-    assert "1:#Chemie 10 alt Jg10(2) | 10[2027, 2028] | 0:#Übergangsheft Jg10(2)" in ansicht
-    # Links ohne Titel und getrennt: die Ausmusterungen rücken ein.
-    assert "2:Jg10(2) |  | 0:#Elemente 10 Jg10(2)" in ansicht
+    assert "0:#Chemie 10 alt Jg10(2) | 10[2027, 2028] | 0:#Übergangsheft Jg10(2)" in ansicht
+    # Rechts eingeführt zählt nicht für links: die Ausmusterung trägt ihren
+    # eigenen Titel, steht damit nicht getrennt und rückt nicht ein.
+    assert "0:#Übergangsheft Jg10(2) |  | 0:#Elemente 10 Jg10(2)" in ansicht
+
+
+def test_der_titel_steht_je_fach_einmal():
+    # Terra steht unter Erdkunde und Politik: in jedem Fach mit Titel.
+    daten = [replace(a, isbn="Terra") for fach in ("Erdkunde", "Politik")
+             for a in _buch(AUS, fach, "Terra", (5, 2026))]
+    tabelle = baue_tabelle(ordne_aenderungen(daten, RANG_STANDARD), RANG_STANDARD)
+    assert [_ansicht(tabelle, fach)[1] for fach in ("Erdkunde", "Politik")] \
+        == ["0:#Terra Jg5(2) | 5[2027] | leer(2)"] * 2
 
 
 def test_zwei_gehen_eines_kommt_das_eine_ist_gestreckt():
