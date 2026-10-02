@@ -1350,7 +1350,14 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     # Deutsch 7 ab 2027/2028, und aus dem Abgleich: Chemie 9, Erdkunde 5, Politik 5
     # nach 2025/2026 - je eine Jahrgangszeile und ein Buchmenü.
     assert text.count('class="kasten einfuehrung"') == 1
-    assert text.count('class="kasten ausmusterung"') == 3
+    assert text.count('class="kasten ausmusterung"') == 2
+    # Chemie heute steht danach in keiner Liste mehr: kräftiger gefärbt.
+    # Terra bleibt in Jahrgang 6, das Deutschbuch steht schon in Jahrgang 5.
+    assert text.count('class="kasten ausmusterung ganz"') == 1
+    assert "ganz weg, steht danach in keiner Bücherliste mehr" in text
+    assert "bleibt in der Bücherliste Erdkunde 6; Politik 6 (kein Antrag)" in text
+    assert "steht schon in der Bücherliste Deutsch 5" in text
+    assert "ganz neu: <b>0</b>" in text and "ganz weg: <b>1</b>" in text
     assert text.count('<template id="antrag-') == 4
     assert "ab 2027/28" in text and "bis 2025/26" in text
     assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text

@@ -39,6 +39,12 @@
   --ausmusterung-strich: #d9534f;
   --ausmusterung-grund: #f8dcdb;
   --ausmusterung-reihe: #fdf1f1;
+  /* Änderungsliste: die Kästen der Anträge, kräftiger für ein Buch, das ganz
+   * neu kommt bzw. ganz weggeht. */
+  --einfuehrung-kasten: #edf4fc;
+  --einfuehrung-ganz: #dde9f8;
+  --ausmusterung-kasten: #fcedec;
+  --ausmusterung-ganz: #f7dcdb;
   /* Kopf: Werte der IServ-Navigationsleiste (Bootstrap 3). */
   --nav-grund: #f8f8f8;
   --nav-rand: #e7e7e7;
@@ -1108,6 +1114,12 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   gap: .6rem 1.2rem;
   margin: 0 0 .8rem;
 }
+/* Was die kräftigen Kästen bedeuten, mit ihrer Zahl. */
+.aenderungen-legende { display: inline-flex; flex-wrap: wrap; gap: .4rem 1.2rem; align-items: center; color: #777; font-variant-numeric: tabular-nums; }
+.aenderungen-legende b { color: var(--iserv-text); font-weight: 600; }
+.aenderungen-legende i { display: inline-block; width: 1.6rem; height: .9rem; vertical-align: middle; border-left: 4px solid; }
+.aenderungen-legende i.einfuehrung { background: var(--einfuehrung-ganz); border-color: var(--einfuehrung-strich); }
+.aenderungen-legende i.ausmusterung { background: var(--ausmusterung-ganz); border-color: var(--ausmusterung-strich); }
 /* Wie eine btn-group bei Bootstrap: die Knöpfe stoßen aneinander. */
 .btn-gruppe { display: inline-flex; }
 .btn-gruppe > .btn { border-radius: 0; }
@@ -1190,10 +1202,13 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 }
 .aenderungen-tabelle td.anfang .kasten { padding-top: 6px; }
 .aenderungen-tabelle td.ende .kasten { padding-bottom: 6px; }
-.aenderungen-tabelle .kasten.ausmusterung { background: var(--ausmusterung-reihe); border-left: 4px solid var(--ausmusterung-strich); }
-.aenderungen-tabelle .kasten.einfuehrung { background: var(--einfuehrung-reihe); border-left: 4px solid var(--einfuehrung-strich); }
+.aenderungen-tabelle .kasten.ausmusterung { background: var(--ausmusterung-kasten); border-left: 4px solid var(--ausmusterung-strich); }
+.aenderungen-tabelle .kasten.einfuehrung { background: var(--einfuehrung-kasten); border-left: 4px solid var(--einfuehrung-strich); }
+/* Ganz neu (in keiner Bücherliste) bzw. ganz weg (danach in keiner mehr). */
+.aenderungen-tabelle .kasten.ausmusterung.ganz { background: var(--ausmusterung-ganz); }
+.aenderungen-tabelle .kasten.einfuehrung.ganz { background: var(--einfuehrung-ganz); }
 /* Dasselbe Buch an jeder Stelle (static/aenderungen.js). */
-.aenderungen-tabelle .kasten.verknuepft { background: #fff8c4; }
+.aenderungen-tabelle .kasten.verknuepft, .aenderungen-tabelle .kasten.ganz.verknuepft { background: #fff8c4; }
 .aenderungen-tabelle .kopfzeile { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; padding-bottom: 2px; }
 .aenderungen-tabelle .kopfzeile .titel { font-weight: 600; }
 .aenderungen-tabelle .kopfzeile .meta { color: #777; font-size: 12px; }

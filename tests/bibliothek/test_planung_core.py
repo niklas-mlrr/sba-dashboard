@@ -57,6 +57,7 @@ from buecherlisten.planung import (
     setze_buchreihe,
     setze_planung,
     setze_ruecklage,
+    verbleib_der_buecher,
     wirkt_im_schuljahr,
     zusammenfuehren,
 )
@@ -902,6 +903,68 @@ def test_die_aenderungsliste_ist_nach_fach_und_darin_nach_buch_sortiert(stand):
         ("Erdkunde", "Terra 5/6", 6),
         ("Politik", "Terra 5/6", 5),
     ]
+
+
+# ── Ganz neu, ganz weg: die kräftigen Kästen der Änderungsliste ──────────────
+
+
+def _verbleib(stand: Buchplanung, isbn: str, art: str):
+    return verbleib_der_buecher(stand, aenderungen_im_schuljahr(stand))[(isbn, art)]
+
+
+def _ausmustern(stand, isbn, *paare, nach="2026/2027"):
+    for fach, jahrgang in paare:
+        stand = setze_planung(stand, isbn=isbn, fach=fach, jahrgang=jahrgang, ausgemustert_nach=nach)
+    return stand
+
+
+def test_ein_buch_in_keiner_liste_ist_ganz_neu(stand):
+    neu = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
+                           buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett", leihbar=True),
+                           zeilen=_einfuehrung(7))
+    assert _verbleib(neu, NEU, ART_EINFUEHRUNG).ganz
+    # Auch ab diesem Schuljahr: der Jahrgang, in den es kommt, zählt nicht.
+    jetzt = setze_planung(neu, isbn=NEU, fach="Deutsch", jahrgang=7, eingefuehrt_ab="2026/2027")
+    assert _verbleib(jetzt, NEU, ART_EINFUEHRUNG).ganz
+
+
+def test_ein_buch_aus_einer_anderen_liste_ist_nicht_ganz_neu(stand):
+    # Terra kommt in Politik 7 dazu; es zählen alle Listen, auch die von Erdkunde.
+    stand = setze_planung(stand, isbn=TERRA, fach="Politik", jahrgang=7, eingefuehrt_ab="2027/2028")
+    verbleib = _verbleib(stand, TERRA, ART_EINFUEHRUNG)
+    assert not verbleib.ganz
+    assert verbleib.grund == "steht schon in der Bücherliste Erdkunde 5, 6; Politik 5, 6"
+
+
+def test_ganz_weg_erst_wenn_jede_liste_einen_antrag_hat(stand):
+    nur_erdkunde = _ausmustern(stand, TERRA, ("Erdkunde", 5), ("Erdkunde", 6))
+    verbleib = _verbleib(nur_erdkunde, TERRA, ART_AUSMUSTERUNG)
+    assert (verbleib.ganz, verbleib.grund) == (
+        False, "bleibt in der Bücherliste Politik 5, 6 (kein Antrag)")
+    ueberall = _ausmustern(nur_erdkunde, TERRA, ("Politik", 5), ("Politik", 6))
+    assert _verbleib(ueberall, TERRA, ART_AUSMUSTERUNG).ganz
+    # Schon nach dem Vorjahr ausgemustert zählt mit: auch das ist ein Antrag.
+    assert _verbleib(_ausmustern(stand, ALT, ("Chemie", 9), nach="2025/2026"),
+                     ALT, ART_AUSMUSTERUNG).ganz
+
+
+def test_eine_abgelehnte_ausmusterung_laesst_das_buch_in_der_liste(stand):
+    stand = _ausmustern(stand, ALT, ("Chemie", 9))
+    stand = entscheide_antrag(stand, isbn=ALT, fach="Chemie", jahrgang=9, art=ART_AUSMUSTERUNG,
+                              ergebnis="abgelehnt", kuerzel="MÜ")
+    verbleib = _verbleib(stand, ALT, ART_AUSMUSTERUNG)
+    assert (verbleib.ganz, verbleib.grund) == (
+        False, "bleibt in der Bücherliste Chemie 9 (Ausmusterung abgelehnt)")
+
+
+def test_eine_einfuehrung_anderswo_haelt_das_buch_ausser_sie_ist_abgelehnt(stand):
+    stand = _ausmustern(stand, ALT, ("Chemie", 9))
+    stand = setze_planung(stand, isbn=ALT, fach="Chemie", jahrgang=10, eingefuehrt_ab="2027/2028")
+    verbleib = _verbleib(stand, ALT, ART_AUSMUSTERUNG)
+    assert (verbleib.ganz, verbleib.grund) == (False, "hat auch einen Antrag zur Einführung")
+    stand = entscheide_antrag(stand, isbn=ALT, fach="Chemie", jahrgang=10, art=ART_EINFUEHRUNG,
+                              ergebnis="abgelehnt", kuerzel="MÜ")
+    assert _verbleib(stand, ALT, ART_AUSMUSTERUNG).ganz
 
 
 def _antraege(art, titel, *jahrgaenge, fach="Mathematik", leihbar=True):

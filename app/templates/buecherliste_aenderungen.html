@@ -46,6 +46,8 @@
   oben der Titel, wenn das Buch hier zum ersten Mal im Fach steht, darunter
   die Jahrgangszeile - ein Knopf, der das Buchmenü des Antrags öffnet.
   ``anfang``/``ende`` falsch: der Kasten hängt am Kasten darüber/darunter.
+  ``ganz``: das Buch kommt ganz neu bzw. geht ganz weg (``verbleib_der_buecher``),
+  der Kasten ist kräftiger gefärbt.
 #}
 {% macro kastenzelle(z) %}
 {%- if z is none %}
@@ -53,7 +55,8 @@
 <td class="r leer anfang" rowspan="{{ z.rowspan }}">{{ "kein Vorgänger" if z.art == "ausmusterung" else "kein Nachfolger" }}</td>
 {%- else %}{% set e = z.eintrag %}
 <td class="r{% if z.anfang %} anfang{% endif %}{% if z.ende %} ende{% endif %}" rowspan="{{ z.rowspan }}">
-  <div class="kasten {{ z.art }}" style="--stufe:{{ z.stufe }}" data-buch="{{ e.fach }}|{{ e.isbn }}" title="{{ e.titel }}">
+  <div class="kasten {{ z.art }}{% if e.verbleib and e.verbleib.ganz %} ganz{% endif %}" style="--stufe:{{ z.stufe }}"
+    data-buch="{{ e.fach }}|{{ e.isbn }}" title="{{ e.titel }}{% if e.verbleib %} – {{ e.verbleib.grund }}{% endif %}">
     {%- if z.titel %}
     <div class="kopfzeile"><span class="titel">{{ e.titel }}</span>
       <span class="meta">{{ [e.verlag, e.neupreis] | select | join(" · ") }}</span>
@@ -92,6 +95,7 @@
       <dt>ISBN</dt><dd><samp>{{ e.isbn_anzeige }}</samp></dd>
       <dt>Schuljahr</dt><dd>{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</dd>
       <dt>Leihbar</dt><dd>{{ "ja" if e.leihbar else "nein" }}</dd>
+      {% if e.verbleib %}<dt>Bücherlisten</dt><dd>{{ e.verbleib.grund }}</dd>{% endif %}
       {% if e.einfuehrung %}
       <dt>Neupreis</dt><dd>{{ e.neupreis or "–" }}</dd>
       {% elif e.eingefuehrt_ab %}
@@ -152,6 +156,11 @@
     <button type="button" class="btn btn-default" data-filter="partner" data-wert="" aria-pressed="true">Alle Zeilen</button>
     <button type="button" class="btn btn-default" data-filter="partner" data-wert="ja" aria-pressed="false">Ersetzungen ({{ zaehler.mit_partner }})</button>
     <button type="button" class="btn btn-default" data-filter="partner" data-wert="nein" aria-pressed="false">Ohne Partner ({{ zaehler.ohne_partner }})</button>
+  </span>
+  {#- Gezählt werden Bücher, nicht Anträge. #}
+  <span class="aenderungen-legende">
+    <span><i class="einfuehrung ganz"></i> ganz neu: <b>{{ zaehler.ganz_einfuehrung }}</b></span>
+    <span><i class="ausmusterung ganz"></i> ganz weg: <b>{{ zaehler.ganz_ausmusterung }}</b></span>
   </span>
 </div>
 {#

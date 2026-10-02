@@ -640,6 +640,89 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
         a.fach.casefold(), a.titel.casefold(), a.isbn, a.jahrgang, a.art != ART_EINFUEHRUNG)))
 
 
+@dataclass(frozen=True)
+class Verbleib:
+    """Ob ein Buch mit seinen Anträgen einer Art **ganz** kommt oder **ganz** geht - und warum.
+
+    Die Änderungsliste färbt solche Bücher kräftiger. ``grund`` steht im
+    Buchmenü und unter der Maus.
+    """
+
+    ganz: bool
+    grund: str
+
+
+def _paare_text(paare: Sequence[tuple[str, int]]) -> str:
+    """``[("Musik", 8), ("Musik", 9), ("Chemie", 9)]`` → ``"Chemie 9; Musik 8, 9"``."""
+    je_fach: dict[str, list[int]] = {}
+    for fach, jahrgang in sorted(paare, key=lambda p: (p[0].casefold(), p[1])):
+        je_fach.setdefault(fach, []).append(jahrgang)
+    return "; ".join(f"{fach} {', '.join(map(str, jgs))}" for fach, jgs in je_fach.items())
+
+
+def verbleib_der_buecher(stand: Buchplanung,
+                         antraege: Sequence[Aenderung]) -> dict[tuple[str, str], Verbleib]:
+    """Je (ISBN, Art) der Anträge: kommt das Buch ganz neu, geht es ganz weg?
+
+    Es zählen alle Bücherlisten, jedes Fach. Gelistet ist ein Buch in einem
+    Fach und Jahrgang, wenn es dort in diesem Schuljahr im Regal steht
+    (:func:`wirkt_im_schuljahr`).
+
+    * **Ganz neu** ist eine Einführung, wenn das Buch im Moment in keiner
+      Bücherliste steht. Ein Jahrgang, in den es gerade (ab diesem Schuljahr)
+      eingeführt wird, zählt nicht - der ist die Einführung selbst.
+    * **Ganz weg** ist eine Ausmusterung, wenn für jeden Jahrgang, in dessen
+      Liste das Buch steht, eine Ausmusterung beantragt ist und es keinen
+      Antrag gibt, es irgendwo einzuführen. Abgelehnte Anträge zählen nicht:
+      eine abgelehnte Ausmusterung lässt das Buch in seiner Liste, eine
+      abgelehnte Einführung bringt es nirgends hin. Eine abgelehnte Einführung
+      bleibt dagegen ganz neu - das Buch steht ja trotzdem in keiner Liste.
+    """
+    try:
+        jetzt = schuljahr_zahl(stand.schuljahr)
+    except UngueltigesSchuljahr:
+        return {}
+    zeilen: dict[str, dict[tuple[str, int], Planungszeile]] = {}
+    for zeile in stand.planung:
+        zeilen.setdefault(zeile.isbn, {})[(zeile.fach, zeile.jahrgang)] = zeile
+    buecher = {buch.isbn: buch for buch in stand.buecher}
+    je_buch: dict[str, list[Aenderung]] = {}
+    for antrag in antraege:
+        je_buch.setdefault(antrag.isbn, []).append(antrag)
+
+    heraus: dict[tuple[str, str], Verbleib] = {}
+    for isbn, eigene in je_buch.items():
+        eigene_zeilen = zeilen.get(isbn, {})
+        buch = buecher.get(isbn)
+        paare = set(buch.kombinationen if buch else ()) | set(eigene_zeilen)
+        gelistet = {p for p in paare if wirkt_im_schuljahr(eigene_zeilen.get(p), stand.schuljahr)}
+        einfuehrungen = [a for a in eigene if a.einfuehrung]
+        ausmusterungen = {(a.fach, a.jahrgang): a for a in eigene if not a.einfuehrung}
+
+        if einfuehrungen:
+            schon = sorted(gelistet - {(a.fach, a.jahrgang) for a in einfuehrungen
+                                       if a.wechsel == jetzt})
+            heraus[(isbn, ART_EINFUEHRUNG)] = Verbleib(False, "steht schon in der Bücherliste "
+                                                       + _paare_text(schon)) if schon \
+                else Verbleib(True, "ganz neu, steht noch in keiner Bücherliste")
+
+        if ausmusterungen:
+            ohne_antrag = sorted(gelistet - set(ausmusterungen))
+            abgelehnt = sorted(p for p, a in ausmusterungen.items() if a.status == ANTRAG_ABGELEHNT)
+            if ohne_antrag:
+                verbleib = Verbleib(False, f"bleibt in der Bücherliste {_paare_text(ohne_antrag)}"
+                                           " (kein Antrag)")
+            elif abgelehnt:
+                verbleib = Verbleib(False, f"bleibt in der Bücherliste {_paare_text(abgelehnt)}"
+                                           " (Ausmusterung abgelehnt)")
+            elif any(a.status != ANTRAG_ABGELEHNT for a in einfuehrungen):
+                verbleib = Verbleib(False, "hat auch einen Antrag zur Einführung")
+            else:
+                verbleib = Verbleib(True, "ganz weg, steht danach in keiner Bücherliste mehr")
+            heraus[(isbn, ART_AUSMUSTERUNG)] = verbleib
+    return heraus
+
+
 # ── Die Reihenfolge der Änderungsliste ───────────────────────────────────────
 #
 # Sortiert wird nach Fach und dann nach einer Rangfolge aus Jahrgang und

@@ -51,6 +51,7 @@ from buecherlisten.planung import (
     planungs_status,
     planungs_zusatz,
     rang_text,
+    verbleib_der_buecher,
     zum_schuljahr_ausgemustert,
 )
 
@@ -359,6 +360,9 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
     kennung = str(aktuell["id"])
     planung, stand = _planungskontext(request, kennung)
     abschnitte = aenderungsliste(stand, rang) if stand else ()
+    # Kommt ein Buch ganz neu, geht es ganz weg? Die Kästen sind dann kräftiger.
+    verbleib = verbleib_der_buecher(stand, [a for ab in abschnitte for a in ab.antraege]) \
+        if stand else {}
 
     # Jeder Antrag bekommt eine Nummer: sie verbindet seine Jahrgangszeile mit
     # seinem Menü (<template id="antrag-N">) und das Menü mit denen seiner
@@ -378,6 +382,7 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
                 "begruendung": a.begruendung, "leihbar": a.leihbar,
                 "neupreis": fmt_price(a.neupreis) if a.neupreis else "",
                 "eingefuehrt_ab": a.eingefuehrt_ab, "partner": [],
+                "verbleib": verbleib.get((a.isbn, a.art)),
             }
             eintraege.append(nummer[id(a)])
         return nummer[id(a)]
@@ -408,6 +413,10 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
     })
     zaehler["mit_partner"] = sum(1 for a in abschnitte if a.mit_partner)
     zaehler["ohne_partner"] = len(abschnitte) - zaehler["mit_partner"]
+    zaehler.update({
+        "ganz_" + art: sum(1 for (_, eigene), v in verbleib.items() if eigene == art and v.ganz)
+        for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
+    })
     return _seite(request, "buecherliste_aenderungen.html", {
         "planung": planung, "schuljahr": aktuell.get("name") or kennung,
         "eintraege": eintraege, "tabelle": tabelle, "koepfe": koepfe, "zaehler": zaehler,
