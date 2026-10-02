@@ -155,7 +155,9 @@
   </span>
 </div>
 {#
-  Je Fach ein <tbody class="aenderungen-fach"> mit dem Fachnamen, je Gruppe
+  Je Fach ein <tbody class="aenderungen-fach"> mit dem Fachnamen und darunter
+  den Köpfen der beiden Seiten (``fachkopf``), damit sie bei langen Listen
+  nicht nur ganz oben stehen; je Gruppe
   ein <tbody class="aenderungen-gruppe">: Abschnitte mit gleichem Wert im
   vorderen Kriterium (Jahrgang oder Jahr), innen durch eine gestrichelte
   Linie getrennt (``unterabschnitt``). Die Mitte trägt den Wert fett und je
@@ -186,6 +188,10 @@
   {% for block in tabelle %}
   <tbody class="aenderungen-fach" data-fach="{{ block.fach }}">
     <tr><td colspan="3"><a href="/buecherliste/fach/{{ block.fach | urlencode }}">{{ block.fach }}</a></td></tr>
+    <tr class="fachkopf">
+      <th class="kopf-aus" scope="col">Ausmusterung</th><th class="kopf-mitte"></th>
+      <th class="kopf-ein" scope="col">Einführung</th>
+    </tr>
   </tbody>
   {% for gruppe in block.gruppen %}
   <tbody class="aenderungen-gruppe{% if loop.first %} erster{% endif %}" data-fach="{{ block.fach }}"
