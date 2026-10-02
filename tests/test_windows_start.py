@@ -190,7 +190,28 @@ def test_jedes_start_label_wird_angesprungen_und_existiert_genau_einmal():
 
     assert len(labels) == len(set(labels)), f"doppeltes Label: {labels}"
     for label in labels:
-        assert f"goto :{label}" in inhalt, f"Label {label!r} wird nie angesprungen"
+        assert f"goto :{label}" in inhalt or f"call :{label}" in inhalt, (
+            f"Label {label!r} wird nie angesprungen"
+        )
+
+
+def test_start_nimmt_nur_ein_python_mit_venv():
+    """Ein Python ohne venv endete erst bei der Einrichtung mit "No module named venv".
+
+    Das embeddable-Paket von python.org und manches mitgebrachte Python haben
+    weder ``venv`` noch ``ensurepip``. Jeder Kandidat wird deshalb darauf
+    geprueft, bevor er genommen wird; einer ohne bekommt eine eigene Meldung.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert '%* -c "import venv, ensurepip" >nul 2>&1' in inhalt
+    for kandidat in ('"%~dp0python\\python.exe"', "py -3", "python"):
+        assert f"call :pruefe_python {kandidat}" in inhalt, kandidat
+    assert "if defined PY_OHNE_VENV goto :python_unvollstaendig" in inhalt
+    # Die Pruefung muss vor dem ersten venv-Aufruf entschieden sein.
+    assert inhalt.index("goto :python_unvollstaendig") < inhalt.index(
+        '%PYEXE% -m venv "%VENV%"'
+    )
 
 
 def test_requirements_entsprechen_dem_uv_export():

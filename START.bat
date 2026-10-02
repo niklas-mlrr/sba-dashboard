@@ -32,21 +32,18 @@ echo   Bitte NICHT als Administrator starten.
 echo.
 
 rem ── 1. Python finden ──────────────────────────────────────────────────────
+rem Ein Python zaehlt nur, wenn es venv und ensurepip mitbringt. Das
+rem "embeddable"-Paket von python.org und manches Python, das ein anderes
+rem Programm in den PATH legt, haben beides nicht; frueher wurde so eines
+rem genommen, und die Einrichtung endete mit "No module named venv". Solche
+rem Kandidaten werden uebersprungen und nur fuer die Fehlermeldung gemerkt.
 set "PYEXE="
-if exist "%~dp0python\python.exe" (
-    set "PYEXE=%~dp0python\python.exe"
-    goto :python_da
-)
-py -3 --version >nul 2>&1
-if not errorlevel 1 (
-    set "PYEXE=py -3"
-    goto :python_da
-)
-python --version >nul 2>&1
-if not errorlevel 1 (
-    set "PYEXE=python"
-    goto :python_da
-)
+set "PY_OHNE_VENV="
+if exist "%~dp0python\python.exe" call :pruefe_python "%~dp0python\python.exe"
+if not defined PYEXE call :pruefe_python py -3
+if not defined PYEXE call :pruefe_python python
+if defined PYEXE goto :python_da
+if defined PY_OHNE_VENV goto :python_unvollstaendig
 
 echo   KEIN PYTHON GEFUNDEN.
 echo.
@@ -176,6 +173,39 @@ rem Benutzerkonfiguration aus %LOCALAPPDATA%. Ein ausdruecklicher --config-Pfad
 rem waere der Arbeitskopie-Modus und wuerde genau diese Trennung aufheben.
 "%VENV%\Scripts\python.exe" -m app.start
 goto :ende
+
+rem Prueft einen Python-Kandidaten (Befehl samt Argumenten in %*). Ohne
+rem Klammerblock, weil ein Pfad wie "Program Files (x86)" ihn aufbraeche.
+:pruefe_python
+%* --version >nul 2>&1
+if errorlevel 1 exit /b 0
+%* -c "import venv, ensurepip" >nul 2>&1
+if errorlevel 1 goto :pruefe_python_ohne_venv
+set "PYEXE=%*"
+exit /b 0
+:pruefe_python_ohne_venv
+if not defined PY_OHNE_VENV set "PY_OHNE_VENV=%*"
+exit /b 0
+
+:python_unvollstaendig
+echo   PYTHON IST UNVOLLSTAENDIG.
+echo.
+echo   Gefunden wurde: %PY_OHNE_VENV%
+echo   Diesem Python fehlt das Modul "venv". Das ist meist das
+echo   "embeddable"-Paket oder ein Python, das ein anderes Programm
+echo   mitbringt. Damit laesst sich das Programm nicht einrichten.
+echo.
+echo   So bekommen Sie ein vollstaendiges, ohne Administrator zu sein:
+echo.
+echo     1. python.org im Browser oeffnen, "Downloads"
+echo     2. Den normalen Installer fuer Windows herunterladen und starten
+echo        (nicht das "embeddable package")
+echo     3. Im Installer den Haken bei "Install for me only" setzen
+echo     4. Danach diese Datei erneut doppelklicken
+echo.
+pause
+popd
+exit /b 1
 
 :kopierfehler
 echo.
