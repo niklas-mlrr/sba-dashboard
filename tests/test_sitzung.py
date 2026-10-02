@@ -120,6 +120,20 @@ def test_jede_benutzung_setzt_die_frist_zurueck(anmeldung: Anmeldung, einstellun
         assert anmeldung.client() is not None
 
 
+def test_der_benutzer_fuer_ein_kuerzel_zaehlt_als_benutzung(anmeldung: Anmeldung,
+                                                            einstellungen, uhr: _Uhr):
+    """Wer Anträge entscheidet, arbeitet an der Mappe - wie ein Abruf."""
+    with pytest.raises(NichtAngemeldet):
+        anmeldung.benutzer()
+    _anmelden(anmeldung, einstellungen)
+    for _ in range(3):
+        uhr.weiter(59)
+        assert anmeldung.benutzer() == BENUTZER
+    uhr.weiter(60)
+    with pytest.raises(Abgelaufen):
+        anmeldung.benutzer()
+
+
 def test_der_status_verlaengert_die_frist_nicht(anmeldung: Anmeldung, einstellungen, uhr: _Uhr):
     """Der Takt des Fensters fragt dauernd nach - das darf das Schloss nicht aufhalten."""
     _anmelden(anmeldung, einstellungen)

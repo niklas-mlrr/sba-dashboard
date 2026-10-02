@@ -143,19 +143,35 @@ class Anmeldung:
         laufenden Abruf nötig ist.
         """
         with self._lock:
-            if self._client is None:
-                raise NichtAngemeldet(
-                    "Nicht bei IServ angemeldet. Bitte im Programmfenster anmelden."
-                )
-            if self._verfallen():
-                self._client = None
-                self._benutzer = None
-                raise Abgelaufen(
-                    f"Die Anmeldung ist nach {self._ablauf // 60} Minuten ohne Abruf "
-                    "abgelaufen. Bitte im Programmfenster erneut anmelden."
-                )
-            self._zuletzt = self._zeit()
+            self._benutze()
             return self._client
+
+    def benutzer(self) -> str:
+        """Wer angemeldet ist - das Kürzel, mit dem ein Antrag entschieden wird.
+
+        Zählt als Benutzung wie :meth:`client`: wer die Änderungsliste
+        durchgeht, arbeitet an der Mappe, und soll nicht nach dreißig Minuten
+        mitten im Entscheiden hinausfliegen.
+        """
+        with self._lock:
+            self._benutze()
+            assert self._benutzer is not None
+            return self._benutzer
+
+    def _benutze(self) -> None:
+        """Prüft die Anmeldung und setzt das Zeitschloss zurück. Nur unter Lock."""
+        if self._client is None:
+            raise NichtAngemeldet(
+                "Nicht bei IServ angemeldet. Bitte im Programmfenster anmelden."
+            )
+        if self._verfallen():
+            self._client = None
+            self._benutzer = None
+            raise Abgelaufen(
+                f"Die Anmeldung ist nach {self._ablauf // 60} Minuten ohne Abruf "
+                "abgelaufen. Bitte im Programmfenster erneut anmelden."
+            )
+        self._zuletzt = self._zeit()
 
     def status(self) -> dict[str, Any]:
         """Was das Fenster anzeigt. Enthält den Benutzernamen, nie das Passwort.

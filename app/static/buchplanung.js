@@ -22,7 +22,7 @@
 //   5. Die Änderungsliste: ein Klick auf eine Jahrgangszeile öffnet ihr Buchmenü
 //      (<template id="antrag-N">); darin Genehmigen, Ablehnen, Zurücksetzen
 //      und die Begründung (POST /api/buchplanung/antrag). Kürzel und Datum
-//      stehen einmal oben auf der Seite. „Ersetzt durch …“ im Menü wechselt
+//      setzt der Server aus der IServ-Anmeldung. „Ersetzt durch …“ im Menü wechselt
 //      zum Menü des Partners, ohne den Dialog zu schließen.
 //
 // Der Menü-Inhalt wird NICHT hier gebaut: er steht je Buch fertig gerendert in
@@ -515,8 +515,6 @@
 
     if (art === "antrag") {
       const zeile = knopf.closest("[data-antrag]");
-      const formular = document.getElementById("antrag-formular");
-      const werte = formular ? felder(formular) : {};
       const begruendung = zeile.querySelector('[data-antrag-feld="begruendung"]');
       // Ohne data-ergebnis (der Knopf „Speichern“ an der Begründung) bleibt
       // die Entscheidung, wie sie ist: null statt "".
@@ -524,7 +522,7 @@
       sende("/api/buchplanung/antrag", {
         isbn: zeile.dataset.isbn, fach: zeile.dataset.fach,
         jahrgang: Number(zeile.dataset.jahrgang), art: zeile.dataset.antrag,
-        ergebnis: ergebnis, kuerzel: werte.kuerzel || "", datum: werte.datum || null,
+        ergebnis: ergebnis,
         begruendung: begruendung ? begruendung.value.trim() : null,
       }, () => ergebnis === null ? "Die Begründung wurde gespeichert."
           : ergebnis ? "Der Antrag ist " + ergebnis + "."

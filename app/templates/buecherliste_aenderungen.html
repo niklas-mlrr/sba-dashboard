@@ -11,22 +11,15 @@
   Jede Jahrgangszeile ist ein Antrag, der für sich genehmigt oder abgelehnt
   wird, im Buchmenü, das ein Klick auf die Zeile öffnet.
 
-  Kürzel und Datum stehen **einmal** oben und gelten für jeden Klick - wer die
-  Liste durchgeht, entscheidet mit demselben Kürzel. Die Begründung gilt für
+  Entschieden wird mit dem Namen der IServ-Anmeldung und dem heutigen Datum;
+  beides setzt der Server (``api_antrag``). Die Begründung gilt für
   beide Anträge einer Planungszeile; steht ein Buch nur für ein Schuljahr in
   einem Jahrgang, hat es zwei Anträge mit derselben Begründung.
 
   Die Entscheidung gilt dem Schuljahr, das beim Entscheiden in der Zeile
   stand. Ändert es sich im Planungsmenü, steht der Antrag wieder auf offen.
 #}
-{% block kopfaktionen %}{% if planung.mtime is none %}{{ bp.kopfknoepfe(planung, "aenderungen", none) }}{% else %}
-<span class="planung-formular" id="antrag-formular">
-  <input type="text" class="planung-feld" data-planung-feld="kuerzel" id="antrag-kuerzel"
-    maxlength="10" placeholder="Kürzel" aria-label="Kürzel, mit dem entschieden wird">
-  <input type="date" class="planung-feld" data-planung-feld="datum" value="{{ heute.isoformat() }}"
-    aria-label="Datum der Entscheidung">
-</span>
-{% endif %}{% endblock %}
+{% block kopfaktionen %}{% if planung.mtime is none %}{{ bp.kopfknoepfe(planung, "aenderungen", none) }}{% endif %}{% endblock %}
 
 {% block kopfzeile %}
 <div id="buchplanung" data-schuljahr="{{ planung.schuljahr }}"

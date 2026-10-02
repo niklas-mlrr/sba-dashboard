@@ -12,8 +12,6 @@
 //      Gruppe ebenso.
 //   2. Dasselbe Buch an allen Stellen hervorheben (data-buch): unter der
 //      Maus, mit dem Tastaturfokus und solange sein Menü offen ist.
-//   3. Das Kürzel bleibt in diesem Browser stehen, damit es nicht bei jedem
-//      Neuladen fehlt. Ohne Speicher (privates Fenster) ist das Feld leer.
 (function () {
   const tabelle = document.getElementById("aenderungen");
   const filter = { status: "", art: "", partner: "" };
@@ -82,16 +80,4 @@
     if (zeile) verknuepfe(zeile.closest(".kasten").dataset.buch);
   });
   if (menue) menue.addEventListener("close", () => verknuepfe(null));
-
-  // ── Kürzel ──────────────────────────────────────────────────────────────
-  const kuerzel = document.getElementById("antrag-kuerzel");
-  const SCHLUESSEL = "sba-antrag-kuerzel";
-  if (kuerzel) {
-    try {
-      if (!kuerzel.value) kuerzel.value = localStorage.getItem(SCHLUESSEL) || "";
-    } catch (fehler) { /* ohne Speicher bleibt das Feld leer */ }
-    kuerzel.addEventListener("change", () => {
-      try { localStorage.setItem(SCHLUESSEL, kuerzel.value.trim()); } catch (fehler) { /* s. o. */ }
-    });
-  }
 })();

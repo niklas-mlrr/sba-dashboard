@@ -255,13 +255,19 @@ def api_planung(request: Request, anfrage: PlanungsAnfrage) -> JSONResponse:
 
 @router.post("/api/buchplanung/antrag")
 def api_antrag(request: Request, anfrage: AntragAnfrage) -> JSONResponse:
-    """Eine Zeile der Änderungsliste: genehmigen, ablehnen, zurücksetzen, begründen."""
+    """Eine Zeile der Änderungsliste: genehmigen, ablehnen, zurücksetzen, begründen.
+
+    Wer genehmigt oder ablehnt, entscheidet mit dem Namen seiner
+    IServ-Anmeldung und mit dem heutigen Datum - beides kommt nicht aus dem
+    Browser. Zurücksetzen und eine Begründung allein brauchen keinen Namen.
+    """
+    entscheidet = bool(anfrage.ergebnis and anfrage.ergebnis.strip())
+    kuerzel = request.app.state.anmeldung.benutzer() if entscheidet else ""
     stand = domaene.schreibe_antrag(
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
         jahrgang=anfrage.jahrgang, art=anfrage.art, ergebnis=anfrage.ergebnis,
-        kuerzel=anfrage.kuerzel, datum=anfrage.datum, begruendung=anfrage.begruendung,
-        mtime=anfrage.mtime,
+        kuerzel=kuerzel, begruendung=anfrage.begruendung, mtime=anfrage.mtime,
     )
     return _antwort(stand)
 

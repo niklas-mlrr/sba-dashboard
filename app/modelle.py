@@ -261,6 +261,9 @@ class AntragAnfrage(_BuchplanungAnfrage):
     ``genehmigt``, ``abgelehnt`` oder leer (zurück auf offen); ``None`` lässt
     die Entscheidung stehen und speichert nur die ``begruendung``. Die Werte
     prüft der Kern (``entscheide_antrag``), nicht dieses Modell.
+
+    Kürzel und Datum fehlen mit Absicht: entschieden wird mit dem Namen der
+    IServ-Anmeldung und dem heutigen Tag (``api_antrag``).
     """
 
     isbn: NichtLeer
@@ -268,8 +271,6 @@ class AntragAnfrage(_BuchplanungAnfrage):
     jahrgang: int
     art: NichtLeer
     ergebnis: str | None = None
-    kuerzel: str = ""
-    datum: date | None = None
     begruendung: str | None = None
 
 

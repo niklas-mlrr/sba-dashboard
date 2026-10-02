@@ -12,7 +12,6 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date
 from typing import Any, Callable, cast
 from urllib.parse import quote
 
@@ -420,7 +419,6 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
     return _seite(request, "buecherliste_aenderungen.html", {
         "planung": planung, "schuljahr": aktuell.get("name") or kennung,
         "eintraege": eintraege, "tabelle": tabelle, "koepfe": koepfe, "zaehler": zaehler,
-        "heute": date.today(),
     })
 
 

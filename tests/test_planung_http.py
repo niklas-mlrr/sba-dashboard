@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
@@ -1346,7 +1347,8 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     text = seiten.get("/buecherliste/aenderungen").text
     assert 'href="/buecherliste/aenderungen"' in text
     assert 'data-schuljahr="2026/2027"' in text
-    assert 'id="antrag-kuerzel"' in text
+    # Kürzel und Datum kommen aus der Anmeldung, nicht aus einem Feld.
+    assert 'id="antrag-kuerzel"' not in text
     # Deutsch 7 ab 2027/2028, und aus dem Abgleich: Chemie 9, Erdkunde 5, Politik 5
     # nach 2025/2026 - je eine Jahrgangszeile und ein Buchmenü.
     assert text.count('class="kasten einfuehrung"') == 1
@@ -1493,22 +1495,25 @@ def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     stand = _mit_einfuehrung(seiten, abgeglichen)
+    # Ein Kürzel oder Datum aus dem Browser zählt nicht: entschieden wird mit
+    # dem Namen der Anmeldung und dem heutigen Tag.
     antwort = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
         "art": "einfuehrung", "ergebnis": "genehmigt", "kuerzel": "MÜ",
         "datum": "2026-09-30", "begruendung": "neuer Lehrplan", "mtime": stand["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
+    heute = date.today()
     buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
     zeile = next(z for z in buch["planung"] if z["jahrgang"] == 7)
     assert zeile["antrag_einfuehrung"] == {
-        "ergebnis": "genehmigt", "kuerzel": "MÜ", "datum": "2026-09-30"}
+        "ergebnis": "genehmigt", "kuerzel": "b.lehrer", "datum": heute.isoformat()}
     assert zeile["antrag_ausmusterung"]["ergebnis"] == "offen"
     assert zeile["begruendung"] == "neuer Lehrplan"
 
     text = seiten.get("/buecherliste/aenderungen").text
     assert 'data-status="genehmigt"' in text and "neuer Lehrplan" in text
-    assert "MÜ, 30.09.2026" in text
+    assert f"b.lehrer, {heute:%d.%m.%Y}" in text
     # Das Planungsmenü zeigt die Entscheidung mit, nur zum Lesen.
     assert "planung-antrag" in seiten.get("/buecherliste/fach/Deutsch").text
 
@@ -1523,16 +1528,24 @@ def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
     assert zeile["begruendung"] == "neuer Lehrplan"
 
 
-def test_ein_antrag_ohne_kuerzel_wird_mit_einem_satz_abgelehnt(
+def test_ein_antrag_ohne_anmeldung_wird_nicht_entschieden(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     stand = _mit_einfuehrung(seiten, abgeglichen)
+    assert seiten.delete("/api/anmeldung").status_code == 200
+    for ergebnis in ("genehmigt", "abgelehnt"):
+        antwort = seiten.post("/api/buchplanung/antrag", json={
+            "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+            "art": "einfuehrung", "ergebnis": ergebnis, "mtime": stand["mtime"],
+        })
+        assert antwort.status_code == 401
+        assert "angemeldet" in antwort.json()["fehler"]
+    # Eine Begründung allein braucht keinen Namen.
     antwort = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
-        "art": "einfuehrung", "ergebnis": "genehmigt", "mtime": stand["mtime"],
+        "art": "einfuehrung", "begruendung": "später", "mtime": stand["mtime"],
     })
-    assert antwort.status_code == 400
-    assert "Kürzel" in antwort.json()["fehler"]
+    assert antwort.status_code == 200, antwort.text
 
 
 def test_ein_antrag_auf_eine_alte_fassung_ist_409(
