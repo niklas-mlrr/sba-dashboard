@@ -23,6 +23,12 @@ set "CODE=%ZIEL%\app"
 set "VENV=%ZIEL%\venv"
 set "ANFORDERUNGEN=%CODE%\sba-dashboard\requirements.txt"
 set "INSTALLSTAND=%VENV%\requirements.installed.txt"
+rem Die mitgelieferten Pakete (wheels\, erzeugt von tools\wheelhouse.py)
+rem bleiben auf dem Netzlaufwerk und werden nicht gespiegelt: rund 60 MB, die
+rem nur bei Einrichtung und Update gelesen werden. %CD% statt %~dp0, weil pushd
+rem einem UNC-Pfad oben einen Laufwerksbuchstaben gegeben hat.
+set "WHEELS=%CD%\wheels"
+set "PIP_DISABLE_PIP_VERSION_CHECK=1"
 
 echo ==========================================================
 echo   Schulbuchausleihe - Bestand und Nachbestellung
@@ -92,7 +98,7 @@ rem Beide zu nehmen ist richtig: die Vorlage braucht nur START.sh und die
 rem Testsuite, im Produktivmodus liegt die echte Mappe auf dem Netzlaufwerk.
 rem Dazu config.local.json (zeigt auf die Arbeitskopie) und die Nachbardateien,
 rem die neben einer geoeffneten Mappe entstehen.
-set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude htmlcov node_modules backups /XF *.pyc .coverage *.xlsx config.local.json *.dashboard-cache.json *.sba-dashboard.lock"
+set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude htmlcov node_modules backups wheels /XF *.pyc .coverage *.xlsx config.local.json *.dashboard-cache.json *.sba-dashboard.lock"
 rem robocopy meldet mit Rueckgabecode 1 "es wurde etwas kopiert". Genau daran
 rem haengt weiter unten die Frage, ob der IServ-Client neu installiert werden
 rem muss - sonst liefe nach einem Update weiter der alte Stand.
@@ -129,10 +135,11 @@ if not exist "%VENV%\Scripts\python.exe" (
     %PYEXE% -m venv "%VENV%"
     if errorlevel 1 goto :venvfehler
     set "VENV_NEU=1"
-    rem setuptools und wheel gehoeren mit ins venv: nur dann laesst sich das
+    rem setuptools gehoert mit ins venv: nur dann laesst sich das
     rem Geschwister-Paket unten mit --no-build-isolation installieren, also
-    rem auch dann noch, wenn der Laptop gerade kein Internet hat.
-    "%VENV%\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel --quiet
+    rem auch dann noch, wenn der Laptop gerade kein Internet hat. wheel braucht
+    rem es nicht mehr, setuptools baut seit 70.1 selbst Raeder.
+    call :pip_install --upgrade pip setuptools
     if errorlevel 1 goto :pipfehler
 )
 
@@ -149,7 +156,7 @@ if "%VENV_NEU%"=="1" (
 ) else (
     echo   Abhaengigkeiten haben sich geaendert und werden aktualisiert...
 )
-"%VENV%\Scripts\python.exe" -m pip install -r "%ANFORDERUNGEN%" --quiet
+call :pip_install -r "%ANFORDERUNGEN%"
 if errorlevel 1 goto :pipfehler
 copy /y "%ANFORDERUNGEN%" "%INSTALLSTAND%" >nul
 if errorlevel 1 goto :installstandfehler
@@ -207,6 +214,34 @@ rem Python 2 schreibt seine Version nach stderr, daher 2^>^&1.
 for /f "delims=" %%V in ('%* --version 2^>^&1') do set "PY_OHNE_VENV_VERSION=%%V"
 exit /b 0
 
+rem Installiert Pakete ins venv (Argumente in %*). Zuerst ohne Internet aus
+rem wheels\: die Schulrechner erreichen PyPI nicht direkt. Nur wenn das
+rem scheitert - Ordner fehlt, Paket fehlt, unbekannte Python-Version -, geht es
+rem ueber das Internet, mit dem Proxy, den Windows dafuer nennt.
+rem "exit /b" ohne Zahl gibt den Rueckgabecode des letzten pip weiter.
+:pip_install
+if not exist "%WHEELS%\" goto :pip_install_online
+"%VENV%\Scripts\python.exe" -m pip install --no-index --find-links "%WHEELS%" --quiet %* >nul 2>&1
+if not errorlevel 1 exit /b 0
+echo   Mitgelieferte Pakete reichen nicht, versuche es ueber das Internet...
+:pip_install_online
+if not defined PROXY_GEPRUEFT call :proxy_ermitteln
+"%VENV%\Scripts\python.exe" -m pip install --quiet %*
+exit /b
+
+rem Python liest einen fest eingetragenen Proxy selbst aus der Registry, eine
+rem automatische Konfiguration (PAC/WPAD, wie in Schulnetzen ueblich) aber
+rem nicht. Windows wertet sie aus und nennt den Proxy fuer pypi.org; pip
+rem nimmt ihn aus PIP_PROXY. Antwortet PowerShell nicht (gesperrt), bleibt
+rem es beim direkten Weg.
+:proxy_ermitteln
+set "PROXY_GEPRUEFT=1"
+if defined PIP_PROXY exit /b 0
+if defined HTTPS_PROXY exit /b 0
+for /f "usebackq delims=" %%X in (`powershell -NoProfile -NonInteractive -Command "$u=[uri]'https://pypi.org/simple/'; $p=[Net.WebRequest]::GetSystemWebProxy().GetProxy($u); if ($p -and $p.Authority -ne $u.Authority) { $p.AbsoluteUri }" 2^>nul`) do set "PIP_PROXY=%%X"
+if defined PIP_PROXY echo   Proxy: %PIP_PROXY%
+exit /b 0
+
 :python_unvollstaendig
 echo   KEIN PASSENDES PYTHON GEFUNDEN.
 echo.
@@ -262,7 +297,8 @@ exit /b 1
 :pipfehler
 echo.
 echo   Die benoetigten Pakete liessen sich nicht installieren.
-echo   Meist fehlt dafuer der Internetzugang. Bitte Niklas Bescheid geben.
+echo   Weder die mitgelieferten Pakete (Ordner "wheels" neben dieser Datei)
+echo   noch das Internet haben gereicht. Bitte Niklas Bescheid geben.
 echo.
 if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1
 pause

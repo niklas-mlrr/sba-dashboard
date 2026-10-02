@@ -74,9 +74,9 @@ def test_start_installiert_nur_bei_geaenderten_anforderungen():
     assert 'set "INSTALLSTAND=%VENV%\\requirements.installed.txt"' in inhalt
     assert 'fc /b "%ANFORDERUNGEN%" "%INSTALLSTAND%" >nul 2>&1' in inhalt
     assert "if not errorlevel 1 goto :pakete_fertig" in inhalt
-    assert 'pip install -r "%ANFORDERUNGEN%" --quiet' in inhalt
+    assert 'call :pip_install -r "%ANFORDERUNGEN%"' in inhalt
     assert 'copy /y "%ANFORDERUNGEN%" "%INSTALLSTAND%" >nul' in inhalt
-    assert inhalt.index('pip install -r "%ANFORDERUNGEN%" --quiet') < inhalt.index(
+    assert inhalt.index('call :pip_install -r "%ANFORDERUNGEN%"') < inhalt.index(
         'copy /y "%ANFORDERUNGEN%" "%INSTALLSTAND%" >nul'
     )
 
@@ -162,7 +162,8 @@ def test_start_installiert_die_geschwister_ins_venv_statt_pythonpath():
         z for z in inhalt.splitlines() if "pip install --no-build-isolation" in z
     )
     # setuptools muss im venv liegen, sonst hat --no-build-isolation kein Backend.
-    assert "pip install --upgrade pip setuptools wheel --quiet" in inhalt
+    # wheel nicht mehr: setuptools baut seit 70.1 selbst Raeder.
+    assert "call :pip_install --upgrade pip setuptools\n" in inhalt
 
 
 def test_start_installiert_die_geschwister_nur_bei_geaenderten_quellen():
@@ -234,6 +235,34 @@ def test_start_sucht_python_3_auch_hinter_einem_python_2():
     assert inhalt.index("goto :python_unvollstaendig") < inhalt.index(
         '%PYEXE% -m venv "%VENV%"'
     )
+
+
+def test_start_installiert_zuerst_ohne_internet():
+    """Die Schulrechner erreichen PyPI nicht direkt (WinError 10061).
+
+    Jeder pip-Install geht deshalb zuerst gegen ``wheels/`` neben START.bat,
+    ohne Index. Erst wenn das scheitert, geht es ins Netz, mit dem Proxy, den
+    Windows fuer pypi.org nennt. ``wheels/`` liegt auf dem Netzlaufwerk und
+    wird nicht nach %LOCALAPPDATA% gespiegelt.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert 'set "WHEELS=%CD%\\wheels"' in inhalt
+    offline = (
+        '"%VENV%\\Scripts\\python.exe" -m pip install --no-index '
+        '--find-links "%WHEELS%" --quiet %*'
+    )
+    online = '"%VENV%\\Scripts\\python.exe" -m pip install --quiet %*'
+    assert offline in inhalt and online in inhalt
+    assert inhalt.index(offline) < inhalt.index(online)
+    assert "if not defined PROXY_GEPRUEFT call :proxy_ermitteln" in inhalt
+    assert "GetSystemWebProxy().GetProxy($u)" in inhalt
+    assert 'do set "PIP_PROXY=%%X"' in inhalt
+    # Ausser dem Unterprogramm und dem Geschwister-Install ruft niemand pip direkt.
+    direkt = [z for z in inhalt.splitlines() if "-m pip install" in z]
+    assert len(direkt) == 3, direkt
+    zeile = next(z for z in inhalt.splitlines() if z.startswith('set "AUSSCHLUSS='))
+    assert " wheels " in zeile.split("/XF")[0]
 
 
 def test_requirements_entsprechen_dem_uv_export():

@@ -254,6 +254,26 @@ uv export --no-dev --no-hashes --no-emit-project \
     --format requirements-txt -o requirements.txt
 ```
 
+**Danach immer auch `wheels/` neu bauen:**
+
+```bash
+uv run python tools/wheelhouse.py
+```
+
+Die Schulrechner erreichen PyPI nicht direkt (pip endet mit `WinError 10061`).
+`wheels/` enthält deshalb jedes Paket aus `requirements.txt` plus `pip` und
+`setuptools` als fertiges Rad für 64-Bit-Windows und Python 3.10 bis 3.14,
+zusammen rund 60 MB, und liegt bewusst im Repo. `START.bat` installiert zuerst
+ohne Internet aus diesem Ordner (er bleibt auf dem Netzlaufwerk und wird nicht
+gespiegelt). Nur wenn das scheitert, geht es übers Netz, mit dem Proxy, den
+Windows per PAC/WPAD für pypi.org nennt. `tests/test_wheelhouse.py` schlägt fehl,
+sobald `wheels/` nicht mehr zu `requirements.txt` passt.
+
+Python sucht `START.bat` nicht nur als erstes `python` im PATH: auf den
+Schulrechnern ist das ein Python 2.7, das Python 3 liegt ohne py-Launcher
+daneben. Durchsucht werden jeder PATH-Treffer, die Registry (PEP 514) und die
+üblichen Installationsordner; genommen wird das erste Python ab 3.10 mit `venv`.
+
 `ausleihe-api` steht bewusst nicht darin: als Pfad-Abhängigkeit hätte es in einer
 Datei, die auf einem fremden Rechner mit `pip install -r` verarbeitet wird, keine
 gültige Adresse. `START.bat` installiert es stattdessen aus dem gespiegelten
