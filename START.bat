@@ -188,6 +188,13 @@ if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"
 "%VENV%\Scripts\python.exe" -c "import ausleihe" >nul 2>&1 || set "GESCHWISTER_NEU=1"
 if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig
 echo   Bibliothek wird eingerichtet...
+rem --no-build-isolation braucht setuptools im venv. Es kommt sonst nur beim
+rem Anlegen hinein, und seit Python 3.12 bringt ein venv es nicht mehr selbst
+rem mit: ein venv aus einem abgebrochenen Start endete hier mit "Cannot import
+rem 'setuptools.build_meta'". Deshalb nachsehen und notfalls nachinstallieren.
+"%VENV%\Scripts\python.exe" -c "import setuptools" >nul 2>&1
+if errorlevel 1 call :pip_install setuptools
+if errorlevel 1 goto :pipfehler
 "%VENV%\Scripts\python.exe" -m pip install --no-build-isolation --no-deps --quiet "%CODE%\ausleihe-api"
 if errorlevel 1 goto :geschwisterfehler
 :geschwister_fertig

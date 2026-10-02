@@ -161,6 +161,18 @@ def test_start_installiert_die_geschwister_ins_venv_statt_pythonpath():
     assert "sba-bestand" not in next(
         z for z in inhalt.splitlines() if "pip install --no-build-isolation" in z
     )
+    # Auch in einem venv aus einem abgebrochenen Start, das ohne setuptools
+    # liegen blieb ("Cannot import 'setuptools.build_meta'").
+    nachsehen = (
+        '"%VENV%\\Scripts\\python.exe" -c "import setuptools" >nul 2>&1\n'
+        "if errorlevel 1 call :pip_install setuptools\n"
+        "if errorlevel 1 goto :pipfehler\n"
+    )
+    assert nachsehen in inhalt
+    assert inhalt.index(nachsehen) < inhalt.index("pip install --no-build-isolation")
+    assert inhalt.index('if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig') < (
+        inhalt.index(nachsehen)
+    )
     # setuptools muss im venv liegen, sonst hat --no-build-isolation kein Backend.
     # wheel nicht mehr: setuptools baut seit 70.1 selbst Raeder.
     assert "call :pip_install --upgrade pip setuptools\n" in inhalt
