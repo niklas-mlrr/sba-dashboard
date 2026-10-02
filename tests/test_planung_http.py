@@ -1352,8 +1352,6 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     assert text.count('class="kasten einfuehrung"') == 1
     assert text.count('class="kasten ausmusterung"') == 3
     assert text.count('<template id="antrag-') == 4
-    # Jedes Fach (Chemie, Deutsch, Erdkunde, Politik) hat eigene Spaltenköpfe.
-    assert text.count('class="aenderungen-fach"') == text.count('<tr class="fachkopf">') == 4
     assert "ab 2027/28" in text and "bis 2025/26" in text
     assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text
     # Deutsch 7 kommt ohne Vorgänger, Chemie heute geht ersatzlos.

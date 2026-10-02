@@ -1168,25 +1168,11 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
    dunkler die Gruppen, eine gestrichelte Linie die Teile einer Gruppe. */
 .aenderungen-tabelle > tbody.aenderungen-fach > tr > td {
   padding-top: 14px;
-  padding-bottom: 4px;
   border-top: 2px solid #bbb;
   font-size: 15px;
   font-weight: 700;
 }
 .aenderungen-tabelle > tbody.aenderungen-fach a { color: inherit; }
-/* Unter dem Fachnamen die Köpfe der Seiten, kleiner als der Tabellenkopf,
-   in den Farben der Seiten; ihr Strich trennt sie von der ersten Gruppe. */
-.aenderungen-tabelle > tbody.aenderungen-fach > tr.fachkopf > th {
-  padding: 2px 8px 3px;
-  border-bottom: 2px solid #ddd;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  white-space: nowrap;
-}
-.aenderungen-tabelle > tbody.aenderungen-fach > tr.fachkopf > th.kopf-aus { color: var(--ausmusterung); border-bottom-color: var(--ausmusterung-strich); }
-.aenderungen-tabelle > tbody.aenderungen-fach > tr.fachkopf > th.kopf-ein { color: var(--einfuehrung); border-bottom-color: var(--einfuehrung-strich); text-align: right; }
 .aenderungen-tabelle > tbody.aenderungen-gruppe > tr > td { padding: 0; height: 1px; border-top: 0; vertical-align: middle; }
 .aenderungen-tabelle > tbody.aenderungen-gruppe > tr > td.anfang { border-top: 2px solid var(--grund); }
 .aenderungen-tabelle > tbody.aenderungen-gruppe > tr:first-child > td { border-top: 1px solid #999; }
