@@ -143,8 +143,7 @@ class Anmeldung:
         laufenden Abruf nötig ist.
         """
         with self._lock:
-            self._benutze()
-            return self._client
+            return self._benutze()
 
     def benutzer(self) -> str:
         """Wer angemeldet ist - das Kürzel, mit dem ein Antrag entschieden wird.
@@ -158,9 +157,10 @@ class Anmeldung:
             assert self._benutzer is not None
             return self._benutzer
 
-    def _benutze(self) -> None:
+    def _benutze(self) -> AusleiheProtokoll:
         """Prüft die Anmeldung und setzt das Zeitschloss zurück. Nur unter Lock."""
-        if self._client is None:
+        client = self._client
+        if client is None:
             raise NichtAngemeldet(
                 "Nicht bei IServ angemeldet. Bitte im Programmfenster anmelden."
             )
@@ -172,6 +172,7 @@ class Anmeldung:
                 "abgelaufen. Bitte im Programmfenster erneut anmelden."
             )
         self._zuletzt = self._zeit()
+        return client
 
     def status(self) -> dict[str, Any]:
         """Was das Fenster anzeigt. Enthält den Benutzernamen, nie das Passwort.
