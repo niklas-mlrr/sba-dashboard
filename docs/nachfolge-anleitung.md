@@ -287,25 +287,32 @@ einträgt, gleicht die Angabe an IServ an. Ein geleerter Preis bleibt leer.
 
 Hier stehen alle Bücher, die ab diesem Schuljahr oder später **eingeführt**
 werden, und alle, die nach dem letzten Schuljahr oder später **ausgemustert**
-werden. Links steht, was geht, rechts, was kommt: Wird in einem Fach und
-Jahrgang ein Buch nach einem Schuljahr ausgemustert und ein anderes ab dem
-nächsten eingeführt, ersetzt das neue das alte und beide stehen in einer
-Zeile. Gehen oder kommen mehrere Bücher, stehen sie untereinander, Leihbücher
-zuerst; der Kasten der anderen Seite reicht dann über alle. Eine leere Seite
-heißt „kein Vorgänger“ oder „kein Nachfolger“.
+werden. Links steht, was geht, rechts, was kommt. Auf gleicher Höhe steht,
+was im selben Fach und Jahrgang zusammen wechselt: eine Ausmusterung „bis
+2026/27“ neben einer Einführung „ab 2027/28“. Eine leere Seite heißt „kein
+Vorgänger“ oder „kein Nachfolger“.
 
-Sortiert ist nach Fach, darin nach Jahrgang. Ein Buch für mehrere Jahrgänge
-steht mit allen seinen Jahrgängen zusammen: in Jg. 5 erst die Bücher nur für
-Jg. 5, dann die für Jg. 5 bis 6, dann 5 bis 7 und so weiter. Ein Klick auf
-die Spaltenköpfe „Einführung“ (so ist es eingestellt) oder „Ausmusterung“
-bestimmt, ob die neuen oder die alten Bücher so zusammengefasst werden.
-Gehört ein Buch zu zwei Fächern, steht es unter beiden.
+Jede **Jahrgangszeile** ist ein Antrag. Ein Buch für mehrere Jahrgänge hat
+seinen Titel nur an der obersten Stelle; darunter stehen nur noch seine
+Jahrgangszeilen. Stehen sie direkt untereinander, hängt der farbige Kasten
+zusammen. Steht dazwischen ein anderes Buch, ist der Kasten in dieser Spalte
+eingerückt, damit man das Buch wiederfindet; die Maus darauf hebt es an allen
+Stellen gelb hervor.
+
+**Sortierung:** nach Fach, dann nach Jahrgang und dem Jahr des Wechsels. In
+der Mitte zwischen den Spalten steht fett, wonach zuerst sortiert wird, und
+grau das andere. Ein Klick auf „Jg.“ oder „Jahr“ im Kopf stellt das um; ein
+zweiter Klick dreht die Richtung. Innerhalb eines Jahrgangs kommen zuerst
+Bücher, die aus dem Jahrgang darüber weiterlaufen, dann Bücher nur für diesen
+Jahrgang, dann Bücher, die im nächsten Jahrgang weiterlaufen; danach
+Leihbücher vor Kaufbüchern und nach Titel. Gehört ein Buch zu zwei Fächern,
+steht es unter beiden.
 
 1. Tragen Sie oben Ihr **Kürzel** ein. Das Datum steht schon auf heute. Das
    Kürzel merkt sich der Browser für das nächste Mal.
-2. Klicken Sie auf ein **Buch**. Es öffnet sich ein Menü mit Verlag, ISBN,
-   Schuljahr, Neupreis und Begründung.
-3. Klicken Sie dort auf **„Genehmigen"** oder **„Ablehnen"**. Jedes Buch
+2. Klicken Sie auf eine **Jahrgangszeile**. Es öffnet sich ein Menü mit
+   Verlag, ISBN, Schuljahr, Neupreis und Begründung.
+3. Klicken Sie dort auf **„Genehmigen"** oder **„Ablehnen"**. Jeder Antrag
    wird für sich entschieden; die Entscheidung steht danach mit Kürzel und
    Datum im Menü und als Etikett in der Tabelle. **„Zurücksetzen"** macht sie
    wieder offen. Unter „Ersetzt durch“ bzw. „Ersetzt“ kommen Sie mit einem

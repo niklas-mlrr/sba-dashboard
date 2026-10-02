@@ -38,18 +38,24 @@ from buecherlisten.planung import (
     FACH_BESTAETIGT,
     NUR_ISERV,
     OHNE_VERLAG,
+    RANG_JAHRGANG,
+    RANG_WECHSEL,
     Aenderung,
     Buchplanung,
+    aenderungsliste,
     endet_mit_vorjahr,
-    ersetzungen_im_schuljahr,
     fach_bestaetigung,
     fach_status,
+    lies_rang,
+    naechster_rang,
     planungs_status,
     planungs_zusatz,
+    rang_text,
     zum_schuljahr_ausgemustert,
 )
 
 from .. import buchplanung as planungsdomaene
+from ..aenderungsliste import baue_tabelle
 from ..buecherlisten import (
     Buch,
     Buecherlisten,
@@ -324,18 +330,19 @@ def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
 
 
 @router.get("/buecherliste/aenderungen")
-def aenderungen(request: Request, sortierung: str = ART_EINFUEHRUNG) -> Response:
+def aenderungen(request: Request, sortierung: str = "") -> Response:
     """Die Änderungsliste: jede Einführung und Ausmusterung dieses Schuljahrs, zum Entscheiden.
 
     Steht vor ``/buecherliste/{ansicht}``, sonst hielte die „aenderungen“ für
     eine Ansicht. Gelesen wird nur die Datei; IServ liefert allein, welches
     Schuljahr das laufende ist - eine Anfrage statt aller Bücherlisten.
 
-    ``sortierung`` sagt, welche Seite einer Ersetzung die Gruppen bildet
-    (:func:`ersetzungen_im_schuljahr`): die Einführung, sonst die Ausmusterung.
+    ``sortierung`` ist die Rangfolge aus Jahrgang und Wechseljahr
+    (:func:`lies_rang`, z. B. ``wechsel-ab,jg``); die Köpfe der Tabelle
+    verlinken auf die Rangfolge nach ihrem Klick (:func:`naechster_rang`).
+    Das Raster baut :func:`app.aenderungsliste.baue_tabelle`.
     """
-    if sortierung != ART_AUSMUSTERUNG:
-        sortierung = ART_EINFUEHRUNG
+    rang = lies_rang(sortierung)
     try:
         client = request.app.state.anmeldung.client()
     except (NichtAngemeldet, Abgelaufen) as exc:
@@ -351,12 +358,11 @@ def aenderungen(request: Request, sortierung: str = ART_EINFUEHRUNG) -> Response
                         f"Das laufende Schuljahr konnte nicht geladen werden: {exc}", 502)
     kennung = str(aktuell["id"])
     planung, stand = _planungskontext(request, kennung)
-    abschnitte = ersetzungen_im_schuljahr(stand, nach=sortierung) if stand else ()
+    abschnitte = aenderungsliste(stand, rang) if stand else ()
 
-    # Jeder Antrag bekommt eine Nummer: sie verbindet seine Zelle mit seinem
-    # Menü (<template id="antrag-N">) und das Menü mit denen seiner Partner.
-    # Steht ein Antrag in zwei Abschnitten (die andere Seite einer Ersetzung,
-    # deren Bücher nicht untereinander stehen), hat er trotzdem ein Menü.
+    # Jeder Antrag bekommt eine Nummer: sie verbindet seine Jahrgangszeile mit
+    # seinem Menü (<template id="antrag-N">) und das Menü mit denen seiner
+    # Partner - der anderen Seite desselben Abschnitts.
     eintraege: list[dict[str, Any]] = []
     nummer: dict[int, dict[str, Any]] = {}
 
@@ -376,42 +382,22 @@ def aenderungen(request: Request, sortierung: str = ART_EINFUEHRUNG) -> Response
             eintraege.append(nummer[id(a)])
         return nummer[id(a)]
 
-    # Je Abschnitt n Zeilen, n = die längere Seite. Die letzte Zelle der
-    # kürzeren Seite reicht bis unten, damit beide Seiten bündig enden; eine
-    # leere Seite ist eine Zelle über alle n Zeilen.
-    faecher: list[dict[str, Any]] = []
     for abschnitt in abschnitte:
-        ersetzung = abschnitt.ersetzung
-        for eigene, andere in ((ersetzung.ausmusterungen, ersetzung.einfuehrungen),
-                               (ersetzung.einfuehrungen, ersetzung.ausmusterungen)):
+        for eigene, andere in ((abschnitt.ausmusterungen, abschnitt.einfuehrungen),
+                               (abschnitt.einfuehrungen, abschnitt.ausmusterungen)):
             for a in eigene:
                 eintrag(a)["partner"] = [eintrag(p) for p in andere]
-        seiten = [[eintrag(a) for a in antraege]
-                  for antraege in (abschnitt.ausmusterungen, abschnitt.einfuehrungen)]
-        hoehe = max(1, *(len(seite) for seite in seiten))
-        zeilen: list[dict[str, Any]] = [{"aus": None, "ein": None} for _ in range(hoehe)]
-        for schluessel, seite in zip(("aus", "ein"), seiten):
-            if not seite:
-                zeilen[0][schluessel] = {"leer": True, "rowspan": hoehe}
-            for i, buch in enumerate(seite):
-                rowspan = hoehe - i if i == len(seite) - 1 else 1
-                zeilen[i][schluessel] = {"eintrag": buch, "rowspan": rowspan}
-        neues_fach = not faecher or faecher[-1]["fach"] != abschnitt.fach
-        if neues_fach:
-            faecher.append({"fach": abschnitt.fach, "ersetzungen": []})
-        vorige = faecher[-1]["ersetzungen"][-1] if not neues_fach else None
-        # Ein Strich trennt die Bücher, nicht aber die Jahrgänge eines Buchs
-        # und nicht den ersten Abschnitt vom Fachnamen.
-        faecher[-1]["ersetzungen"].append({
-            "jahrgang": abschnitt.jahrgang, "wechsel": abschnitt.wechsel,
-            "mit_partner": ersetzung.mit_partner,
-            "gruppe_anfang": abschnitt.gruppe_anfang, "gruppe_ende": abschnitt.gruppe_ende,
-            "strich": vorige is not None and vorige["gruppe_ende"] != abschnitt.gruppe_anfang,
-            "hoehe": hoehe, "zeilen": zeilen,
-        })
-    # Gezählt werden Ersetzungen, nicht Abschnitte: eine Ersetzung kann in
-    # zweien stehen.
-    ersetzungen = list({id(a.ersetzung): a.ersetzung for a in abschnitte}.values())
+    tabelle = baue_tabelle(abschnitte, rang, eintrag)
+
+    # Die Köpfe „Jg.“ und „Jahr“: wohin ihr Klick führt, in welche Richtung
+    # sie gerade sortieren und welcher vorn steht.
+    koepfe = {
+        kriterium: {
+            "href": "?sortierung=" + rang_text(naechster_rang(rang, kriterium)),
+            "absteigend": dict(rang)[kriterium], "vorn": rang[0][0] == kriterium,
+        }
+        for kriterium in (RANG_JAHRGANG, RANG_WECHSEL)
+    }
     zaehler = {
         status: sum(1 for e in eintraege if e["status"] == status)
         for status in (ANTRAG_OFFEN, ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT)
@@ -420,12 +406,12 @@ def aenderungen(request: Request, sortierung: str = ART_EINFUEHRUNG) -> Response
         art: sum(1 for e in eintraege if e["art"] == art)
         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
     })
-    zaehler["mit_partner"] = sum(1 for e in ersetzungen if e.mit_partner)
-    zaehler["ohne_partner"] = len(ersetzungen) - zaehler["mit_partner"]
+    zaehler["mit_partner"] = sum(1 for a in abschnitte if a.mit_partner)
+    zaehler["ohne_partner"] = len(abschnitte) - zaehler["mit_partner"]
     return _seite(request, "buecherliste_aenderungen.html", {
         "planung": planung, "schuljahr": aktuell.get("name") or kennung,
-        "eintraege": eintraege, "faecher": faecher, "zaehler": zaehler,
-        "sortierung": sortierung, "heute": date.today(),
+        "eintraege": eintraege, "tabelle": tabelle, "koepfe": koepfe, "zaehler": zaehler,
+        "heute": date.today(),
     })
 
 

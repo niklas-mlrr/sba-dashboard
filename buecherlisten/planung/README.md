@@ -212,19 +212,28 @@ Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) ergibt zwei Anträge.
 Gerechnet wird das in `aenderungen_im_schuljahr` (`modelle.py`), entschieden
 in `entscheide_antrag` (`abgleich.py`).
 
-Seit 2026-10-01 zeigt die Seite die Anträge als **Ersetzungen**
-(`ersetzungen_im_schuljahr`): je Fach, Jahrgang und Wechsel links, was nach
-dem Schuljahr davor geht, rechts, was ab dem Wechsel kommt. Mehrere Bücher
-einer Seite stehen untereinander, leihbare zuerst; die kürzere Seite reicht
-per `rowspan` bis unten. Sortiert wird nach Fach, dann nach den Büchern der
-Sortierseite (Standard: Einführung, `?sortierung=ausmusterung` die andere):
-ein Buch steht mit allen seinen Jahrgängen zusammen, die Bücher nach ihrem
-ersten und letzten Jahrgang (erst nur Jg. 5, dann 5 bis 6, dann 5 bis 7;
-Lücken zählen nicht), dann leihbar zuerst und nach Titel. Stehen zwei
-Bücher derselben Ersetzung direkt untereinander, teilen sie sich einen
-**Abschnitt** und damit den Kasten der anderen Seite; sonst steht die andere
-Seite in beiden. Entschieden wird jeder Antrag für sich, im Buchmenü, das ein
-Klick auf das Buch öffnet.
+Seit 2026-10-02 ordnet `aenderungsliste` (bzw. die reine `ordne_aenderungen`)
+jeden Antrag für sich ein: nach **Fach**, dann nach der **Rangfolge** aus
+Jahrgang und Wechseljahr (`?sortierung=jg,wechsel`, je `-ab` für absteigend;
+die Köpfe „Jg.“ und „Jahr“ stellen sie um wie bei den Bücherlisten,
+`naechster_rang`). Das **Wechseljahr** ist bei „ab X“ das Jahr X, bei „nach Y“
+das Jahr Y+1. Was in Fach, Jahrgang und Wechseljahr gleich ist, bildet einen
+**Abschnitt** und steht auf gleicher Höhe: links die Ausmusterungen, rechts
+die Einführungen. Innerhalb einer Seite zuerst nach der **Reichweite**
+(`reichweite`): Bücher, deren nächster anderer Jahrgang darüber liegt
+(Abstand 1, 2 …), dann Bücher nur für diesen Jahrgang, dann Bücher, die nach
+unten weiterreichen (größter Abstand zuerst); reicht ein Buch in beide
+Richtungen, zählt der kleinere Abstand, bei Gleichstand der nach oben. Danach
+Leihbuch vor Kaufbuch, dann Titel.
+
+Das Raster der Seite baut `baue_tabelle` in `app/aenderungsliste.py`: Titel
+nur an der obersten Stelle eines Buchs im Fach, je Buch eine Zelle über
+seine Zeilen (die kürzere Seite gestreckt), Kästen desselben Buchs hängen
+über Abschnitte zusammen, Einrückung je Fach und Spalte nur dort, wo ein Buch
+getrennt steht, und Gruppen aus Abschnitten mit gleichem Wert im vorderen
+Kriterium (die Mitte zeigt ihn fett, das andere Kriterium grau; ausgerichtet
+von `verteile` in `app/static/mittelspalte.js`). Entschieden wird jeder
+Antrag für sich, im Buchmenü, das ein Klick auf seine Jahrgangszeile öffnet.
 
 Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
 „Ausmusterung nach Schuljahr“ je drei Spalten, dahinter eine gemeinsame:

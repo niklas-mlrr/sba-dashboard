@@ -1097,9 +1097,10 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-bemerkungszeile .planung-bemerkung-rahmen { margin-top: .2rem; }
 
 /* ── Änderungsliste ────────────────────────────────────────────
-   Jede Einführung und Ausmusterung des Schuljahrs als Antrag, je Fach und
-   Jahrgang als Ersetzung: links, was geht, rechts, was kommt. Entschieden
-   wird im Buchmenü, das ein Klick auf das Buch öffnet. */
+   Jede Einführung und Ausmusterung des Schuljahrs als Antrag, je Fach,
+   Jahrgang und Wechsel in einem Abschnitt: links, was geht, rechts, was
+   kommt. Entschieden wird im Buchmenü, das ein Klick auf die Jahrgangszeile
+   öffnet. */
 
 .aenderungen-filter {
   display: flex;
@@ -1131,19 +1132,40 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   text-overflow: ellipsis;
 }
 .planung-antrag .label { font-size: 10px; }
-/* Die Tabelle nimmt die ganze Breite; Ausmusterung und Einführung teilen
-   sich, was Jahrgang und Pfeil übrig lassen, zu gleichen Teilen. */
+/* Das Raster (app/aenderungsliste.py): je Titel und je Jahrgangszeile eine
+   Tabellenzeile, damit gleiche Jahrgänge links und rechts auf einer Höhe
+   stehen. Ein Buch ist eine Zelle über seine Zeilen; darin ein farbiger
+   Kasten mit geradem Strich vorn wie in der Fachliste (tr.zeile-*),
+   eingerückt um seine Stufe. Die Tabelle nimmt die ganze Breite, die Mitte
+   ist schmal, die beiden Seiten teilen sich den Rest. */
 .aenderungen-tabelle { table-layout: fixed; }
-.aenderungen-tabelle .spalte-jahrgang { width: 6.5rem; }
-.aenderungen-tabelle .spalte-pfeil { width: 2rem; }
-.aenderungen-tabelle > thead > tr > th { cursor: default; }
-.aenderungen-tabelle > thead > tr > th a { color: inherit; }
-.aenderungen-tabelle > thead > tr > th.aenderungen-kopf-ausmusterung { border-bottom-color: var(--ausmusterung-strich); }
-.aenderungen-tabelle > thead > tr > th.aenderungen-kopf-einfuehrung { border-bottom-color: var(--einfuehrung-strich); }
+.aenderungen-tabelle col.mitte { width: 3.4rem; }
 .aenderungen-tabelle > tbody[hidden] { display: none; }
-/* Fachname über seinen Ersetzungen; ein kräftiger Strich trennt die Fächer,
-   ein dunklerer die Gruppen darin (.strich), ein heller die Ersetzungen
-   einer Gruppe. */
+.aenderungen-tabelle > thead > tr > th { cursor: default; vertical-align: bottom; }
+.aenderungen-tabelle > thead > tr > th.kopf-aus { color: var(--ausmusterung); border-bottom-color: var(--ausmusterung-strich); }
+.aenderungen-tabelle > thead > tr > th.kopf-ein { color: var(--einfuehrung); border-bottom-color: var(--einfuehrung-strich); text-align: right; }
+/* Der Kopf der Mitte zeigt „Jg.“ und „Jahr“ und ragt dafür über die Spalte
+   hinaus; links und rechts stehen die Köpfe bündig außen, also ist Platz. */
+.aenderungen-tabelle > thead > tr > th.kopf-mitte { overflow: visible; text-align: center; padding-inline: 0; }
+.aenderungen-tabelle .doppelkopf { display: inline-flex; gap: .7rem; margin-inline: -4rem; }
+/* Wie die sortierbaren Köpfe der Bücherlisten: ein Dreieck für die Richtung
+   (oben = aufsteigend), hier an beiden Kriterien; fett ist das vordere. */
+.aenderungen-tabelle .sortknopf { color: var(--iserv-text); font-weight: 400; white-space: nowrap; cursor: pointer; }
+.aenderungen-tabelle .sortknopf.vorn { font-weight: 700; }
+.aenderungen-tabelle .sortknopf::after {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+.aenderungen-tabelle .sortknopf[data-richtung="auf"]::after { border-bottom: 4px solid; }
+.aenderungen-tabelle .sortknopf[data-richtung="ab"]::after { border-top: 4px solid; }
+/* Fachname über seinen Gruppen; ein kräftiger Strich trennt die Fächer, ein
+   dunkler die Gruppen, eine gestrichelte Linie die Teile einer Gruppe. */
 .aenderungen-tabelle > tbody.aenderungen-fach > tr > td {
   padding-top: 14px;
   border-top: 2px solid #bbb;
@@ -1151,45 +1173,79 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   font-weight: 700;
 }
 .aenderungen-tabelle > tbody.aenderungen-fach a { color: inherit; }
-.aenderungen-tabelle > tbody.aenderungen-fach + tbody > tr:first-child > td { border-top: 0; }
-.aenderungen-tabelle > tbody.strich > tr:first-child > td { border-top-color: #999; }
-/* Mehrere Bücher einer Seite: ein schmaler weißer Spalt trennt die Kästen. */
-.aenderungen-tabelle > tbody > tr + tr > td { border-top: 2px solid var(--grund); }
-.aenderungen-tabelle > tbody > tr > td.aenderung-jahrgang { color: #777; white-space: nowrap; }
-.aenderungen-tabelle > tbody > tr > td.aenderung-jahrgang b { color: var(--iserv-text); font-size: 15px; }
-.aenderungen-tabelle > tbody > tr > td.aenderung-jahrgang .klein { display: block; }
-.aenderungen-tabelle > tbody > tr > td.aenderung-pfeil { color: #aaa; text-align: center; vertical-align: middle; }
-.aenderungen-tabelle > tbody > tr > td.aenderung-seite-aus {
-  background: var(--ausmusterung-reihe);
-  box-shadow: inset 3px 0 0 var(--ausmusterung-strich);
+.aenderungen-tabelle > tbody.aenderungen-gruppe > tr > td { padding: 0; height: 1px; border-top: 0; vertical-align: middle; }
+.aenderungen-tabelle > tbody.aenderungen-gruppe > tr > td.anfang { border-top: 2px solid var(--grund); }
+.aenderungen-tabelle > tbody.aenderungen-gruppe > tr:first-child > td { border-top: 1px solid #999; }
+.aenderungen-tabelle > tbody.aenderungen-gruppe.erster > tr:first-child > td { border-top: 0; }
+.aenderungen-tabelle > tbody.aenderungen-gruppe > tr.unterabschnitt > td { border-top: 1px dashed #ccc; }
+.aenderungen-tabelle > tbody.aenderungen-gruppe > tr > td.leer { padding: 2px 8px; color: #777; font-size: 13px; font-style: italic; }
+.aenderungen-tabelle .kasten {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* was höher gezogen wird als sein Inhalt, steht mittig */
+  height: 100%;
+  margin-left: calc(var(--stufe, 0) * 1.25rem);
+  padding: 1px 8px;
 }
-.aenderungen-tabelle > tbody > tr > td.aenderung-seite-ein {
-  background: var(--einfuehrung-reihe);
-  box-shadow: inset 3px 0 0 var(--einfuehrung-strich);
-}
-.aenderungen-tabelle > tbody > tr > td.aenderung-leer { color: #777; font-style: italic; vertical-align: middle; }
-.aenderungen-tabelle > tbody > tr > td.gedimmt { opacity: .4; }
-/* Das Buch ist ein Knopf: Titel und Entscheidung oben, darunter eine Zeile
-   mit dem Wichtigsten. Bei mehreren Zeilen steht es oben im Kasten. */
-.aenderung-buch {
+.aenderungen-tabelle td.anfang .kasten { padding-top: 6px; }
+.aenderungen-tabelle td.ende .kasten { padding-bottom: 6px; }
+.aenderungen-tabelle .kasten.ausmusterung { background: var(--ausmusterung-reihe); border-left: 4px solid var(--ausmusterung-strich); }
+.aenderungen-tabelle .kasten.einfuehrung { background: var(--einfuehrung-reihe); border-left: 4px solid var(--einfuehrung-strich); }
+/* Dasselbe Buch an jeder Stelle (static/aenderungen.js). */
+.aenderungen-tabelle .kasten.verknuepft { background: #fff8c4; box-shadow: inset 0 0 0 2px #e0c65a; }
+.aenderungen-tabelle .kopfzeile { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; padding-bottom: 2px; }
+.aenderungen-tabelle .kopfzeile .titel { font-weight: 600; }
+.aenderungen-tabelle .kopfzeile .meta { color: #777; font-size: 12px; }
+/* Eine Jahrgangszeile ist ein Knopf: Jahrgang, Schuljahr, Entscheidung. */
+.aenderungen-tabelle .jgzeile {
+  box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px .8rem;
+  grid-template-columns: 3.4rem 7.2rem minmax(0, 1fr);
+  gap: .5rem;
   align-items: baseline;
   width: 100%;
-  margin: 0;
-  padding: 0 0 0 4px;
+  margin: 0 0 0 -4px;
+  padding: 2px 4px;
   font: inherit;
   color: inherit;
   text-align: left;
   background: none;
   border: 0;
+  border-radius: 0;
   cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
-.aenderung-buch:focus-visible { outline: 2px solid #66afe9; outline-offset: 2px; }
-.aenderung-titel { color: #337ab7; font-weight: 600; }
-.aenderung-buch:hover .aenderung-titel { color: #23527c; text-decoration: underline; }
-.aenderung-fakt { grid-column: 1 / -1; color: #777; font-size: 12px; }
+.aenderungen-tabelle .jgzeile:hover { background: rgb(51 122 183 / .08); }
+.aenderungen-tabelle .jgzeile:hover .jg { text-decoration: underline; }
+.aenderungen-tabelle .jgzeile:focus-visible { outline: 2px solid #66afe9; }
+.aenderungen-tabelle .jgzeile .jg { color: #337ab7; font-weight: 600; }
+.aenderungen-tabelle .jgzeile .wann { color: #555; font-size: 13px; }
+.aenderungen-tabelle .jgzeile .rechts { display: flex; gap: .4rem; align-items: baseline; }
+.aenderungen-tabelle .jgzeile.gedimmt { opacity: .4; }
+/* Die Mitte: fett der Gruppenwert, grau je Teil das andere Kriterium;
+   die Höhen setzt static/mittelspalte.js. Ein einziger Teil (.paar): beide
+   untereinander im Fluss, die Zeile wächst mit. */
+.aenderungen-tabelle > tbody.aenderungen-gruppe > tr > td.mitte-wert {
+  position: relative;
+  padding: 2px 0;
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.aenderungen-tabelle td.mitte-wert .haupt,
+.aenderungen-tabelle td.mitte-wert .neben {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  line-height: 1.2;
+  transform: translateY(-50%);
+}
+.aenderungen-tabelle td.mitte-wert .haupt { font-weight: 700; }
+.aenderungen-tabelle td.mitte-wert .neben { color: #777; font-size: 12px; }
+.aenderungen-tabelle td.mitte-wert.paar .haupt,
+.aenderungen-tabelle td.mitte-wert.paar .neben { position: static; display: block; transform: none; }
 
 /* Das Buchmenü eines Antrags. */
 .btn-success { color: #fff; background-color: #5cb85c; border-color: #4cae4c; }

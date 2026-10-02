@@ -1348,63 +1348,80 @@ def test_die_aenderungsliste_zeigt_einfuehrungen_und_ausmusterungen(
     assert 'data-schuljahr="2026/2027"' in text
     assert 'id="antrag-kuerzel"' in text
     # Deutsch 7 ab 2027/2028, und aus dem Abgleich: Chemie 9, Erdkunde 5, Politik 5
-    # nach 2025/2026 - je ein Buch in der Tabelle und ein Buchmenü.
-    assert text.count('class="aenderung-seite-ein"') == 1
-    assert text.count('class="aenderung-seite-aus"') == 3
+    # nach 2025/2026 - je eine Jahrgangszeile und ein Buchmenü.
+    assert text.count('class="kasten einfuehrung"') == 1
+    assert text.count('class="kasten ausmusterung"') == 3
     assert text.count('<template id="antrag-') == 4
-    assert "ab 2027/2028" in text and "nach 2025/2026" in text
+    assert "ab 2027/28" in text and "bis 2025/26" in text
     assert 'data-ergebnis="genehmigt"' in text and 'data-ergebnis="abgelehnt"' in text
-    # Deutsch 7 kommt ohne Vorgänger (links leer), Chemie heute geht ersatzlos.
-    assert re.search(r'class="aenderung-leer"[^>]*>kein Vorgänger</td>\s*<td class="aenderung-pfeil"', text)
-    assert re.search(r'</td>\s*<td class="aenderung-leer"[^>]*>kein Nachfolger</td>', text)
+    # Deutsch 7 kommt ohne Vorgänger, Chemie heute geht ersatzlos.
+    assert "kein Vorgänger" in text and "kein Nachfolger" in text
+    assert '<script src="/static/mittelspalte.js"></script>' in text
 
 
-class _Abschnitte(HTMLParser):
-    """Je <tbody> der Änderungsliste: Fach, Strich, Gruppen und die Zellen mit rowspan."""
+class _Raster(HTMLParser):
+    """Je Gruppe der Änderungsliste: Fach, Zeilen und ihre Zellen mit rowspan, Stufe und Titel."""
 
     def __init__(self) -> None:
         super().__init__()
         self.faecher: list[str] = []
-        self.abschnitte: list[dict] = []
+        self.gruppen: list[dict] = []
+        self._zelle: dict | None = None
+        self._in_gruppe = False
 
     def handle_starttag(self, tag, attrs):
         werte = dict(attrs)
         klasse = (werte.get("class") or "").split()
         if tag == "tbody" and "aenderungen-fach" in klasse:
             self.faecher.append(werte["data-fach"])
+        elif tag == "tbody" and "aenderungen-gruppe" in klasse:
+            self._in_gruppe = True
+            self.gruppen.append({"fach": werte["data-fach"], "partner": werte["data-partner"],
+                                 "zeilen": []})
+        elif tag == "tr" and self._in_gruppe:
+            self.gruppen[-1]["zeilen"].append([])
+        elif tag == "td" and self._in_gruppe:
+            self._zelle = {"klasse": klasse, "rowspan": int(werte.get("rowspan", 1)),
+                           "titel": False, "stufe": None}
+            self.gruppen[-1]["zeilen"][-1].append(self._zelle)
+        elif tag == "div" and self._zelle is not None and "kasten" in klasse:
+            self._zelle["stufe"] = int(werte["style"].split(":")[1])
+        elif tag == "span" and self._zelle is not None and "titel" in klasse:
+            self._zelle["titel"] = True
+
+    def handle_endtag(self, tag):
+        if tag == "td":
+            self._zelle = None
         elif tag == "tbody":
-            self.abschnitte.append({
-                "fach": werte["data-fach"], "strich": "strich" in klasse,
-                "gruppen": (werte["data-gruppe-anfang"], werte["data-gruppe-ende"]),
-                "zellen": [],
-            })
-        elif tag == "td" and self.abschnitte and klasse:
-            self.abschnitte[-1]["zellen"].append((klasse[0], int(werte.get("rowspan", 1))))
+            self._in_gruppe = False
 
 
-def test_die_aenderungsliste_stellt_ein_buch_mit_allen_jahrgaengen_zusammen(
+def test_die_aenderungsliste_stellt_jahrgaenge_eines_buchs_untereinander(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     stand = _mit_einfuehrung(seiten, abgeglichen)
     antwort = seiten.post("/api/buchplanung/planung", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 8,
-        "eingefuehrt_ab": "2028/2029", "mtime": stand["mtime"],
+        "eingefuehrt_ab": "2027/2028", "mtime": stand["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
-    sammler = _Abschnitte()
+    sammler = _Raster()
     sammler.feed(seiten.get("/buecherliste/aenderungen").text)
     # Terra 5/6 gehört zu Erdkunde und Politik und steht unter beiden.
     assert sammler.faecher == ["Chemie", "Deutsch", "Erdkunde", "Politik"]
-    deutsch = [a for a in sammler.abschnitte if a["fach"] == "Deutsch"]
-    # Jg. 7 und 8 sind dasselbe Buch: eine Gruppe, kein Strich dazwischen.
-    assert [a["strich"] for a in deutsch] == [False, False]
-    assert deutsch[0]["gruppen"][1] == deutsch[1]["gruppen"][0]
+    deutsch = [g for g in sammler.gruppen if g["fach"] == "Deutsch"]
+    # Jg. 7 und 8 je eine Gruppe; Jg. 7 hat den Titel, Jg. 8 nur die Zeile.
+    assert len(deutsch) == 2
+    rechts = [g["zeilen"][0][-1] for g in deutsch]
+    assert [z["titel"] for z in rechts] == [True, False]
+    # Jg. 8 hängt am Kasten darüber: kein Spalt, also keine Einrückung.
+    assert "anfang" not in rechts[1]["klasse"] and rechts[1]["stufe"] == 0
 
 
-def test_die_kuerzere_seite_einer_ersetzung_reicht_bis_unten(
+def test_die_kuerzere_seite_eines_abschnitts_reicht_bis_unten(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Chemie heute 9 geht, zwei Bücher kommen: der alte Kasten ist zwei Zeilen hoch."""
+    """Chemie heute 9 geht, zwei Bücher kommen: der alte Kasten ist so hoch wie beide."""
     mtime = abgeglichen["mtime"]
     for isbn, titel, leihbar in ((NEU, "Elemente Chemie", True), (KAUF, "Arbeitsheft Chemie", False)):
         antwort = seiten.post("/api/buchplanung/buch/neu", json={
@@ -1416,15 +1433,15 @@ def test_die_kuerzere_seite_einer_ersetzung_reicht_bis_unten(
         assert antwort.status_code == 200, antwort.text
         mtime = antwort.json()["mtime"]
     text = seiten.get("/buecherliste/aenderungen").text
-    sammler = _Abschnitte()
+    sammler = _Raster()
     sammler.feed(text)
-    chemie = [a for a in sammler.abschnitte if a["fach"] == "Chemie"]
-    assert len(chemie) == 1
-    assert chemie[0]["zellen"] == [
-        ("aenderung-jahrgang", 2), ("aenderung-seite-aus", 2), ("aenderung-pfeil", 2),
-        ("aenderung-seite-ein", 1), ("aenderung-seite-ein", 1),
-    ]
-    # Das Leihbuch steht vor dem Kaufbuch, und das Menü des alten Buchs nennt beide.
+    (chemie,) = [g for g in sammler.gruppen if g["fach"] == "Chemie"]
+    assert chemie["partner"] == "ja"
+    # Titelzeile und Jahrgangszeile je neues Buch: vier Zeilen, links eine
+    # gestreckte Zelle, in der Mitte der Jahrgang als Paar.
+    erste = chemie["zeilen"][0]
+    assert [(z["klasse"][0], z["rowspan"]) for z in erste] == [("r", 4), ("mitte-wert", 4), ("r", 2)]
+    assert "paar" in erste[1]["klasse"]
     tabelle = text.split('id="aenderungen"')[1].split("</table>")[0]
     assert tabelle.index("Elemente Chemie") < tabelle.index("Arbeitsheft Chemie")
     menue = next(teil for teil in text.split("<template ")[1:] if "Chemie heute 9" in
@@ -1433,18 +1450,23 @@ def test_die_kuerzere_seite_einer_ersetzung_reicht_bis_unten(
     assert "Elemente Chemie" in menue and "Arbeitsheft Chemie" in menue
 
 
-def test_die_aenderungsliste_sortiert_auf_wunsch_nach_der_ausmusterung(
+def test_die_koepfe_jahrgang_und_jahr_stellen_die_sortierung_um(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     _mit_einfuehrung(seiten, abgeglichen)
-    standard = seiten.get("/buecherliste/aenderungen").text
-    assert 'class="aenderungen-kopf-einfuehrung" data-sort aria-sort="ascending"' in standard
-    text = seiten.get("/buecherliste/aenderungen?sortierung=ausmusterung").text
-    assert 'class="aenderungen-kopf-ausmusterung" data-sort aria-sort="ascending"' in text
-    assert 'href="?sortierung=einfuehrung"' in text
-    # Was die Seite nicht kennt, ist die Einführung.
-    unbekannt = seiten.get("/buecherliste/aenderungen?sortierung=quatsch").text
-    assert 'class="aenderungen-kopf-einfuehrung" data-sort aria-sort="ascending"' in unbekannt
+
+    def koepfe(text: str) -> dict[str, tuple[bool, str, str]]:
+        return {m[1]: (bool(m[0]), m[2], m[3]) for m in re.findall(
+            r'class="sortknopf( vorn)?" href="\?sortierung=([^"]*)" data-sorte="(\w+)"\s+'
+            r'data-richtung="(\w+)"', text) for m in [(m[0], m[2], m[1], m[3])]}
+
+    standard = koepfe(seiten.get("/buecherliste/aenderungen").text)
+    # Jahrgang vorn und aufsteigend; ein Klick darauf dreht ihn, einer auf Jahr stellt Jahr vor.
+    assert standard == {"jg": (True, "jg-ab,wechsel", "auf"), "wechsel": (False, "wechsel,jg", "auf")}
+    nach_jahr = koepfe(seiten.get("/buecherliste/aenderungen?sortierung=wechsel-ab").text)
+    assert nach_jahr["wechsel"] == (True, "wechsel,jg", "ab") and not nach_jahr["jg"][0]
+    # Was die Seite nicht kennt, ist die Standardreihenfolge.
+    assert koepfe(seiten.get("/buecherliste/aenderungen?sortierung=quatsch").text) == standard
 
 
 def test_die_aenderungsliste_ohne_anmeldung_zeigt_einen_hinweis(seiten: TestClient) -> None:

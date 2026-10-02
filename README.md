@@ -29,9 +29,10 @@ Bücherlisten und PDFs. IServ selbst bleibt unverändert.
 Bestätigt wird weiterhin die Liste als Ganzes, über „Liste bestätigen“ oben auf
 der Seite. Seit 2026-09-30 steht im Menü „Bücherlisten“ die **Änderungsliste**:
 jede Einführung ab diesem Schuljahr und jede Ausmusterung nach dem Vorjahr
-oder später, je Fach und Jahrgang als Ersetzung (links, was geht, rechts, was
-kommt). Ein Klick auf ein Buch öffnet sein Menü zum Genehmigen oder Ablehnen
-mit Kürzel, Datum und Begründung (Spalten „Antrag …“ und „Begründung“ auf
+oder später, je Fach, Jahrgang und Wechsel auf gleicher Höhe (links, was
+geht, rechts, was kommt), sortierbar nach Jahrgang und Jahr. Ein Klick auf
+eine Jahrgangszeile öffnet ihr Menü zum Genehmigen oder Ablehnen mit Kürzel,
+Datum und Begründung (Spalten „Antrag …“ und „Begründung“ auf
 „Fächer & Jahrgang“). Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
 die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
 welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher

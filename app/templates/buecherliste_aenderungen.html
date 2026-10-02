@@ -5,11 +5,11 @@
 {% block ueberschrift %}Änderungen<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
 {#
   Die Änderungsliste: jede Einführung ab diesem Schuljahr und jede
-  Ausmusterung nach dem Vorjahr oder später, als **Ersetzungen**
-  (``ersetzungen_im_schuljahr`` in buecherlisten/planung/modelle.py): je Fach,
-  Jahrgang und Wechsel links, was geht, rechts, was kommt. Jedes Buch ist ein
-  Antrag, der für sich genehmigt oder abgelehnt wird - im Buchmenü, das ein
-  Klick auf das Buch öffnet.
+  Ausmusterung nach dem Vorjahr oder später. Die Reihenfolge rechnet
+  ``aenderungsliste`` (buecherlisten/planung/modelle.py), das Raster
+  ``baue_tabelle`` (app/aenderungsliste.py) - hier wird es nur ausgegeben.
+  Jede Jahrgangszeile ist ein Antrag, der für sich genehmigt oder abgelehnt
+  wird, im Buchmenü, das ein Klick auf die Zeile öffnet.
 
   Kürzel und Datum stehen **einmal** oben und gelten für jeden Klick - wer die
   Liste durchgeht, entscheidet mit demselben Kürzel. Die Begründung gilt für
@@ -41,30 +41,34 @@
 {%- endmacro %}
 
 {#
-  Ein Buch in der Tabelle: Titel, Entscheidung und eine Zeile mit dem
-  Wichtigsten. Alles Weitere steht im Buchmenü (Vorlage ``antrag-N``).
+  Ein Buch auf einer Seite eines Abschnitts (``Zelle`` aus
+  app/aenderungsliste.py): ein farbiger Kasten, eingerückt um seine Stufe,
+  oben der Titel, wenn das Buch hier zum ersten Mal im Fach steht, darunter
+  die Jahrgangszeile - ein Knopf, der das Buchmenü des Antrags öffnet.
+  ``anfang``/``ende`` falsch: der Kasten hängt am Kasten darüber/darunter.
 #}
-{% macro buchzelle(zelle, seite) %}
-{% if zelle.leer %}
-{# Links leer: das neue Buch ersetzt nichts. Rechts leer: das alte geht ersatzlos. #}
-<td class="aenderung-leer" rowspan="{{ zelle.rowspan }}">{{ "kein Vorgänger" if seite == "aus" else "kein Nachfolger" }}</td>
-{% else %}{% set e = zelle.eintrag %}
-<td class="aenderung-seite-{{ seite }}" rowspan="{{ zelle.rowspan }}" data-antrag="{{ e.art }}"
-  data-status="{{ e.status }}">
-  <button type="button" class="aenderung-buch" data-planung="antrag-menue" data-vorlage="antrag-{{ e.nummer }}">
-    <span class="aenderung-titel">{{ e.titel }}</span>{{ bp.statuslabel(e.status) }}
-    <span class="aenderung-fakt">
-      {%- set fakten = [] -%}
-      {%- if e.verlag %}{% set _ = fakten.append(e.verlag) %}{% endif -%}
-      {%- if e.einfuehrung and e.neupreis %}{% set _ = fakten.append(e.neupreis) %}{% endif -%}
-      {%- if not e.einfuehrung and e.eingefuehrt_ab %}{% set _ = fakten.append("seit " ~ schuljahr_kurz(e.eingefuehrt_ab)) %}{% endif -%}
-      {%- if not e.leihbar %}{% set _ = fakten.append("nicht leihbar") %}{% endif -%}
-      {{ fakten | join(" · ") }}
-      {%- if e.begruendung %} · <span title="{{ e.begruendung }}" aria-label="mit Begründung">¶</span>{% endif -%}
-    </span>
-  </button>
+{% macro kastenzelle(z) %}
+{%- if z is none %}
+{%- elif z.leer %}
+<td class="r leer anfang" rowspan="{{ z.rowspan }}">{{ "kein Vorgänger" if z.art == "ausmusterung" else "kein Nachfolger" }}</td>
+{%- else %}{% set e = z.eintrag %}
+<td class="r{% if z.anfang %} anfang{% endif %}{% if z.ende %} ende{% endif %}" rowspan="{{ z.rowspan }}">
+  <div class="kasten {{ z.art }}" style="--stufe:{{ z.stufe }}" data-buch="{{ e.fach }}|{{ e.isbn }}" title="{{ e.titel }}">
+    {%- if z.titel %}
+    <div class="kopfzeile"><span class="titel">{{ e.titel }}</span>
+      <span class="meta">{{ [e.verlag, e.neupreis] | select | join(" · ") }}</span>
+      {%- if not e.leihbar %} <span class="label label-default">Kaufbuch</span>{% endif %}</div>
+    {%- endif %}
+    <button type="button" class="jgzeile" data-planung="antrag-menue" data-vorlage="antrag-{{ e.nummer }}"
+      data-antrag="{{ e.art }}" data-status="{{ e.status }}">
+      <span class="jg">Jg. {{ e.jahrgang }}</span>
+      <span class="wann">{{ "ab" if e.einfuehrung else "bis" }} {{ schuljahr_kurz(e.schuljahr) }}</span>
+      <span class="rechts">{{ bp.statuslabel(e.status) }}
+        {%- if e.begruendung %} <span title="{{ e.begruendung }}" aria-label="mit Begründung">¶</span>{% endif %}</span>
+    </button>
+  </div>
 </td>
-{% endif %}
+{%- endif %}
 {% endmacro %}
 
 {#
@@ -151,48 +155,50 @@
   </span>
 </div>
 {#
-  Je Fach ein <tbody class="aenderungen-fach"> mit dem Fachnamen, je
-  Ersetzung ein <tbody> mit so vielen Zeilen, wie die längere Seite Bücher
-  hat; die kürzere Seite reicht mit rowspan bis unten. ``strich`` trennt
-  die Bücher (``data-gruppe-anfang``/``-ende``: welche Buchgruppe oben und
-  unten im Abschnitt steht) - die Jahrgänge eines Buchs stehen ohne Strich
-  untereinander.
+  Je Fach ein <tbody class="aenderungen-fach"> mit dem Fachnamen, je Gruppe
+  ein <tbody class="aenderungen-gruppe">: Abschnitte mit gleichem Wert im
+  vorderen Kriterium (Jahrgang oder Jahr), innen durch eine gestrichelte
+  Linie getrennt (``unterabschnitt``). Die Mitte trägt den Wert fett und je
+  Teil das andere Kriterium grau; ihre Höhe richtet static/mittelspalte.js
+  aus, bei nur einem Teil (``paar``) stehen beide im Fluss.
 
-  Die Köpfe „Ausmusterung“ und „Einführung“ wählen, welche Seite die Gruppen
-  bildet (``?sortierung=``). Sortiert wird auf dem Server, nicht per
-  static/sortieren.js: die verbundenen Zellen vertragen kein Umstellen.
+  Die Köpfe „Jg.“ und „Jahr“ verlinken auf die Rangfolge nach ihrem Klick
+  (``?sortierung=``); sortiert wird auf dem Server, die verbundenen Zellen
+  vertragen kein Umstellen im Browser.
 #}
 <div class="tabellenrahmen">
-<table class="iserv-tabelle aenderungen-tabelle" id="aenderungen">
-  <colgroup><col class="spalte-jahrgang"><col><col class="spalte-pfeil"><col></colgroup>
+<table class="iserv-tabelle aenderungen-tabelle raster" id="aenderungen">
+  <colgroup><col><col class="mitte"><col></colgroup>
   <thead>
     <tr>
-      <th>Jg.</th>
-      {% for art, name in (("ausmusterung", "Ausmusterung"), ("einfuehrung", "Einführung")) %}
-      {% if not loop.first %}<th aria-hidden="true"></th>{% endif %}
-      <th class="aenderungen-kopf-{{ art }}" data-sort{% if sortierung == art %} aria-sort="ascending"{% endif %}>
-        <a href="?sortierung={{ art }}" title="Bücher mit mehreren Jahrgängen nach der {{ name }} zusammenfassen">{{ name }}</a></th>
-      {% endfor %}
+      <th class="kopf-aus">Ausmusterung</th>
+      <th class="kopf-mitte"><span class="doppelkopf">
+        {%- for kriterium, name, hinweis in (("jg", "Jg.", "Nach Jahrgang sortieren"),
+              ("wechsel", "Jahr", "Nach dem Jahr des Wechsels sortieren (bis 2026/27 bzw. ab 2027/28 = 2027)")) %}
+        {%- set k = koepfe[kriterium] %}
+        <a class="sortknopf{% if k.vorn %} vorn{% endif %}" href="{{ k.href }}" data-sorte="{{ kriterium }}"
+          data-richtung="{{ 'ab' if k.absteigend else 'auf' }}"
+          title="{{ hinweis }}; erneut klicken dreht die Richtung um">{{ name }}</a>
+        {%- endfor %}</span></th>
+      <th class="kopf-ein">Einführung</th>
     </tr>
   </thead>
-  {% for fach in faecher %}
-  <tbody class="aenderungen-fach" data-fach="{{ fach.fach }}">
-    <tr><td colspan="4"><a href="/buecherliste/fach/{{ fach.fach | urlencode }}">{{ fach.fach }}</a></td></tr>
+  {% for block in tabelle %}
+  <tbody class="aenderungen-fach" data-fach="{{ block.fach }}">
+    <tr><td colspan="3"><a href="/buecherliste/fach/{{ block.fach | urlencode }}">{{ block.fach }}</a></td></tr>
   </tbody>
-  {% for ersetzung in fach.ersetzungen %}
-  <tbody class="aenderungen-ersetzung{% if ersetzung.strich %} strich{% endif %}" data-gruppe-anfang="{{ ersetzung.gruppe_anfang }}" data-gruppe-ende="{{ ersetzung.gruppe_ende }}"
-    data-fach="{{ fach.fach }}" data-partner="{{ 'ja' if ersetzung.mit_partner else 'nein' }}">
-    {% for zeile in ersetzung.zeilen %}
-    <tr>
-      {% if loop.first %}
-      <td class="aenderung-jahrgang" rowspan="{{ ersetzung.hoehe }}">Jg. <b>{{ ersetzung.jahrgang }}</b>
-        <span class="klein grau">zu {{ schuljahr_kurz(ersetzung.wechsel) }}</span></td>
-      {% endif %}
-      {% if zeile.aus %}{{ buchzelle(zeile.aus, "aus") }}{% endif %}
-      {% if loop.first %}
-      <td class="aenderung-pfeil" rowspan="{{ ersetzung.hoehe }}" aria-hidden="true">{{ "→" if ersetzung.mit_partner else "" }}</td>
-      {% endif %}
-      {% if zeile.ein %}{{ buchzelle(zeile.ein, "ein") }}{% endif %}
+  {% for gruppe in block.gruppen %}
+  <tbody class="aenderungen-gruppe{% if loop.first %} erster{% endif %}" data-fach="{{ block.fach }}"
+    data-partner="{{ 'ja' if gruppe.mit_partner else 'nein' }}">
+    {% for zeile in gruppe.zeilen %}
+    <tr data-teil="{{ zeile.teil }}"{% if zeile.unterabschnitt %} class="unterabschnitt"{% endif %}>
+      {{- kastenzelle(zeile.aus) }}
+      {%- if zeile.mitte %}{% set m = zeile.mitte %}
+      <td class="mitte-wert{% if m.paar %} paar{% endif %}" rowspan="{{ m.rowspan }}">
+        <span class="haupt">{{ m.haupt }}</span>
+        {%- for wert in m.neben %}<span class="neben" data-teil="{{ loop.index0 }}">{{ wert }}</span>{% endfor %}</td>
+      {%- endif %}
+      {{- kastenzelle(zeile.ein) }}
     </tr>
     {% endfor %}
   </tbody>
@@ -206,4 +212,5 @@
 {% endblock %}
 
 {% block skripte %}<script src="/static/buchplanung.js"></script>
+<script src="/static/mittelspalte.js"></script>
 <script src="/static/aenderungen.js"></script>{% endblock %}

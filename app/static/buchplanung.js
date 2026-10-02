@@ -19,7 +19,7 @@
 //   4. „+ Buch hinzufügen“ unter der Fach-Liste: dasselbe Menü mit freier
 //      ISBN, deren Vorschläge die Bücher anderer Fächer sind
 //      (POST /api/buchplanung/buch/neu).
-//   5. Die Änderungsliste: ein Klick auf ein Buch öffnet sein Buchmenü
+//   5. Die Änderungsliste: ein Klick auf eine Jahrgangszeile öffnet ihr Buchmenü
 //      (<template id="antrag-N">); darin Genehmigen, Ablehnen, Zurücksetzen
 //      und die Begründung (POST /api/buchplanung/antrag). Kürzel und Datum
 //      stehen einmal oben auf der Seite. „Ersetzt durch …“ im Menü wechselt

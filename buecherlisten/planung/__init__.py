@@ -13,9 +13,9 @@ Einstellungen, keine Sperren; das ist ``app/buchplanung.py``.
 
 Dazu die Änderungsliste: jede Einführung und Ausmusterung ist ein Antrag,
 der genehmigt oder abgelehnt wird (:func:`aenderungen_im_schuljahr`,
-:func:`entscheide_antrag`). Auf der Seite stehen die Anträge als Ersetzungen
-(:func:`ersetzungen_im_schuljahr`): was in einem Fach und Jahrgang geht und
-was dafür kommt.
+:func:`entscheide_antrag`). Auf der Seite stehen die Anträge in Abschnitten
+(:func:`aenderungsliste`): was in einem Fach und Jahrgang zum selben Wechsel
+geht und was dafür kommt.
 
 Aufbau: :mod:`~buecherlisten.planung.modelle` die Begriffe und die gerechneten
 Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
@@ -66,6 +66,9 @@ from .modelle import (
     PLANUNG_GEPLANT,
     PLANUNG_IM_EINSATZ,
     PLANUNG_LAEUFT_AUS,
+    RANG_JAHRGANG,
+    RANG_STANDARD,
+    RANG_WECHSEL,
     RUECKLAGE_STATUS,
     Abschnitt,
     Aenderung,
@@ -73,17 +76,21 @@ from .modelle import (
     Buch,
     Buchbemerkung,
     Buchplanung,
-    Ersetzung,
     Planungszeile,
     Ruecklage,
     UngueltigesSchuljahr,
     aenderungen_im_schuljahr,
+    aenderungsliste,
     endet_mit_vorjahr,
-    ersetzungen_im_schuljahr,
     fach_bestaetigung,
     fach_status,
+    lies_rang,
+    naechster_rang,
+    ordne_aenderungen,
     planungs_status,
     planungs_zusatz,
+    rang_text,
+    reichweite,
     schuljahr_zahl,
     wirkt_im_schuljahr,
     zum_schuljahr_ausgemustert,
@@ -117,8 +124,15 @@ __all__ = [
     "Aenderung",
     "Antragsentscheidung",
     "aenderungen_im_schuljahr",
-    "Ersetzung",
-    "ersetzungen_im_schuljahr",
+    "aenderungsliste",
+    "lies_rang",
+    "naechster_rang",
+    "ordne_aenderungen",
+    "rang_text",
+    "reichweite",
+    "RANG_JAHRGANG",
+    "RANG_STANDARD",
+    "RANG_WECHSEL",
     "entscheide_antrag",
     "FACH_BESTAETIGT",
     "FACH_OFFEN",
