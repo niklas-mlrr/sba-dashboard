@@ -36,6 +36,7 @@ from .abgleich import (
     setze_buchreihe,
     setze_planung,
     setze_ruecklage,
+    verbinde_fortlaufende,
     zusammenfuehren,
 )
 from .laden import AusleiheClient, Schnappschuss, lade_schnappschuss
@@ -183,6 +184,7 @@ __all__ = [
     "setze_buchreihe",
     "setze_planung",
     "setze_ruecklage",
+    "verbinde_fortlaufende",
     "verbleib_der_buecher",
     "wirkt_im_schuljahr",
     "zum_schuljahr_ausgemustert",

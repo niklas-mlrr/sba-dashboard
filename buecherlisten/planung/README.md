@@ -348,6 +348,15 @@ sagt `bisher_ab` (die Einführung beim Öffnen) bzw. `neu`. Für Status, Zusatz
 „(ab …)“/„(bis …)“ und Vergleich zählt die Zeile, die dieses Schuljahr wirkt
 (`massgebliche_zeile`).
 
+**Vor jedem Speichern** (jede Eintragung und der Abgleich, `app/buchplanung.py`)
+verbindet `verbinde_fortlaufende` zwei Zeilen eines Jahrgangs, die lückenlos
+aneinander anschließen (ausgemustert nach X, eingeführt ab X+1) und gleich
+leihbar sind: das ist kein Wechsel, sondern ein Buch, das durchgehend im
+Regal steht. Gespeichert wird eine fortlaufende Zeile mit der Einführung der
+früheren und der Ausmusterung der späteren; die beiden Anträge zum Wechsel
+fallen weg, Bemerkungen und Begründungen bleiben. Ist „leihbar“ verschieden
+oder liegt ein Jahr dazwischen, bleiben es zwei Zeilen.
+
 Ein Wechsel ist eine Ausmusterung und eine Einführung - beide stehen als
 Antrag auf der Änderungsliste, „ganz neu“ oder „ganz weg“ ist das Buch dabei
 nicht (`verbleib_der_buecher`). Die Bücherlisten-Seiten zeigen ein halbes

@@ -57,6 +57,7 @@ from buecherlisten.planung import (
     setze_buchreihe,
     setze_planung,
     setze_ruecklage,
+    verbinde_fortlaufende,
     verbleib_der_buecher,
     wirkt_im_schuljahr,
     zusammenfuehren,
@@ -517,6 +518,48 @@ def test_eine_ausgemusterte_zeile_behaelt_ihren_wert_wenn_die_neue_umschaltet(st
                          bisher_ab="2026/2027"),
     ])
     assert [z.leihbar for z in neu.zeilen_des_paars(DEUTSCH, "Deutsch", 5)] == [True, True]
+
+
+def _zeilen_von_deutsch_5(*zeilen: Planungszeile) -> Buchplanung:
+    stand = zusammenfuehren(None, _schnappschuss())
+    andere = tuple(z for z in stand.planung if (z.isbn, z.jahrgang) != (DEUTSCH, 5))
+    return replace(stand, planung=andere + zeilen)
+
+
+def _z(ab="", nach="", leihbar=True, **felder) -> Planungszeile:
+    return Planungszeile(DEUTSCH, "Deutsch", 5, eingefuehrt_ab=ab, ausgemustert_nach=nach,
+                         leihbar=leihbar, **felder)
+
+
+def test_lueckenlos_anschliessende_zeilen_gleicher_leihbarkeit_werden_eine():
+    genehmigt = Antragsentscheidung("genehmigt", "SL", date(2026, 10, 1))
+    stand = _zeilen_von_deutsch_5(
+        _z(nach="2025/2026", bemerkung="alt", antrag_ausmusterung=genehmigt),
+        _z(ab="2026/2027", nach="2029/2030", bemerkung="neu", kuerzel="FK",
+           antrag_einfuehrung=genehmigt, antrag_ausmusterung=genehmigt))
+    (zeile,) = verbinde_fortlaufende(stand).zeilen_des_paars(DEUTSCH, "Deutsch", 5)
+    assert (zeile.eingefuehrt_ab, zeile.ausgemustert_nach, zeile.leihbar) \
+        == ("", "2029/2030", True)
+    # Die Anträge zum Wechsel fallen weg, die Ausmusterung der späteren bleibt.
+    assert zeile.antrag_ausmusterung == genehmigt
+    assert zeile.antrag_einfuehrung == Antragsentscheidung()
+    assert (zeile.bemerkung, zeile.kuerzel) == ("alt / neu", "FK")
+
+
+def test_eine_kette_wird_ganz_verbunden():
+    stand = _zeilen_von_deutsch_5(_z(nach="2025/2026"), _z(ab="2026/27", nach="2026/2027"),
+                                  _z(ab="2027/2028"))
+    (zeile,) = verbinde_fortlaufende(stand).zeilen_des_paars(DEUTSCH, "Deutsch", 5)
+    assert (zeile.eingefuehrt_ab, zeile.ausgemustert_nach) == ("", "")
+
+
+@pytest.mark.parametrize("spaeter", [
+    _z(ab="2026/2027", leihbar=False),      # anderes Häkchen: ein echter Wechsel
+    _z(ab="2027/2028"),                     # ein Jahr Lücke
+])
+def test_ein_wechsel_oder_eine_luecke_bleiben_zwei_zeilen(spaeter):
+    stand = _zeilen_von_deutsch_5(_z(nach="2025/2026"), spaeter)
+    assert verbinde_fortlaufende(stand) is stand
 
 
 def test_eine_alte_datei_bekommt_leihbar_je_zeile_aus_buchreihen(tmp_path, stand):

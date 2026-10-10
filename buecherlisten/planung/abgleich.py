@@ -490,6 +490,59 @@ def setze_buchplanung(
     return _ohne_verwaiste(neu, isbn)
 
 
+def verbinde_fortlaufende(stand: Buchplanung) -> Buchplanung:
+    """Zwei Zeilen eines Jahrgangs, die lückenlos aneinander anschließen und
+    gleich leihbar sind, werden eine - vor jedem Speichern.
+
+    „Ausgemustert nach 2025/2026“ und „eingeführt ab 2026/2027“ mit demselben
+    Häkchen sind kein Wechsel, sondern ein Buch, das durchgehend im Regal
+    steht. Das entsteht etwa, wenn „leihbar“ erst umgeschaltet und dann an der
+    neuen Zeile von Hand zurückgestellt wird, oder durch Eintragungen in
+    Excel. Gespeichert wird es als **eine** fortlaufende Zeile: Einführung der
+    früheren, Ausmusterung der späteren. Ketten aus mehr als zwei Zeilen
+    werden ganz verbunden.
+
+    Von den Anträgen bleibt der Einführungsantrag der früheren und der
+    Ausmusterungsantrag der späteren Zeile - die beiden dazwischen betrafen
+    den Wechsel, den es nun nicht mehr gibt. Kürzel und Datum der Bestätigung
+    kommen von der späteren Zeile, wenn sie eins trägt; Bemerkungen und
+    Begründungen beider bleiben stehen.
+    """
+    je_paar: dict[tuple[str, str, int], list[Planungszeile]] = {}
+    for zeile in stand.planung:
+        je_paar.setdefault((zeile.isbn, zeile.fach, zeile.jahrgang), []).append(zeile)
+    planung: list[Planungszeile] = []
+    verbunden_irgendwo = False
+    for zeilen in je_paar.values():
+        zeilen.sort(key=zeitfolge)
+        verbunden = [zeilen[0]]
+        for spaeter in zeilen[1:]:
+            frueher = verbunden[-1]
+            if (frueher.leihbar == spaeter.leihbar and frueher.ende is not None
+                    and spaeter.beginn is not None and frueher.ende + 1 == spaeter.beginn):
+                verbunden[-1] = _verbinde(frueher, spaeter)
+                verbunden_irgendwo = True
+            else:
+                verbunden.append(spaeter)
+        planung.extend(verbunden)
+    return _ersetzt(stand, planung=tuple(planung)) if verbunden_irgendwo else stand
+
+
+def _verbinde(frueher: Planungszeile, spaeter: Planungszeile) -> Planungszeile:
+    def beide(eins: str, anderes: str) -> str:
+        return " / ".join(dict.fromkeys(text for text in (eins, anderes) if text))
+
+    bestaetigung = spaeter if spaeter.bestaetigt else frueher
+    return replace(
+        frueher,
+        ausgemustert_nach=spaeter.ausgemustert_nach,
+        antrag_ausmusterung=spaeter.antrag_ausmusterung,
+        kuerzel=bestaetigung.kuerzel, datum=bestaetigung.datum,
+        bemerkung=beide(frueher.bemerkung, spaeter.bemerkung),
+        begruendung=beide(frueher.begruendung, spaeter.begruendung),
+    )
+
+
 def _ohne_verwaiste(stand: Buchplanung, isbn: str) -> Buchplanung:
     """Ein Buch ohne jeden Jahrgang fällt aus der Datei.
 

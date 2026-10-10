@@ -1111,6 +1111,28 @@ def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dic
     assert 'data-eingefuehrt-ab="2026/2027"' in liste
 
 
+def test_gleich_leihbar_anschliessende_zeilen_werden_fortlaufend_gespeichert(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Erst geteilt, dann die neue Zeile von Hand wieder auf leihbar: gespeichert
+    wird eine durchgehende Zeile - in der Antwort und in der Datei."""
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "leihbar": True, "ausgemustert_nach": "2025/2026",
+                    "bisher_ab": ""},
+                   {"jahrgang": 5, "leihbar": True, "eingefuehrt_ab": "2026/2027",
+                    "ausgemustert_nach": "2028/2029", "neu": True}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    planung = next(b for b in antwort.json()["planung"]["buecher"]
+                   if b["isbn"] == DEUTSCH)["planung"]
+    assert [(z["leihbar"], z["eingefuehrt_ab"], z["ausgemustert_nach"]) for z in planung] \
+        == [(True, "", "2028/2029")]
+    ws = openpyxl.load_workbook(antwort.json()["datei"])["Fächer & Jahrgang"]
+    assert sum(1 for z in ws.iter_rows(min_row=2, values_only=True) if z[0] == DEUTSCH) == 1
+
+
 def _deutsch_vorlage(seiten: TestClient) -> str:
     text = seiten.get("/buecherliste/fach/Deutsch").text
     return text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]

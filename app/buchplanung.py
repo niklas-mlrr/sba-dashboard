@@ -50,6 +50,7 @@ from buecherlisten.planung import (
     setze_buchreihe,
     setze_planung,
     setze_ruecklage,
+    verbinde_fortlaufende,
     zusammenfuehren,
 )
 from buecherlisten.planung.laden import AusleiheClient
@@ -123,7 +124,7 @@ def gleiche_ab(
 
     pfad = _pfad(einstellungen, schnappschuss.schuljahr)
     if not pfad.is_file():
-        stand = zusammenfuehren(None, schnappschuss)
+        stand = verbinde_fortlaufende(zusammenfuehren(None, schnappschuss))
         pfad.parent.mkdir(parents=True, exist_ok=True)
         wb = neue_mappe()
         schreibe_mappe(wb, stand)
@@ -139,7 +140,7 @@ def gleiche_ab(
             # heimlich überschrieben - aber ihre Blätter werden neu geschrieben,
             # und was darin stand, war ohnehin nicht lesbar. Deshalb: von vorn.
             vorher = None
-        stand = zusammenfuehren(vorher, schnappschuss)
+        stand = verbinde_fortlaufende(zusammenfuehren(vorher, schnappschuss))
         schreibe_mappe(wb, stand)
         speichere_mappe(wb, pfad, backups_behalten=einstellungen.backups_behalten)
     return Stand(planung=stand, pfad=pfad, zustand=Dateizustand.von(pfad))
@@ -183,6 +184,8 @@ def _aendere(
             nachher = aenderung(vorher)
         except (UnbekanntesBuch, UngueltigeEingabe) as exc:
             raise UngueltigeAenderung(str(exc)) from exc
+        # Lückenlos anschließende Zeilen mit gleichem „leihbar“ sind eine.
+        nachher = verbinde_fortlaufende(nachher)
         schreibe_mappe(wb, nachher)
         speichere_mappe(wb, pfad, backups_behalten=einstellungen.backups_behalten)
     return Stand(planung=nachher, pfad=pfad, zustand=Dateizustand.von(pfad))
