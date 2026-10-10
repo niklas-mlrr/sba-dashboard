@@ -684,11 +684,12 @@ class Aenderung:
     schuljahr: str
     entscheidung: Antragsentscheidung
     begruendung: str = ""
-    # Leihbar aus der Zeile, der Neupreis aus der Buchreihe: leihbare Bücher
-    # stehen in einem Abschnitt zuerst, und der Neupreis ist, was eine
-    # Einführung kostet (je Exemplar).
+    # Leihbar aus der Zeile, Neupreis und Leihgebühr aus der Buchreihe:
+    # leihbare Bücher stehen in einem Abschnitt zuerst, und der Neupreis ist,
+    # was eine Einführung kostet (je Exemplar).
     leihbar: bool = False
     neupreis: float | None = None
+    leihgebuehr: float | None = None
     # Seit wann die Planungszeile das Buch führt - bei einer Ausmusterung, wie
     # lange es im Einsatz war. Leer für alles, was vor der Planung schon da war.
     eingefuehrt_ab: str = ""
@@ -751,6 +752,7 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
                 entscheidung=zeile.antrag(art), begruendung=zeile.begruendung,
                 leihbar=zeile.leihbar,
                 neupreis=buch.neupreis if buch else None,
+                leihgebuehr=buch.leihgebuehr if buch else None,
                 eingefuehrt_ab=zeile.eingefuehrt_ab,
             ))
     return tuple(sorted(heraus, key=lambda a: (

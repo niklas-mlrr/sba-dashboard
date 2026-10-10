@@ -1215,11 +1215,12 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .aenderungen-tabelle .kopfzeile { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; padding-bottom: 2px; }
 .aenderungen-tabelle .kopfzeile .titel { font-weight: 600; }
 .aenderungen-tabelle .kopfzeile .meta { color: #777; font-size: 12px; }
-/* Eine Jahrgangszeile ist ein Knopf: Jahrgang, Schuljahr, Entscheidung. */
+/* Eine Jahrgangszeile ist ein Knopf: Jahrgang, Schuljahr, leihbar und
+   rechtsbündig die Entscheidung. */
 .aenderungen-tabelle .jgzeile {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 3.4rem 7.2rem minmax(0, 1fr);
+  grid-template-columns: 3.4rem 5.6rem minmax(0, 1fr) auto;
   gap: .5rem;
   align-items: baseline;
   width: 100%;
@@ -1239,7 +1240,7 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .aenderungen-tabelle .jgzeile:focus-visible { outline: 2px solid #66afe9; }
 .aenderungen-tabelle .jgzeile .jg { color: #337ab7; font-weight: 600; }
 .aenderungen-tabelle .jgzeile .wann { color: #555; font-size: 13px; }
-.aenderungen-tabelle .jgzeile .rechts { display: flex; gap: .4rem; align-items: baseline; }
+.aenderungen-tabelle .jgzeile .rechts { display: flex; gap: .4rem; align-items: baseline; justify-self: end; }
 .aenderungen-tabelle .jgzeile.gedimmt { opacity: .4; }
 /* Die Mitte: fett der Gruppenwert, grau je Teil das andere Kriterium;
    die Höhen setzt static/mittelspalte.js. Ein einziger Teil (.paar): beide

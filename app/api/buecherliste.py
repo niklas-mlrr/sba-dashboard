@@ -413,6 +413,7 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
                 "kuerzel": a.entscheidung.kuerzel, "datum": a.entscheidung.datum,
                 "begruendung": a.begruendung, "leihbar": a.leihbar,
                 "neupreis": fmt_price(a.neupreis) if a.neupreis else "",
+                "leihgebuehr": fmt_price(a.leihgebuehr) if a.leihgebuehr else "",
                 "eingefuehrt_ab": a.eingefuehrt_ab, "partner": [],
                 "verbleib": verbleib.get((a.isbn, a.art)),
             }

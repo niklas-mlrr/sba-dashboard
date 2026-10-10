@@ -52,14 +52,15 @@
     data-buch="{{ e.fach }}|{{ e.isbn }}" title="{{ e.titel }}{% if e.verbleib %} – {{ e.verbleib.grund }}{% endif %}">
     {%- if z.titel %}
     <div class="kopfzeile"><span class="titel">{{ e.titel }}</span>
-      <span class="meta">{{ [e.verlag, e.neupreis] | select | join(" · ") }}</span>
-      {%- if not e.leihbar %} <span class="label label-default">Kaufbuch</span>{% endif %}</div>
+      <span class="meta">{{ [e.verlag, e.isbn_anzeige,
+        "Preis " ~ e.neupreis if e.neupreis, "Leihgebühr " ~ e.leihgebuehr if e.leihgebuehr] | select | join(" · ") }}</span></div>
     {%- endif %}
+    {#- Leihbar gilt je Jahrgang, darum steht es in der Jahrgangszeile. #}
     <button type="button" class="jgzeile" data-planung="antrag-menue" data-vorlage="antrag-{{ e.nummer }}"
       data-antrag="{{ e.art }}" data-status="{{ e.status }}">
       <span class="jg">Jg. {{ e.jahrgang }}</span>
-      <span class="wann">{{ "ab" if e.einfuehrung else "bis" }} {{ schuljahr_kurz(e.schuljahr) }}
-        {%- if not e.leihbar and not z.titel %} <span class="label label-default">Kaufbuch</span>{% endif %}</span>
+      <span class="wann">{{ "ab" if e.einfuehrung else "bis" }} {{ schuljahr_kurz(e.schuljahr) }}</span>
+      <span class="leihbar">{% if e.leihbar %}<span class="label label-default">leihbar</span>{% endif %}</span>
       <span class="rechts">{{ bp.statuslabel(e.status) }}
         {%- if e.begruendung %} <span title="{{ e.begruendung }}" aria-label="mit Begründung">¶</span>{% endif %}</span>
     </button>
