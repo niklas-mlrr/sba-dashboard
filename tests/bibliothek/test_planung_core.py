@@ -40,6 +40,7 @@ from buecherlisten.planung import (
     UngueltigeEingabe,
     aenderungen_im_schuljahr,
     aenderungsliste,
+    alles_genehmigt,
     bestaetige_fach,
     entscheide_antrag,
     fach_status,
@@ -60,6 +61,7 @@ from buecherlisten.planung import (
     verbinde_fortlaufende,
     verbleib_der_buecher,
     wirkt_im_schuljahr,
+    zu_entscheidende_antraege,
     zusammenfuehren,
 )
 from buecherlisten.planung.modelle import Buchbemerkung, Planungszeile
@@ -273,7 +275,7 @@ def test_eintragungen_ueberleben_den_abgleich(stand):
     stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=5)
     stand = setze_planung(stand, isbn=TERRA, fach="Erdkunde", jahrgang=7,
                           eingefuehrt_ab="2027/2028")
-    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
 
     neu = zusammenfuehren(stand, _schnappschuss())
 
@@ -322,7 +324,7 @@ def test_fehlendes_vorjahr_ist_kein_fehler_sondern_eine_warnung(stand):
 
 
 def test_ein_neues_buch_wirft_das_fach_aus_seiner_bestaetigung(stand):
-    stand, anzahl = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
+    stand, anzahl = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     assert anzahl == 1
     assert fach_status(stand, "Deutsch")[0] == FACH_BESTAETIGT
 
@@ -338,14 +340,14 @@ def test_ein_neues_buch_wirft_das_fach_aus_seiner_bestaetigung(stand):
 
 def test_bestaetigung_gilt_nur_dem_eigenen_fach(stand):
     """Terra steht in Erdkunde und Politik - Erdkunde bestätigt nicht für Politik."""
-    stand, anzahl = bestaetige_fach(stand, fach="Erdkunde", kuerzel="ABC", datum=None)
+    stand, anzahl = bestaetige_fach(stand, fach="Erdkunde", kuerzel="ABC", datum=date(2026, 9, 3))
     assert anzahl == 2
     assert fach_status(stand, "Erdkunde")[0] == FACH_BESTAETIGT
     assert fach_status(stand, "Politik")[0] == FACH_OFFEN
 
 
 def test_leeres_kuerzel_nimmt_die_bestaetigung_zurueck(stand):
-    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     zurueck, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="", datum=None)
     assert fach_status(zurueck, "Deutsch")[0] == FACH_OFFEN
     assert not zurueck.planungszeile(DEUTSCH, "Deutsch", 5).bestaetigt
@@ -884,7 +886,7 @@ def test_ein_buch_aus_einem_anderen_fach_kommt_ueber_seine_jahrgaenge_dazu(stand
     assert len(neu.buecher) == len(stand.buecher)
     assert neu.buch(TERRA) == terra
     # Die neue Zeile ist unbestätigt, das Fach damit nicht mehr ganz bestätigt.
-    bestaetigt, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
+    bestaetigt, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     nachher = fuege_buch_hinzu(bestaetigt, isbn=TERRA, fach="Deutsch",
                                buchreihe=_reihe(terra), zeilen=_einfuehrung(7))
     assert fach_status(nachher, "Deutsch")[0] == FACH_TEILWEISE
@@ -1386,3 +1388,37 @@ def test_ein_unbekannter_text_in_der_antragsspalte_bleibt_und_gilt_als_offen(tmp
     gelesen = lies_datei(pfad)
     antrag = gelesen.planungszeile(DEUTSCH, "Deutsch", 7).antrag_einfuehrung
     assert (antrag.ergebnis, antrag.status) == ("vertagt", ANTRAG_OFFEN)
+
+
+# ── Entscheidungen 2026-10-10 ────────────────────────────────────────────────
+
+def test_bestaetigen_braucht_ein_datum(stand):
+    with pytest.raises(UngueltigeEingabe, match="Datum"):
+        bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
+
+
+def test_mit_einfuehrung_und_ausmusterung_erst_geplant_dann_laeuft_aus():
+    zeile = Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                          eingefuehrt_ab="2027/2028", ausgemustert_nach="2029/2030")
+    assert planungs_status(zeile, "2026/2027") == PLANUNG_GEPLANT
+    assert planungs_status(zeile, "2027/2028") == PLANUNG_LAEUFT_AUS
+    assert planungs_status(zeile, "2029/2030") == PLANUNG_LAEUFT_AUS
+    assert planungs_status(zeile, "2030/2031") == PLANUNG_AUSGEMUSTERT
+
+
+def test_alles_genehmigt_zaehlt_nur_antraege_der_aenderungsliste():
+    genehmigt = Antragsentscheidung(ergebnis=ANTRAG_GENEHMIGT, kuerzel="b.lehrer")
+    # Eine längst vollzogene Einführung ist kein Antrag; ohne Antrag ist nichts offen.
+    alt = Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=7, eingefuehrt_ab="2020/2021")
+    assert zu_entscheidende_antraege(alt, "2026/2027") == ()
+    assert alles_genehmigt(alt, "2026/2027")
+    # Ausmusterung nach dem Vorjahr steht noch auf der Liste.
+    zeile = replace(alt, ausgemustert_nach="2025/2026")
+    assert zu_entscheidende_antraege(zeile, "2026/2027") == (ART_AUSMUSTERUNG,)
+    assert not alles_genehmigt(zeile, "2026/2027")
+    assert alles_genehmigt(replace(zeile, antrag_ausmusterung=genehmigt), "2026/2027")
+    # Beide Anträge: erst genehmigt, wenn beide es sind.
+    beide = Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=7, eingefuehrt_ab="2027/2028",
+                          ausgemustert_nach="2029/2030", antrag_einfuehrung=genehmigt)
+    assert not alles_genehmigt(beide, "2026/2027")
+    assert alles_genehmigt(replace(beide, antrag_ausmusterung=genehmigt), "2026/2027")

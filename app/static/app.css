@@ -985,6 +985,16 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 /* `tbody tr:hover` der Seite hebt Zeilen hervor, die sich anklicken lassen.
    Hier lässt sich nichts anklicken - nur die Felder darin. */
 .planung-tabelle tbody tr:hover { background: none; }
+/* Alle Anträge der Zeile genehmigt (oder keiner offen): hell in der Farbe des
+   Status-Labels dahinter - grün, blau, gelb, rot wie .label-success/-info/
+   -warning/-danger. */
+.planung-tabelle tr.genehmigt.status-im-einsatz > td { background: #dff0d8; }
+.planung-tabelle tr.genehmigt.status-geplant > td { background: var(--einfuehrung-grund); }
+.planung-tabelle tr.genehmigt.status-laeuft-aus > td { background: #fcf8e3; }
+.planung-tabelle tr.genehmigt.status-ausgemustert > td { background: var(--ausmusterung-grund); }
+/* Hinterlegt braucht die Zeile außen etwas Luft, sonst klebt der Jahrgang am Rand. */
+.planung-tabelle tr.genehmigt > td:first-child { padding-left: .4rem; }
+.planung-tabelle tr.genehmigt > td:last-child { padding-right: .4rem; }
 /* Ein Eingabefeld steht als `inline-block` auf der Grundlinie und säße damit
    etwas tiefer als bloßer Text wie der Jahrgang daneben. */
 .planung-tabelle .planung-feld,

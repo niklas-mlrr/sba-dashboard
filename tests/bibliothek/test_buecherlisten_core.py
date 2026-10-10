@@ -240,3 +240,12 @@ def test_schuelerliste_polstert_nur_bei_bedarf_auf_gerade_seitenzahl(daten):
     )[0]
     # 3 + 1 Leerseite für Jahrgang 5, je 1 + 1 für die drei anderen.
     assert _seiten(gepolstert.inhalt) == 10
+
+
+def test_null_euro_ist_ein_betrag():
+    """0 ist ein Preis, kein fehlender (Entscheidung 2026-10-10)."""
+    from buecherlisten.core.daten import fmt_price
+
+    assert fmt_price(0) == "0,00 €"
+    assert fmt_price(12.5) == "12,50 €"
+    assert fmt_price(None) == "–"

@@ -58,8 +58,7 @@ def fmt_price(value: float | None) -> str:
         value = float(value)
     except (TypeError, ValueError):
         return "–"
-    if value == 0:
-        return "–"
+    # 0 ist ein Preis („0,00 €“), kein fehlender (Entscheidung 2026-10-10).
     return f"{value:.2f}".replace(".", ",") + " €"
 
 

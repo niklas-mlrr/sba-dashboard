@@ -17,7 +17,7 @@
 {%- set klasse = {"bestätigt": "label-success",
                   "teilweise": "label-warning", "offen": "label-status",
                   "geplant": "label-info", "läuft aus": "label-warning",
-                  "ausgemustert": "label-default", "im Einsatz": "label-success",
+                  "ausgemustert": "label-danger", "im Einsatz": "label-success",
                   "genehmigt": "label-success", "abgelehnt": "label-danger"}.get(status, "label-status") -%}
 <span class="label {{ klasse }}">{{ status }}</span>
 {%- endmacro %}
@@ -34,7 +34,7 @@
     aria-label="Kürzel der Fachkonferenzleitung">
   <input type="date" class="planung-feld" data-planung-feld="datum"
     value="{{ stand.datum.isoformat() if stand and stand.datum else '' }}"
-    aria-label="Datum der Bestätigung">
+    required aria-label="Datum der Bestätigung">
   <button type="button" class="btn btn-default" data-planung="fach" data-fach="{{ gruppe }}"
     title="Diese Bücherliste als bestätigt eintragen">Liste bestätigen</button>
 </span>
@@ -170,8 +170,17 @@
   ausgemusterte Zeile (``zeile.gesperrt``) hat ein graues Häkchen.
   ``data-bisher-ab`` sagt dem Server, welche Zeile des Jahrgangs gemeint ist.
 #}
+{#
+  Sind alle Anträge der Zeile genehmigt - oder gibt es keinen -, ist sie in
+  der Farbe ihres Status hinterlegt (``zeile.genehmigt``, gerechnet von
+  ``alles_genehmigt`` in buecherlisten/planung/modelle.py). Solange etwas
+  offen oder abgelehnt ist, bleibt sie weiß.
+#}
 {% set iserv_leihbar = dict(buch.leihbar_iserv or ()) if buch else {} %}
+{% set statusklasse = {"im Einsatz": "im-einsatz", "geplant": "geplant",
+                       "läuft aus": "laeuft-aus", "ausgemustert": "ausgemustert"}.get(zeile.status) %}
 <tr data-planung-zeile data-bisher-ab="{{ zeile.eingefuehrt_ab }}"
+  {%- if zeile.genehmigt and statusklasse %} class="genehmigt status-{{ statusklasse }}"{% endif %}
   {%- if zeile.aktuell %} data-aktuell{% endif %}{% if zeile.alt %} data-alt{% endif %}>
   <td class="planung-spalte-jahrgang">
     {% if zeile.aktuell %}{{ zeile.jahrgang }}<input type="hidden"

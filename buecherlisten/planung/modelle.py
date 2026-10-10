@@ -713,6 +713,40 @@ class Aenderung:
         return jahr if self.einfuehrung else jahr + 1
 
 
+def zu_entscheidende_antraege(zeile: Planungszeile, schuljahr: str) -> tuple[str, ...]:
+    """Die Anträge dieser Zeile, die auf der Änderungsliste stehen.
+
+    Eine Einführung ab dem laufenden Schuljahr oder später, eine Ausmusterung
+    nach dem Vorjahr oder später (:func:`aenderungen_im_schuljahr`). Eine
+    längst vollzogene Einführung ist kein Antrag mehr - über sie entscheidet
+    niemand, also hält sie auch nichts auf. Unlesbares zählt nicht.
+    """
+    try:
+        jetzt = schuljahr_zahl(schuljahr)
+    except UngueltigesSchuljahr:
+        return ()
+    arten: list[str] = []
+    for art, ab_jahr in ((ART_EINFUEHRUNG, jetzt), (ART_AUSMUSTERUNG, jetzt - 1)):
+        angabe = zeile.schuljahr_des_antrags(art)
+        try:
+            if angabe and schuljahr_zahl(angabe) >= ab_jahr:
+                arten.append(art)
+        except UngueltigesSchuljahr:
+            continue
+    return tuple(arten)
+
+
+def alles_genehmigt(zeile: Planungszeile, schuljahr: str) -> bool:
+    """Ist jeder Antrag dieser Zeile, über den zu entscheiden ist, genehmigt?
+
+    Eine Zeile ohne einen solchen Antrag gilt als genehmigt: an ihr ist nichts
+    mehr offen (Entscheidung 2026-10-10). Das Planungsmenü hinterlegt sie dann
+    in der Farbe ihres Status.
+    """
+    return all(zeile.antrag(art).status == ANTRAG_GENEHMIGT
+               for art in zu_entscheidende_antraege(zeile, schuljahr))
+
+
 def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
     """Alle Einführungen und Ausmusterungen, die dieses Schuljahr zu entscheiden sind.
 
@@ -731,19 +765,14 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
     selbst noch einmal, in Abschnitten (:func:`aenderungsliste`).
     """
     try:
-        jetzt = schuljahr_zahl(stand.schuljahr)
+        schuljahr_zahl(stand.schuljahr)
     except UngueltigesSchuljahr:
         return ()
     heraus: list[Aenderung] = []
     for zeile in stand.planung:
         buch = stand.buch(zeile.isbn)
-        for art, ab_jahr in ((ART_EINFUEHRUNG, jetzt), (ART_AUSMUSTERUNG, jetzt - 1)):
+        for art in zu_entscheidende_antraege(zeile, stand.schuljahr):
             angabe = zeile.schuljahr_des_antrags(art)
-            try:
-                if not angabe or schuljahr_zahl(angabe) < ab_jahr:
-                    continue
-            except UngueltigesSchuljahr:
-                continue
             heraus.append(Aenderung(
                 isbn=zeile.isbn,
                 titel=buch.titel if buch else zeile.isbn,

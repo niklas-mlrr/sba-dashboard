@@ -64,3 +64,13 @@ def test_zurueck_nur_zur_passenden_vorgaengerin():
                    _zeile(nach="2025/2026", leihbar=False)):
         assert _schritt([vorher, _zeile(ab="2026/2027", leihbar=False)], 1) \
             == {"art": "umschalten"}
+
+
+def test_eine_kuenftige_zeile_nimmt_den_wechsel_ebenfalls_zurueck():
+    """Auch ab einem späteren Schuljahr: die Vorgängerin endet im Jahr davor."""
+    zeilen = [_zeile(nach="2027/2028", leihbar=True),
+              _zeile(ab="2028/2029", leihbar=False)]
+    assert _schritt(zeilen, 1) == {"art": "zurueck", "vorgaenger": 0}
+    # Mit einer Lücke dazwischen ist es keine Vorgängerin: nur umschalten.
+    zeilen[0]["ausgemustert_nach"] = "2026/2027"
+    assert _schritt(zeilen, 1) == {"art": "umschalten"}

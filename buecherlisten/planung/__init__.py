@@ -83,6 +83,7 @@ from .modelle import (
     Verbleib,
     aenderungen_im_schuljahr,
     aenderungsliste,
+    alles_genehmigt,
     endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
@@ -96,6 +97,7 @@ from .modelle import (
     schuljahr_zahl,
     verbleib_der_buecher,
     wirkt_im_schuljahr,
+    zu_entscheidende_antraege,
     zum_schuljahr_ausgemustert,
 )
 from .vergleich import (
@@ -130,6 +132,7 @@ __all__ = [
     "Antragsentscheidung",
     "aenderungen_im_schuljahr",
     "aenderungsliste",
+    "alles_genehmigt",
     "lies_rang",
     "naechster_rang",
     "ordne_aenderungen",
@@ -187,6 +190,7 @@ __all__ = [
     "verbinde_fortlaufende",
     "verbleib_der_buecher",
     "wirkt_im_schuljahr",
+    "zu_entscheidende_antraege",
     "zum_schuljahr_ausgemustert",
     "zusammenfuehren",
 ]

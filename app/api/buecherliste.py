@@ -44,6 +44,7 @@ from buecherlisten.planung import (
     Buchplanung,
     UngueltigesSchuljahr,
     aenderungsliste,
+    alles_genehmigt,
     endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
@@ -255,6 +256,9 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
                     "datum": zeile.datum,
                     "bemerkung": zeile.bemerkung,
                     "status": status,
+                    # Sind alle Anträge der Zeile genehmigt (oder gibt es
+                    # keinen), hinterlegt das Menü sie in der Farbe des Status.
+                    "genehmigt": alles_genehmigt(zeile, planung.schuljahr),
                     # Der Zusatz „(ab …)“/„(bis …)“ in der Bücherliste kommt von
                     # der Zeile, die für dieses Schuljahr spricht.
                     "zusatz": planungs_zusatz(zeile, planung.schuljahr)
@@ -310,6 +314,13 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
             eintrag["leihbar_titel"] = (
                 f"leihbar: Jg. {', '.join(map(str, ja))} · Kaufbuch: Jg. {', '.join(map(str, nein))}"
                 if ja and nein else "")
+    # Gezeigt wird nur, was die Schule dort verliehen hat - mindestens ein
+    # Jahrgang leihbar (Entscheidung 2026-10-10). Um die Ausmusterungen geht
+    # es wegen der Rücklagen und der Regale; ein reines Kaufbuch hat keine.
+    ausgemustert = {
+        fach: [eintrag for eintrag in eintraege if eintrag["leihbar"]]
+        for fach, eintraege in ausgemustert.items()
+    }
 
     # Die Vorschläge für „+ Buch hinzufügen“: jedes Buch der Datei, mit dem,
     # was das Menü bei einem Treffer übernimmt.
@@ -412,8 +423,8 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
                 "einfuehrung": a.einfuehrung, "schuljahr": a.schuljahr, "status": a.status,
                 "kuerzel": a.entscheidung.kuerzel, "datum": a.entscheidung.datum,
                 "begruendung": a.begruendung, "leihbar": a.leihbar,
-                "neupreis": fmt_price(a.neupreis) if a.neupreis else "",
-                "leihgebuehr": fmt_price(a.leihgebuehr) if a.leihgebuehr else "",
+                "neupreis": fmt_price(a.neupreis) if a.neupreis is not None else "",
+                "leihgebuehr": fmt_price(a.leihgebuehr) if a.leihgebuehr is not None else "",
                 "eingefuehrt_ab": a.eingefuehrt_ab, "partner": [],
                 "verbleib": verbleib.get((a.isbn, a.art)),
             }

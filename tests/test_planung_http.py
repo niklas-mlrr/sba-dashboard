@@ -214,7 +214,7 @@ def test_ein_neues_buch_macht_das_fach_wieder_unbestaetigt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     bestaetigt = seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     }).json()
 
@@ -425,7 +425,7 @@ def test_kuenftige_ausmusterung_laesst_die_bestaetigung_stehen(
 ) -> None:
     """Was erst in drei Jahren greift, ändert die bestätigte Liste nicht."""
     stand = seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     }).json()
 
@@ -446,7 +446,7 @@ def test_ausmusterung_im_laufenden_schuljahr_nimmt_die_bestaetigung_zurueck(
 ) -> None:
     """Jetzt fehlt das Buch in der Liste, die bestätigt wurde - also neu prüfen."""
     stand = seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     }).json()
 
@@ -576,11 +576,11 @@ def test_veraltete_mtime_wird_mit_409_abgelehnt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     })
     antwort = seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Erdkunde", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Erdkunde", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 409
@@ -589,7 +589,7 @@ def test_veraltete_mtime_wird_mit_409_abgelehnt(
 
 def test_eintragen_ohne_datei_meldet_den_fehlenden_abgleich(seiten: TestClient) -> None:
     antwort = seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "mtime": 1.0,
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03", "mtime": 1.0,
     })
     assert antwort.status_code == 503
     assert "aktualisieren" in antwort.json()["fehler"]
@@ -606,7 +606,7 @@ def test_unbekannte_isbn_wird_abgelehnt(seiten: TestClient, abgeglichen: dict) -
 
 def test_fehlende_mtime_ist_ein_deutscher_satz(seiten: TestClient, abgeglichen: dict) -> None:
     antwort = seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
     })
     assert antwort.status_code == 400
     assert antwort.json()["fehler"] == "Es fehlt eine gültige Änderungszeit der geladenen Datei."
@@ -687,7 +687,7 @@ def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     })
     assert "label-success" in seiten.get("/buecherliste/fach/Deutsch").text
@@ -707,7 +707,7 @@ def test_druckmenue_kennt_die_nicht_bestaetigten_faecher(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     })
     text = seiten.get("/buecherliste/fach").text
@@ -1617,3 +1617,100 @@ def test_ein_antrag_auf_eine_alte_fassung_ist_409(
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 409
+
+
+# ── Entscheidungen 2026-10-10 ────────────────────────────────────────────────
+
+def _vorlage(text: str, isbn: str, fach: str) -> str:
+    """Das gerenderte Planungsmenü eines Buchs in einem Fach."""
+    kopf = f'<template class="planung-vorlage" data-isbn="{isbn}" data-fach="{fach}">'
+    return text.split(kopf)[1].split("</template>")[0]
+
+
+def test_ausmusterungen_zeigen_kein_reines_kaufbuch(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Terra in Erdkunde ausgelaufen, aber dort nie leihbar: steht nicht unter „Ausmusterungen“."""
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026", "leihbar": False},
+                   {"jahrgang": 6, "ausgemustert_nach": "2025/2026", "leihbar": False}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert "Ausmusterungen zu diesem Schuljahr" not in text
+    assert f'<tr data-isbn="{TERRA}"' not in text
+
+
+def test_ausgemustert_ist_im_menue_rot(seiten: TestClient, abgeglichen: dict) -> None:
+    _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
+    menue = _vorlage(seiten.get("/buecherliste/fach/Erdkunde").text, TERRA, "Erdkunde")
+    assert '<span class="label label-danger">ausgemustert</span>' in menue
+
+
+def test_genehmigte_zeilen_sind_in_der_farbe_ihres_status_hinterlegt(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = _mit_einfuehrung(seiten, abgeglichen)
+
+    def zeile_ab(ab: str) -> str:
+        menue = _vorlage(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH, "Deutsch")
+        treffer = re.search(rf'<tr data-planung-zeile data-bisher-ab="{re.escape(ab)}"([^>]*)>', menue)
+        assert treffer, menue
+        return treffer.group(1)
+
+    # Ohne Antrag ist nichts offen: hinterlegt. Die offene Einführung nicht.
+    assert 'class="genehmigt status-im-einsatz"' in zeile_ab("")
+    assert "genehmigt" not in zeile_ab("2027/2028")
+
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": "einfuehrung", "ergebnis": "abgelehnt", "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    assert "genehmigt" not in zeile_ab("2027/2028")
+
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": "einfuehrung", "ergebnis": "genehmigt", "mtime": antwort.json()["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    assert 'class="genehmigt status-geplant"' in zeile_ab("2027/2028")
+
+
+def test_liste_bestaetigen_braucht_ein_datum(seiten: TestClient, abgeglichen: dict) -> None:
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert antwort.json()["fehler"] == "Bitte das Datum der Bestätigung eintragen."
+    # Zurücknehmen geht ohne.
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "",
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    assert 'required aria-label="Datum der Bestätigung"' in seiten.get(
+        "/buecherliste/fach/Deutsch").text
+
+
+def test_antraege_zeigen_null_euro_als_betrag(seiten: TestClient, abgeglichen: dict) -> None:
+    stand = _mit_einfuehrung(seiten, abgeglichen)
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [z for z in (
+            {"jahrgang": p["jahrgang"], "eingefuehrt_ab": p["eingefuehrt_ab"] or "",
+             "ausgemustert_nach": p["ausgemustert_nach"] or "", "leihbar": p["leihbar"],
+             "bisher_ab": p["eingefuehrt_ab"] or ""}
+            for b in stand["planung"]["buecher"] if b["isbn"] == DEUTSCH
+            for p in b["planung"] if p["fach"] == "Deutsch")],
+        "buchreihe": {"titel": "Deutschbuch", "verlag": "Cornelsen",
+                      "neupreis": 0, "leihgebuehr": 0},
+        "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/aenderungen").text
+    assert "<dt>Leihgebühr</dt><dd>0,00 €</dd>" in text
+    assert "<dt>Neupreis</dt><dd>0,00 €</dd>" in text

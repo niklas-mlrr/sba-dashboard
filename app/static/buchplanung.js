@@ -45,10 +45,10 @@
 //   teilen     - die Zeile galt schon vor diesem Schuljahr (``alt``): sie
 //                bleibt, wie sie war, endet aber mit dem Vorjahr; darunter
 //                beginnt mit dem Schuljahr eine neue mit umgeschaltetem Häkchen.
-//   zurueck    - die Zeile beginnt mit diesem Schuljahr, und darüber steht ihre
-//                Vorgängerin (gleicher Jahrgang, endet mit dem Vorjahr, schon
-//                mit dem gewünschten Häkchen): die Zeile fällt weg, und die
-//                Vorgängerin läuft weiter.
+//   zurueck    - die Zeile beginnt mit diesem oder einem künftigen Schuljahr,
+//                und es gibt ihre Vorgängerin (gleicher Jahrgang, endet genau
+//                im Jahr vor ihrer Einführung, schon mit dem gewünschten
+//                Häkchen): die Zeile fällt weg, und die Vorgängerin läuft weiter.
 //   umschalten - sonst (eine künftige oder neue Zeile): nur das Häkchen.
 //
 // ``zeilen`` stehen da, wie vor dem Klick: {jahrgang, eingefuehrt_ab,
@@ -64,10 +64,11 @@ const leihbarSchritt = (function () {
     if (zeile.alt) return { art: "teilen" };
     const jetzt = jahr(schuljahr);
     const gewuenscht = !zeile.leihbar;
-    if (jetzt !== null && jahr(zeile.eingefuehrt_ab) === jetzt) {
+    const beginn = jahr(zeile.eingefuehrt_ab);
+    if (jetzt !== null && beginn !== null && beginn >= jetzt) {
       const vorgaenger = zeilen.findIndex((andere, i) => i !== nummer
         && andere.jahrgang === zeile.jahrgang && andere.leihbar === gewuenscht
-        && jahr(andere.ausgemustert_nach) === jetzt - 1);
+        && jahr(andere.ausgemustert_nach) === beginn - 1);
       if (vorgaenger >= 0) return { art: "zurueck", vorgaenger: vorgaenger };
     }
     return { art: "umschalten" };
@@ -666,6 +667,11 @@ if (typeof document !== "undefined") {
 
     if (art === "fach") {
       const werte = kopf ? felder(kopf) : {};
+      // Wer bestätigt, braucht ein Datum; nur das Zurücknehmen geht ohne.
+      if (werte.kuerzel && !werte.datum) {
+        zeige("Bitte das Datum der Bestätigung eintragen.", "fehlerhaft");
+        return;
+      }
       sende("/api/buchplanung/fach", {
         fach: knopf.dataset.fach, kuerzel: werte.kuerzel || "",
         datum: werte.datum || null,

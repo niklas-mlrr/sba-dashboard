@@ -730,10 +730,13 @@ def bestaetige_fach(
     "bestätigter Stand": kommt später ein Buch dazu, ist seine Zeile leer, und
     das Fach ist wieder nur teilweise bestätigt.
 
-    Ein leeres Kürzel nimmt die Bestätigung des ganzen Fachs zurück.
+    Ein leeres Kürzel nimmt die Bestätigung des ganzen Fachs zurück. Wer
+    bestätigt, braucht ein Datum (Entscheidung 2026-10-10).
     """
     if fach not in stand.faecher:
         raise UngueltigeEingabe(f"„{fach}“ kommt in dieser Datei als Fach nicht vor.")
+    if kuerzel.strip() and datum is None:
+        raise UngueltigeEingabe("Bitte das Datum der Bestätigung eintragen.")
     isbns = {buch.isbn for buch in stand.buecher_je_fach(fach)}
     geaendert = 0
     planung: list[Planungszeile] = []

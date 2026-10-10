@@ -240,7 +240,8 @@ Jahrgänge und Preise kommen frisch aus IServ.
 ### Schritt 1: die Fachkonferenzen (Ansicht „Fach")
 
 Öffnen Sie ein Fach. Oben stehen Kürzel, Datum und **„Liste bestätigen"** — die
-Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch.
+Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch. Ohne Datum
+lässt sich nicht bestätigen; nur zum Zurücknehmen (Kürzel leeren) braucht es keins.
 
 Der Knopf setzt Kürzel und Datum in jede Zeile dieses Fachs. Kommt danach ein
 Buch hinzu, hat es noch kein Kürzel: der Status wechselt auf **„teilweise"**,
