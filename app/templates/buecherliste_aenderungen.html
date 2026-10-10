@@ -91,6 +91,7 @@
       <dt>ISBN</dt><dd><samp>{{ e.isbn_anzeige }}</samp></dd>
       <dt>Schuljahr</dt><dd>{{ "ab" if e.einfuehrung else "nach" }} {{ e.schuljahr }}</dd>
       <dt>Leihbar</dt><dd>{{ "ja" if e.leihbar else "nein" }}</dd>
+      <dt>Leihgebühr</dt><dd>{{ e.leihgebuehr or "–" }}</dd>
       {% if e.verbleib %}<dt>Bücherlisten</dt><dd>{{ e.verbleib.grund }}</dd>{% endif %}
       {% if e.einfuehrung %}
       <dt>Neupreis</dt><dd>{{ e.neupreis or "–" }}</dd>
