@@ -56,7 +56,15 @@ CONTENT_WIDTH = RIGHT_EDGE - LEFT_MARGIN    # = 465.28 — auch die Tabellenbrei
 HEADER_LABEL_FONT, HEADER_LABEL_SIZE = "Helvetica", 8.0
 HEADER_LABEL_BASELINE = PAGE_H - 45.74      # "Liste für" / "gültig für"
 HEADER_VALUE_FONT, HEADER_VALUE_SIZE = "Helvetica-Bold", 12.0
-HEADER_VALUE_BASELINE = PAGE_H - 56.02      # "Schuljahr 26/27" / "<Fach>"
+# "Schuljahr 26/27" / "<Fach>": Abweichend vom Original (56.02) so weit unter
+# der Label-Zeile, dass sich die Zeilen bei keinem Zeichen berühren können —
+# auch nicht Unterlänge ("g" in "gültig für") über Versal mit Akzent ("Ü", "Å").
+# Maßgeblich sind die FontBBox-Grenzen aus den Adobe-AFM-Dateien (Einheiten
+# pro 1000): tiefster Punkt Helvetica -225, höchster Helvetica-Bold 962.
+HEADER_LINE_CLEARANCE = 1.0
+HEADER_VALUE_BASELINE = HEADER_LABEL_BASELINE - (
+    0.225 * HEADER_LABEL_SIZE + 0.962 * HEADER_VALUE_SIZE + HEADER_LINE_CLEARANCE
+)                                           # = PAGE_H - 60.08
 TITLE_FONT, TITLE_SIZE = "Helvetica-Bold", 24.0
 TITLE_BASELINE = PAGE_H - 105.73            # "Bücherliste <Fach>"
 
