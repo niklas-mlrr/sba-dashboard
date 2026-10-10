@@ -33,7 +33,62 @@
 //
 // Antwortet der Server mit 409, hat jemand anderes die Datei angefasst; dann
 // wird nicht überschrieben, sondern nachgeladen.
+//
+// Eine Ausnahme von "rechnet nichts": was ein Klick auf „Leihbar“ in einer
+// Zeile des Menüs bewirkt (leihbarSchritt). Das ist Formularbearbeitung - es
+// entsteht eine Zeile oder fällt weg -, und man soll sie vor dem Speichern
+// sehen. Ob das Ergebnis zulässig ist (keine zwei Zeilen zur selben Zeit),
+// prüft trotzdem der Server.
+
+// „leihbar“ gilt je Zeile. Ein Klick auf das Häkchen der Zeile ``nummer``:
+//
+//   teilen     - die Zeile galt schon vor diesem Schuljahr (``alt``): sie
+//                bleibt, wie sie war, endet aber mit dem Vorjahr; darunter
+//                beginnt mit dem Schuljahr eine neue mit umgeschaltetem Häkchen.
+//   zurueck    - die Zeile beginnt mit diesem Schuljahr, und darüber steht ihre
+//                Vorgängerin (gleicher Jahrgang, endet mit dem Vorjahr, schon
+//                mit dem gewünschten Häkchen): die Zeile fällt weg, und die
+//                Vorgängerin läuft weiter.
+//   umschalten - sonst (eine künftige oder neue Zeile): nur das Häkchen.
+//
+// ``zeilen`` stehen da, wie vor dem Klick: {jahrgang, eingefuehrt_ab,
+// ausgemustert_nach, leihbar, alt}. Rein, ohne DOM - geprüft mit node
+// (tests/test_buchplanung_js.py).
+const leihbarSchritt = (function () {
+  function jahr(text) {
+    const treffer = /^\s*(\d{4})/.exec(text || "");
+    return treffer ? Number(treffer[1]) : null;
+  }
+  return function (zeilen, nummer, schuljahr) {
+    const zeile = zeilen[nummer];
+    if (zeile.alt) return { art: "teilen" };
+    const jetzt = jahr(schuljahr);
+    const gewuenscht = !zeile.leihbar;
+    if (jetzt !== null && jahr(zeile.eingefuehrt_ab) === jetzt) {
+      const vorgaenger = zeilen.findIndex((andere, i) => i !== nummer
+        && andere.jahrgang === zeile.jahrgang && andere.leihbar === gewuenscht
+        && jahr(andere.ausgemustert_nach) === jetzt - 1);
+      if (vorgaenger >= 0) return { art: "zurueck", vorgaenger: vorgaenger };
+    }
+    return { art: "umschalten" };
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { leihbarSchritt };
+}
+
+// In der Bücherliste steht „Leihbar“ halb, wenn das Buch in den Jahrgängen
+// einer Zeile teils leihbar ist, teils nicht. Halb gibt es nur als
+// Eigenschaft, nicht als Attribut - die Vorlage setzt ``data-teilweise``.
+if (typeof document !== "undefined") {
+  for (const feld of document.querySelectorAll("input.nur-lesen[data-teilweise]")) {
+    feld.indeterminate = true;
+  }
+}
+
 (function () {
+  if (typeof document === "undefined") return;
   const wurzel = document.getElementById("buchplanung");
   if (!wurzel) return;
   const meldung = document.getElementById("planung-meldung");
@@ -116,7 +171,7 @@
   function felder(bereich) {
     const werte = {};
     for (const feld of bereich.querySelectorAll("[data-planung-feld]")) {
-      werte[feld.dataset.planungFeld] = feld.value.trim();
+      werte[feld.dataset.planungFeld] = feld.type === "checkbox" ? feld.checked : feld.value.trim();
     }
     return werte;
   }
@@ -171,14 +226,81 @@
     menue.querySelector('[data-buchreihe-feld="isbn"]').focus();
   }
 
+  // Eine neue Zeile übernimmt „leihbar“ von der letzten der Tabelle - meist
+  // ist ein Buch in allen Jahrgängen gleich.
   function fuegeJahrgangAn(knopf) {
     const koerper = knopf.closest(".planung-block").querySelector("[data-planung-zeilen]");
     if (!koerper || !leerzeile) return;
+    const vorige = koerper.lastElementChild;
     koerper.appendChild(leerzeile.content.cloneNode(true));
     const zeile = koerper.lastElementChild;
+    if (vorige) {
+      zeile.querySelector('[data-planung-feld="leihbar"]').checked =
+        vorige.querySelector('[data-planung-feld="leihbar"]').checked;
+    }
     messeBemerkungen(zeile);
     zeile.querySelector('[data-planung-feld="jahrgang"]').focus();
   }
+
+  // ── „Leihbar“ je Zeile (Regel oben: leihbarSchritt) ───────────────────────
+
+  function vorjahrText() {
+    if (wurzel.dataset.vorjahr) return wurzel.dataset.vorjahr;
+    const jahr = parseInt(wurzel.dataset.planungsjahr, 10);
+    return Number.isFinite(jahr) ? (jahr - 1) + "/" + jahr : "";
+  }
+
+  function feldIn(zeile, name) {
+    return zeile.querySelector('[data-planung-feld="' + name + '"]');
+  }
+
+  function schalteLeihbar(feld) {
+    const zeile = feld.closest("[data-planung-zeile]");
+    const koerper = zeile.closest("[data-planung-zeilen]");
+    const alle = [...koerper.querySelectorAll("[data-planung-zeile]")];
+    const daten = alle.map((tr) => {
+      const werte = felder(tr);
+      return {
+        jahrgang: Number(werte.jahrgang), eingefuehrt_ab: werte.eingefuehrt_ab || "",
+        ausgemustert_nach: werte.ausgemustert_nach || "",
+        // Das angeklickte Häkchen steht schon um; gefragt ist der Stand davor.
+        leihbar: tr === zeile ? !feld.checked : Boolean(werte.leihbar),
+        alt: "alt" in tr.dataset,
+      };
+    });
+    const schritt = leihbarSchritt(daten, alle.indexOf(zeile), wurzel.dataset.planungsjahr);
+    const ausmusterung = feldIn(zeile, "ausgemustert_nach");
+
+    if (schritt.art === "teilen" && leerzeile) {
+      const gewuenscht = feld.checked;
+      const bisher = ausmusterung.value;
+      feld.checked = !gewuenscht;
+      feld.disabled = true;
+      feld.title = "ausgemustert - nicht mehr umschaltbar";
+      ausmusterung.value = vorjahrText();
+      const neue = leerzeile.content.firstElementChild.cloneNode(true);
+      feldIn(neue, "jahrgang").value = daten[alle.indexOf(zeile)].jahrgang;
+      feldIn(neue, "leihbar").checked = gewuenscht;
+      feldIn(neue, "eingefuehrt_ab").value = wurzel.dataset.planungsjahr || "";
+      feldIn(neue, "ausgemustert_nach").value = bisher;
+      zeile.after(neue);
+      messeBemerkungen(neue);
+    } else if (schritt.art === "zurueck") {
+      const vorgaenger = alle[schritt.vorgaenger];
+      feldIn(vorgaenger, "ausgemustert_nach").value = ausmusterung.value;
+      const haekchen = feldIn(vorgaenger, "leihbar");
+      haekchen.disabled = false;
+      haekchen.removeAttribute("title");
+      zeile.remove();
+    }
+  }
+
+  document.addEventListener("change", (ereignis) => {
+    const feld = ereignis.target;
+    if (menue && menue.contains(feld) && feld.dataset && feld.dataset.planungFeld === "leihbar") {
+      schalteLeihbar(feld);
+    }
+  });
 
   // ── Die Bemerkung: eine Zeile hoch, beim Tippen so hoch wie ihr Text ──────
   //
@@ -234,9 +356,14 @@
       }
       zeilen.push({
         jahrgang: jahrgang,
+        leihbar: Boolean(werte.leihbar),
         eingefuehrt_ab: werte.eingefuehrt_ab || "",
         ausgemustert_nach: werte.ausgemustert_nach || "",
         bemerkung: werte.bemerkung || "",
+        // Welche Zeile das war: ihre Einführung beim Öffnen. Eine neue Zeile
+        // hat keine (``neu``) - ein Jahrgang kann mehrere Zeilen haben.
+        bisher_ab: "bisherAb" in zeile.dataset ? zeile.dataset.bisherAb : null,
+        neu: !("bisherAb" in zeile.dataset),
       });
     }
     // Den Rücklage-Block gibt es nur bei leihbaren Büchern; fehlt er, wird
@@ -292,7 +419,7 @@
         feld.focus();
         return undefined;
       }
-      werte[feld.dataset.buchreiheFeld] = feld.type === "checkbox" ? feld.checked : feld.value.trim();
+      werte[feld.dataset.buchreiheFeld] = feld.value.trim();
     }
     const pflicht = [["titel", "den Titel"], ["verlag", "den Verlag"]];
     // Beim Hinzufügen ist die ISBN eine Eingabe; ob sie gültig ist, prüft der Server.
@@ -307,7 +434,7 @@
     return {
       isbn: werte.isbn, titel: werte.titel, verlag: werte.verlag,
       neupreis: preis(werte.neupreis), leihgebuehr: preis(werte.leihgebuehr),
-      leihbar: Boolean(werte.leihbar), bemerkung: werte.bemerkung || "",
+      bemerkung: werte.bemerkung || "",
     };
   }
 
@@ -433,8 +560,10 @@
     setze("leihgebuehr", preis(buch.leihgebuehr));
     setze("bemerkung", buch.bemerkung || "");
     messeBemerkungen(bereich);
-    const leihbar = bereich.querySelector('[data-buchreihe-feld="leihbar"]');
-    if (leihbar) leihbar.checked = Boolean(buch.leihbar);
+    // „Leihbar“ steht je Jahrgang: die Zeilen übernehmen, was das Buch sonst ist.
+    for (const leihbar of menue.querySelectorAll('[data-planung-zeile] [data-planung-feld="leihbar"]')) {
+      leihbar.checked = Boolean(buch.leihbar);
+    }
     // Weiter geht es mit den Jahrgängen - die Buchreihe ist vollständig.
     const jahrgang = menue.querySelector('[data-planung-zeile] [data-planung-feld="jahrgang"]');
     (jahrgang || feld).focus();
@@ -522,6 +651,9 @@
       sende("/api/buchplanung/antrag", {
         isbn: zeile.dataset.isbn, fach: zeile.dataset.fach,
         jahrgang: Number(zeile.dataset.jahrgang), art: zeile.dataset.antrag,
+        // Welche Zeile des Jahrgangs - nach einem Wechsel von „leihbar“ hat er zwei.
+        eingefuehrt_ab: zeile.dataset.eingefuehrtAb === undefined ? null
+          : zeile.dataset.eingefuehrtAb,
         ergebnis: ergebnis,
         begruendung: begruendung ? begruendung.value.trim() : null,
       }, () => ergebnis === null ? "Die Begründung wurde gespeichert."

@@ -413,7 +413,7 @@ def test_derselbe_jahrgang_zweimal_wird_abgelehnt(
     antwort = seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
         "zeilen": [{"jahrgang": 7, "eingefuehrt_ab": "2028/2029"},
-                   {"jahrgang": 7, "eingefuehrt_ab": "2029/2030"}],
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/29"}],
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 400
@@ -1047,31 +1047,68 @@ def test_das_menue_heisst_wie_in_iserv_und_fragt_nach_leihbar(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
     assert "Buchreihe bearbeiten" in vorlage
-    # Erst die Buchreihe, dann Leihbar, dann Einführung und Ausmusterung.
-    assert vorlage.index('data-buchreihe-feld="leihgebuehr"') \
-        < vorlage.index('data-buchreihe-feld="leihbar"') \
-        < vorlage.index("Einführung und Ausmusterung")
-    leihbar = vorlage.split('data-buchreihe-feld="leihbar"')[1].split(">")[0]
-    assert "checked" in leihbar
+    # „Leihbar“ steht nicht bei der Buchreihe, sondern je Zeile - als Spalte
+    # hinter dem Jahrgang.
+    assert 'data-buchreihe-feld="leihbar"' not in vorlage
+    assert vorlage.index("Einführung und Ausmusterung") < vorlage.index("<th>Leihbar</th>") \
+        < vorlage.index("Einführung<br>zum Schuljahr")
+    zeile = vorlage.split("<tr data-planung-zeile")[1].split("</tr>")[0]
+    leihbar = zeile.split('data-planung-feld="leihbar"')[1].split(">")[0]
+    assert "checked" in leihbar and "disabled" not in leihbar
+    assert 'data-bisher-ab=""' in zeile and "data-alt" in zeile
     neu = text.split('id="planung-neu-vorlage"')[1].split("</template>")[0]
     assert "Buch hinzufügen" in neu
-    assert 'data-buchreihe-feld="leihbar"' in neu
+    assert "<th>Leihbar</th>" in neu and 'data-buchreihe-feld="leihbar"' not in neu
+    leer = text.split('id="planung-leerzeile"')[1].split("</template>")[0]
+    assert 'data-planung-feld="leihbar"' in leer
+    # Das Menü kennt Schuljahr und Vorjahr, um eine Zeile beim Umschalten zu teilen.
+    assert 'data-planungsjahr="2026/2027" data-vorjahr="2025/2026"' in text
 
 
 def test_korrigiertes_leihbar_steht_in_der_liste(seiten: TestClient, abgeglichen: dict) -> None:
     antwort = seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": KAUF, "fach": "Latein",
-        "zeilen": [{"jahrgang": 5}],
-        "buchreihe": {**_buchreihe("Wörterbuch Latein", "Langenscheidt", 19.9), "leihbar": True},
+        "zeilen": [{"jahrgang": 5, "leihbar": True, "bisher_ab": ""}],
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
+    wb = openpyxl.load_workbook(antwort.json()["datei"])
+    assert "leihbar" not in [z.value for z in wb["Buchreihen"][1]]
     text = seiten.get("/buecherliste/fach/Latein").text
     zeile = text.split(f'<tr data-isbn="{KAUF}"')[1].split("</tr>")[0]
-    assert 'data-wert="1"' in zeile
+    assert 'data-wert="1" class="aenderung" title="In IServ: Latein Jg. 5 nein"' in zeile
     assert "in IServ: nein" in text
     # Jetzt gibt es auch den Rücklage-Block.
     assert "Rücklage für die Fachschaft Latein" in text
+
+
+def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dict) -> None:
+    """Was das Menü beim Umschalten schickt: die alte Zeile endet mit dem
+    Vorjahr, eine neue beginnt. Danach ist die alte gesperrt."""
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "leihbar": True, "ausgemustert_nach": "2025/2026",
+                    "bisher_ab": ""},
+                   {"jahrgang": 5, "leihbar": False, "eingefuehrt_ab": "2026/2027", "neu": True}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    planung = next(b for b in antwort.json()["planung"]["buecher"]
+                   if b["isbn"] == DEUTSCH)["planung"]
+    assert [(z["jahrgang"], z["leihbar"], z["eingefuehrt_ab"], z["ausgemustert_nach"])
+            for z in planung] == [(5, True, "", "2025/2026"), (5, False, "2026/2027", "")]
+    vorlage = _deutsch_vorlage(seiten)
+    alt, neu = vorlage.split("<tr data-planung-zeile")[1:3]
+    assert "disabled" in alt.split('data-planung-feld="leihbar"')[1].split(">")[0]
+    assert 'data-bisher-ab="2026/2027"' in neu and "data-alt" not in neu.split(">")[0]
+    # Auf der Seite steht das Buch weiter in Jahrgang 5 - als Kaufbuch.
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = text.split(f'<tr data-isbn="{DEUTSCH}"')[1].split("</tr>")[0]
+    assert 'data-wert="0"' in zeile and "(bis" not in zeile
+    # Die Änderungsliste führt beides als Antrag.
+    liste = seiten.get("/buecherliste/aenderungen").text
+    assert liste.count(f'data-isbn="{DEUTSCH}"') == 2
+    assert 'data-eingefuehrt-ab="2026/2027"' in liste
 
 
 def _deutsch_vorlage(seiten: TestClient) -> str:
@@ -1079,11 +1116,11 @@ def _deutsch_vorlage(seiten: TestClient) -> str:
     return text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
 
 
-def test_das_menue_fragt_unter_leihbar_nach_der_bemerkung(
+def test_das_menue_fragt_unter_den_preisen_nach_der_bemerkung(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     vorlage = _deutsch_vorlage(seiten)
-    assert vorlage.index('data-buchreihe-feld="leihbar"') \
+    assert vorlage.index('data-buchreihe-feld="leihgebuehr"') \
         < vorlage.index('data-buchreihe-feld="bemerkung"') \
         < vorlage.index("Einführung und Ausmusterung")
     neu = seiten.get("/buecherliste/fach/Deutsch").text \
@@ -1267,7 +1304,7 @@ def test_eine_eingefuehrte_planung_gleicht_iserv(
     """Eingeführt ab diesem Schuljahr heißt: laut Datei dieses Jahr da."""
     seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
-        "zeilen": [{"jahrgang": 5}, {"jahrgang": 6, "eingefuehrt_ab": "2026/2027"}],
+        "zeilen": [{"jahrgang": 5}, {"jahrgang": 6, "eingefuehrt_ab": "2026/2027", "leihbar": True}],
         "mtime": abgeglichen["mtime"],
     })
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
@@ -1435,8 +1472,8 @@ def test_die_kuerzere_seite_eines_abschnitts_reicht_bis_unten(
     for isbn, titel, leihbar in ((NEU, "Elemente Chemie", True), (KAUF, "Arbeitsheft Chemie", False)):
         antwort = seiten.post("/api/buchplanung/buch/neu", json={
             "schuljahr": "2026/2027", "isbn": isbn, "fach": "Chemie",
-            "zeilen": [{"jahrgang": 9, "eingefuehrt_ab": "2026/2027"}],
-            "buchreihe": {**_buchreihe(titel, "Klett"), "leihbar": leihbar},
+            "zeilen": [{"jahrgang": 9, "eingefuehrt_ab": "2026/2027", "leihbar": leihbar}],
+            "buchreihe": _buchreihe(titel, "Klett"),
             "mtime": mtime,
         })
         assert antwort.status_code == 200, antwort.text

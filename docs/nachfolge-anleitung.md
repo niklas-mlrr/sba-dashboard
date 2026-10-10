@@ -265,8 +265,13 @@ eigenen. In der letzten Zeile lässt sich ein **weiterer Jahrgang** eintragen,
 auch einer, der das Buch heute noch gar nicht hat. Gespeichert wird, sobald Sie
 ein Feld verlassen.
 
-Die Ausmusterung gibt es nur bei **Leihbüchern**: was die Familien selbst
-kaufen, liegt in keinem Regal der Schule, und das Feld ist dort gesperrt.
+**„Leihbar" steht je Zeile**, als Häkchen hinter dem Jahrgang: ein Buch kann
+in einem Jahrgang Leihbuch und im nächsten Kaufbuch sein. Wird das Häkchen
+eines Jahrgangs umgestellt, der schon vor diesem Schuljahr geführt wurde,
+bleibt die alte Zeile stehen, wird aber nach dem Vorjahr ausgemustert (ihr
+Häkchen ist dann grau), und darunter erscheint eine neue Zeile ab diesem
+Schuljahr mit dem neuen Wert. Ein Klick auf das Häkchen der neuen Zeile nimmt
+das wieder zurück. Beides steht danach als Antrag unter „Änderungen".
 
 **Rechts: die Rücklage.** Wie viele Exemplare die Fachschaft behalten möchte,
 statt sie wegzuwerfen, dazu ein Stand (gewünscht / zugesagt / zurückgelegt) und
@@ -337,9 +342,9 @@ Vier Blätter:
 
 * **Buchreihen** — jeder Titel einmal, mit Fach, Jahrgang und Preisen. Drin sind alle Bücher des laufenden Schuljahres und aus dem
   Vorjahr die leihbaren; nur die liegen noch im Bestand der Schule. Titel,
-  Verlag, Preise und „leihbar“ gelten, wie sie hier stehen. Was IServ anders
+  Verlag und Preise gelten, wie sie hier stehen. Was IServ anders
   führt, zeigt das Programm auf den Bücherlisten-Seiten, nicht in der Datei.
-* **Fächer & Jahrgang** — eine Zeile je Buch, Fach und Jahrgang, mit
+* **Fächer & Jahrgang** — eine Zeile je Buch, Fach und Jahrgang, mit „leihbar“ (ja/nein),
   Einführung, Ausmusterung, der Entscheidung über beide (Spalten „Antrag …",
   mit Kürzel und Datum), einer Begründung und der Bestätigung der
   Fachkonferenzleitung. Den

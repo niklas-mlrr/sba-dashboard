@@ -58,7 +58,8 @@
     <button type="button" class="jgzeile" data-planung="antrag-menue" data-vorlage="antrag-{{ e.nummer }}"
       data-antrag="{{ e.art }}" data-status="{{ e.status }}">
       <span class="jg">Jg. {{ e.jahrgang }}</span>
-      <span class="wann">{{ "ab" if e.einfuehrung else "bis" }} {{ schuljahr_kurz(e.schuljahr) }}</span>
+      <span class="wann">{{ "ab" if e.einfuehrung else "bis" }} {{ schuljahr_kurz(e.schuljahr) }}
+        {%- if not e.leihbar and not z.titel %} <span class="label label-default">Kaufbuch</span>{% endif %}</span>
       <span class="rechts">{{ bp.statuslabel(e.status) }}
         {%- if e.begruendung %} <span title="{{ e.begruendung }}" aria-label="mit Begründung">¶</span>{% endif %}</span>
     </button>
@@ -76,7 +77,8 @@
 {% macro antragsmenue(e) %}
 <template id="antrag-{{ e.nummer }}">
   <div class="antrag-menue" data-antrag="{{ e.art }}" data-isbn="{{ e.isbn }}"
-    data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}">
+    data-fach="{{ e.fach }}" data-jahrgang="{{ e.jahrgang }}"
+    data-eingefuehrt-ab="{{ e.eingefuehrt_ab }}">
   <div class="modal-header">
     <span class="antrag-art antrag-art-{{ e.art }}">{{ "Einführung" if e.einfuehrung else "Ausmusterung" }}
       · {{ e.fach }} · Jahrgang {{ e.jahrgang }}</span>

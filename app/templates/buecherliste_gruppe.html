@@ -23,6 +23,7 @@
 {% block kopfzeile %}
 <div id="buchplanung" data-schuljahr="{{ planung.schuljahr }}"
   {% if planung.mtime is not none %}data-mtime="{{ planung.mtime }}"{% endif %}
+  data-planungsjahr="{{ planung.planungsjahr }}" data-vorjahr="{{ planung.vorjahr }}"
   data-ansicht="{{ ansicht }}"></div>
 <p id="planung-meldung" class="hinweis meldung" hidden></p>
 {{ bp.hinweise(planung, ansicht, gruppe.name if gruppe else none) }}
@@ -31,7 +32,10 @@
 {#
   Nachgebaut nach der IServ-Detailseite einer Bücherliste, nur lesend: ohne
   Zurückhalten/Einstellungen/Vorschau/Drucken, ohne Hinzufügen und Entfernen,
-  und "Leihbar" ist ein Häkchen, das sich nicht umschalten lässt.
+  und "Leihbar" ist ein Häkchen, das sich nicht umschalten lässt. „Leihbar“
+  gilt je Fach und Jahrgang: ist ein Buch in den Jahrgängen der Zeile teils
+  leihbar, teils nicht, steht das Häkchen halb (``leihbaeckchen``, gesetzt von
+  static/buchplanung.js), und beim Überfahren steht, wo.
 
   Bei Fach und Verlag kommen die Bücher aus mehreren Jahrgangslisten; dort
   steht deshalb zusätzlich die Spalte Jahrgang. Sie sortiert als Text mit
@@ -71,6 +75,19 @@
   Zeichen in der Zeile - ein Pfeil vorn, ein Zahnrad hinten - stand vorher da
   und ist wieder weg: es steht in jeder Zeile, sagt aber immer dasselbe.
 #}
+{#
+  Gelb ist das Häkchen, wenn IServ „leihbar“ in einem Jahrgang dieser Zeile
+  anders führt (``leihbar_iserv``) - beim Überfahren steht, wo.
+#}
+{% macro leihbaeckchen(buch) -%}
+{%- set anders = buch.leihbar_iserv or () -%}
+<td data-wert="{{ 0.5 if buch.leihbar_teilweise else (1 if buch.leihbar else 0) }}"
+  {%- if anders %} class="aenderung" title="In IServ: {% for paar, wert in anders %}{{ paar[0] }} Jg. {{ paar[1] }} {{ 'ja' if wert else 'nein' }}{{ '; ' if not loop.last }}{% endfor %}"
+  {%- elif buch.leihbar_titel %} title="{{ buch.leihbar_titel }}"{% endif %}><input type="checkbox"
+  class="nur-lesen" tabindex="-1" aria-readonly="true"
+  {%- if buch.leihbar %} checked{% endif %}{% if buch.leihbar_teilweise %} data-teilweise{% endif %}
+  aria-label="leihbar{{ ' (teilweise)' if buch.leihbar_teilweise }}"></td>
+{%- endmacro %}
 {% macro buchtabelle(buecher, mit_jahrgang, gesamt=false, ohne="", fach=none) %}
 {#
   Geplant wird nur in der Fach-Ansicht und nur, wenn es eine Datei gibt: ohne
@@ -125,8 +142,7 @@
       <td data-wert="{{ buch.isbn }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
       <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}"{{ feldabweichung(iserv, "neupreis") }}>{{ euro(buch.neupreis) }}</td>
       <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}"{{ feldabweichung(iserv, "leihgebuehr") }}>{{ euro(buch.leihgebuehr) }}</td>
-      <td data-wert="{{ 1 if buch.leihbar else 0 }}"{{ feldabweichung(iserv, "leihbar") }}><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
-        {% if buch.leihbar %}checked{% endif %} aria-label="leihbar"></td>
+      {{ leihbaeckchen(buch) }}
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
     </tr>
@@ -253,8 +269,7 @@
       <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
       <td data-wert="{{ e.neupreis if e.neupreis is not none else '' }}">{{ euro(e.neupreis) }}</td>
       <td data-wert="{{ e.leihgebuehr if e.leihgebuehr is not none else '' }}">{{ euro(e.leihgebuehr) }}</td>
-      <td data-wert="{{ 1 if e.leihbar else 0 }}"><input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
-        {% if e.leihbar %}checked{% endif %} aria-label="leihbar"></td>
+      {{ leihbaeckchen(e) }}
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, e, gruppe.name) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
     </tr>

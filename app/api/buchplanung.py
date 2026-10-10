@@ -22,7 +22,6 @@ from starlette.concurrency import run_in_threadpool
 from buecherlisten.planung import (
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
-    Antragsentscheidung,
     Buchplanung,
     Buchreiheneingabe,
     Jahrgangseingabe,
@@ -39,6 +38,7 @@ from ..modelle import (
     BuchHinzufuegenAnfrage,
     BuchplanungsAnfrage,
     FachbestaetigungAnfrage,
+    JahrgangEingabe,
     PlanungsAnfrage,
     RuecklageAnfrage,
 )
@@ -64,19 +64,22 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
             "verlag": buch.verlag,
             "faecher": list(buch.faecher),
             "jahrgaenge": list(buch.jahrgaenge),
-            "leihbar": buch.leihbar,
+            "leihbar": stand.leihbar(buch.isbn),
             "neupreis": buch.neupreis,
             "leihgebuehr": buch.leihgebuehr,
             "bemerkung": bemerkung.bemerkung if bemerkung else "",
+            # Je Zeile - ein Jahrgang kann nach einem Wechsel von „leihbar“
+            # zwei haben, unterschieden an der Einführung.
             "planung": [
                 {
                     "fach": fach,
                     "jahrgang": jahrgang,
-                    "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
-                    "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
-                    "kuerzel": zeile.kuerzel if zeile else "",
-                    "datum": zeile.datum.isoformat() if zeile and zeile.datum else None,
-                    "bemerkung": zeile.bemerkung if zeile else "",
+                    "leihbar": zeile.leihbar,
+                    "eingefuehrt_ab": zeile.eingefuehrt_ab,
+                    "ausgemustert_nach": zeile.ausgemustert_nach,
+                    "kuerzel": zeile.kuerzel,
+                    "datum": zeile.datum.isoformat() if zeile.datum else None,
+                    "bemerkung": zeile.bemerkung,
                     "status": planungs_status(zeile, stand.schuljahr),
                     **{
                         f"antrag_{art}": {
@@ -85,12 +88,12 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
                             "datum": antrag.datum.isoformat() if antrag.datum else None,
                         }
                         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
-                        for antrag in ((zeile.antrag(art) if zeile else Antragsentscheidung()),)
+                        for antrag in (zeile.antrag(art),)
                     },
-                    "begruendung": zeile.begruendung if zeile else "",
+                    "begruendung": zeile.begruendung,
                 }
                 for fach, jahrgang in stand.zeilen_des_buchs(buch)
-                for zeile in (stand.planungszeile(buch.isbn, fach, jahrgang),)
+                for zeile in stand.zeilen_des_paars(buch.isbn, fach, jahrgang)
             ],
             "ruecklagen": [
                 {
@@ -126,6 +129,17 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
         "verlage": list(stand.verlage),
         "warnungen": list(stand.warnungen),
     }
+
+
+def _jahrgaenge(zeilen: list[JahrgangEingabe]) -> list[Jahrgangseingabe]:
+    return [
+        Jahrgangseingabe(
+            jahrgang=zeile.jahrgang, eingefuehrt_ab=zeile.eingefuehrt_ab,
+            ausgemustert_nach=zeile.ausgemustert_nach, bemerkung=zeile.bemerkung,
+            leihbar=zeile.leihbar, bisher_ab=zeile.bisher_ab, neu=zeile.neu,
+        )
+        for zeile in zeilen
+    ]
 
 
 def _antwort(stand: domaene.Stand, **zusatz: object) -> JSONResponse:
@@ -197,20 +211,14 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
     stand = domaene.schreibe_buchplanung(
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
-        zeilen=[
-            Jahrgangseingabe(
-                jahrgang=zeile.jahrgang, eingefuehrt_ab=zeile.eingefuehrt_ab,
-                ausgemustert_nach=zeile.ausgemustert_nach, bemerkung=zeile.bemerkung,
-            )
-            for zeile in anfrage.zeilen
-        ],
+        zeilen=_jahrgaenge(anfrage.zeilen),
         ruecklage=None if anfrage.ruecklage is None else Ruecklageneingabe(
             anzahl=anfrage.ruecklage.anzahl, bemerkung=anfrage.ruecklage.bemerkung,
         ),
         buchreihe=None if anfrage.buchreihe is None else Buchreiheneingabe(
             titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
             neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
-            leihbar=anfrage.buchreihe.leihbar, bemerkung=anfrage.buchreihe.bemerkung,
+            bemerkung=anfrage.buchreihe.bemerkung,
         ),
         mtime=anfrage.mtime,
     )
@@ -226,15 +234,9 @@ def api_buch_neu(request: Request, anfrage: BuchHinzufuegenAnfrage) -> JSONRespo
         buchreihe=Buchreiheneingabe(
             titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
             neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
-            leihbar=anfrage.buchreihe.leihbar, bemerkung=anfrage.buchreihe.bemerkung,
+            bemerkung=anfrage.buchreihe.bemerkung,
         ),
-        zeilen=[
-            Jahrgangseingabe(
-                jahrgang=zeile.jahrgang, eingefuehrt_ab=zeile.eingefuehrt_ab,
-                ausgemustert_nach=zeile.ausgemustert_nach, bemerkung=zeile.bemerkung,
-            )
-            for zeile in anfrage.zeilen
-        ],
+        zeilen=_jahrgaenge(anfrage.zeilen),
         mtime=anfrage.mtime,
     )
     return _antwort(stand)
@@ -248,7 +250,8 @@ def api_planung(request: Request, anfrage: PlanungsAnfrage) -> JSONResponse:
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
         jahrgang=anfrage.jahrgang, eingefuehrt_ab=anfrage.eingefuehrt_ab,
         ausgemustert_nach=anfrage.ausgemustert_nach, kuerzel=anfrage.kuerzel,
-        datum=anfrage.datum, bemerkung=anfrage.bemerkung, mtime=anfrage.mtime,
+        datum=anfrage.datum, bemerkung=anfrage.bemerkung, leihbar=anfrage.leihbar,
+        mtime=anfrage.mtime,
     )
     return _antwort(stand)
 
@@ -267,7 +270,8 @@ def api_antrag(request: Request, anfrage: AntragAnfrage) -> JSONResponse:
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
         jahrgang=anfrage.jahrgang, art=anfrage.art, ergebnis=anfrage.ergebnis,
-        kuerzel=kuerzel, begruendung=anfrage.begruendung, mtime=anfrage.mtime,
+        kuerzel=kuerzel, begruendung=anfrage.begruendung,
+        eingefuehrt_ab=anfrage.eingefuehrt_ab, mtime=anfrage.mtime,
     )
     return _antwort(stand)
 

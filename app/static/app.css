@@ -887,8 +887,7 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   padding: 0 15px;
 }
 .iserv-modal .buchreihe-form .preisfeld { flex: 0 0 33.33333333%; padding: 0 15px; }
-.iserv-modal .buchreihe-leihbar .checkbox { margin: 0; }
-.iserv-modal .buchreihe-leihbar .checkbox label { font-weight: 700; cursor: pointer; }.iserv-modal .input-group { display: flex; }
+.iserv-modal .input-group { display: flex; }
 .iserv-modal .input-group .form-control {
   flex: 1 1 auto;
   min-width: 0;
@@ -1006,6 +1005,10 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-feld-jahrgang { width: calc(2ch + 2.4rem); min-width: calc(2ch + 2.4rem); }
 .planung-feld-anzahl { width: calc(4ch + 2.4rem); }
 .planung-spalte-jahrgang { white-space: nowrap; }
+/* „Leihbar“ je Zeile; eine ausgemusterte Zeile hat ein graues Häkchen. */
+.planung-spalte-leihbar { text-align: center; }
+.planung-spalte-leihbar input[type="checkbox"] { cursor: pointer; }
+.planung-spalte-leihbar input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .45; }
 .planung-spalte-bemerkung { width: 100%; }
 .planung-zeilenende { white-space: nowrap; text-align: right; }
 

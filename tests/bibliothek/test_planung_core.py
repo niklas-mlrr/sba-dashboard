@@ -72,20 +72,22 @@ KAUF = "9783140000000"
 def _buecher() -> tuple[Buch, ...]:
     return (
         Buch(isbn=DEUTSCH, titel="Deutschbuch 5", verlag="Cornelsen",
-             kombinationen=(("Deutsch", 5),), leihbar=True,
+             kombinationen=(("Deutsch", 5),), leihbar_paare=(("Deutsch", 5),),
              neupreis=22.5, leihgebuehr=5.0),
         # Ein Mehrjahresband in zwei Fächern: vier Zeilen auf "Fächer & Jahrgang".
         Buch(isbn=TERRA, titel="Terra 5/6", verlag="Klett",
              kombinationen=(("Erdkunde", 5), ("Erdkunde", 6),
                             ("Politik", 5), ("Politik", 6)),
-             leihbar=True, neupreis=25.0, leihgebuehr=5.0),
+             leihbar_paare=(("Erdkunde", 5), ("Erdkunde", 6), ("Politik", 5), ("Politik", 6)),
+             neupreis=25.0, leihgebuehr=5.0),
         # Nur im Vorjahr und leihbar: das ist der Fall "ausgemustert", für den
         # eine Fachschaft Exemplare zurücklegen lassen möchte.
         Buch(isbn=ALT, titel="Chemie heute 9", verlag="Westermann",
-             kombinationen=(("Chemie", 9),), leihbar=True, neupreis=30.0),
+             kombinationen=(("Chemie", 9),), leihbar_paare=(("Chemie", 9),),
+             neupreis=30.0),
         # Kein Leihbuch: die Familien kaufen es selbst.
         Buch(isbn=KAUF, titel="Wörterbuch Latein", verlag="Langenscheidt",
-             kombinationen=(("Latein", 7),), leihbar=False, neupreis=19.9),
+             kombinationen=(("Latein", 7),), neupreis=19.9),
     )
 
 
@@ -167,8 +169,8 @@ def test_buecher_kommen_mit_ihren_kombinationen_zurueck(tmp_path, stand):
     # Jedes Buch steht auf "Buchreihen" - auch das nur im Vorjahr geführte und
     # das Kaufbuch.
     assert gelesen.buch(ALT).neupreis == 30.0
-    assert gelesen.buch(KAUF).leihbar is False
-    assert gelesen.buch(ALT).leihbar is True
+    assert gelesen.leihbar(KAUF) is False
+    assert gelesen.leihbar(ALT) is True
 
 
 def test_eine_planung_ohne_heutiges_vorkommen_bleibt_erhalten(tmp_path, stand):
@@ -307,7 +309,7 @@ def test_faecher_und_jahrgaenge_bleiben_die_der_datei(stand):
                    if b.isbn == DEUTSCH else b for b in _buecher())
     neu = zusammenfuehren(stand, _schnappschuss(anders))
     assert neu.buch(DEUTSCH).kombinationen == (("Deutsch", 5),)
-    assert neu.planungszeile(DEUTSCH, "Deutsch", 5) is None
+    assert not neu.planungszeile(DEUTSCH, "Deutsch", 5).ausgemustert_nach
 
 
 def test_fehlendes_vorjahr_ist_kein_fehler_sondern_eine_warnung(stand):
@@ -325,7 +327,7 @@ def test_ein_neues_buch_wirft_das_fach_aus_seiner_bestaetigung(stand):
 
     zusaetzlich = _buecher() + (
         Buch(isbn="9783060000012", titel="Deutschbuch 6", verlag="Cornelsen",
-             kombinationen=(("Deutsch", 6),), leihbar=True, neupreis=23.0),
+             kombinationen=(("Deutsch", 6),), leihbar_paare=(("Deutsch", 6),), neupreis=23.0),
     )
     neu = zusammenfuehren(stand, _schnappschuss(zusaetzlich))
     status, hinweis = fach_status(neu, "Deutsch")
@@ -345,7 +347,7 @@ def test_leeres_kuerzel_nimmt_die_bestaetigung_zurueck(stand):
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=None)
     zurueck, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="", datum=None)
     assert fach_status(zurueck, "Deutsch")[0] == FACH_OFFEN
-    assert zurueck.planungszeile(DEUTSCH, "Deutsch", 5) is None
+    assert not zurueck.planungszeile(DEUTSCH, "Deutsch", 5).bestaetigt
 
 
 def test_fach_ohne_bestaetigung_ist_offen(stand):
@@ -407,8 +409,144 @@ def test_derselbe_jahrgang_zweimal_wird_abgelehnt(stand):
     with pytest.raises(UngueltigeEingabe, match="zweimal"):
         setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
             Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/2029"),
+            Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/29"),
+        ])
+
+
+def test_zwei_zeilen_eines_jahrgangs_duerfen_sich_nicht_ueberschneiden(stand):
+    with pytest.raises(UngueltigeEingabe, match="überschneiden"):
+        setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+            Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/2029"),
             Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2029/2030"),
         ])
+    # Die eingeführte Zeile läuft, solange sie keine Ausmusterung hat.
+    with pytest.raises(UngueltigeEingabe, match="überschneiden"):
+        setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+            Jahrgangseingabe(jahrgang=5, bisher_ab=""),
+            Jahrgangseingabe(jahrgang=5, eingefuehrt_ab="2026/2027", leihbar=False, neu=True),
+        ])
+
+
+# ── „leihbar“ je Zeile ───────────────────────────────────────────────────────
+
+
+def _teile_deutsch(stand):
+    """Wie das Menü „leihbar“ an Deutsch 5 umschaltet: die alte Zeile endet mit
+    dem Vorjahr, die neue beginnt mit dem Schuljahr."""
+    return setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026", leihbar=True, bisher_ab=""),
+        Jahrgangseingabe(jahrgang=5, eingefuehrt_ab="2026/2027", leihbar=False, neu=True),
+    ])
+
+
+def test_leihbar_steht_je_zeile(stand):
+    assert stand.planungszeile(DEUTSCH, "Deutsch", 5).leihbar
+    assert not stand.planungszeile(KAUF, "Latein", 7).leihbar
+    assert stand.leihbar(DEUTSCH) and not stand.leihbar(KAUF)
+    # Nur eine Zeile umschalten, ohne die anderen anzufassen.
+    neu = setze_planung(stand, isbn=TERRA, fach="Politik", jahrgang=6, leihbar=False)
+    assert not neu.planungszeile(TERRA, "Politik", 6).leihbar
+    assert neu.planungszeile(TERRA, "Politik", 5).leihbar
+    assert neu.planungszeile(TERRA, "Erdkunde", 6).leihbar
+    # ``None`` lässt den Wert stehen.
+    assert setze_planung(neu, isbn=TERRA, fach="Politik", jahrgang=6,
+                         ausgemustert_nach="2030/2031").planungszeile(TERRA, "Politik", 6).leihbar \
+        is False
+
+
+def test_ein_wechsel_von_leihbar_sind_zwei_zeilen(tmp_path, stand):
+    neu = _teile_deutsch(stand)
+    alt, jetzt = neu.zeilen_des_paars(DEUTSCH, "Deutsch", 5)
+    assert (alt.eingefuehrt_ab, alt.ausgemustert_nach, alt.leihbar) == ("", "2025/2026", True)
+    assert (jetzt.eingefuehrt_ab, jetzt.ausgemustert_nach, jetzt.leihbar) \
+        == ("2026/2027", "", False)
+    # Die maßgebliche Zeile ist die, die dieses Schuljahr wirkt.
+    assert neu.planungszeile(DEUTSCH, "Deutsch", 5) == jetzt
+    assert neu.planungszeile(DEUTSCH, "Deutsch", 5, "") == alt
+    assert planungs_status(alt, neu.schuljahr) == PLANUNG_AUSGEMUSTERT
+    assert wirkt_im_schuljahr(jetzt, neu.schuljahr)
+    # Das Buch bleibt in der Bücherliste, jetzt als Kaufbuch.
+    assert neu.korrekturen_fuer_iserv()[DEUTSCH]["borrowable"] == {5: False}
+    assert neu.leihbar(DEUTSCH)  # die alte Zeile war leihbar: Rücklage bleibt möglich
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, neu)
+    gelesen = lies_datei(pfad)
+    assert gelesen.zeilen_des_paars(DEUTSCH, "Deutsch", 5) == (alt, jetzt)
+    assert gelesen.buch(DEUTSCH).kombinationen == (("Deutsch", 5),)
+    # Ein Abgleich lässt beide stehen.
+    assert zusammenfuehren(gelesen, _schnappschuss()).zeilen_des_paars(
+        DEUTSCH, "Deutsch", 5) == (alt, jetzt)
+
+
+def test_ein_wechsel_von_leihbar_ist_ein_antrag_mit_partner(stand):
+    neu = _teile_deutsch(stand)
+    antraege = [a for a in aenderungen_im_schuljahr(neu) if a.isbn == DEUTSCH]
+    assert sorted((a.art, a.schuljahr, a.leihbar) for a in antraege) == [
+        (ART_AUSMUSTERUNG, "2025/2026", True), (ART_EINFUEHRUNG, "2026/2027", False)]
+    verbleib = verbleib_der_buecher(neu, antraege)
+    # Weder ganz neu noch ganz weg: das Buch bleibt in der Liste.
+    assert not verbleib[(DEUTSCH, ART_EINFUEHRUNG)].ganz
+    assert not verbleib[(DEUTSCH, ART_AUSMUSTERUNG)].ganz
+    # Entschieden wird je Zeile - über die Einführung gewählt.
+    entschieden = entscheide_antrag(neu, isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
+                                    art=ART_AUSMUSTERUNG, ergebnis="genehmigt", kuerzel="SL",
+                                    eingefuehrt_ab="", heute=date(2026, 10, 1))
+    assert entschieden.planungszeile(DEUTSCH, "Deutsch", 5, "").antrag_ausmusterung.status \
+        == ANTRAG_GENEHMIGT
+    assert entschieden.planungszeile(DEUTSCH, "Deutsch", 5, "2026/2027") \
+        .antrag_ausmusterung.status == ANTRAG_OFFEN
+
+
+def test_rueckgaengig_macht_aus_zwei_zeilen_wieder_eine(stand):
+    """Das Menü entfernt die neue Zeile und gibt der alten ihre Ausmusterung zurück."""
+    geteilt = _teile_deutsch(stand)
+    zurueck = setze_buchplanung(geteilt, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="", leihbar=True, bisher_ab=""),
+    ])
+    assert zurueck.zeilen_des_paars(DEUTSCH, "Deutsch", 5) == (
+        stand.planungszeile(DEUTSCH, "Deutsch", 5),)
+
+
+def test_eine_ausgemusterte_zeile_behaelt_ihren_wert_wenn_die_neue_umschaltet(stand):
+    geteilt = _teile_deutsch(stand)
+    # Die neue Zeile beginnt dieses Schuljahr: einfach umschalten.
+    neu = setze_buchplanung(geteilt, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026", bisher_ab=""),
+        Jahrgangseingabe(jahrgang=5, eingefuehrt_ab="2026/2027", leihbar=True,
+                         bisher_ab="2026/2027"),
+    ])
+    assert [z.leihbar for z in neu.zeilen_des_paars(DEUTSCH, "Deutsch", 5)] == [True, True]
+
+
+def test_eine_alte_datei_bekommt_leihbar_je_zeile_aus_buchreihen(tmp_path, stand):
+    from openpyxl import load_workbook
+
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    # Den Aufbau bis 2026-10-10 nachstellen: „leihbar“ auf „Buchreihen“, nicht
+    # auf „Fächer & Jahrgang“.
+    wb = load_workbook(pfad)
+    reihen, paare = wb["Buchreihen"], wb["Fächer & Jahrgang"]
+    spalte = [c.value for c in paare[1]].index("leihbar") + 1
+    paare.delete_cols(spalte)
+    reihen.cell(1, reihen.max_column + 1, "leihbar")
+    isbn_spalte = [c.value for c in reihen[1]].index("ISBN") + 1
+    for nummer in range(2, reihen.max_row + 1):
+        isbn = reihen.cell(nummer, isbn_spalte).value
+        reihen.cell(nummer, reihen.max_column, "nein" if isbn in (KAUF, TERRA) else "ja")
+    wb.save(pfad)
+
+    gelesen = lies_datei(pfad)
+    assert gelesen.planungszeile(DEUTSCH, "Deutsch", 5).leihbar
+    assert not gelesen.planungszeile(TERRA, "Politik", 6).leihbar
+    assert not gelesen.planungszeile(KAUF, "Latein", 7).leihbar
+
+    schreibe_datei(pfad, gelesen)
+    wb = load_workbook(pfad)
+    assert "leihbar" not in [c.value for c in wb["Buchreihen"][1]]
+    assert [c.value for c in wb["Fächer & Jahrgang"][1]][:4] == ["ISBN", "Fach", "Jahrgang", "leihbar"]
+    assert lies_datei(pfad).planungszeile(DEUTSCH, "Deutsch", 5).leihbar
 
 
 def test_bestaetigung_bleibt_bei_einer_aenderung_fuer_ein_kuenftiges_jahr(stand):
@@ -595,7 +733,7 @@ def test_titel_und_preis_werden_geaendert(stand):
     # Für das PDF gelten die Werte der Datei - für jedes Buch, alle Felder.
     assert neu.korrekturen_fuer_iserv()[DEUTSCH] == {
         "title": "Deutschbuch 5 (NRW)", "publisher": "Cornelsen", "price": 24.0,
-        "fee": 5.0, "borrowable": True}
+        "fee": 5.0, "borrowable": {5: True}}
     assert set(neu.korrekturen_fuer_iserv()) == {b.isbn for b in neu.buecher}
 
 
@@ -766,9 +904,9 @@ def test_ein_im_menue_angelegtes_buch_uebersteht_datei_und_abgleich(tmp_path, st
 
     # Führt IServ das Buch inzwischen selbst, bleiben Werte und Planung die der Datei.
     aus_iserv = Buch(isbn=NEU, titel="Neu 7 (IServ)", verlag="Klett",
-                     kombinationen=(("Deutsch", 7),), leihbar=True)
+                     kombinationen=(("Deutsch", 7),), leihbar_paare=(("Deutsch", 7),))
     uebergeben = zusammenfuehren(neu, _schnappschuss(_buecher() + (aus_iserv,)))
-    assert (uebergeben.buch(NEU).titel, uebergeben.buch(NEU).leihbar) == ("Neu 7", False)
+    assert (uebergeben.buch(NEU).titel, uebergeben.leihbar(NEU)) == ("Neu 7", False)
     assert uebergeben.planungszeile(NEU, "Deutsch", 7).eingefuehrt_ab == "2027/2028"
 
 
@@ -831,30 +969,32 @@ def test_eine_alte_datei_mit_den_spalten_wird_gelesen_und_verliert_sie(tmp_path,
 
 
 def test_leihbar_wird_geaendert_und_uebersteht_datei_und_abgleich(tmp_path, stand):
-    kauf = stand.buch(KAUF)
-    neu = setze_buchreihe(stand, isbn=KAUF, eingabe=_reihe(kauf, leihbar=True))
-    assert neu.buch(KAUF).leihbar
+    neu = setze_planung(stand, isbn=KAUF, fach="Latein", jahrgang=7, leihbar=True)
+    assert neu.leihbar(KAUF)
     # Jetzt darf die Fachschaft auch zurücklegen.
     setze_ruecklage(neu, isbn=KAUF, fach="Latein", anzahl=3)
 
     pfad = tmp_path / "Buchplanung.xlsx"
     schreibe_datei(pfad, neu)
     gelesen = lies_datei(pfad)
-    assert gelesen.buch(KAUF).leihbar
-    assert gelesen.korrekturen_fuer_iserv()[KAUF]["borrowable"] is True
+    assert gelesen.planungszeile(KAUF, "Latein", 7).leihbar
+    assert gelesen.korrekturen_fuer_iserv()[KAUF]["borrowable"] == {7: True}
 
     abgeglichen = zusammenfuehren(gelesen, _schnappschuss())
-    assert abgeglichen.buch(KAUF).leihbar
-    # Ohne Angabe bleibt, was in der Datei steht.
-    ohne = setze_buchreihe(abgeglichen, isbn=KAUF, eingabe=_reihe(kauf, leihbar=None))
-    assert ohne.buch(KAUF).leihbar
+    assert abgeglichen.planungszeile(KAUF, "Latein", 7).leihbar
+    # Die Buchreihe zu ändern lässt „leihbar“ stehen.
+    ohne = setze_buchreihe(abgeglichen, isbn=KAUF, eingabe=_reihe(stand.buch(KAUF)))
+    assert ohne.leihbar(KAUF)
 
 
-def test_ein_neues_buch_nimmt_leihbar_aus_dem_menue(stand):
+def test_ein_neues_buch_nimmt_leihbar_je_jahrgang_aus_dem_menue(stand):
     neu = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
-                           buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett", leihbar=True),
-                           zeilen=_einfuehrung(7))
-    assert neu.buch(NEU).leihbar
+                           buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett"),
+                           zeilen=[Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2027/2028",
+                                                    leihbar=True),
+                                   Jahrgangseingabe(jahrgang=8, eingefuehrt_ab="2027/2028")])
+    assert neu.planungszeile(NEU, "Deutsch", 7).leihbar
+    assert not neu.planungszeile(NEU, "Deutsch", 8).leihbar
 
 
 # ── Die Änderungsliste: Anträge genehmigen oder ablehnen ────────────────────
@@ -920,7 +1060,7 @@ def _ausmustern(stand, isbn, *paare, nach="2026/2027"):
 
 def test_ein_buch_in_keiner_liste_ist_ganz_neu(stand):
     neu = fuege_buch_hinzu(stand, isbn=NEU, fach="Deutsch",
-                           buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett", leihbar=True),
+                           buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett"),
                            zeilen=_einfuehrung(7))
     assert _verbleib(neu, NEU, ART_EINFUEHRUNG).ganz
     # Auch ab diesem Schuljahr: der Jahrgang, in den es kommt, zählt nicht.
@@ -1074,7 +1214,8 @@ def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(
     from openpyxl import load_workbook
     ws = load_workbook(str(pfad))["Fächer & Jahrgang"]
     kopf = [z.value for z in ws[1]]
-    assert kopf[3:12] == [
+    assert kopf[3:13] == [
+        "leihbar",
         "Einführung", "Antrag Einführung", "Antrag Einführung Kürzel",
         "Antrag Einführung Datum", "Ausmusterung nach Schuljahr", "Antrag Ausmusterung",
         "Antrag Ausmusterung Kürzel", "Antrag Ausmusterung Datum", "Begründung",

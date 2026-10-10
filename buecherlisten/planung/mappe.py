@@ -9,7 +9,8 @@ Schlüssel:
 Blatt                   Schlüssel                   eintragbar
 ======================  ==========================  =========================
 ``Buchreihen``          ISBN                        Bemerkung
-``Fächer & Jahrgang``   (ISBN, Fach, Jahrgang)      Einführung, Ausmusterung,
+``Fächer & Jahrgang``   (ISBN, Fach, Jahrgang,      leihbar, Einführung,
+                        Einführung)                 Ausmusterung,
                                                     je Antrag Entscheidung,
                                                     Kürzel, Datum;
                                                     Begründung, Kürzel,
@@ -32,7 +33,7 @@ Unverändert gilt die Regel, die die Mappe widerspruchsfrei hält:
     alles andere wird bei jedem Schreiben neu gesetzt.
 
 Die Ausnahme ist ``Buchreihen``: seit 2026-09-25 ist die Datei das Soll, und
-Titel, Verlag, Preise und leihbar werden gelesen, wie sie dort stehen - der
+Titel, Verlag und Preise werden gelesen, wie sie dort stehen - der
 Abgleich überschreibt sie nicht. Was IServ davon abweichend nennt, zeigt das
 Dashboard im Vergleich, nicht die Datei. Bis dahin trug eine im Menü
 korrigierte Zelle den IServ-Wert als Kommentar („in IServ: 22,50 €“); ein
@@ -70,6 +71,7 @@ from .modelle import (
     Buchplanung,
     Planungszeile,
     Ruecklage,
+    zeitfolge,
 )
 
 BLATT_BUECHER = "Buchreihen"
@@ -106,6 +108,7 @@ SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
 SPALTE_ANTRAG_EINFUEHRUNG = "Antrag Einführung"
 SPALTE_ANTRAG_AUSMUSTERUNG = "Antrag Ausmusterung"
 SPALTE_BEGRUENDUNG = "Begründung"
+SPALTE_LEIHBAR = "leihbar"
 
 _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
     BLATT_BUECHER: (
@@ -116,13 +119,15 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("ISBN", 18, False),
         ("Neupreis", 12, False),
         ("Leihpreis", 12, False),
-        ("leihbar", 9, False),
         ("Bemerkung", 30, True),
     ),
     BLATT_FACH_JAHRGANG: (
         ("ISBN", 18, False),
         ("Fach", 22, False),
         ("Jahrgang", 10, False),
+        # Je Zeile, nicht je Buchreihe (seit 2026-10-10): in IServ steht
+        # „leihbar“ am Eintrag der Jahrgangsliste.
+        (SPALTE_LEIHBAR, 9, True),
         (SPALTE_EINFUEHRUNG, 13, True),
         # Je Antrag drei Spalten, direkt hinter dem Schuljahr, über das
         # entschieden wird: Entscheidung, Kürzel, Datum.
@@ -195,6 +200,12 @@ def _zahl(roh: object) -> float | None:
         return None
 
 
+def _ja(roh: object) -> bool:
+    if isinstance(roh, bool):
+        return roh
+    return _text(roh).casefold() in (_JA, "x", "1", "wahr", "true")
+
+
 def _ganzzahl(roh: object) -> int | None:
     wert = _zahl(roh)
     if wert is None:
@@ -259,6 +270,13 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     ist geplant - auch dann, wenn ihr Schuljahr schon erreicht ist. Bis
     2026-09-25 hielt das eine eigene Spalte ``in der Bücherliste`` fest; eine
     Datei, die sie noch hat, wird genauso gelesen.
+
+    Jede Zeile wird gelesen, auch eine ohne jede Eintragung: sie trägt
+    ``leihbar``. Bis 2026-10-10 stand ``leihbar`` je Buch auf ``Buchreihen``;
+    fehlt die Spalte auf ``Fächer & Jahrgang``, gilt für jede Zeile eines Buchs
+    der alte Wert, und beim nächsten Speichern steht er an der neuen Stelle.
+    Steht dieselbe Zeile (ISBN, Fach, Jahrgang, Einführung) zweimal da, gilt
+    die erste.
     """
     fehlend = [name for name in BLAETTER if name not in wb.sheetnames]
     if fehlend:
@@ -270,20 +288,23 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
     planung_roh = _zeilen(wb[BLATT_FACH_JAHRGANG])
     ruecklage_roh = _zeilen(wb[BLATT_RUECKLAGE])
 
+    mit_leihbar = SPALTE_LEIHBAR in _kopf(wb[BLATT_FACH_JAHRGANG])
+    leihbar_alt = {_text(zeile.get("ISBN")): _ja(zeile.get(SPALTE_LEIHBAR)) for zeile in buch_roh}
+
     kombinationen: dict[str, set[tuple[str, int]]] = {}
     planung: list[Planungszeile] = []
+    gesehen: set[tuple[str, str, int, object]] = set()
     for zeile in planung_roh:
         isbn = _text(zeile.get("ISBN"))
         fach = _text(zeile.get("Fach")) or OHNE_FACH
         jahrgang = _ganzzahl(zeile.get("Jahrgang"))
         if not isbn or jahrgang is None:
             continue
-        if not _text(zeile.get(SPALTE_EINFUEHRUNG)):
-            kombinationen.setdefault(isbn, set()).add((fach, jahrgang))
         eintrag = Planungszeile(
             isbn=isbn,
             fach=fach,
             jahrgang=jahrgang,
+            leihbar=_ja(zeile.get(SPALTE_LEIHBAR)) if mit_leihbar else leihbar_alt.get(isbn, False),
             eingefuehrt_ab=_text(zeile.get(SPALTE_EINFUEHRUNG)),
             ausgemustert_nach=_text(zeile.get(SPALTE_AUSMUSTERUNG)),
             kuerzel=_text(zeile.get("Kürzel")),
@@ -293,8 +314,12 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             antrag_ausmusterung=_lies_antrag(zeile, SPALTE_ANTRAG_AUSMUSTERUNG),
             begruendung=_text(zeile.get(SPALTE_BEGRUENDUNG)),
         )
-        if not eintrag.leer:
-            planung.append(eintrag)
+        if eintrag.schluessel in gesehen:
+            continue
+        gesehen.add(eintrag.schluessel)
+        if not eintrag.eingefuehrt_ab:
+            kombinationen.setdefault(isbn, set()).add((fach, jahrgang))
+        planung.append(eintrag)
 
     buecher = tuple(
         Buch(
@@ -303,7 +328,6 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             verlag=_text(zeile.get("Verlag")) or OHNE_VERLAG,
             kombinationen=tuple(sorted(kombinationen.get(isbn, set()),
                                        key=lambda paar: (paar[0].casefold(), paar[1]))),
-            leihbar=_text(zeile.get("leihbar")).casefold() == _JA,
             neupreis=_zahl(zeile.get("Neupreis")),
             leihgebuehr=_zahl(zeile.get("Leihpreis")),
         )
@@ -447,36 +471,32 @@ def _buchzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "ISBN": buch.isbn,
             "Neupreis": buch.neupreis,
             "Leihpreis": buch.leihgebuehr,
-            "leihbar": _JA if buch.leihbar else _NEIN,
             "Bemerkung": eintrag.bemerkung if eintrag else "",
         })
     return zeilen
 
 
 def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
-    """Je (Buch, Fach, Jahrgang) eine Zeile - sortiert nach Fach, Jahrgang, Titel."""
+    """Jede Planungszeile eines Buchs der Datei - sortiert nach Fach, Jahrgang,
+    Titel und, bei mehreren Zeilen eines Paars, nach der Einführung."""
+    titel = {buch.isbn: buch.titel.casefold() for buch in stand.buecher}
     zeilen: list[dict[str, object]] = []
-    aufgestellt: list[tuple[str, int, str, str]] = []
-    for buch in stand.buecher:
-        for fach, jahrgang in stand.zeilen_des_buchs(buch):
-            aufgestellt.append((fach, jahrgang, buch.titel.casefold(), buch.isbn))
-    for fach, jahrgang, _, isbn in sorted(
-            aufgestellt, key=lambda e: (e[0].casefold(), e[1], e[2], e[3])):
-        zeile = stand.planungszeile(isbn, fach, jahrgang)
+    for zeile in sorted((z for z in stand.planung if z.isbn in titel),
+                        key=lambda z: (z.fach.casefold(), z.jahrgang, titel[z.isbn], z.isbn,
+                                       zeitfolge(z))):
         zeilen.append({
-            "ISBN": isbn,
-            "Fach": fach,
-            "Jahrgang": jahrgang,
-            SPALTE_EINFUEHRUNG: zeile.eingefuehrt_ab if zeile else "",
-            **_schreibe_antrag(SPALTE_ANTRAG_EINFUEHRUNG,
-                               zeile.antrag_einfuehrung if zeile else None),
-            SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach if zeile else "",
-            **_schreibe_antrag(SPALTE_ANTRAG_AUSMUSTERUNG,
-                               zeile.antrag_ausmusterung if zeile else None),
-            SPALTE_BEGRUENDUNG: zeile.begruendung if zeile else "",
-            "Kürzel": zeile.kuerzel if zeile else "",
-            "Datum": zeile.datum if zeile else None,
-            "Bemerkung": zeile.bemerkung if zeile else "",
+            "ISBN": zeile.isbn,
+            "Fach": zeile.fach,
+            "Jahrgang": zeile.jahrgang,
+            SPALTE_LEIHBAR: _JA if zeile.leihbar else _NEIN,
+            SPALTE_EINFUEHRUNG: zeile.eingefuehrt_ab,
+            **_schreibe_antrag(SPALTE_ANTRAG_EINFUEHRUNG, zeile.antrag_einfuehrung),
+            SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach,
+            **_schreibe_antrag(SPALTE_ANTRAG_AUSMUSTERUNG, zeile.antrag_ausmusterung),
+            SPALTE_BEGRUENDUNG: zeile.begruendung,
+            "Kürzel": zeile.kuerzel,
+            "Datum": zeile.datum,
+            "Bemerkung": zeile.bemerkung,
         })
     return zeilen
 
@@ -526,9 +546,12 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     zeile(4, "Stand", stand.stand)
     zeile(6, "Eintragen", "Diese Datei ist das Soll: Titel, Verlag, Preise, leihbar, "
                           "Fächer und Jahrgänge bleiben beim Abgleich, wie sie hier "
-                          "stehen; nur neue Bücher kommen aus IServ dazu.")
+                          "stehen; nur neue Bücher kommen aus IServ dazu. „leihbar“ "
+                          "steht je Fach und Jahrgang auf „Fächer & Jahrgang“.")
     zeile(7, "Bücher", "Aus dem laufenden Schuljahr alle, aus dem Vorjahr die "
-                       "leihbaren - nur die liegen im Bestand der Schule.")
+                       "leihbaren - nur die liegen im Bestand der Schule. Wechselt "
+                       "„leihbar“, endet die alte Zeile mit dem Vorjahr, und eine "
+                       "neue beginnt mit dem Schuljahr.")
     zeile(8, "Abweichungen", "Was IServ anders führt, zeigt das Dashboard beim "
                              "Öffnen der Bücherlisten. IServ selbst "
                              "bleibt unverändert.")

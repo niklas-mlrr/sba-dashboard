@@ -162,6 +162,7 @@ class PlanungsAnfrage(_BuchplanungAnfrage):
     kuerzel: str = ""
     datum: date | None = None
     bemerkung: str = ""
+    leihbar: bool | None = None
 
 
 class JahrgangEingabe(BaseModel):
@@ -172,12 +173,20 @@ class JahrgangEingabe(BaseModel):
     bestätigten Zeile geschieht, wenn sie sich ändert, entscheidet
     ``buecherlisten/planung/abgleich.py::setze_buchplanung`` - nicht der Körper
     der Anfrage.
+
+    ``leihbar`` gilt je Zeile; ``None`` lässt es, wie es ist. ``bisher_ab`` ist
+    die Einführung, mit der die Zeile im Menü stand, ``neu`` heißt: die Zeile
+    gab es noch nicht. Ein Jahrgang kann mehrere Zeilen haben, erst damit ist
+    die gemeinte klar.
     """
 
     jahrgang: int
     eingefuehrt_ab: str = ""
     ausgemustert_nach: str = ""
     bemerkung: str = ""
+    leihbar: bool | None = None
+    bisher_ab: str | None = None
+    neu: bool = False
 
 
 class RuecklageEingabe(BaseModel):
@@ -204,7 +213,6 @@ class BuchreiheEingabe(BaseModel):
     verlag: str = ""
     neupreis: float | None = None
     leihgebuehr: float | None = None
-    leihbar: bool | None = None
     bemerkung: str | None = None
 
 
@@ -272,6 +280,8 @@ class AntragAnfrage(_BuchplanungAnfrage):
     art: NichtLeer
     ergebnis: str | None = None
     begruendung: str | None = None
+    # Die Einführung der Zeile - nötig, wenn der Jahrgang mehrere Zeilen hat.
+    eingefuehrt_ab: str | None = None
 
 
 class AnmeldeAnfrage(BaseModel):

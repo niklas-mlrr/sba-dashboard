@@ -82,33 +82,38 @@ Jahrgangslisten = list[tuple[int, int, dict]]
 # heißen wie in ``series_data`` (``title``, ``publisher``, ``price``, ``fee``;
 # die ISBN ist der Schlüssel und wird nicht korrigiert), damit dieses Modul
 # nichts von der Buchplanung wissen muss, die sie
-# festhält (``buecherlisten/planung/``).
+# festhält (``buecherlisten/planung/``). Dazu ``borrowable`` als
+# {Jahrgang: leihbar}: in IServ gehört es zum Eintrag einer Jahrgangsliste.
 Korrekturen = Mapping[str, Mapping[str, Any]]
 
 
-def wende_korrekturen_an(detail: dict, korrekturen: Korrekturen | None) -> dict:
+def wende_korrekturen_an(detail: dict, korrekturen: Korrekturen | None,
+                         jahrgang: int | None = None) -> dict:
     """Ein Bücherlisten-Detail aus IServ, mit den korrigierten Angaben der Buchreihen.
 
     Die **eine** Stelle, an der Korrekturen wirken: alles, was danach aus den
     Listen gelesen wird - Seiten und PDF -, sieht nur noch die
     korrigierten Werte, auch beim Gruppieren nach Verlag. Das
     Original bleibt unverändert; zurück kommt eine Kopie, sobald es etwas zu
-    ändern gibt.
+    ändern gibt. ``jahrgang`` ist der Jahrgang der Liste - nur damit lässt
+    sich „leihbar“ korrigieren.
     """
     if not korrekturen:
         return detail
     kopie = copy.deepcopy(detail)
     for section in kopie.get("sections") or []:
         for option in section.get("options") or []:
-            option["items"] = [korrigiere_eintrag(item, korrekturen)
+            option["items"] = [korrigiere_eintrag(item, korrekturen, jahrgang)
                                for item in option.get("items") or []]
     return kopie
 
 
-def korrigiere_eintrag(item: dict, korrekturen: Korrekturen | None) -> dict:
+def korrigiere_eintrag(item: dict, korrekturen: Korrekturen | None,
+                       jahrgang: int | None = None) -> dict:
     """Ein Eintrag einer Bücherliste mit den korrigierten Angaben seiner Buchreihe.
 
-    Ohne Korrektur kommt derselbe Eintrag zurück, sonst eine Kopie.
+    Ohne Korrektur kommt derselbe Eintrag zurück, sonst eine Kopie. „Leihbar“
+    wird nur korrigiert, wenn die Korrektur einen Wert für ``jahrgang`` hat.
     """
     sd = item.get("series_data") or {}
     isbn = sd.get("isbn") or item.get("series")
@@ -116,7 +121,10 @@ def korrigiere_eintrag(item: dict, korrekturen: Korrekturen | None) -> dict:
     if not felder:
         return item
     # "Leihbar" gehört in IServ zum Eintrag der Liste, nicht zur Buchreihe.
-    eintrag = {"borrowable": felder.pop("borrowable")} if "borrowable" in felder else {}
+    leihbar = felder.pop("borrowable", None)
+    if isinstance(leihbar, Mapping):
+        leihbar = leihbar.get(jahrgang) if jahrgang is not None else None
+    eintrag = {"borrowable": bool(leihbar)} if leihbar is not None else {}
     return {**item, **eintrag, "series_data": {**sd, **felder}}
 
 
@@ -128,7 +136,8 @@ def hole_jahrgangslisten(
     by_grade = {bl["grade"]: bl for bl in booklists if bl.get("grade") is not None}
     return [
         (grade, by_grade[grade]["id"], wende_korrekturen_an(
-            client.schoolyears.get_booklist(schoolyear_id, by_grade[grade]["id"]), korrekturen))
+            client.schoolyears.get_booklist(schoolyear_id, by_grade[grade]["id"]), korrekturen,
+            grade))
         for grade in sorted(by_grade)
     ]
 
@@ -154,9 +163,14 @@ def _sammle(listen: Jahrgangslisten, gruppen_von: Callable[[dict], list[str]]) -
                                 "fee": sd.get("fee"),
                                 "borrowable": bool(item.get("borrowable")),
                                 "grades": set(),
+                                # Die Jahrgänge, in denen der Eintrag leihbar
+                                # ist - "borrowable" gilt je Jahrgangsliste.
+                                "borrowable_grades": set(),
                             },
                         )
                         entry["grades"].add(grade)
+                        if item.get("borrowable"):
+                            entry["borrowable_grades"].add(grade)
     return entries
 
 

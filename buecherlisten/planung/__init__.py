@@ -104,6 +104,7 @@ from .vergleich import (
     Abweichung,
     IservBuch,
     aktive_paare,
+    leihbar_im_schuljahr,
     vergleiche,
 )
 
@@ -114,6 +115,7 @@ __all__ = [
     "Abweichung",
     "IservBuch",
     "aktive_paare",
+    "leihbar_im_schuljahr",
     "vergleiche",
     "BLAETTER",
     "ANTRAG_ABGELEHNT",

@@ -48,8 +48,10 @@ from buecherlisten.planung import (
     Buchplanung,
     IservBuch,
     aktive_paare,
+    leihbar_im_schuljahr,
     planungs_status,
     vergleiche,
+    wirkt_im_schuljahr,
     zum_schuljahr_ausgemustert,
 )
 from buecherlisten.planung import Buch as PlanBuch
@@ -58,7 +60,7 @@ OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
 
 # Die drei Arten einer Abweichung - zugleich die CSS-Klassen der Markierung.
-AENDERUNG = "aenderung"        # ein anderer Wert (Titel, Verlag, Preis, leihbar)
+AENDERUNG = "aenderung"        # ein anderer Wert (Titel, Verlag, Preis, leihbar je Paar)
 EINFUEHRUNG = "einfuehrung"    # laut Datei in Fach/Jahrgang, in IServ noch nicht
 AUSMUSTERUNG = "ausmusterung"  # in IServ noch in Fach/Jahrgang, laut Datei nicht mehr
 _EINFUEHRUNG_TEXT = "Einführung, fehlt in IServ"
@@ -117,6 +119,14 @@ class Buch:
     weg: tuple[Paar, ...] = ()
     paare_sonst: tuple[tuple[str, str], ...] = ()
     reihe: str = ""
+    # „Leihbar“ gilt je (Fach, Jahrgang). Ist das Buch in den Paaren dieser
+    # Zeile teils leihbar, teils nicht, ist ``leihbar`` wahr und
+    # ``leihbar_teilweise`` auch - das Häkchen steht halb, ``leihbar_titel``
+    # sagt wo. ``leihbar_iserv`` nennt die Paare, in denen IServ es anders
+    # führt, mit dem Wert aus IServ.
+    leihbar_teilweise: bool = False
+    leihbar_titel: str = ""
+    leihbar_iserv: tuple[tuple[Paar, bool], ...] = ()
 
     @property
     def abweichend(self) -> bool:
@@ -334,14 +344,17 @@ _FELDER = {"title": "titel", "publisher": "verlag", "price": "neupreis", "fee": 
 def _buch(item: dict, jahrgang: int | None, korrekturen: Korrekturen | None = None) -> Buch | None:
     # "borrowable" steht am Eintrag, alles andere an der Buchreihe.
     original = {**(item.get("series_data") or {}), "borrowable": bool(item.get("borrowable"))}
-    korrigiert = korrigiere_eintrag(item, korrekturen)
+    korrigiert = korrigiere_eintrag(item, korrekturen, jahrgang)
     daten = korrigiert.get("series_data") or {}
     isbn = daten.get("isbn") or item.get("series")
     if not isbn:
         return None
+    felder = (korrekturen or {}).get(isbn) or {}
     iserv = tuple(
         (_FELDER[name], original.get(name))
-        for name in (korrekturen or {}).get(isbn) or {} if name in _FELDER
+        for name in felder if name in _FELDER
+        # „Leihbar“ korrigiert die Datei je Jahrgang - nur wo sie einen Wert hat.
+        and (name != "borrowable" or jahrgang in (felder.get(name) or {}))
     )
     return Buch(
         iserv=iserv,
@@ -385,8 +398,11 @@ def _gruppiere(buecher: list[Buch], schluessel: Any) -> tuple[Gruppe, ...]:
                 verlag=vorhanden.verlag,
                 neupreis=vorhanden.neupreis,
                 leihgebuehr=vorhanden.leihgebuehr,
-                # Leihbar, sobald es in irgendeiner Liste leihbar ist.
+                # Leihbar, sobald es in irgendeiner Liste leihbar ist - und
+                # teilweise, wenn nicht in allen.
                 leihbar=vorhanden.leihbar or buch.leihbar,
+                leihbar_teilweise=vorhanden.leihbar_teilweise or buch.leihbar_teilweise
+                or vorhanden.leihbar != buch.leihbar,
                 jahrgaenge=tuple(sorted(set(vorhanden.jahrgaenge) | set(buch.jahrgaenge))),
                 iserv=vorhanden.iserv,
             )
@@ -420,23 +436,27 @@ def iserv_je_isbn(daten: Buecherlisten) -> dict[str, IservBuch]:
     """Die Bücher der IServ-Listen je ISBN, mit allen (Fach, Jahrgang)-Paaren.
 
     ``daten`` muss **ohne** Korrekturen geladen sein: verglichen wird mit dem,
-    was in IServ steht. Leihbar ist ein Buch, sobald es in einer Liste
-    leihbar ist - wie in :func:`_gruppiere`.
+    was in IServ steht. Leihbar ist ein Buch je Jahrgangsliste; ``leihbar``
+    heißt: in einer Liste leihbar - wie in :func:`_gruppiere`.
     """
     werte: dict[str, Buch] = {}
     paare: dict[str, set[Paar]] = {}
+    leihbar_paare: dict[str, set[Paar]] = {}
     leihbar: dict[str, bool] = {}
     for liste in daten.listen:
         for buch in liste.alle_buecher:
             werte.setdefault(buch.isbn, buch)
             leihbar[buch.isbn] = leihbar.get(buch.isbn, False) or buch.leihbar
             if liste.jahrgang is not None:
-                paare.setdefault(buch.isbn, set()).update(
-                    (fach, liste.jahrgang) for fach in buch.faecher or (OHNE_FACH,))
+                hier = {(fach, liste.jahrgang) for fach in buch.faecher or (OHNE_FACH,)}
+                paare.setdefault(buch.isbn, set()).update(hier)
+                if buch.leihbar:
+                    leihbar_paare.setdefault(buch.isbn, set()).update(hier)
     return {
         isbn: IservBuch(isbn=isbn, titel=buch.titel, verlag=buch.verlag,
                         neupreis=buch.neupreis, leihgebuehr=buch.leihgebuehr,
-                        leihbar=leihbar[isbn], paare=frozenset(paare.get(isbn, ())))
+                        leihbar=leihbar[isbn], paare=frozenset(paare.get(isbn, ())),
+                        leihbar_paare=frozenset(leihbar_paare.get(isbn, ())))
         for isbn, buch in werte.items()
     }
 
@@ -456,8 +476,9 @@ class Vergleich:
         """Paare, die dieses Schuljahr gelten oder erst noch kommen."""
         return tuple(
             (fach, jahrgang) for fach, jahrgang in self.planung.zeilen_des_buchs(buch)
-            if planungs_status(self.planung.planungszeile(buch.isbn, fach, jahrgang),
-                               self.planung.schuljahr) != PLANUNG_AUSGEMUSTERT
+            if any(planungs_status(zeile, self.planung.schuljahr) != PLANUNG_AUSGEMUSTERT
+                   for zeile in self.planung.zeilen_des_paars(buch.isbn, fach, jahrgang)
+                   or [None])
         )
 
     def zum_schuljahr_ausgemustert(self, buch: PlanBuch) -> frozenset[str]:
@@ -487,6 +508,28 @@ def _paare_text(paare: tuple[Paar, ...] | list[Paar]) -> str:
                      for fach, jgs in je_fach.items())
 
 
+def _leihbar_laut_datei(planung: Buchplanung, isbn: str, paar: Paar) -> bool:
+    """„Leihbar“ eines Paars: laut der Zeile, die dieses Schuljahr wirkt, sonst
+    der maßgeblichen (einer geplanten oder ausgemusterten)."""
+    zeilen = planung.zeilen_des_paars(isbn, *paar)
+    if any(wirkt_im_schuljahr(zeile, planung.schuljahr) for zeile in zeilen):
+        return leihbar_im_schuljahr(planung, isbn, paar)
+    zeile = planung.massgebliche_zeile(isbn, *paar)
+    return zeile.leihbar if zeile else False
+
+
+def _leihbar(werte: dict[Paar, bool]) -> dict[str, Any]:
+    """``leihbar``, ``leihbar_teilweise`` und ``leihbar_titel`` einer Zeile aus ihren Paaren."""
+    ja = sorted((p for p, w in werte.items() if w), key=lambda p: (p[0].casefold(), p[1]))
+    nein = sorted((p for p, w in werte.items() if not w), key=lambda p: (p[0].casefold(), p[1]))
+    teilweise = bool(ja and nein)
+    return {
+        "leihbar": bool(ja), "leihbar_teilweise": teilweise,
+        "leihbar_titel": f"leihbar: {_paare_text(ja)} · Kaufbuch: {_paare_text(nein)}"
+        if teilweise else "",
+    }
+
+
 def _reihe(abweichung: Abweichung | None) -> str:
     if abweichung is None:
         return ""
@@ -509,14 +552,22 @@ def _aus_datei(v: Vergleich, buch: PlanBuch, paare: tuple[Paar, ...] | frozenset
             draussen = [paar for paar in alle if not hier(paar)]
             if draussen:
                 sonst.append((art, f"{text}: {_paare_text(draussen)}"))
+    # „Leihbar“ weicht je Paar ab; gelb ist es nur, wo es in dieser Gruppe abweicht.
+    leihbar_iserv = tuple((paar, wert) for paar, wert in
+                          (abweichung.leihbar_anders if abweichung else ()) if hier(paar))
+    felder = abweichung.felder if abweichung and abweichung.art == BEIDE else ()
     return Buch(
         isbn=buch.isbn, titel=buch.titel,
         faecher=tuple(sorted({fach for fach, _ in paare}, key=str.casefold)),
         verlag="" if buch.verlag == OHNE_VERLAG else buch.verlag,
-        neupreis=buch.neupreis, leihgebuehr=buch.leihgebuehr, leihbar=buch.leihbar,
+        neupreis=buch.neupreis, leihgebuehr=buch.leihgebuehr,
+        **_leihbar({paar: _leihbar_laut_datei(v.planung, buch.isbn, paar)
+                    for paar in paare if hier(paar)}),
+        leihbar_iserv=leihbar_iserv,
         jahrgaenge=jahrgaenge if jahrgaenge is not None
         else tuple(sorted({jahrgang for _, jahrgang in paare})),
-        iserv=abweichung.felder if abweichung and abweichung.art == BEIDE else (),
+        iserv=tuple((feld, wert) for feld, wert in felder
+                    if feld != "leihbar" or leihbar_iserv),
         von_hand=buch.isbn not in v.iserv, herkunft=herkunft,
         neu=tuple(paar for paar in neu if hier(paar)),
         weg=tuple(paar for paar in weg if hier(paar)),
@@ -531,7 +582,8 @@ def _aus_iserv(v: Vergleich, ist: IservBuch, paare: tuple[Paar, ...] | frozenset
         isbn=ist.isbn, titel=ist.titel,
         faecher=tuple(sorted({fach for fach, _ in paare}, key=str.casefold)),
         verlag=ist.verlag, neupreis=ist.neupreis, leihgebuehr=ist.leihgebuehr,
-        leihbar=ist.leihbar, jahrgaenge=tuple(sorted({jahrgang for _, jahrgang in paare})),
+        **_leihbar({paar: ist.leihbar_in(paar) for paar in paare}),
+        jahrgaenge=tuple(sorted({jahrgang for _, jahrgang in paare})),
         herkunft=NUR_ISERV, weg=paare, reihe=_reihe(v.ergebnis.get(ist.isbn)),
     )
 

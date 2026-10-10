@@ -26,12 +26,22 @@ TERRA = "9783121000562"
 NEU = "9783161484100"
 
 
-def _stand(*planung: Planungszeile, **felder) -> Buchplanung:
+def _stand(*planung: Planungszeile, leihbar: bool = True, **felder) -> Buchplanung:
+    """Terra in drei Paaren, leihbar; ``planung`` ersetzt die Zeile ihres Paars.
+
+    Wie in einer gelesenen Datei ist ein Paar nur dann eingeführt, wenn seine
+    Zeile keine Einführung hat.
+    """
+    paare = (("Erdkunde", 5), ("Erdkunde", 6), ("Politik", 5))
+    gegeben = {(z.fach, z.jahrgang) for z in planung}
+    zeilen = tuple(replace(z, leihbar=leihbar) for z in planung) + tuple(
+        Planungszeile(TERRA, f, j, leihbar=leihbar) for f, j in paare if (f, j) not in gegeben)
     buch = Buch(isbn=TERRA, titel="Terra 5/6", verlag="Klett",
-                kombinationen=(("Erdkunde", 5), ("Erdkunde", 6), ("Politik", 5)),
-                leihbar=True, neupreis=25.0, leihgebuehr=5.0)
+                kombinationen=tuple(sorted((z.fach, z.jahrgang) for z in zeilen
+                                           if not z.eingefuehrt_ab)),
+                neupreis=25.0, leihgebuehr=5.0)
     return Buchplanung(schuljahr="2026/2027", vorjahr="2025/2026",
-                       buecher=(replace(buch, **felder),), planung=planung)
+                       buecher=(replace(buch, **felder),), planung=zeilen)
 
 
 def _iserv(**felder) -> dict[str, IservBuch]:
@@ -59,6 +69,30 @@ def test_ein_abweichender_wert_nennt_den_iserv_wert(feld, iserv_wert):
     assert ergebnis.art == BEIDE
     assert ergebnis.iserv == {feld: iserv_wert}
     assert not ergebnis.gleich
+
+
+def test_leihbar_wird_je_paar_verglichen():
+    """In IServ steht „leihbar“ je Jahrgangsliste, in der Datei je Zeile."""
+    nur_erdkunde_5 = frozenset({("Erdkunde", 5)})
+    ergebnis = vergleiche(_stand(), _iserv(leihbar_paare=nur_erdkunde_5))[TERRA]
+    assert ergebnis.leihbar_anders == ((("Erdkunde", 6), False), (("Politik", 5), False))
+    assert ergebnis.iserv == {"leihbar": False}
+    assert not ergebnis.gleich
+    # Stimmt es je Paar, ist das Buch gleich - auch wenn es nur teils leihbar ist.
+    stand = _stand(Planungszeile(TERRA, "Erdkunde", 6), Planungszeile(TERRA, "Politik", 5))
+    stand = replace(stand, planung=tuple(replace(z, leihbar=(z.fach, z.jahrgang) == ("Erdkunde", 5))
+                                         for z in stand.planung))
+    assert vergleiche(stand, _iserv(leihbar_paare=nur_erdkunde_5))[TERRA].gleich
+
+
+def test_ein_wechsel_von_leihbar_vergleicht_die_zeile_die_wirkt():
+    """Die alte Zeile (leihbar, bis zum Vorjahr) zählt nicht mehr, die neue schon."""
+    stand = _stand(Planungszeile(TERRA, "Politik", 5, ausgemustert_nach="2025/2026"))
+    neu = replace(stand, planung=stand.planung + (
+        Planungszeile(TERRA, "Politik", 5, eingefuehrt_ab="2026/2027", leihbar=False),))
+    alle = frozenset({("Erdkunde", 5), ("Erdkunde", 6)})
+    assert vergleiche(neu, _iserv(leihbar_paare=alle))[TERRA].gleich
+    assert vergleiche(neu, _iserv())[TERRA].leihbar_anders == ((("Politik", 5), True),)
 
 
 def test_ohne_verlag_gleicht_dem_leeren_verlag():

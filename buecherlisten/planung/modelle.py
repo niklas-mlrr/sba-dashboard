@@ -11,7 +11,10 @@ eigenen Schlüssel - genau den seines Blatts in der Arbeitsmappe:
   (ISBN, Fach, Jahrgang). Eine gestaffelte Einführung eines Mehrjahresbands
   (Jg. 7 ab 2027/28, Jg. 8 ab 2028/29) sind damit zwei Zeilen statt einer
   Bemerkung im Freitext, und die Fachkonferenzleitung bestätigt ihre eigenen
-  Zeilen, nicht die eines anderen Fachs.
+  Zeilen, nicht die eines anderen Fachs. Jede Zeile sagt auch, ob das Buch
+  dort **leihbar** ist; wechselt das, hat das Paar zwei Zeilen hintereinander
+  (die alte ausgemustert, die neue eingeführt) - unterschieden an der
+  Einführung.
 * **Anträge** - jede Einführung und Ausmusterung einer Planungszeile wird
   genehmigt oder abgelehnt (:class:`Antragsentscheidung`), mit einer
   gemeinsamen Begründung. Die Änderungsliste rechnet
@@ -86,13 +89,11 @@ OHNE_VERLAG = "(ohne Verlag)"
 # gehört nicht dazu: sie ist der Schlüssel des Buchs und steht im Menü nur zum
 # Lesen.
 #
-# ``leihbar`` ist in IServ kein Feld der Buchreihe, sondern des Eintrags einer
-# Bücherliste (``borrowable``, neben ``series_data``). Es gilt trotzdem wie
-# die anderen - ``korrigiere_eintrag`` in ``buecherlisten/core/daten.py`` legt
-# es an die richtige Stelle.
+# ``leihbar`` gehört nicht dazu: in IServ ist es ein Feld des Eintrags einer
+# Bücherliste (``borrowable``), also je Jahrgang, und so steht es auch in der
+# Datei - je Planungszeile (seit 2026-10-10, vorher je Buchreihe).
 ISERV_FELD: dict[str, str] = {
     "titel": "title", "verlag": "publisher", "neupreis": "price", "leihgebuehr": "fee",
-    "leihbar": "borrowable",
 }
 
 # Die Legende, die im Blatt "Info" steht: Status → was er bedeutet. Sie steht
@@ -138,6 +139,30 @@ def schuljahr_zahl(kennung: str) -> int:
     return int(treffer.group(1))
 
 
+def _jahr_oder_none(angabe: str) -> int | None:
+    try:
+        return schuljahr_zahl(angabe)
+    except UngueltigesSchuljahr:
+        return None
+
+
+def einfuehrung_schluessel(angabe: str) -> object:
+    """Was zwei Einführungen gleich macht: das Jahr, sonst der Text; leer bleibt leer."""
+    text = (angabe or "").strip()
+    if not text:
+        return ""
+    jahr = _jahr_oder_none(text)
+    return jahr if jahr is not None else text
+
+
+def zeitfolge(zeile: Planungszeile) -> tuple[int, int, str]:
+    """Sortierschlüssel der Zeilen eines Paars: die eingeführte zuerst, dann nach Einführung."""
+    if not zeile.eingefuehrt_ab:
+        return (0, 0, "")
+    jahr = zeile.beginn
+    return (1, jahr if jahr is not None else 10_000, zeile.eingefuehrt_ab)
+
+
 # ── Was aus IServ kommt ──────────────────────────────────────────────────────
 
 
@@ -151,19 +176,24 @@ class Buch:
     Jahrgang 8 zum Fach Informatik gehört, hat zwei Paare, nicht vier. Genau
     diese Paare sind die Zeilen des Blatts ``Fächer & Jahrgang``, und zwar die
     **ohne** Einführung: dort ist das Buch schon eingeführt. Eine Zeile mit
-    Einführung ist geplant und steht nur in ``Buchplanung.planung``.
+    Einführung ist geplant.
+
+    Ob das Buch leihbar ist, steht nicht hier, sondern je Planungszeile
+    (:meth:`Buchplanung.leihbar`).
     """
 
     isbn: str
     titel: str
     verlag: str
     kombinationen: tuple[tuple[str, int], ...] = ()
-    leihbar: bool = False
     neupreis: float | None = None
     leihgebuehr: float | None = None
     # Paare, die nur im Vorjahr vorkamen. Kein Dateiinhalt: der Abgleich macht
     # daraus Planungszeilen mit "Ausmusterung nach" = Vorjahr.
     ausgemustert: tuple[tuple[str, int], ...] = ()
+    # Paare, in denen IServ das Buch als leihbar führt. Ebenfalls kein
+    # Dateiinhalt: der Abgleich setzt daraus ``leihbar`` der neuen Zeilen.
+    leihbar_paare: tuple[tuple[str, int], ...] = ()
 
     @property
     def faecher(self) -> tuple[str, ...]:
@@ -235,12 +265,18 @@ class Planungszeile:
     eigenen Blatt und führte den bestätigten Stand als ISBN-Liste mit; seither
     ist sie dort, wo das Bestätigte steht, und eine neu dazugekommene Zeile ist
     von allein unbestätigt.
+
+    Ein Paar (Fach, Jahrgang) kann mehrere Zeilen haben, deren Zeiträume sich
+    nicht überschneiden - so wechselt ``leihbar``: die alte Zeile endet mit
+    dem Vorjahr, die neue beginnt mit dem Schuljahr. Unterschieden werden sie
+    an der Einführung (:attr:`schluessel`).
     """
 
     isbn: str
     fach: str
     jahrgang: int
     eingefuehrt_ab: str = ""
+    leihbar: bool = False
     ausgemustert_nach: str = ""
     kuerzel: str = ""
     datum: date | None = None
@@ -256,6 +292,21 @@ class Planungszeile:
                         self.kuerzel, self.bemerkung, self.begruendung)) \
             and self.datum is None \
             and self.antrag_einfuehrung.leer and self.antrag_ausmusterung.leer
+
+    @property
+    def schluessel(self) -> tuple[str, str, int, object]:
+        """(ISBN, Fach, Jahrgang, Einführung) - „2027/28“ und „2027/2028“ sind gleich."""
+        return (self.isbn, self.fach, self.jahrgang, einfuehrung_schluessel(self.eingefuehrt_ab))
+
+    @property
+    def beginn(self) -> int | None:
+        """Jahresanfang der Einführung; ``None`` ohne (oder mit unlesbarer) Einführung."""
+        return _jahr_oder_none(self.eingefuehrt_ab)
+
+    @property
+    def ende(self) -> int | None:
+        """Jahresanfang der Ausmusterung; ``None`` ohne (oder mit unlesbarer) Ausmusterung."""
+        return _jahr_oder_none(self.ausgemustert_nach)
 
     def antrag(self, art: str) -> Antragsentscheidung:
         return self.antrag_einfuehrung if art == ART_EINFUEHRUNG else self.antrag_ausmusterung
@@ -301,10 +352,34 @@ class Buchplanung:
     ruecklagen: tuple[Ruecklage, ...] = ()
     warnungen: tuple[str, ...] = field(default_factory=tuple)
 
+    def __post_init__(self) -> None:
+        """Jedes eingeführte Paar eines Buchs hat eine Planungszeile.
+
+        Seit ``leihbar`` je Zeile steht, ist auch eine Zeile ohne jede
+        Eintragung ein Wert der Datei. Fehlt sie (ein Buch, das nur mit
+        ``kombinationen`` angelegt wurde), kommt sie hier dazu - nicht leihbar.
+        """
+        vorhanden = {(z.isbn, z.fach, z.jahrgang) for z in self.planung if not z.eingefuehrt_ab}
+        fehlend = tuple(
+            Planungszeile(isbn=buch.isbn, fach=fach, jahrgang=jahrgang)
+            for buch in self.buecher for fach, jahrgang in buch.kombinationen
+            if (buch.isbn, fach, jahrgang) not in vorhanden
+        )
+        if fehlend:
+            object.__setattr__(self, "planung", self.planung + fehlend)
+
     # ── Nachschlagen ────────────────────────────────────────────────────────
 
     def buch(self, isbn: str) -> Buch | None:
         return next((b for b in self.buecher if b.isbn == isbn), None)
+
+    def leihbar(self, isbn: str) -> bool:
+        """Ist das Buch in irgendeiner Zeile leihbar - heute, geplant oder im Vorjahr?
+
+        Daran hängt die Rücklage: zurücklegen lässt sich nur, was die Schule
+        verleiht oder verliehen hat.
+        """
+        return any(z.leihbar for z in self.planung if z.isbn == isbn)
 
     def korrekturen_fuer_iserv(self) -> dict[str, dict[str, object]]:
         """Die Angaben jedes Buchs, in den Feldnamen von IServ (``series_data``).
@@ -317,21 +392,61 @@ class Buchplanung:
         So nimmt sie ``buecherlisten.core.daten.wende_korrekturen_an`` entgegen:
         der Kern der Bücherlisten kennt diese Datei nicht und soll es auch nicht.
         """
-        return {
-            buch.isbn: {
+        heraus: dict[str, dict[str, object]] = {}
+        for buch in self.buecher:
+            felder: dict[str, object] = {
                 ISERV_FELD[feld]: "" if feld == "verlag" and buch.verlag == OHNE_VERLAG
                 else getattr(buch, feld)
                 for feld in ISERV_FELD
             }
-            for buch in self.buecher
-        }
+            # Leihbar je Jahrgang - so steht es in IServ, am Eintrag der
+            # Jahrgangsliste. Es zählen die Zeilen, die dieses Schuljahr
+            # wirken; leihbar in einem Fach reicht.
+            je_jahrgang: dict[int, bool] = {}
+            for zeile in self.planung:
+                if zeile.isbn == buch.isbn and wirkt_im_schuljahr(zeile, self.schuljahr):
+                    je_jahrgang[zeile.jahrgang] = (je_jahrgang.get(zeile.jahrgang, False)
+                                                   or zeile.leihbar)
+            if je_jahrgang:
+                felder["borrowable"] = je_jahrgang
+            heraus[buch.isbn] = felder
+        return heraus
 
     def bemerkung(self, isbn: str) -> Buchbemerkung | None:
         return next((b for b in self.bemerkungen if b.isbn == isbn), None)
 
-    def planungszeile(self, isbn: str, fach: str, jahrgang: int) -> Planungszeile | None:
-        return next((z for z in self.planung if z.isbn == isbn
-                     and z.fach == fach and z.jahrgang == jahrgang), None)
+    def zeilen_des_paars(self, isbn: str, fach: str, jahrgang: int) -> tuple[Planungszeile, ...]:
+        """Alle Zeilen eines Buchs in einem Fach und Jahrgang, in ihrer Zeitfolge."""
+        return tuple(sorted(
+            (z for z in self.planung
+             if z.isbn == isbn and z.fach == fach and z.jahrgang == jahrgang),
+            key=zeitfolge))
+
+    def planungszeile(self, isbn: str, fach: str, jahrgang: int,
+                      eingefuehrt_ab: str | None = None) -> Planungszeile | None:
+        """Eine Zeile des Paars - mit ``eingefuehrt_ab`` genau die mit dieser
+        Einführung, sonst die maßgebliche (:meth:`massgebliche_zeile`)."""
+        if eingefuehrt_ab is None:
+            return self.massgebliche_zeile(isbn, fach, jahrgang)
+        gesucht = einfuehrung_schluessel(eingefuehrt_ab)
+        return next((z for z in self.zeilen_des_paars(isbn, fach, jahrgang)
+                     if einfuehrung_schluessel(z.eingefuehrt_ab) == gesucht), None)
+
+    def massgebliche_zeile(self, isbn: str, fach: str, jahrgang: int) -> Planungszeile | None:
+        """Die Zeile, die für dieses Schuljahr spricht.
+
+        Die, die in diesem Schuljahr wirkt; sonst die nächste geplante; sonst
+        die zuletzt ausgemusterte. Bei einem Paar mit nur einer Zeile ist es
+        diese - also fast immer.
+        """
+        zeilen = self.zeilen_des_paars(isbn, fach, jahrgang)
+        if len(zeilen) <= 1:
+            return zeilen[0] if zeilen else None
+        wirkend = [z for z in zeilen if wirkt_im_schuljahr(z, self.schuljahr)]
+        if wirkend:
+            return wirkend[-1]
+        geplant = [z for z in zeilen if planungs_status(z, self.schuljahr) == PLANUNG_GEPLANT]
+        return geplant[0] if geplant else zeilen[-1]
 
     def planung_des_fachs(self, fach: str) -> tuple[Planungszeile, ...]:
         return tuple(z for z in self.planung if z.fach == fach)
@@ -416,10 +531,11 @@ def fach_status(
         for eigenes, jahrgang in stand.zeilen_des_buchs(buch):
             if eigenes != fach:
                 continue
-            gesamt += 1
-            zeile = stand.planungszeile(buch.isbn, fach, jahrgang)
-            if zeile is None or not zeile.bestaetigt:
-                offen.append(f"{buch.titel} (Jg. {jahrgang})")
+            for zeile in stand.zeilen_des_paars(buch.isbn, fach, jahrgang):
+                gesamt += 1
+                if not zeile.bestaetigt:
+                    offen.append(f"{buch.titel} (Jg. {jahrgang})")
+    offen = list(dict.fromkeys(offen))
     if gesamt == 0:
         return FACH_OFFEN, "Zu diesem Fach steht kein Buch in der Datei."
     if not offen:
@@ -545,8 +661,8 @@ def zum_schuljahr_ausgemustert(stand: Buchplanung, buch: Buch, fach: str) -> boo
     Fach in einem anderen Jahrgang weiter oder ist dort noch geplant, steht es
     in der normalen Liste, mit „(bis …)“ hinter dem auslaufenden Jahrgang.
     """
-    zeilen = [stand.planungszeile(buch.isbn, f, jahrgang)
-              for f, jahrgang in stand.zeilen_des_buchs(buch) if f == fach]
+    zeilen = [zeile for f, jahrgang in stand.zeilen_des_buchs(buch) if f == fach
+              for zeile in stand.zeilen_des_paars(buch.isbn, f, jahrgang)]
     return bool(zeilen) \
         and all(planungs_status(z, stand.schuljahr) == PLANUNG_AUSGEMUSTERT for z in zeilen) \
         and any(endet_mit_vorjahr(z, stand.schuljahr) for z in zeilen)
@@ -568,8 +684,9 @@ class Aenderung:
     schuljahr: str
     entscheidung: Antragsentscheidung
     begruendung: str = ""
-    # Aus der Buchreihe: leihbare Bücher stehen in einem Abschnitt zuerst, und
-    # der Neupreis ist, was eine Einführung kostet (je Exemplar).
+    # Leihbar aus der Zeile, der Neupreis aus der Buchreihe: leihbare Bücher
+    # stehen in einem Abschnitt zuerst, und der Neupreis ist, was eine
+    # Einführung kostet (je Exemplar).
     leihbar: bool = False
     neupreis: float | None = None
     # Seit wann die Planungszeile das Buch führt - bei einer Ausmusterung, wie
@@ -632,7 +749,7 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
                 verlag=buch.verlag if buch else "",
                 fach=zeile.fach, jahrgang=zeile.jahrgang, art=art, schuljahr=angabe,
                 entscheidung=zeile.antrag(art), begruendung=zeile.begruendung,
-                leihbar=buch.leihbar if buch else False,
+                leihbar=zeile.leihbar,
                 neupreis=buch.neupreis if buch else None,
                 eingefuehrt_ab=zeile.eingefuehrt_ab,
             ))
@@ -682,9 +799,9 @@ def verbleib_der_buecher(stand: Buchplanung,
         jetzt = schuljahr_zahl(stand.schuljahr)
     except UngueltigesSchuljahr:
         return {}
-    zeilen: dict[str, dict[tuple[str, int], Planungszeile]] = {}
+    zeilen: dict[str, dict[tuple[str, int], list[Planungszeile]]] = {}
     for zeile in stand.planung:
-        zeilen.setdefault(zeile.isbn, {})[(zeile.fach, zeile.jahrgang)] = zeile
+        zeilen.setdefault(zeile.isbn, {}).setdefault((zeile.fach, zeile.jahrgang), []).append(zeile)
     buecher = {buch.isbn: buch for buch in stand.buecher}
     je_buch: dict[str, list[Aenderung]] = {}
     for antrag in antraege:
@@ -695,13 +812,21 @@ def verbleib_der_buecher(stand: Buchplanung,
         eigene_zeilen = zeilen.get(isbn, {})
         buch = buecher.get(isbn)
         paare = set(buch.kombinationen if buch else ()) | set(eigene_zeilen)
-        gelistet = {p for p in paare if wirkt_im_schuljahr(eigene_zeilen.get(p), stand.schuljahr)}
+        gelistet = {p for p in paare
+                    if any(wirkt_im_schuljahr(z, stand.schuljahr)
+                           for z in eigene_zeilen.get(p) or (None,))}
         einfuehrungen = [a for a in eigene if a.einfuehrung]
         ausmusterungen = {(a.fach, a.jahrgang): a for a in eigene if not a.einfuehrung}
+        # Geht in einem Paar eine Zeile und kommt zum selben Wechsel eine neue
+        # (etwa als Kaufbuch statt als Leihbuch), bleibt das Buch dort stehen.
+        weiter = {p for p, a in ausmusterungen.items()
+                  if any((e.fach, e.jahrgang) == p and e.wechsel == a.wechsel
+                         and e.status != ANTRAG_ABGELEHNT for e in einfuehrungen)}
 
         if einfuehrungen:
             schon = sorted(gelistet - {(a.fach, a.jahrgang) for a in einfuehrungen
-                                       if a.wechsel == jetzt})
+                                       if a.wechsel == jetzt
+                                       and (a.fach, a.jahrgang) not in weiter})
             heraus[(isbn, ART_EINFUEHRUNG)] = Verbleib(False, "steht schon in der Bücherliste "
                                                        + _paare_text(schon)) if schon \
                 else Verbleib(True, "ganz neu, steht noch in keiner Bücherliste")
@@ -712,6 +837,9 @@ def verbleib_der_buecher(stand: Buchplanung,
             if ohne_antrag:
                 verbleib = Verbleib(False, f"bleibt in der Bücherliste {_paare_text(ohne_antrag)}"
                                            " (kein Antrag)")
+            elif weiter:
+                verbleib = Verbleib(False, f"bleibt in der Bücherliste {_paare_text(sorted(weiter))}"
+                                           " (dort neu eingeführt)")
             elif abgelehnt:
                 verbleib = Verbleib(False, f"bleibt in der Bücherliste {_paare_text(abgelehnt)}"
                                            " (Ausmusterung abgelehnt)")

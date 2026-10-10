@@ -206,13 +206,14 @@ def schreibe_fachbestaetigung(
 def schreibe_planung(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
     eingefuehrt_ab: str = "", ausgemustert_nach: str = "", kuerzel: str = "",
-    datum: date | None = None, bemerkung: str = "", mtime: float,
+    datum: date | None = None, bemerkung: str = "", leihbar: bool | None = None,
+    mtime: float,
 ) -> Stand:
     """Trägt die Zeile eines Buchs in **einem** Fach und Jahrgang ein."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_planung(
         stand, isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=eingefuehrt_ab,
         ausgemustert_nach=ausgemustert_nach, kuerzel=kuerzel, datum=datum,
-        bemerkung=bemerkung,
+        bemerkung=bemerkung, leihbar=leihbar,
     ))
 
 
@@ -250,12 +251,12 @@ def schreibe_neues_buch(
 def schreibe_antrag(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
     art: str, ergebnis: str | None, kuerzel: str = "", datum: date | None = None,
-    begruendung: str | None = None, mtime: float,
+    begruendung: str | None = None, eingefuehrt_ab: str | None = None, mtime: float,
 ) -> Stand:
     """Genehmigt oder lehnt eine Einführung oder Ausmusterung ab - die Änderungsliste."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: entscheide_antrag(
         stand, isbn=isbn, fach=fach, jahrgang=jahrgang, art=art, ergebnis=ergebnis,
-        kuerzel=kuerzel, datum=datum, begruendung=begruendung,
+        kuerzel=kuerzel, datum=datum, begruendung=begruendung, eingefuehrt_ab=eingefuehrt_ab,
     ))
 
 

@@ -72,19 +72,24 @@ def _kennung_und_name(client: AusleiheClient, kennung: str | None) -> tuple[str,
     return kennung, str(aktuell.get("name") or kennung)
 
 
-def _jahr(
-    client: AusleiheClient, kennung: str,
-) -> tuple[dict[str, dict], dict[str, set[tuple[str, int]]]]:
+Paare = dict[str, set[tuple[str, int]]]
+
+
+def _jahr(client: AusleiheClient, kennung: str) -> tuple[dict[str, dict], Paare, Paare]:
     """Ein Schuljahr einmal holen und zweimal auswerten.
 
     Zurück kommen die Bücher je ISBN und, je ISBN, die (Fach, Jahrgang)-Paare,
-    in denen das Buch in diesem Schuljahr vorkommt.
+    in denen das Buch in diesem Schuljahr vorkommt - einmal alle, einmal die,
+    in denen es leihbar ist (``borrowable`` steht in IServ je Jahrgangsliste).
     """
     listen = hole_jahrgangslisten(client, kennung)
-    paare: dict[str, set[tuple[str, int]]] = {}
+    paare: Paare = {}
+    leihbar: Paare = {}
     for (fach, isbn), eintrag in sammle_je_fach_und_isbn(listen).items():
         paare.setdefault(isbn, set()).update((fach, jahrgang) for jahrgang in eintrag["grades"])
-    return sammle_je_isbn(listen), paare
+        leihbar.setdefault(isbn, set()).update(
+            (fach, jahrgang) for jahrgang in eintrag["borrowable_grades"])
+    return sammle_je_isbn(listen), paare, leihbar
 
 
 def lade_schnappschuss(
@@ -99,48 +104,47 @@ def lade_schnappschuss(
     Fehlt das Vorjahr in IServ (erstes Schuljahr im System), ist das **kein**
     Fehler: der Schnappschuss enthält dann nur das laufende Jahr, und eine
     Warnung sagt, warum keine Ausmusterung erkannt werden konnte.
+
+    Leihbar ist ein Buch je (Fach, Jahrgang); aus dem Vorjahr zählen nur die
+    Paare, in denen es leihbar war.
     """
     kennung, name = _kennung_und_name(client, schuljahr)
     warnungen: list[str] = []
 
     vorjahr_id = vorjahr or vorjahr_kennung(kennung)
-    aktuelle, aktuelle_paare = _jahr(client, kennung)
+    aktuelle, aktuelle_paare, aktuell_leihbar = _jahr(client, kennung)
     try:
-        alte, alte_paare = _jahr(client, vorjahr_id)
+        alte, _, alt_leihbar = _jahr(client, vorjahr_id)
     except Exception as exc:  # noqa: BLE001 - jedes Scheitern heißt hier dasselbe
-        alte, alte_paare = {}, {}
+        alte, alt_leihbar = {}, {}
         warnungen.append(
             f"Das Vorjahr {vorjahr_id} ließ sich nicht laden ({exc}); "
             "ausgemusterte Bücher des Vorjahres fehlen deshalb in dieser Datei."
         )
 
+    def sortiert(paare: set[tuple[str, int]]) -> tuple[tuple[str, int], ...]:
+        return tuple(sorted(paare, key=lambda paar: (paar[0].casefold(), paar[1])))
+
     buecher = []
     for isbn in sorted(set(aktuelle) | set(alte)):
         jetzt = aktuelle.get(isbn)
-        frueher = alte.get(isbn)
-        quelle = jetzt or frueher
+        quelle = jetzt or alte.get(isbn)
         assert quelle is not None  # eine der beiden Seiten hat die ISBN geliefert
-        leihbar = bool(quelle.get("borrowable"))
-        if jetzt is None and not leihbar:
-            # Aus dem Vorjahr verschwunden und nie im Bestand der Schule: dazu
-            # gibt es nichts zu planen.
-            continue
         kombinationen = set(aktuelle_paare.get(isbn, ()))
-        ausgemustert: set[tuple[str, int]] = set()
-        if leihbar:
-            ausgemustert = set(alte_paare.get(isbn, ())) - kombinationen
-            kombinationen |= ausgemustert
+        # Aus dem Vorjahr verschwunden und dort nirgends leihbar: das Buch lag
+        # nie im Bestand der Schule, dazu gibt es nichts zu planen.
+        ausgemustert = set(alt_leihbar.get(isbn, ())) - kombinationen
+        if jetzt is None and not ausgemustert:
+            continue
         buecher.append(Buch(
             isbn=isbn,
             titel=str(quelle.get("title") or "?"),
             verlag=str(quelle.get("publisher") or "") or OHNE_VERLAG,
-            kombinationen=tuple(sorted(kombinationen,
-                                       key=lambda paar: (paar[0].casefold(), paar[1]))),
-            leihbar=leihbar,
+            kombinationen=sortiert(kombinationen | ausgemustert),
             neupreis=_preis(quelle.get("price")),
             leihgebuehr=_preis(quelle.get("fee")),
-            ausgemustert=tuple(sorted(ausgemustert,
-                                      key=lambda paar: (paar[0].casefold(), paar[1]))),
+            ausgemustert=sortiert(ausgemustert),
+            leihbar_paare=sortiert(set(aktuell_leihbar.get(isbn, ())) | ausgemustert),
         ))
 
     return Schnappschuss(

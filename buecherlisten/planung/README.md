@@ -27,8 +27,8 @@ alles andere darunter.
 ## Die Datei: ein Bücher-Blatt, zwei Tabellen daneben
 
 | Blatt | Schlüssel | eintragbar |
-| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis, leihbar (das Soll, ohne Kommentar) |
-| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang) | Einführung, Ausmusterung nach Schuljahr, je Antrag Entscheidung/Kürzel/Datum, Begründung, Kürzel, Datum, Bemerkung |
+| `Buchreihen` | ISBN | Bemerkung; Titel, Verlag, Neupreis, Leihpreis (das Soll, ohne Kommentar) |
+| `Fächer & Jahrgang` | (ISBN, Fach, Jahrgang, Einführung) | leihbar, Einführung, Ausmusterung nach Schuljahr, je Antrag Entscheidung/Kürzel/Datum, Begründung, Kürzel, Datum, Bemerkung |
 | `Rücklage` | (ISBN, Fach) | Anzahl, Kürzel, Datum, Status, Bemerkung |
 | `Info` | — | (nichts; Schuljahr, Stand und Legende) |
 
@@ -293,10 +293,8 @@ nachgebaut. Die ISBN steht dort nur zum Lesen, grau hinterlegt: sie ist der
 Schlüssel des Buchs. **Gespeichert wird in dieser Datei, nicht in IServ**: das
 Dashboard bleibt dort nur-lesend.
 
-Seit 2026-09-25 gehört auch „Leihbar“ dazu, als Häkchen unter den Preisen und
-vor Einführung und Ausmusterung. In IServ ist das kein Feld der Buchreihe,
-sondern eines jeden Listeneintrags (`borrowable`); `korrigiere_eintrag` setzt
-es auf den Eintrag. „Leihbar“ entscheidet auch, ob eine Rücklage möglich ist.
+Von 2026-09-25 bis 2026-10-10 gehörte auch „Leihbar“ dazu, als Häkchen unter
+den Preisen. Seitdem steht es je Zeile (siehe „Leihbar je Fach und Jahrgang“).
 
 * **Die Eingabe gilt, wie sie ist.** Auf `Buchreihen` steht der eingegebene
   Wert, ohne Kommentar. Ein leerer Preis ist leer.
@@ -317,6 +315,49 @@ Fächer und Jahrgänge, die IServ im selben Dialog führt, lassen sich hier nich
 
 Die Datei gilt je Schuljahr. Eine neue Datei für das nächste Schuljahr bringt
 die geänderten Angaben des Vorjahrs **nicht** mit (`docs/roadmap.md`).
+
+## Leihbar je Fach und Jahrgang
+
+Seit 2026-10-10 steht „leihbar“ nicht mehr je Buchreihe auf `Buchreihen`,
+sondern je Zeile auf `Fächer & Jahrgang`, direkt hinter `Jahrgang`. So führt
+es auch IServ: `borrowable` gehört zum Eintrag einer Jahrgangsliste, nicht
+zur Buchreihe. Ein Buch kann in Jahrgang 7 leihbar und in Jahrgang 8 ein
+Kaufbuch sein.
+
+Im Planungsmenü ist es die Spalte „Leihbar“ der Tabelle „Einführung und
+Ausmusterung“. Umgeschaltet wird so (`leihbarSchritt` in
+`app/static/buchplanung.js`, sichtbar vor dem Speichern):
+
+* **Die Zeile galt schon vor diesem Schuljahr** (keine Einführung oder eine
+  ältere): sie bleibt, wie sie war, bekommt aber die Ausmusterung nach dem
+  Vorjahr, und ihr Häkchen wird grau. Darunter beginnt eine neue Zeile mit
+  Einführung = Schuljahr der Datei, dem umgeschalteten Häkchen und der
+  bisherigen Ausmusterung.
+* **Klick auf das Häkchen der neuen Zeile**, solange darüber die
+  Vorgängerin steht: der Wechsel wird zurückgenommen - die neue Zeile fällt
+  weg, die alte bekommt ihre Ausmusterung zurück (meist leer).
+* **Sonst** (eine Zeile ab diesem Schuljahr ohne Vorgängerin, eine künftige
+  oder neue): nur das Häkchen wechselt.
+* Eine **ausgemusterte** Zeile hat ein graues Häkchen und lässt sich nicht
+  umschalten.
+
+Ein Jahrgang hat damit mehrere Zeilen, unterschieden an der Einführung. Ihre
+Zeiträume dürfen sich nicht überschneiden (`_pruefe_zeitraeume`); das prüft
+der Server auch für Eintragungen ohne das Menü. Welche Zeile das Menü meint,
+sagt `bisher_ab` (die Einführung beim Öffnen) bzw. `neu`. Für Status, Zusatz
+„(ab …)“/„(bis …)“ und Vergleich zählt die Zeile, die dieses Schuljahr wirkt
+(`massgebliche_zeile`).
+
+Ein Wechsel ist eine Ausmusterung und eine Einführung - beide stehen als
+Antrag auf der Änderungsliste, „ganz neu“ oder „ganz weg“ ist das Buch dabei
+nicht (`verbleib_der_buecher`). Die Bücherlisten-Seiten zeigen ein halbes
+Häkchen, wenn ein Buch in den Jahrgängen einer Zeile teils leihbar ist; der
+Vergleich mit IServ geht je Paar (`leihbar_anders`), und das PDF bekommt
+„leihbar“ je Jahrgang (`korrekturen_fuer_iserv`). Eine Rücklage ist möglich,
+sobald irgendeine Zeile des Buchs leihbar ist.
+
+Eine ältere Datei (mit `leihbar` auf `Buchreihen`) wird gelesen, als stünde
+der Wert in jeder Zeile des Buchs, und beim nächsten Speichern umgestellt.
 
 ## Ein Buch hinzufügen
 

@@ -37,10 +37,12 @@ from buecherlisten.planung import (
     FACH_BESTAETIGT,
     NUR_ISERV,
     OHNE_VERLAG,
+    PLANUNG_AUSGEMUSTERT,
     RANG_JAHRGANG,
     RANG_WECHSEL,
     Aenderung,
     Buchplanung,
+    UngueltigesSchuljahr,
     aenderungsliste,
     endet_mit_vorjahr,
     fach_bestaetigung,
@@ -50,6 +52,7 @@ from buecherlisten.planung import (
     planungs_status,
     planungs_zusatz,
     rang_text,
+    schuljahr_zahl,
     verbleib_der_buecher,
     zum_schuljahr_ausgemustert,
 )
@@ -205,7 +208,7 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         "schuljahr": schuljahr, "mtime": None, "fehler": None, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
         "ruecklage_je_isbn": {}, "bemerkung_je_isbn": {}, "ausmusterungen_je_fach": {},
-        "vorjahr": "",
+        "vorjahr": "", "planungsjahr": "", "leihbar_isbns": set(),
         "verlage": [], "buecher": [], "isbns": set(),
     }
     try:
@@ -216,6 +219,10 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         return leer, None
 
     planung = stand.planung
+    try:
+        jetzt = schuljahr_zahl(planung.schuljahr)
+    except UngueltigesSchuljahr:
+        jetzt = 0
     zeilen: dict[str, dict[str, list[dict[str, Any]]]] = {}
     ruecklagen: dict[str, dict[str, Any]] = {}
     for buch in planung.buecher:
@@ -223,33 +230,45 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         # angeht, und die Fachkonferenzleitung bestätigt nur ihre eigenen.
         je_fach: dict[str, list[dict[str, Any]]] = {}
         for fach, jahrgang in planung.zeilen_des_buchs(buch):
-            zeile = planung.planungszeile(buch.isbn, fach, jahrgang)
-            je_fach.setdefault(fach, []).append({
-                "jahrgang": jahrgang,
-                # ``aktuell`` heißt: in der Datei steht zu diesem (Fach,
-                # Jahrgang) keine Einführung. Das Buch ist dort schon
-                # eingeführt - so kommen die Paare aus den Bücherlisten dieses
-                # Schuljahrs und des Vorjahrs an; zu entscheiden ist nur noch
-                # die Ausmusterung. Ein geplanter Jahrgang trägt eine
-                # Einführung und lässt sich deshalb ganz ändern und entfernen.
-                "aktuell": (fach, jahrgang) in buch.kombinationen,
-                "eingefuehrt_ab": zeile.eingefuehrt_ab if zeile else "",
-                "ausgemustert_nach": zeile.ausgemustert_nach if zeile else "",
-                "kuerzel": zeile.kuerzel if zeile else "",
-                "datum": zeile.datum if zeile else None,
-                "bemerkung": zeile.bemerkung if zeile else "",
-                "status": planungs_status(zeile, planung.schuljahr),
-                "zusatz": planungs_zusatz(zeile, planung.schuljahr),
-                # Die Entscheidungen der Änderungsliste - im Menü nur zum Lesen.
-                **{
-                    f"antrag_{art}": {"status": antrag.status, "kuerzel": antrag.kuerzel,
-                                      "datum": antrag.datum}
-                    for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
-                    if zeile and zeile.schuljahr_des_antrags(art)
-                    for antrag in (zeile.antrag(art),)
-                },
-                "begruendung": zeile.begruendung if zeile else "",
-            })
+            massgeblich = planung.massgebliche_zeile(buch.isbn, fach, jahrgang)
+            for zeile in planung.zeilen_des_paars(buch.isbn, fach, jahrgang):
+                status = planungs_status(zeile, planung.schuljahr)
+                je_fach.setdefault(fach, []).append({
+                    "jahrgang": jahrgang,
+                    # ``aktuell`` heißt: die Zeile hat keine Einführung. Das
+                    # Buch ist dort schon eingeführt - so kommen die Paare aus
+                    # den Bücherlisten dieses Schuljahrs und des Vorjahrs an;
+                    # zu entscheiden ist nur noch die Ausmusterung. Ein
+                    # geplanter Jahrgang trägt eine Einführung und lässt sich
+                    # deshalb ganz ändern und entfernen.
+                    "aktuell": not zeile.eingefuehrt_ab,
+                    "leihbar": zeile.leihbar,
+                    # Schaltet man „leihbar“ an einer Zeile um, die schon vor
+                    # diesem Schuljahr galt, endet sie mit dem Vorjahr und eine
+                    # neue beginnt (``static/buchplanung.js``). Eine
+                    # ausgemusterte Zeile lässt sich nicht mehr umschalten.
+                    "alt": zeile.beginn is None or zeile.beginn < jetzt,
+                    "gesperrt": status == PLANUNG_AUSGEMUSTERT,
+                    "eingefuehrt_ab": zeile.eingefuehrt_ab,
+                    "ausgemustert_nach": zeile.ausgemustert_nach,
+                    "kuerzel": zeile.kuerzel,
+                    "datum": zeile.datum,
+                    "bemerkung": zeile.bemerkung,
+                    "status": status,
+                    # Der Zusatz „(ab …)“/„(bis …)“ in der Bücherliste kommt von
+                    # der Zeile, die für dieses Schuljahr spricht.
+                    "zusatz": planungs_zusatz(zeile, planung.schuljahr)
+                    if zeile is massgeblich else "",
+                    # Die Entscheidungen der Änderungsliste - im Menü nur zum Lesen.
+                    **{
+                        f"antrag_{art}": {"status": antrag.status, "kuerzel": antrag.kuerzel,
+                                          "datum": antrag.datum}
+                        for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
+                        if zeile.schuljahr_des_antrags(art)
+                        for antrag in (zeile.antrag(art),)
+                    },
+                    "begruendung": zeile.begruendung,
+                })
         zeilen[buch.isbn] = je_fach
     for wunsch in planung.ruecklagen:
         ruecklagen.setdefault(wunsch.isbn, {})[wunsch.fach] = {
@@ -271,11 +290,13 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         je_buch = ausmusterungen.setdefault(zeile.fach, {})
         eintrag = je_buch.setdefault(altes.isbn, {
             "titel": altes.titel, "verlag": altes.verlag, "isbn": altes.isbn,
-            "isbn_anzeige": format_isbn(altes.isbn), "leihbar": altes.leihbar,
+            "isbn_anzeige": format_isbn(altes.isbn),
             "neupreis": altes.neupreis, "leihgebuehr": altes.leihgebuehr,
-            "jahrgaenge": [],
+            "jahrgaenge": [], "ja": [], "nein": [],
         })
-        eintrag["jahrgaenge"].append(zeile.jahrgang)
+        if zeile.jahrgang not in eintrag["jahrgaenge"]:
+            eintrag["jahrgaenge"].append(zeile.jahrgang)
+        eintrag["ja" if zeile.leihbar else "nein"].append(zeile.jahrgang)
     ausgemustert: dict[str, list[dict[str, Any]]] = {
         fach: sorted(je_buch.values(), key=lambda e: e["titel"].casefold())
         for fach, je_buch in ausmusterungen.items()
@@ -283,6 +304,12 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
     for eintraege in ausgemustert.values():
         for eintrag in eintraege:
             eintrag["jahrgaenge"].sort()
+            ja, nein = sorted(eintrag.pop("ja")), sorted(eintrag.pop("nein"))
+            eintrag["leihbar"] = bool(ja)
+            eintrag["leihbar_teilweise"] = bool(ja and nein)
+            eintrag["leihbar_titel"] = (
+                f"leihbar: Jg. {', '.join(map(str, ja))} · Kaufbuch: Jg. {', '.join(map(str, nein))}"
+                if ja and nein else "")
 
     # Die Vorschläge für „+ Buch hinzufügen“: jedes Buch der Datei, mit dem,
     # was das Menü bei einem Treffer übernimmt.
@@ -290,7 +317,8 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
     buecher = [
         {"isbn": buch.isbn, "isbn_anzeige": format_isbn(buch.isbn), "titel": buch.titel,
          "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
-         "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr, "leihbar": buch.leihbar,
+         "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
+         "leihbar": planung.leihbar(buch.isbn),
          "bemerkung": bemerkungen.get(buch.isbn, ""),
          "faecher": sorted({fach for fach, _ in buch.kombinationen}
                            | {z.fach for z in planung.planung if z.isbn == buch.isbn},
@@ -318,6 +346,11 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         "bemerkung_je_isbn": bemerkungen,
         "ausmusterungen_je_fach": ausgemustert,
         "vorjahr": planung.vorjahr,
+        # Das Schuljahr der Datei: das Menü führt damit eine neue Zeile ein,
+        # wenn „leihbar“ an einer alten umgeschaltet wird.
+        "planungsjahr": planung.schuljahr,
+        # Bücher, für die es eine Rücklage geben kann (eine Zeile ist leihbar).
+        "leihbar_isbns": {buch.isbn for buch in planung.buecher if planung.leihbar(buch.isbn)},
         "verlage": [v for v in planung.verlage if v != OHNE_VERLAG],
         "buecher": buecher,
         # Die Bücher der Datei: nur ihre Zeilen haben ein Planungsmenü.

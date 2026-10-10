@@ -157,14 +157,22 @@
 {%- endif -%}
 {%- endmacro %}
 
-{% macro jahrgangszeile(planung, buch, zeile) %}
+{% macro jahrgangszeile(planung, buch, zeile, fach) %}
 {#
   Ein Jahrgang ohne Einführung (``zeile.aktuell``) ist eingeführt - daran
   lässt sich nichts mehr entscheiden, offen ist nur noch die Ausmusterung. Ein
   geplanter Jahrgang trägt eine Einführung; dort sind alle Felder offen, und er
   lässt sich auch wieder entfernen.
+
+  „Leihbar“ gilt je Zeile. ``data-alt``: die Zeile galt schon vor diesem
+  Schuljahr - umgeschaltet wird dann nicht sie, sondern sie endet mit dem
+  Vorjahr, und darunter beginnt eine neue (``static/buchplanung.js``). Eine
+  ausgemusterte Zeile (``zeile.gesperrt``) hat ein graues Häkchen.
+  ``data-bisher-ab`` sagt dem Server, welche Zeile des Jahrgangs gemeint ist.
 #}
-<tr data-planung-zeile{% if zeile.aktuell %} data-aktuell{% endif %}>
+{% set iserv_leihbar = dict(buch.leihbar_iserv or ()) if buch else {} %}
+<tr data-planung-zeile data-bisher-ab="{{ zeile.eingefuehrt_ab }}"
+  {%- if zeile.aktuell %} data-aktuell{% endif %}{% if zeile.alt %} data-alt{% endif %}>
   <td class="planung-spalte-jahrgang">
     {% if zeile.aktuell %}{{ zeile.jahrgang }}<input type="hidden"
       data-planung-feld="jahrgang" value="{{ zeile.jahrgang }}">
@@ -172,6 +180,12 @@
       data-planung-feld="jahrgang" min="1" max="13" value="{{ zeile.jahrgang }}"
       aria-label="Jahrgang">{% endif %}
   </td>
+  <td class="planung-spalte-leihbar"><input type="checkbox" data-planung-feld="leihbar"
+    {%- if zeile.leihbar %} checked{% endif %}{% if zeile.gesperrt %} disabled
+    title="ausgemustert - nicht mehr umschaltbar"{% endif %} aria-label="leihbar">
+    {%- if zeile.status in ("im Einsatz", "läuft aus") and (fach, zeile.jahrgang) in iserv_leihbar %}
+    <span class="buchreihe-iserv">in IServ: {{ "ja" if iserv_leihbar[(fach, zeile.jahrgang)] else "nein" }}</span>
+    {%- endif %}</td>
   <td>
     {% if zeile.aktuell %}
     <span class="klein grau">{{ zeile.eingefuehrt_ab or "eingeführt" }}</span>
@@ -299,14 +313,10 @@
   </div>
   {#
     „Leihbar“ steht in IServ nicht im Dialog der Buchreihe, sondern als Häkchen
-    je Eintrag einer Bücherliste. Hier gilt es für das Buch in allen Listen und
-    ist wie Titel und Preise eine Korrektur, die IServ selbst nicht ändert.
+    je Eintrag einer Bücherliste - also je Jahrgang. Seit 2026-10-10 steht es
+    deshalb hier nicht mehr, sondern je Zeile unter „Einführung und
+    Ausmusterung“.
   #}
-  <div class="form-group buchreihe-leihbar">
-    <div class="checkbox"><label><input type="checkbox" data-buchreihe-feld="leihbar"
-      {% if not neu and buch.leihbar %}checked{% endif %}> Leihbar</label></div>
-    {{ in_iserv(iserv, "leihbar") }}
-  </div>
   <div class="form-group">
     <label class="control-label">Bemerkung</label>
     {# Dasselbe Feld wie die Bemerkung je Jahrgang: eine Zeile, beim Anklicken
@@ -317,16 +327,21 @@
   </div>
   {% if neu %}
   <p class="small help-block">ISBN oder Titel eintippen: Bücher aus anderen Fächern werden
-    vorgeschlagen und bringen Titel, Verlag, Preise, „Leihbar“ und die Bemerkung mit. Eine neue ISBN legt das Buch nur
+    vorgeschlagen und bringen Titel, Verlag, Preise und die Bemerkung mit. Eine neue ISBN legt das Buch nur
     im Dashboard an - in IServ ändert sich nichts.</p>
   {% elif buch.von_hand %}
   <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
-    hinzugefügt. Titel, Verlag, Preise und „Leihbar“ gelten, wie sie hier stehen.</p>
+    hinzugefügt. Titel, Verlag und Preise gelten, wie sie hier stehen.</p>
   {% else %}
   <p class="small help-block">Die Angaben gelten im Dashboard - in den Bücherlisten, im
     PDF und in der Planungsdatei. In IServ selbst ändert sich nichts.</p>
   {% endif %}
 </div>
+{% endmacro %}
+
+{% macro tabellenkopf() %}
+<thead><tr><th>Jahrgang</th><th>Leihbar</th><th>Einführung<br>zum Schuljahr</th>
+  <th>Ausmusterung<br>nach Schuljahr</th><th>Bemerkung</th><th></th></tr></thead>
 {% endmacro %}
 
 {% macro planungsvorlage(planung, buch, fach) %}
@@ -347,10 +362,9 @@
       #}
       <div class="planung-tabellenrahmen">
         <table class="planung-tabelle">
-          <thead><tr><th>Jahrgang</th><th>Einführung<br>zum Schuljahr</th>
-            <th>Ausmusterung<br>nach Schuljahr</th><th>Bemerkung</th><th></th></tr></thead>
+          {{ tabellenkopf() }}
           <tbody data-planung-zeilen>
-            {% for zeile in zeilen %}{{ jahrgangszeile(planung, buch, zeile) }}{% endfor %}
+            {% for zeile in zeilen %}{{ jahrgangszeile(planung, buch, zeile, fach) }}{% endfor %}
           </tbody>
         </table>
       </div>
@@ -359,16 +373,16 @@
       </p>
       <p class="small help-block">Ein Jahrgang, in dem das Buch schon geführt wird, braucht nur
         die Ausmusterung. „+ Jahrgang“ trägt eine Neueinführung ein - mit dem Schuljahr, ab dem
-        sie gilt.</p>
+        sie gilt. „Leihbar“ umschalten beendet einen schon geführten Jahrgang mit dem Vorjahr
+        und führt ihn ab {{ planung.planungsjahr }} neu ein.</p>
     </div>
     {#
-      Zurückgelegt wird nur, was die Schule besitzt. ``buch.leihbar`` heißt
-      dabei "leihbar oder im Vorjahr leihbar gewesen" - der Schnappschuss trägt
-      den Wert des Jahres ein, in dem das Buch zuletzt vorkam
-      (``buecherlisten/planung/laden.py``). Bei einem Kaufbuch fehlt der Block
-      ganz; der Server weist eine Rücklage dazu ohnehin ab.
+      Zurückgelegt wird nur, was die Schule besitzt: irgendeine Zeile des
+      Buchs ist leihbar, auch eine ausgemusterte (``Buchplanung.leihbar``).
+      Bei einem Kaufbuch fehlt der Block ganz; der Server weist eine Rücklage
+      dazu ohnehin ab.
     #}
-    {% if buch.leihbar %}
+    {% if buch.isbn in planung.leihbar_isbns %}
     <div class="planung-block">
       <h4>Rücklage für die Fachschaft {{ fach }}</h4>
       <label class="planung-ruecklage">Exemplare
@@ -405,9 +419,10 @@
   einmal je Seite, nicht je Buch: die Leerzeile hängt an keinem Buch, und zwei
   gleichzeitig offene Menüs gibt es nicht.
 
-  Die Leerzeile trägt kein ``disabled`` an der Ausmusterung - ob das Buch
-  leihbar ist, weiß erst das Skript beim Anfügen (es übernimmt es aus der
-  Tabelle, in die es die Zeile hängt).
+  Das Häkchen „Leihbar“ der Leerzeile ist leer - das Skript übernimmt es beim
+  Anfügen von der letzten Zeile der Tabelle, in die es die Zeile hängt. Sie
+  hat kein ``data-bisher-ab``: sie ist neu. Auch die Zeile, die beim
+  Umschalten von „Leihbar“ entsteht, ist eine Kopie davon.
 #}
 {#
   Die Verlage, die das Feld "Verlag" beim Tippen vorschlägt: alle, die in
@@ -432,8 +447,7 @@
       <h4>Einführung und Ausmusterung</h4>
       <div class="planung-tabellenrahmen">
         <table class="planung-tabelle">
-          <thead><tr><th>Jahrgang</th><th>Einführung<br>zum Schuljahr</th>
-            <th>Ausmusterung<br>nach Schuljahr</th><th>Bemerkung</th><th></th></tr></thead>
+          {{ tabellenkopf() }}
           <tbody data-planung-zeilen></tbody>
         </table>
       </div>
@@ -461,6 +475,8 @@
     <td class="planung-spalte-jahrgang"><input type="number"
       class="planung-feld planung-feld-jahrgang" data-planung-feld="jahrgang"
       min="1" max="13" placeholder="Jg." aria-label="Jahrgang"></td>
+    <td class="planung-spalte-leihbar"><input type="checkbox" data-planung-feld="leihbar"
+      aria-label="leihbar"></td>
     <td><input type="text" class="planung-feld planung-feld-schuljahr"
       data-planung-feld="eingefuehrt_ab" placeholder="JJJJ/JJJJ"
       aria-label="eingeführt zum Schuljahr"></td>

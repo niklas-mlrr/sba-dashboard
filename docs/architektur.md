@@ -477,6 +477,15 @@ Regal der Schule — es gibt daran nichts zurückzulegen. Dasselbe `leihbar`
 entscheidet deshalb auch, ob sich eine **Rücklage** eintragen lässt; bei einem
 Kaufbuch fehlt der Block im Menü, und der Server weist sie ab.
 
+**`leihbar` steht je (Fach, Jahrgang), nicht je Buchreihe** (seit 2026-10-10),
+wie `borrowable` in IServ am Eintrag einer Jahrgangsliste. Wechselt es in
+einem schon geführten Jahrgang, endet dessen Zeile mit dem Vorjahr und eine
+neue beginnt mit dem Schuljahr — ein Paar hat dann zwei Zeilen, unterschieden
+an der Einführung, ohne Überschneidung. So bleibt nachvollziehbar, bis wann
+ein Buch verliehen wurde, und der Wechsel läuft als Antrag über die
+Änderungsliste wie jede andere Einführung und Ausmusterung. Einzelheiten in
+`buecherlisten/planung/README.md`.
+
 Die **Ausmusterung** hängt seit 2026-09-20 nicht mehr daran. Vorher nahm die
 Spalte nur bei leihbaren Büchern einen Wert an — das verwechselte zwei Dinge:
 ausgemustert wird eine Bücherliste, nicht ein Bestand. Auch ein Kaufbuch steht

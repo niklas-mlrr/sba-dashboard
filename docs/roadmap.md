@@ -43,7 +43,7 @@ der Zelle; die Abweichung zeigt der Live-Vergleich auf den Seiten.
 Schuljahr. Legt der erste Abgleich eines neuen Schuljahrs seine Datei an,
 fehlen darin die Korrekturen des Vorjahrs, und das Buch steht wieder so da, wie
 IServ es führt. Naheliegend wäre, beim Anlegen Titel, Verlag, Preise und
-leihbar von „Buchreihen“ aus der Datei des Vorjahrs zu übernehmen - welche
+leihbar (je Zeile auf „Fächer & Jahrgang“) aus der Datei des Vorjahrs zu übernehmen - welche
 davon geändert waren, weiß die Datei ohne Kommentar nicht mehr. Ebenfalls offen: das
 Kommandozeilen-Skript `buecherlisten/generate_booklists.py` kennt die
 Korrekturen nicht.
