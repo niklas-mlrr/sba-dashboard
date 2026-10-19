@@ -256,9 +256,7 @@ class Schreibergebnis:
     ref: str
     # Der Zellwert vor der Änderung, so wie openpyxl ihn hergibt: Zahl, Text,
     # Datum oder None. ``object`` ist hier kein Notausgang, sondern die
-    # ehrliche Signatur einer Tabellenzelle - anders als bei ``ws``/``eintrag``,
-    # die bis 2026-09-05 nur deshalb ``object`` waren, weil sie mit einem
-    # ``None``-Vorgabewert nachträglich angebaut wurden.
+    # ehrliche Signatur einer Tabellenzelle.
     alt: object
     neu: int | None
     zustand: Dateizustand

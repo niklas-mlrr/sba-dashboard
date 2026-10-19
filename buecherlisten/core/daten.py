@@ -183,9 +183,8 @@ def _verlag_von(sd: dict) -> list[str]:
 
 # IServ-Schuljahre heißen "2026/2027". Das Vorjahr daraus abzuleiten ist die
 # einzige Stelle, an der dieses Format ausgewertet wird - einen Endpunkt "alle
-# Schuljahre" gibt es nicht (siehe ausleihe/schoolyears.py). Bis 2026-09-19
-# stand das in ``mehrjahresbaende/core/laden.py``; es liegt jetzt hier, weil
-# inzwischen drei Pakete die Schreibweise brauchen und keines das andere
+# Schuljahre" gibt es nicht (siehe ausleihe/schoolyears.py). Es liegt
+# hier, weil drei Pakete die Schreibweise brauchen und keines das andere
 # importieren soll. ``mehrjahresbaende.core.laden`` reicht beide Namen weiter.
 _JAHRESPAAR = re.compile(r"^(\d{4})\s*/\s*(\d{4})$")
 

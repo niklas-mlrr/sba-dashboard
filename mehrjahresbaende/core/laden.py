@@ -33,10 +33,9 @@ class AusleiheClient(Protocol):
 
 
 # Die Schuljahres-Schreibweise (``vorjahr_kennung``, ``UnbekanntesSchuljahr``)
-# steht seit 2026-09-19 in ``buecherlisten/core/daten.py``: inzwischen brauchen
-# sie drei Pakete, und ein zweiter Parser wäre genau die Stelle, an der sie
-# auseinanderlaufen. Beide Namen bleiben von hier aus erreichbar, damit alles,
-# was sie bisher hier importiert hat, unverändert weiterläuft.
+# steht in ``buecherlisten/core/daten.py``: drei Pakete brauchen sie, und ein
+# zweiter Parser wäre genau die Stelle, an der sie auseinanderlaufen. Beide
+# Namen gehören trotzdem zur Schnittstelle von ``mehrjahresbaende.core``.
 
 
 def _buch(item: dict) -> Buchvorkommen | None:

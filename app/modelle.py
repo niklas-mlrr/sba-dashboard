@@ -1,13 +1,8 @@
-"""Anfragekörper der drei schreibenden Routen - als Pydantic-Modelle.
+"""Anfragekörper der schreibenden Routen - als Pydantic-Modelle.
 
-Bis 2026-09-05 stand hier nichts: jede Route nahm ``dict = Body(...)`` und
-prüfte danach von Hand mit ``isinstance``-Ketten nach. Das war rund vierzig
-Zeilen, die bei jeder neuen Route wieder anfielen - und bei drei Anfrageformen
-noch überschaubar, bei dreißig nicht mehr.
-
-Der Grund, warum es *nicht* von Anfang an Pydantic war, ist trotzdem echt und
-hat sich nicht erledigt: FastAPIs Vorgabeantwort auf einen ungültigen Körper
-ist ein **englisches, schemaförmiges 422**::
+Pydantic hat einen Haken, der hier gelöst werden muss: FastAPIs
+Vorgabeantwort auf einen ungültigen Körper ist ein **englisches,
+schemaförmiges 422**::
 
     {"detail": [{"type": "missing", "loc": ["body", "key"], ...}]}
 
@@ -53,12 +48,8 @@ NichtLeer = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 class EinstellungenAnfrage(BaseModel):
     """``POST /api/einstellungen`` - die zwei Werte hinter dem Zahnrad im Fenster.
 
-    Bis 2026-09-10 hieß dieses Modell ``EinrichtungAnfrage`` und trug einen
-    einzigen ``pfad``: den vollen Dateipfad der Mappe, eingegeben auf einer
-    Browserseite. Beides hat sich geändert - eingestellt wird der **Ordner**
-    (der Dateiname trägt die Jahreszahl und wechselt, siehe
-    ``app.settings.mappe_im_ordner``), und dazu der IServ-Server, der vorher nur
-    von Hand in der JSON-Datei änderbar war.
+    Eingestellt wird der **Ordner**, nicht die Datei: der Dateiname trägt die
+    Jahreszahl und wechselt (siehe ``app.settings.mappe_im_ordner``).
     """
 
     server: NichtLeer
@@ -287,10 +278,8 @@ class AntragAnfrage(_BuchplanungAnfrage):
 class AnmeldeAnfrage(BaseModel):
     """``POST /api/anmeldung`` - die Zugangsdaten, die das Programmfenster sendet.
 
-    Bis 2026-09-10 hieß dieses Modell ``AbrufAnfrage`` und war der Körper von
-    ``POST /api/refresh``: jeder Abruf brachte seine eigenen Zugangsdaten mit.
-    Angemeldet wird jetzt einmal im Fenster (``app/sitzung.py``), und
-    ``/api/refresh`` nimmt überhaupt keinen Körper mehr.
+    Angemeldet wird einmal im Fenster (``app/sitzung.py``); ``/api/refresh``
+    nimmt deshalb keinen Körper.
 
     ``passwort`` wird **nicht** beschnitten: ein Leerzeichen am Rand kann Teil
     des Passworts sein. Nur die Mindestlänge gilt, wie in der handgeschriebenen

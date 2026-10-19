@@ -181,9 +181,7 @@ def setze_planung(
     lässt den Wert der Zeile stehen.
 
     Einführung und Ausmusterung gelten für **jedes** Buch, auch für ein
-    Kaufbuch. Bis 2026-09-20 wies die Ausmusterung ein Kaufbuch ab - aus dem
-    Regal der Schule sei nichts zu entfernen. Das verwechselte zwei Dinge:
-    ausgemustert wird eine **Bücherliste**, nicht ein Bestand. Auch ein Buch,
+    Kaufbuch: ausgemustert wird eine **Bücherliste**, nicht ein Bestand. Auch ein Buch,
     das die Familien selbst kaufen, steht bis zu einem Schuljahr auf der Liste
     und danach nicht mehr - und genau das hält diese Spalte fest. Was sich
     wirklich auf den Bestand der Schule bezieht, ist die Rücklage
@@ -569,8 +567,8 @@ class Buchreiheneingabe:
     """Der Block „Buchreihe“ des Planungsmenüs - die änderbaren Felder.
 
     Ohne ISBN: sie ist der Schlüssel des Buchs und steht im Menü nur zum
-    Lesen. Ein leerer Preis ist leer. „Leihbar“ steht seit 2026-10-10 nicht
-    mehr hier, sondern je Jahrgang (:class:`Jahrgangseingabe`).
+    Lesen. Ein leerer Preis ist leer. „Leihbar“ steht nicht hier, sondern je
+    Jahrgang (:class:`Jahrgangseingabe`).
     """
 
     titel: str
@@ -623,8 +621,7 @@ def setze_buchreihe(stand: Buchplanung, *, isbn: str, eingabe: Buchreiheneingabe
 
     Die Datei ist das Soll: die Eingabe gilt, wie sie ist, und ein leerer Preis
     ist leer. Was IServ davon abweichend nennt, zeigt der Vergleich auf den
-    Seiten. Bis 2026-09-25 merkte sich die Datei zu jedem geänderten Feld den
-    IServ-Wert als Kommentar, und ein leerer Preis hieß „wie in IServ“.
+    Seiten.
     """
     buch = _geprueftes_buch(stand, isbn)
     titel, verlag = _gepruefte_buchreihe(eingabe)

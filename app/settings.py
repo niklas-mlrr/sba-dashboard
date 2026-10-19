@@ -134,17 +134,12 @@ def _lies_json_objekt(pfad: Path) -> dict:
 def _schreibe_json_atomar(pfad: Path, daten: dict) -> None:
     """Schreibt eine JSON-Datei atomar - über ``app.dateien.schreibe_atomar``.
 
-    Bis 2026-09-05 machte diese Funktion nur ``write_text`` gefolgt von einem
-    einzelnen ``os.replace`` - ohne ``fsync`` und ohne Wiederholung, anders als
-    der Sidecar-Cache (``app/cache.py``). Das war der einzige der drei
-    Windows-Ersetzen-Orte im Programm ohne den Wiederholungs-Fix vom
-    2026-09-04 (CI auf ``windows-latest``: ``os.replace`` scheitert dort mit
-    ``PermissionError``, solange irgendein Handle auf die Zieldatei offen
-    ist) - und ausgerechnet der heißeste: die Migration alter Vollkopien in
-    ``laden_mit_benutzerkonfiguration`` (siehe Modul-Docstring) kann bei
-    praktisch jedem Programmstart hierher schreiben. ``app.dateien`` bündelt
-    die Nachbardatei-plus-``fsync``-plus-Wiederholung-Logik jetzt für beide
-    Aufrufer (Cache und Benutzerkonfiguration) an einer Stelle.
+    Kein schlichtes ``write_text``: die Migration alter Vollkopien in
+    ``laden_mit_benutzerkonfiguration`` (siehe Modul-Docstring) schreibt bei
+    praktisch jedem Programmstart hierher, und unter Windows scheitert
+    ``os.replace`` mit ``PermissionError``, solange irgendein Handle auf die
+    Zieldatei offen ist. Nachbardatei, ``fsync`` und Wiederholung stehen in
+    ``app.dateien``.
     """
     _atomar_schreiben(pfad, json.dumps(daten, ensure_ascii=False, indent=2) + "\n")
 
@@ -541,11 +536,8 @@ def speichere_benutzerwerte(
     speichern darf, steht damit in der Signatur und nicht erst in einer Prüfung
     im Rumpf.
 
-    Bis 2026-09-10 hieß diese Funktion ``speichere_excel_pfad`` und konnte genau
-    einen Schlüssel schreiben - damals gab es auch nur eine Einstellung, die sich
-    im Betrieb ändern ließ (die Datei, über ``POST /api/einrichtung``). Mit dem
-    Programmfenster sind es zwei, und die Stelle, die atomar in das Overlay
-    schreibt, soll eine bleiben.
+    Eine Funktion für alle Schlüssel, damit die Stelle, die atomar in das
+    Overlay schreibt, eine bleibt.
 
     Gibt die neuen Einstellungen zurück; der Aufrufer ersetzt damit
     ``app.state.einstellungen``.

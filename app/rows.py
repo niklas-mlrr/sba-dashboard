@@ -63,7 +63,7 @@ class Zeile:
             "bestand_ref": self.bestand_ref,
             "bestellt_ref": self.bestellt_ref,
             # Mehrzahl, weil ein Mehrjahresband den Bestand einmal führt, die
-            # Anmeldungen aber je Jahrgang einzeln. Steht seit 2026-09-05 mit in
+            # Anmeldungen aber je Jahrgang einzeln. Steht mit in
             # der Antwort, damit die Oberfläche nach einem Abruf auch diese
             # Spalte hervorheben kann - die geänderten Zellen kommen vom Server
             # als Zellbezüge, und ohne die Anmeldungs-Bezüge bliebe die
@@ -130,15 +130,9 @@ def baue_zeilen(ws: Worksheet, grid: Grid, cache: Cache | None = None) -> list[Z
 class Tabellenstand:
     """Alles, was ein Seitenaufbau über die Mappe wissen muss - in einem Stück.
 
-    Bis 2026-09-05 gab ``lies_tabelle`` ein untypisiertes Vierertupel zurück,
-    dessen Leerfall ``(None, [], None, None)`` hieß. Jeder Aufrufer zerlegte es
-    erst in vier Namen und prüfte danach einen davon auf ``None`` - drei Zeilen
-    Zeremonie je Route, und die drei ``None``-Felder waren für einen Typprüfer
-    (und für den Leser) nicht von echten Werten zu unterscheiden.
-
-    Jetzt gilt: entweder es gibt eine Mappe, dann sind **alle** Felder gesetzt,
-    oder ``lies_tabelle`` gibt ``None`` zurück. Der Leerfall steht damit einmal
-    im Rückgabetyp statt viermal im Inhalt.
+    Entweder es gibt eine Mappe, dann sind **alle** Felder gesetzt, oder
+    ``lies_tabelle`` gibt ``None`` zurück. Der Leerfall steht damit einmal im
+    Rückgabetyp statt als ``None`` in jedem einzelnen Feld.
     """
 
     pfad: Path

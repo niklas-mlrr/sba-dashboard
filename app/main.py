@@ -6,12 +6,10 @@ gestartete Fenster und jeder Test bekommen damit ihre eigene Instanz, die keine
 andere beeinflusst. Der exportierte Modulwert ``app`` bleibt für
 ``uvicorn app.main:app`` erhalten.
 
-Diese Datei hatte bis 2026-09-05 vier Aufgaben: Factory, sämtliche Routen, das
-Domänenlesen (``lies_tabelle``) und die Mappenprüfung
-(``validiere_excel_mappe``). Sie war damit die Datei, die jedes neue Feature
-anfassen musste. Wo die drei anderen Aufgaben jetzt liegen:
+Was bewusst **nicht** hier steht, damit nicht jedes neue Feature diese Datei
+anfassen muss:
 
-* Routen → ``app/api/`` (vier Router, siehe dort)
+* Routen → ``app/api/`` (je Aufgabe ein Router, siehe dort)
 * ``lies_tabelle`` → ``app/rows.py`` (kein FastAPI darin)
 * ``validiere_excel_mappe`` → ``app/excel.py`` (kein FastAPI darin)
 * Ausnahme → HTTP → ``app/fehler.py`` (einmal statt je Route)

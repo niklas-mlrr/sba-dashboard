@@ -29,11 +29,11 @@ Ausleihe-API liefert ISBNs immer ohne Trennzeichen.
 
 Rein lesend (nur GET). Kein Schreibzugriff auf die IServ-Produktionsdatenbank.
 
-Seit 2026-09-17 ist dieses Skript nur noch die Kommandozeile: Laden,
-Layout und Erzeugen stehen in ``buecherlisten/core/`` (wie ``bestand/core/``
-für die Bestandsliste), damit sba-dashboard dieselben PDFs erzeugen kann.
+Dieses Skript ist nur die Kommandozeile: Laden, Layout und Erzeugen stehen in
+``buecherlisten/core/`` (wie ``bestand/core/`` für die Bestandsliste), damit
+sba-dashboard dieselben PDFs erzeugen kann.
 
-Seit 2026-09-17 gibt es neben den Fächern zwei weitere Ansichten (--view):
+Neben den Fächern gibt es zwei weitere Ansichten (--view):
 nach Verlag (Spalten Titel, Fach, Klasse, ISBN, Neupreis, Leihgebühr) und nach
 Jahrgang (Spalten wie die IServ-Liste, Grundpaket und Wahlbereiche in einer
 Tabelle). Kopf, Schriftgrößen und Tabellenbild sind überall dieselben; es
@@ -149,7 +149,6 @@ load_dotenv(_API_ROOT / ".env")
 from ausleihe import AusleiheClient  # noqa: E402
 from ausleihe.exceptions import NotFoundError  # noqa: E402
 
-# Laden, Layout und Erzeugen stehen seit 2026-09-17 in buecherlisten/core/.
 from buecherlisten.core.daten import ANSICHTEN, lade_buecherdaten, waehle_gruppen  # noqa: E402
 from buecherlisten.core.erzeugen import (  # noqa: E402
     erzeuge_buecherlisten_pdfs,

@@ -1,10 +1,11 @@
 """Die HTML-Oberfläche und die Einstellungen, die das Programmfenster schreibt.
 
-``GET /`` ist die einzige Route, die ihre Fehler noch selbst abfängt, und das
-ist Absicht: sie liefert HTML. Eine Lehrkraft, die die Startseite aufruft,
-bekommt bei einem Konfigurationsfehler eine lesbare Fehlerseite - drei Zeilen
-JSON im Browserfenster wären für genau diese Person die schlechteste aller
-Antworten. Alle übrigen Routen liefern JSON und überlassen die Abbildung
+``GET /`` fängt seine Fehler selbst ab, und das ist Absicht: es liefert HTML.
+Eine Lehrkraft, die die Startseite aufruft, bekommt bei einem
+Konfigurationsfehler eine lesbare Fehlerseite - drei Zeilen JSON im
+Browserfenster wären für genau diese Person die schlechteste aller Antworten.
+Dasselbe gilt für die anderen HTML-Seiten (``app/api/buecherliste.py``,
+``app/api/mehrjahresbaende.py``); alle JSON-Routen überlassen die Abbildung
 ``app/fehler.py``.
 """
 from __future__ import annotations
@@ -53,11 +54,10 @@ def api_einstellungen(request: Request, anfrage: EinstellungenAnfrage) -> JSONRe
     Benutzerkonfiguration verdrängen, und der Fehler fiele erst beim nächsten
     Seitenaufbau auf - ohne jeden Hinweis darauf, was ihn ausgelöst hat.
 
-    Bis 2026-09-10 hieß diese Route ``POST /api/einrichtung``, nahm einen vollen
-    Dateipfad und wurde von einer Browserseite bedient. Eingestellt wird jetzt
-    der Ordner (siehe ``app.settings.mappe_im_ordner``), und zwar im
-    Programmfenster - dort gibt es eine Ordnerauswahl, und ein UNC-Pfad von Hand
-    eingetippt war die fehleranfälligste Stelle der Ersteinrichtung.
+    Eingestellt wird der Ordner, nicht die Datei (siehe
+    ``app.settings.mappe_im_ordner``), und zwar im Programmfenster: dort gibt es
+    eine Ordnerauswahl, und ein von Hand eingetippter UNC-Pfad ist die
+    fehleranfälligste Stelle der Ersteinrichtung.
     """
     domain_fehler = pruefe_domain(anfrage.server)
     if domain_fehler:
@@ -98,13 +98,11 @@ def api_einstellungen(request: Request, anfrage: EinstellungenAnfrage) -> JSONRe
         # aus. Dann gilt der config_pfad der App-Instanz (--config-Modus) und
         # sonst die Benutzerkonfiguration im plattformabhängigen Ordner.
         #
-        # Hier stand bis 2026-09-10 als letzter Rückfall der ausgelieferte
-        # Standard im Repo. Das war die einzige Stelle im Programm, die ihn
-        # beschreiben konnte - gegen die Regel aus app/settings.py, und in der
-        # Praxis hat genau das zugeschlagen: ein neuer Test ohne eigenen
-        # config_pfad trug seinen tmp_path-Ordner in die versionierte
-        # config.json ein. benutzer_konfigurationspfad() achtet auf
-        # SBA_CONFIG_DIR und landet in Tests damit automatisch im tmp_path.
+        # Nie der ausgelieferte Standard im Repo als Rückfall: der wird nie
+        # beschrieben (app/settings.py), sonst trägt ein Test ohne eigenen
+        # config_pfad seinen tmp_path in die versionierte config.json ein.
+        # benutzer_konfigurationspfad() achtet auf SBA_CONFIG_DIR und landet in
+        # Tests damit automatisch im tmp_path.
         ziel = replace(
             ziel,
             benutzer_config_pfad=(
@@ -174,9 +172,8 @@ def index(request: Request) -> Response:
         "datei": stand.pfad,
         "zustand": stand.zustand,
         "cache": stand.cache,
-        # iserv_domain stand hier bis 2026-09-05 als "domain" mit drin und wurde
-        # von index.html nie benutzt. Ein Vorlagenwert, den keine Vorlage liest,
-        # sieht bei der nächsten Änderung aus wie eine Zusage.
+        # Nur, was index.html liest: ein Vorlagenwert, den keine Vorlage
+        # benutzt, sieht bei der nächsten Änderung aus wie eine Zusage.
         "in_excel_geoeffnet": sperrdatei(stand.pfad) is not None,
         "sperr_benutzer": sperr_benutzer(stand.pfad),
         "bedarf_gesamt": stand.bedarf_gesamt,

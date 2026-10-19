@@ -1,11 +1,9 @@
 """Ausnahme → HTTP: einmal registriert statt in jeder Route wiederholt.
 
-Bis 2026-09-05 bildete ``app/main.py`` dieselben Ausnahmen in jeder Route
-erneut ab. Das waren rund sechzig Zeilen ``except``-Blöcke, und der Wortlaut
-driftete von Route zu Route: ``BlattFehlt`` ergab im Lesepfad 500, im
-Schreibpfad 503, und auf die Frage "welchen Code gibt eigentlich ``Gesperrt``?"
-gab es je nach Datei eine andere Antwort. Die Tabelle unten ist jetzt die
-einzige Antwort.
+Bildet jede Route ihre Ausnahmen selbst ab, driften Statuscode und Wortlaut
+auseinander - dieselbe ``BlattFehlt`` ergibt dann im Lesepfad 500 und im
+Schreibpfad 503. Die Tabelle unten ist deshalb die einzige Stelle, die
+festlegt, welche Ausnahme welchen Code bekommt.
 
 Warum das überhaupt geht: die Ausnahmen kommen aus ``app/excel.py``,
 ``app/refresh.py``, ``app/settings.py`` und ``app/sitzung.py`` - Modulen ohne

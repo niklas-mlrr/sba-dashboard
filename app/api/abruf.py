@@ -5,10 +5,9 @@ wird - nur so lässt sich "Passwort falsch" noch als 401 beantworten statt als
 Feld in einem Statusobjekt, das niemand liest. Begründung in
 ``docs/architektur.md``.
 
-Bis 2026-09-10 brachte **jeder** Abruf seine Zugangsdaten im Körper mit, und der
-Browser fragte sie jedes Mal neu ab. Angemeldet wird jetzt einmal im
-Programmfenster; ``POST /api/refresh`` nimmt deshalb keinen Körper mehr und holt
-den angemeldeten Client aus ``app.state.anmeldung`` (siehe ``app/sitzung.py``).
+Angemeldet wird einmal im Programmfenster; ``POST /api/refresh`` nimmt deshalb
+keinen Körper und holt den angemeldeten Client aus ``app.state.anmeldung``
+(siehe ``app/sitzung.py``).
 
 Dass die Anmeldung eine **HTTP-Route** ist und kein Methodenaufruf, ist
 Absicht: das Fenster ist damit ein Client wie der Browser, und die Testsuite

@@ -14,11 +14,7 @@ Windows/macOS landet der Cache zusätzlich in einer eigenen ``cache``-
 Unterebene). Deshalb bleiben es zwei öffentliche Funktionen mit eigenem
 Namen - aber ein gemeinsamer privater Kern (:func:`_plattformordner`) sorgt
 dafür, dass beide dieselbe Plattformerkennung und denselben Ordnernamen
-verwenden, statt wie bis 2026-09-05 zwei fast wortgleiche, aber leicht
-unterschiedlich geschriebene Implementierungen zu pflegen (``app/cache.py``
-benutzte ``platform.system()`` mit den Werten ``"Windows"``/``"Darwin"``,
-diese Datei ``sys.platform`` mit ``"win32"``/``"darwin"`` - siehe Kommentar
-bei ``_plattformordner`` unten für die Entscheidung).
+verwenden (``sys.platform``, Begründung bei ``_plattformordner`` unten).
 
 Die Wahl des Ortes folgt je Plattform der dortigen Konvention für genau diesen
 Zweck, damit ein Update des Programmcodes (Git-Pull, Neukopie durch
@@ -120,10 +116,7 @@ def lokaler_cache_ordner() -> Path:
 
     ``SBA_CACHE_DIR`` ersetzt den kompletten Ordner - nicht nur die Wurzel -,
     damit Tests gefahrlos in ein ``tmp_path``-Verzeichnis schreiben können,
-    statt in das echte Benutzerprofil. Bis 2026-09-05 stand diese Funktion als
-    ``_lokaler_cache_ordner`` in ``app/cache.py`` und benutzte dort
-    ``platform.system()`` statt ``sys.platform`` - siehe die Begründung des
-    Wechsels bei :func:`_plattformordner`.
+    statt in das echte Benutzerprofil.
     """
     return _plattformordner(
         override_env="SBA_CACHE_DIR",

@@ -1,4 +1,4 @@
-"""Bücherlisten-PDFs erzeugen - die Logik, die bis 2026-09-17 in ``main()`` stand.
+"""Bücherlisten-PDFs erzeugen - ohne Kommandozeile und ohne HTTP.
 
 Kommandozeile (``generate_booklists.py``) und Dashboard rufen beide
 :func:`erzeuge_buecherlisten_pdfs` auf; die Kommandozeile schreibt die
@@ -8,7 +8,7 @@ Die Website-Zuordnungen (Fachkonferenzleitungen, Kürzel, Aufgabenfelder)
 werden nur geladen, wenn sie gebraucht werden, und lassen sich über
 :class:`Zuordnungen` vorgeben - so laufen Tests ohne Netz. Scheitert ein
 Abruf, wird das PDF trotzdem erzeugt; die Meldung steht dann in
-``ErzeugtesPdf.warnungen`` statt wie früher auf stderr.
+``ErzeugtesPdf.warnungen`` statt auf stderr.
 """
 from __future__ import annotations
 

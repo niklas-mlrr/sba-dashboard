@@ -91,7 +91,7 @@ OHNE_VERLAG = "(ohne Verlag)"
 #
 # ``leihbar`` gehört nicht dazu: in IServ ist es ein Feld des Eintrags einer
 # Bücherliste (``borrowable``), also je Jahrgang, und so steht es auch in der
-# Datei - je Planungszeile (seit 2026-10-10, vorher je Buchreihe).
+# Datei - je Planungszeile.
 ISERV_FELD: dict[str, str] = {
     "titel": "title", "verlag": "publisher", "neupreis": "price", "leihgebuehr": "fee",
 }
@@ -261,10 +261,8 @@ class Planungszeile:
     """Ein Buch in **einem** Fach und **einem** Jahrgang.
 
     ``kuerzel`` und ``datum`` sind die Bestätigung der Fachkonferenzleitung für
-    genau diese Zeile. Bis 2026-09-20 stand die Bestätigung je Fach auf einem
-    eigenen Blatt und führte den bestätigten Stand als ISBN-Liste mit; seither
-    ist sie dort, wo das Bestätigte steht, und eine neu dazugekommene Zeile ist
-    von allein unbestätigt.
+    genau diese Zeile. Sie steht dort, wo das Bestätigte steht - eine neu
+    dazugekommene Zeile ist damit von allein unbestätigt.
 
     Ein Paar (Fach, Jahrgang) kann mehrere Zeilen haben, deren Zeiträume sich
     nicht überschneiden - so wechselt ``leihbar``: die alte Zeile endet mit

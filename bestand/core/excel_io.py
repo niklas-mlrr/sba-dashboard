@@ -1,12 +1,9 @@
 """Dauerhaftes Speichern einer Arbeitsmappe - atomar, mit Sicherungskopie.
 
-Diese Funktion lag bis 2026-09-04 in ``ausleihe.inventory_excel``, also im
-IServ-Client. Dort war sie falsch: sie kennt weder IServ noch HTTP, sondern
-ausschliesslich Dateisystem und openpyxl. Ein Aufrufer, der nur eine Mappe
-sicher speichern will, musste dafuer den kompletten API-Client installieren.
-
-Sie gehoert hierher, weil beide Schalen um dieselbe Excel-Logik sie brauchen:
-die CLI (``update_bestand*.py``) und das Dashboard (``sba-dashboard``).
+Sie kennt weder IServ noch HTTP, sondern ausschliesslich Dateisystem und
+openpyxl, und gehoert deshalb nicht in den IServ-Client, sondern hierher:
+beide Schalen um dieselbe Excel-Logik brauchen sie, die CLI
+(``update_bestand_auto.py``) und das Dashboard.
 
 Das Verfahren ist bewusst dreistufig:
 
@@ -62,14 +59,9 @@ def replace_with_retry(quelle: str, ziel: Path) -> None:
     Haelt der Fehler an, ist es *wirklich* Excel (oder ein Schreibschutz) -
     dann fliegt er weiter und die Meldung stimmt wieder.
 
-    Bis 2026-09-04 gab es dieselbe Funktion ein zweites Mal, fast wortgleich,
-    in ``sba-dashboard/app/cache.py`` - fuer den Sidecar-Cache statt fuer die
-    Mappe. Zwei Kopien derselben sieben Zeilen Wiederholungslogik heisst zwei
-    Stellen, an denen jemand die Wartezeit oder die Versuchszahl aendern
-    kann, ohne die andere zu bemerken. Diese Funktion ist deshalb jetzt
-    public (englischer Name, Export aus ``bestand/core/__init__.py``) und
-    wird vom Dashboard importiert statt erneut abgeschrieben - siehe
-    ``sba-dashboard/app/dateien.py``.
+    Public, weil auch das Dashboard sie fuer seine eigenen Dateien braucht
+    (``app/dateien.py``): eine zweite Kopie waere eine zweite Stelle, an der
+    jemand Wartezeit oder Versuchszahl aendert, ohne die andere zu bemerken.
     """
     warte = _ERSETZ_WARTE_START
     for versuch in range(_ERSETZ_VERSUCHE):

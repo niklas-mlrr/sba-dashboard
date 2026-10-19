@@ -53,7 +53,7 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
 
     Die Oberfläche bekommt genau das, was sie anzeigt, und rechnet selbst
     nichts: welcher Status gilt, entscheidet eine Stelle
-    (``buchplanung/core/modelle.py``), nicht zusätzlich noch ein Skript.
+    (``buecherlisten/planung/modelle.py``), nicht zusätzlich noch ein Skript.
     """
     buecher = []
     for buch in stand.buecher:

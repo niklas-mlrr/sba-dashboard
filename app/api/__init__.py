@@ -1,11 +1,8 @@
 """Die HTTP-Schicht: je Router eine Aufgabe, kein Domänenwissen.
 
-Bis 2026-09-05 stand alles davon in ``app/main.py``, zusammen mit der
-App-Factory, dem Domänenlesen (``lies_tabelle``) und der Mappenprüfung
-(``validiere_excel_mappe``) - vier Aufgaben in einer Datei, und es war die
-Datei, die jedes neue Feature anfassen musste. Die beiden letzten Aufgaben
-enthielten keine Zeile FastAPI und liegen jetzt in ``app/rows.py`` bzw.
-``app/excel.py``; ``create_app`` ist reine Verdrahtung.
+Was keine Zeile FastAPI braucht, liegt nicht hier, sondern in den
+Domänenmodulen (``app/rows.py``, ``app/excel.py``, ``app/buchplanung.py`` ...);
+``create_app`` in ``app/main.py`` ist reine Verdrahtung.
 
 Die sieben Router hier sind nach dem geschnitten, was ein Leser sucht:
 

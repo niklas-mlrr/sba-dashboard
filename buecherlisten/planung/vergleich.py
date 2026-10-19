@@ -1,7 +1,7 @@
 """Die Datei (Soll) mit IServ (Ist) vergleichen - je Buch, über alle Fächer und Jahrgänge.
 
-Seit 2026-09-25 zeigen die Bücherlisten-Seiten den Stand der Datei, nicht den
-aus IServ. IServ wird live geholt und nur noch verglichen; was abweicht, wird
+Die Bücherlisten-Seiten zeigen den Stand der Datei, nicht den aus IServ.
+IServ wird live geholt und nur verglichen; was abweicht, wird
 farbig markiert. Dieses Modul entscheidet, **was** abweicht - ohne HTTP, ohne
 Vorlage, damit die Regel an einer Stelle steht und sich prüfen lässt.
 
@@ -16,7 +16,7 @@ Die Regel: ein Buch ist gleich, wenn
   :func:`~buecherlisten.planung.modelle.wirkt_im_schuljahr` - eingeführt in
   diesem Schuljahr oder vorher, ausgemustert nach diesem Schuljahr oder später.
 * in jedem dieser Paare „leihbar“ übereinstimmt - in IServ je Jahrgangsliste,
-  in der Datei je Zeile (seit 2026-10-10).
+  in der Datei je Zeile.
 
 Ein Buch in zwei Fächern ist damit nur gleich, wenn es in beiden gleich ist,
 ein Mehrjahresband nur, wenn jeder seiner Jahrgänge stimmt.
