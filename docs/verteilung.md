@@ -191,6 +191,5 @@ Der Weg zurück ist eine Änderung an `START.bat` und sonst nichts:
 Der Umzug von `atomic_save_workbook` ist davon unabhängig und wird nicht
 zurückgerollt — er betrifft nur, aus welchem Modul die Funktion importiert wird.
 Wer ihn doch zurückdrehen muss: die Datei `bestand/core/excel_io.py` nach
-`ausleihe/inventory_excel.py` zurückkopieren und die drei Importstellen
-(`app/excel.py`, `bestand/update_bestand.py`, `bestand/update_bestand_auto.py`)
-umbiegen.
+`ausleihe/inventory_excel.py` zurückkopieren und die beiden Importstellen
+(`app/excel.py`, `bestand/update_bestand_auto.py`) umbiegen.

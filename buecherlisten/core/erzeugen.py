@@ -108,10 +108,6 @@ def aufgabenfeld_zuordnung(
     return zuordnung
 
 
-# Der alte, paketinterne Name - bis 2026-09-19 der einzige.
-_aufgabenfelder = aufgabenfeld_zuordnung
-
-
 def _bestaetigungs_zuordnungen(
     vorgabe: Zuordnungen, warnungen: list[str],
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -188,7 +184,7 @@ def erzeuge_buecherlisten_pdfs(
     rueckgabe_an = rueckgabe_an or None
 
     if modus == "aufgabenfeld":
-        aufgabenfeld_map = _aufgabenfelder(vorgabe.aufgabenfeld, warnungen)
+        aufgabenfeld_map = aufgabenfeld_zuordnung(vorgabe.aufgabenfeld, warnungen)
         subjects = sorted(subjects, key=lambda s: subject_sort_key(s, aufgabenfeld_map))
 
     fkl_map: dict[str, str] = {}

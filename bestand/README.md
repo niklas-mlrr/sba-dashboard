@@ -8,10 +8,10 @@ Aktualisiert die Excel-Bestands- und Nachbestellungsliste aus der IServ-Ausleihe
 | Pfad | Status | Verwendung |
 |------|--------|------------|
 | **`update_bestand_auto.py`** | ✅ **aktuell** | **Das einzige Skript, das Nachfolger brauchen.** Auto-Discovery: liest die Excel-Struktur selbst aus; `config.json` enthält nur Datei-/Blatt-Defaults, Sicherheitsbestand und explizite Konflikt-Overrides. |
-| `update_bestand.py` | ⚠️ veraltet | Älterer Ansatz mit manuell gepflegter `config.json` (ISBN↔Zellen-Mappings). Funktioniert noch, ist aber fehleranfällig bei neuen Buchreihen. **Nicht mehr verwenden** — `update_bestand_auto.py` ist der Ersatz. |
 
-> Ein dritter, längst abgelöster Ansatz (`Old - Webscraper for Excel/`, scrapte das
-> IServ-Frontend statt der API) wurde am 2026-08-21 entfernt.
+> Die beiden abgelösten Vorgänger (`update_bestand.py` mit von Hand gepflegten
+> ISBN↔Zellen-Mappings und der Webscraper `Old - Webscraper for Excel/`) sind
+> entfernt; sie stehen nur noch in der Git-Historie.
 
 ## Schnellstart (für Nachfolger)
 
