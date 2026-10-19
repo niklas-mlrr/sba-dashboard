@@ -581,7 +581,7 @@ und ein Treffer füllt die Buchreihe. Eine unbekannte ISBN legt ein Buch an, das
 nur in der Datei steht: auf `Buchreihen` hat es „in IServ: nein“. Ohne diese
 Markierung verwürfe der nächste Abgleich es als verschwunden. Auf der Fach-Seite
 steht es als normale Zeile mit „(ab …)“ im Jahrgang. Die Seite ist sonst live
-aus IServ, deshalb hängt `_planungskontext` diese Zeilen an.
+aus IServ, deshalb hängt `app/planungsansicht.py` diese Zeilen an.
 
 ## Die Anmeldung: einmal im Fenster, mit Zeitschloss
 
