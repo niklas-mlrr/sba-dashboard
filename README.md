@@ -108,6 +108,10 @@ Alle Anfragen müssen an `127.0.0.1` oder `localhost` adressiert sein
 (`Host`-Prüfung gegen DNS-Rebinding), und zustandsändernde Anfragen mit fremdem
 `Origin` werden abgelehnt. Beides ist keine Anmeldung — Begründung und Grenzen
 in [`docs/architektur.md`](docs/architektur.md#was-die-bindung-allein-nicht-abdeckt).
+Auf dem Entwicklungs-VPS kommen über `SBA_ZUSATZ_HOSTS` (aus der nicht
+versionierten `start.local.env`) die Tailnet-Namen dazu, damit das Dashboard
+hinter Tailscale Serve unter `http://<vps-name>:8765` erreichbar ist — siehe
+[`docs/architektur.md`](docs/architektur.md#ausnahme-der-entwicklungs-vps-hinter-tailscale-serve-2026-10-19).
 
 ## Entwickeln
 

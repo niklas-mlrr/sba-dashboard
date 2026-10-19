@@ -289,6 +289,28 @@ Praktische Folge für Tests: der `TestClient` schickt `Host: testserver` und
 bekäme sonst durchweg 400. `tests/conftest.py` setzt deshalb
 `base_url="http://127.0.0.1"`.
 
+### Ausnahme: der Entwicklungs-VPS hinter Tailscale Serve (2026-10-19)
+
+Auf dem VPS soll das Dashboard, wenn es dort von Hand gestartet wird, auch von
+einem zweiten Rechner im Tailnet aus erreichbar sein. Die Bindung bleibt dabei `127.0.0.1`;
+`tailscale serve --bg --http=8765 http://127.0.0.1:8765` reicht es ins Tailnet
+weiter, erreichbar als `http://<vps-name>:8765`. Welche Geräte überhaupt bis
+zum VPS durchkommen, legt die Tailnet-Richtlinie fest, nicht das Dashboard.
+
+Der Browser spricht das Dashboard dann unter dem Tailnet-Namen an, und beide
+Schichten oben würden ihn ablehnen. `SBA_ZUSATZ_HOSTS` (kommagetrennt) nimmt
+diesen Namen in die Liste auf, für `Host` und `Origin` zugleich.
+`START.sh` liest die Variable aus einer nicht versionierten `start.local.env`
+neben sich. Muster mit `*` werden verworfen, sonst schaltete Starlette die
+Host-Prüfung ab. Ohne die Variable, also auf jedem Schulrechner, ändert sich
+nichts.
+
+Grenzen: ohne Bildschirm startet das Dashboard ohne Fenster, also ohne
+Anmeldemaske; ein IServ-Abruf braucht dann `POST /api/anmeldung`. Die
+Anmeldung gilt je laufender Instanz und damit für alle, die sie gerade
+benutzen. Weicht `freier_port` auf 8766 aus, verfehlt die Serve-Zuordnung den
+Port.
+
 ## Warum die Mappe nie im Speicher bleibt
 
 Sie liegt auf einem Netzlaufwerk und kann jederzeit in Excel geöffnet oder von

@@ -30,7 +30,7 @@ from . import fehler
 from .api import ROUTER
 from .refresh import ClientFabrik, RefreshManager
 from .settings import Einstellungen
-from .sicherheit import ERLAUBTE_HOSTS, HerkunftMiddleware
+from .sicherheit import HerkunftMiddleware, erlaubte_hosts
 from .sitzung import Anmeldung
 
 _HIER = Path(__file__).resolve().parent
@@ -65,8 +65,11 @@ def create_app(
     # die billigste und die grundlegendste (gegen DNS-Rebinding hilft der
     # Origin-Vergleich nicht, siehe app/sicherheit.py). Also: Herkunft zuerst
     # eintragen, Host danach.
-    application.add_middleware(HerkunftMiddleware)
-    application.add_middleware(TrustedHostMiddleware, allowed_hosts=list(ERLAUBTE_HOSTS))
+    # Die Namen werden je Anwendung gelesen, nicht beim Import: so sieht ein
+    # Test, der SBA_ZUSATZ_HOSTS setzt, sie in der App, die er danach baut.
+    hosts = erlaubte_hosts()
+    application.add_middleware(HerkunftMiddleware, hosts=hosts)
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=list(hosts))
 
     fehler.registriere(application)
     for router in ROUTER:

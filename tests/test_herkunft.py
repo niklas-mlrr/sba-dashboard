@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.settings import Einstellungen
-from app.sicherheit import herkunft_erlaubt
+from app.sicherheit import FESTE_HOSTS, erlaubte_hosts, herkunft_erlaubt
 from conftest import TEST_BASIS_URL
 
 
@@ -136,3 +136,50 @@ def test_der_testclient_spricht_die_produktive_adresse(client: TestClient):
     """Sonst prüfte die Suite eine Anwendung, die es so nicht gibt."""
     assert TEST_BASIS_URL == "http://127.0.0.1"
     assert client.get("/health").request.headers["host"] == "127.0.0.1"
+
+
+# ── Zusätzliche Namen (SBA_ZUSATZ_HOSTS, Tailscale Serve auf dem VPS) ──────────
+
+TAILNET = "http://vps-name:8765"
+
+
+@pytest.mark.parametrize("roh,erwartet", [
+    (None, FESTE_HOSTS),
+    ("", FESTE_HOSTS),
+    ("vps-name", (*FESTE_HOSTS, "vps-name")),
+    (" VPS-NAME , vps-name.tailnet.example,",
+     (*FESTE_HOSTS, "vps-name", "vps-name.tailnet.example")),
+    ("localhost,vps-name,vps-name", (*FESTE_HOSTS, "vps-name")),
+    ("*", FESTE_HOSTS),                       # hiesse bei Starlette: jeder Host
+    ("*.ts.net,vps-name", (*FESTE_HOSTS, "vps-name")),
+])
+def test_erlaubte_hosts(roh: str | None, erwartet: tuple[str, ...]):
+    umgebung = {} if roh is None else {"SBA_ZUSATZ_HOSTS": roh}
+    assert erlaubte_hosts(umgebung) == erwartet
+
+
+def test_tailnet_name_ohne_variable_abgewiesen(einstellungen: Einstellungen, monkeypatch):
+    """Der Normalfall auf jedem Schulrechner: kein zusätzlicher Name."""
+    monkeypatch.delenv("SBA_ZUSATZ_HOSTS", raising=False)
+    with TestClient(create_app(einstellungen=einstellungen), base_url=TAILNET) as testclient:
+        assert testclient.get("/health").status_code == 400
+
+
+def test_tailnet_name_mit_variable(einstellungen: Einstellungen, monkeypatch):
+    """Lesen und Schreiben über den Tailnet-Namen; Fremde bleiben draußen."""
+    monkeypatch.setenv("SBA_ZUSATZ_HOSTS", "vps-name")
+    app = create_app(einstellungen=einstellungen)
+
+    class _Server:
+        should_exit = False
+
+    with TestClient(app, base_url=TAILNET) as testclient:
+        assert testclient.get("/health").status_code == 200
+        testclient.app.state.server = _Server()
+        fremd = {"Origin": "https://boesewicht.example"}
+        assert testclient.post("/api/beenden", headers=fremd).status_code == 403
+        assert testclient.app.state.server.should_exit is False
+        assert testclient.post("/api/beenden", headers={"Origin": TAILNET}).status_code == 200
+        assert testclient.app.state.server.should_exit is True
+    with TestClient(app, base_url="http://boesewicht.example") as testclient:
+        assert testclient.get("/health").status_code == 400

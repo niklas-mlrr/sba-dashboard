@@ -32,3 +32,6 @@ dist/
 # Ausnahme fuer vorlage/ eine Zeile darueber unberuehrt bleibt.
 /Bestand- und Nachbestellungsliste*.xlsx
 /config.local.json
+# Optionale Umgebung, die START.sh auf genau diesem Rechner einliest (z. B.
+# SBA_ZUSATZ_HOSTS auf dem VPS, siehe app/sicherheit.py).
+/start.local.env

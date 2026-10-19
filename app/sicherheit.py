@@ -30,9 +30,20 @@ Was das **nicht** ist: eine Anmeldung. Wer am Rechner sitzt, darf alles - das
 war und bleibt die Annahme (``docs/architektur.md``, "Warum 127.0.0.1").
 Geprüft wird nur, dass die Anfrage tatsächlich vom Dashboard selbst kommt und
 nicht von einer fremden Seite im selben Browser.
+
+**Zusätzliche Namen (``SBA_ZUSATZ_HOSTS``).** Auf dem Entwicklungs-VPS reicht
+Tailscale Serve das weiterhin an 127.0.0.1 gebundene Dashboard ins Tailnet
+weiter; der Browser spricht es dann unter dem Tailnet-Namen an
+(etwa ``http://vps-name:8765``). Damit Host- und Origin-Prüfung diesen Namen
+kennen, nimmt :func:`erlaubte_hosts` eine kommagetrennte Liste aus der
+Umgebung dazu. Ohne die Variable - auf jedem Schulrechner - bleibt es bei den
+zwei festen Namen. Muster mit ``*`` werden verworfen: Starlette läse ``*`` als
+"jeder Host" und schaltete die Prüfung gegen DNS-Rebinding damit ab.
 """
 from __future__ import annotations
 
+import os
+from collections.abc import Collection, Mapping
 from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers
@@ -44,7 +55,19 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 # nicht gebunden, eine Anfrage mit diesem Host käme also nie an - und Starlette
 # schneidet den Port über ``split(":")[0]`` ab, was bei ``[::1]:8765`` ohnehin
 # nur ``[`` übrig ließe.
-ERLAUBTE_HOSTS = ("127.0.0.1", "localhost")
+FESTE_HOSTS = ("127.0.0.1", "localhost")
+
+ZUSATZ_HOSTS_VARIABLE = "SBA_ZUSATZ_HOSTS"
+
+
+def erlaubte_hosts(umgebung: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    """Die festen Namen plus die aus ``SBA_ZUSATZ_HOSTS`` (siehe Modulkopf)."""
+    roh = (os.environ if umgebung is None else umgebung).get(ZUSATZ_HOSTS_VARIABLE, "")
+    zusatz: list[str] = []
+    for name in (teil.strip().lower() for teil in roh.split(",")):
+        if name and "*" not in name and name not in FESTE_HOSTS and name not in zusatz:
+            zusatz.append(name)
+    return FESTE_HOSTS + tuple(zusatz)
 
 # GET, HEAD und OPTIONS ändern nichts. Sie brauchen den Origin-Vergleich nicht:
 # gegen das Mitlesen einer fremden Seite schützt bereits die Same-Origin-Policy
@@ -60,7 +83,7 @@ _ABLEHNUNG = (
 )
 
 
-def herkunft_erlaubt(origin: str | None) -> bool:
+def herkunft_erlaubt(origin: str | None, hosts: Collection[str] = FESTE_HOSTS) -> bool:
     """Ob ein ``Origin``-Kopf zum Dashboard selbst gehört.
 
     ``None`` gilt als erlaubt, und das ist die eine Entscheidung hier, die
@@ -83,7 +106,7 @@ def herkunft_erlaubt(origin: str | None) -> bool:
         return True
     # urlsplit("null").hostname ist None - ein "Origin: null" (sandboxed
     # iframe, file://) fällt damit durch, ohne Sonderfall.
-    return urlsplit(origin).hostname in ERLAUBTE_HOSTS
+    return urlsplit(origin).hostname in hosts
 
 
 class HerkunftMiddleware:
@@ -95,15 +118,16 @@ class HerkunftMiddleware:
     während die Antwort noch läuft) genau so, wie er ohne Middleware war.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, hosts: Collection[str] = FESTE_HOSTS) -> None:
         self.app = app
+        self.hosts = tuple(hosts)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["method"] in SICHERE_METHODEN:
             await self.app(scope, receive, send)
             return
         origin = Headers(scope=scope).get("origin")
-        if not herkunft_erlaubt(origin):
+        if not herkunft_erlaubt(origin, self.hosts):
             antwort = JSONResponse({"fehler": _ABLEHNUNG}, status_code=403)
             await antwort(scope, receive, send)
             return

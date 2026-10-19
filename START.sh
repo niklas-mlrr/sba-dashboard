@@ -19,6 +19,15 @@ WURZEL="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # dem Home-Ordner per Doppelklick gestartet, also niemals darauf vertrauen,
 # dass das Terminal schon hier steht.
 cd -- "$WURZEL"
+# Optionale Umgebung nur dieses Rechners, nicht im Git (wie config.local.json).
+# Auf dem Entwicklungs-VPS steht dort SBA_ZUSATZ_HOSTS, damit das Dashboard
+# hinter Tailscale Serve unter seinem Tailnet-Namen antwortet (app/sicherheit.py).
+if [[ -f "$WURZEL/start.local.env" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "$WURZEL/start.local.env"
+    set +a
+fi
 VORLAGE="$WURZEL/vorlage/Bestand- und Nachbestellungsliste 2026.xlsx"
 QUELLE="${SBA_ORIGINAL_EXCEL:-$VORLAGE}"
 ARBEITSORDNER="${SBA_ARBEITSORDNER:-$WURZEL}"
