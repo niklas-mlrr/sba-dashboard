@@ -18,7 +18,8 @@ der genehmigt oder abgelehnt wird (:func:`aenderungen_im_schuljahr`,
 geht und was dafür kommt.
 
 Aufbau: :mod:`~buecherlisten.planung.modelle` die Begriffe und die gerechneten
-Status, :mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
+Status, :mod:`~buecherlisten.planung.aenderungen` die Änderungsliste,
+:mod:`~buecherlisten.planung.mappe` die Arbeitsmappe,
 :mod:`~buecherlisten.planung.laden` die beiden Schuljahre aus IServ,
 :mod:`~buecherlisten.planung.abgleich` das Zusammenführen und die Eintragungen,
 :mod:`~buecherlisten.planung.vergleich` den Vergleich der Datei mit IServ.
@@ -38,6 +39,24 @@ from .abgleich import (
     setze_ruecklage,
     verbinde_fortlaufende,
     zusammenfuehren,
+)
+from .aenderungen import (
+    RANG_JAHRGANG,
+    RANG_STANDARD,
+    RANG_WECHSEL,
+    Abschnitt,
+    Aenderung,
+    Verbleib,
+    aenderungen_im_schuljahr,
+    aenderungsliste,
+    alles_genehmigt,
+    lies_rang,
+    naechster_rang,
+    ordne_aenderungen,
+    rang_text,
+    reichweite,
+    verbleib_der_buecher,
+    zu_entscheidende_antraege,
 )
 from .laden import AusleiheClient, Schnappschuss, lade_schnappschuss
 from .mappe import (
@@ -67,12 +86,7 @@ from .modelle import (
     PLANUNG_GEPLANT,
     PLANUNG_IM_EINSATZ,
     PLANUNG_LAEUFT_AUS,
-    RANG_JAHRGANG,
-    RANG_STANDARD,
-    RANG_WECHSEL,
     RUECKLAGE_STATUS,
-    Abschnitt,
-    Aenderung,
     Antragsentscheidung,
     Buch,
     Buchbemerkung,
@@ -80,24 +94,13 @@ from .modelle import (
     Planungszeile,
     Ruecklage,
     UngueltigesSchuljahr,
-    Verbleib,
-    aenderungen_im_schuljahr,
-    aenderungsliste,
-    alles_genehmigt,
     endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
-    lies_rang,
-    naechster_rang,
-    ordne_aenderungen,
     planungs_status,
     planungs_zusatz,
-    rang_text,
-    reichweite,
     schuljahr_zahl,
-    verbleib_der_buecher,
     wirkt_im_schuljahr,
-    zu_entscheidende_antraege,
     zum_schuljahr_ausgemustert,
 )
 from .vergleich import (

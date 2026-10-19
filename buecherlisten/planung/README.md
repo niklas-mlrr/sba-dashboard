@@ -209,7 +209,7 @@ den entschieden wird. Die Seite „Änderungen“ im Menü „Bücherlisten“
   das Buch fehlt schon in der Liste dieses Schuljahrs.
 
 Eine Zeile mit beidem (ein Buch nur für ein Schuljahr) ergibt zwei Anträge.
-Gerechnet wird das in `aenderungen_im_schuljahr` (`modelle.py`), entschieden
+Gerechnet wird das in `aenderungen_im_schuljahr` (`aenderungen.py`), entschieden
 in `entscheide_antrag` (`abgleich.py`).
 
 Seit 2026-10-02 ordnet `aenderungsliste` (bzw. die reine `ordne_aenderungen`)
@@ -400,6 +400,7 @@ aus IServ.
 | Modul | Inhalt |
 |-------|--------|
 | `modelle.py` | die Begriffe und die gerechneten Status |
+| `aenderungen.py` | die Änderungsliste: Anträge, Abschnitte, Reihenfolge |
 | `mappe.py` | die Arbeitsmappe lesen und schreiben (openpyxl) |
 | `laden.py` | beide Schuljahre aus IServ, über `../core/daten.py` |
 | `abgleich.py` | zusammenführen und die einzelnen Eintragungen |

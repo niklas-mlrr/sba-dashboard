@@ -1,6 +1,6 @@
 """Die Tabelle der Änderungsliste: Zeilen, Zellen, Einrückung - ohne HTTP und ohne Vorlage.
 
-``aenderungsliste`` (buecherlisten/planung/modelle.py) liefert die Abschnitte
+``aenderungsliste`` (buecherlisten/planung/aenderungen.py) liefert die Abschnitte
 in der Reihenfolge der Seite. Hier wird daraus das Raster, das die Vorlage
 nur noch ausgibt:
 
@@ -40,7 +40,7 @@ from buecherlisten.planung import (
     Abschnitt,
     Aenderung,
 )
-from buecherlisten.planung.modelle import Rang
+from buecherlisten.planung.aenderungen import Rang
 
 SEITEN = (ART_AUSMUSTERUNG, ART_EINFUEHRUNG)
 
