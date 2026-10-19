@@ -38,12 +38,13 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from math import isfinite
 from pathlib import Path
-from typing import IO, Iterator
+from typing import IO
 from zipfile import BadZipFile
 
 from openpyxl import Workbook, load_workbook
@@ -244,7 +245,7 @@ class Dateizustand:
     geaendert: datetime
 
     @classmethod
-    def von(cls, pfad: Path) -> "Dateizustand":
+    def von(cls, pfad: Path) -> Dateizustand:
         stat = pfad.stat()
         return cls(pfad=pfad, mtime=stat.st_mtime,
                    geaendert=datetime.fromtimestamp(stat.st_mtime))

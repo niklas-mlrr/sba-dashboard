@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 from typing import Any
 
 from buecherlisten.planung import (
@@ -122,7 +123,7 @@ def baue_tabelle(abschnitte: Sequence[Abschnitt], rang: Rang,
             faecher.append([])
         faecher[-1].append(_Teil(abschnitt, [], {}))
 
-    for block, teile in zip(bloecke, faecher):
+    for block, teile in zip(bloecke, faecher, strict=True):
         _zerlege(teile, eintrag)
         _gruppiere(block, teile, vorn, hinten)
     return bloecke
@@ -169,7 +170,7 @@ def _zerlege(teile: list[_Teil], eintrag: Callable[[Aenderung], Any]) -> None:
 
     # Zusammenhang über Abschnitte hinweg: steht auf derselben Seite unten im
     # einen und oben im nächsten Abschnitt dasselbe Buch, hängen die Kästen.
-    for vorher, nachher in zip(teile, teile[1:]):
+    for vorher, nachher in pairwise(teile):
         for art in SEITEN:
             oben, unten = vorher.abschnitt.seite(art), nachher.abschnitt.seite(art)
             if oben and unten and _buch(oben[-1]) == _buch(unten[0]):

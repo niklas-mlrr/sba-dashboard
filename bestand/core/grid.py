@@ -17,8 +17,9 @@ Vier gemessene Eigenheiten des echten Workbooks bestimmen dieses Modul:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any
 
 from openpyxl.utils import get_column_letter
 
@@ -40,7 +41,7 @@ SKIP_ZUSTAND_NOT_WRITABLE = "Zustand nicht schreibbar"
 SKIP_NO_FACH = "kein Fach-Label"
 SKIP_NOT_OFFERED = "nicht angeboten"
 
-Debug = Optional[Callable[[str], None]]
+Debug = Callable[[str], None] | None
 
 
 # ── Zellen-Hilfsfunktionen ────────────────────────────────────────────────────

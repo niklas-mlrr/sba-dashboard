@@ -8,9 +8,10 @@ Nur GET-Zugriffe.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Iterator, Mapping, Optional
+from typing import Any
 
 try:  # ausleihe ist beim reinen Offline-Test nicht noetig
     from ausleihe import NotFoundError
@@ -20,7 +21,7 @@ except Exception:  # pragma: no cover - nur ohne installierte Bibliothek
 
 # Fortschritt: (Ereignis, Nutzlast). Ereignisnamen sind stabil, die Texte nicht -
 # jede Oberflaeche formuliert selbst.
-Progress = Optional[Callable[[str, dict], None]]
+Progress = Callable[[str, dict], None] | None
 
 # Der IServ-Client wird injiziert (siehe Modulkopf). Der Alias haelt fest, dass
 # es derselbe Client ist, den alle fuenf Funktionen unten erwarten.

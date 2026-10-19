@@ -13,8 +13,9 @@ welche Texte das sind, steht dort und ist dort geprüft.
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import filedialog, messagebox, ttk
-from typing import Any, Callable
+from typing import Any
 
 from .fenster import STATUS_TAKT_MS, FensterFehler, Fenstersteuerung
 

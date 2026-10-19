@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -47,8 +48,8 @@ def _abschnitt(*hoehen: int) -> list[dict]:
 
 def _beruehrungsfrei(werte: list[dict], ergebnis: dict) -> bool:
     plaetze = sorted(ergebnis["y"])
-    return all(b - a >= ergebnis["abstand"] - 0.01 for a, b in zip(plaetze, plaetze[1:])) \
-        and all(w["min"] - 0.01 <= y <= w["max"] + 0.01 for w, y in zip(werte, ergebnis["y"]))
+    return all(b - a >= ergebnis["abstand"] - 0.01 for a, b in pairwise(plaetze)) \
+        and all(w["min"] - 0.01 <= y <= w["max"] + 0.01 for w, y in zip(werte, ergebnis["y"], strict=True))
 
 
 def test_ohne_beruehrung_steht_jeder_wert_auf_seinem_wunschplatz():

@@ -96,7 +96,7 @@ def _config(tmp_path: Path) -> Path:
 class _ServerStub:
     """Ein uvicorn-Server, der nicht bindet - er merkt sich nur, was passiert ist."""
 
-    letzte: "_ServerStub | None" = None
+    letzte: _ServerStub | None = None
 
     def __init__(self, _config) -> None:
         _ServerStub.letzte = self

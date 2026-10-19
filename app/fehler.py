@@ -39,7 +39,8 @@ Ort, an dem das noch vorkommt, und das steht dort auch so.
 """
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError

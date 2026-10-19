@@ -37,7 +37,8 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .refresh import AusleiheProtokoll, ClientFabrik, melde_an
 from .settings import Einstellungen

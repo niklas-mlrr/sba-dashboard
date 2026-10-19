@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from bestand.core import (
     EV_BOOKLISTS,
@@ -117,7 +118,7 @@ class Lauf:
         }
 
     @classmethod
-    def ohne_lauf(cls) -> "Lauf":
+    def ohne_lauf(cls) -> Lauf:
         """Der Stand, bevor in dieser Sitzung überhaupt ein Abruf lief.
 
         Baut bewusst ein waschechtes ``Lauf``-Objekt statt eines separaten

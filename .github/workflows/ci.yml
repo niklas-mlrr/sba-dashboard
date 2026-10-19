@@ -22,10 +22,6 @@ on:
 # legt kein Paket in site-packages, mypy findet ausleihe also nur über den
 # Quellbaum daneben. Der Auscheck-Schritt holt den Standardzweig - wer hier
 # etwas ändert, das das Geschwister-Repo braucht, pusht dort zuerst.
-#
-# Bis 2026-09-18 wurde ein drittes Repo ausgecheckt, sba-bestand. Seine Pakete
-# (bestand/, buecherlisten/) liegen jetzt in diesem Repo und kommen mit dem
-# ersten Checkout mit.
 jobs:
   tests:
     name: tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
@@ -110,7 +106,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Ruff (Lint)
-        run: uv run ruff check app tests bestand buecherlisten mehrjahresbaende
+        run: uv run ruff check app tests bestand buecherlisten mehrjahresbaende tools
 
       # Auf jedem Runner mit dessen eigener Plattform, nicht nur einmal auf
       # Linux: app/excel.py hat je einen Zweig für msvcrt (Windows) und fcntl

@@ -28,7 +28,7 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Wie oft und wie lange ``os.replace`` wiederholt wird, wenn Windows die
 # Zieldatei gerade als geoeffnet meldet; zusammen knapp zwei Sekunden
@@ -84,8 +84,8 @@ def replace_with_retry(quelle: str, ziel: Path) -> None:
 
 
 def atomic_save_workbook(
-    workbook: Any, destination: Path, *, backup_dir: Optional[Path] = None
-) -> Optional[Path]:
+    workbook: Any, destination: Path, *, backup_dir: Path | None = None
+) -> Path | None:
     """Ersetzt ``destination`` dauerhaft und legt optional eine Sicherung an.
 
     Gibt den Pfad der Sicherungskopie zurueck, oder ``None``, wenn keine
@@ -95,7 +95,7 @@ def atomic_save_workbook(
     destination = destination.resolve()
     if not destination.exists():
         raise FileNotFoundError(f"Excel-Datei nicht gefunden: {destination}")
-    backup: Optional[Path] = None
+    backup: Path | None = None
     if backup_dir is not None:
         backup_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

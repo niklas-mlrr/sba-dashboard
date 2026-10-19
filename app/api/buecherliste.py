@@ -11,8 +11,9 @@ zu tun ist - kein JSON aus ``app/fehler.py``.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
-from typing import Any, Callable, cast
+from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request

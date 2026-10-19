@@ -23,8 +23,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 _HERE = Path(__file__).parent
 _ROOT = _HERE.parent
@@ -121,7 +122,7 @@ def main(argv: list[str] | None = None, *, client_factory: Any = AusleiheClient)
             safety_stock=args.safety_stock,
         )
     except ConfigError as exc:
-        raise SystemExit(str(exc))
+        raise SystemExit(str(exc)) from None
     print(f"Excel: {config.excel_path.name}  |  Blatt: {config.sheet_name}")
 
     snapshot = fetch_snapshot(client, sy_id, progress=_progress_printer(sy_id))
@@ -181,7 +182,7 @@ def main(argv: list[str] | None = None, *, client_factory: Any = AusleiheClient)
     try:
         rows = rebuild_zu_bestellen(wb, result, snapshot, config.safety_stock)
     except (KeyError, ValueError) as exc:
-        raise SystemExit(str(exc))
+        raise SystemExit(str(exc)) from None
 
     print(f"\n{len(rows)} Bücher mit Nachbestellbedarf:")
     for row in rows:

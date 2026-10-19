@@ -265,7 +265,7 @@ class Einstellungen:
     unbekannte_schluessel: tuple[str, ...] = ()
 
     @classmethod
-    def laden(cls, pfad: Path) -> "Einstellungen":
+    def laden(cls, pfad: Path) -> Einstellungen:
         """Lädt genau diese eine Datei, ohne jedes Overlay.
 
         Für den Arbeitskopie-Modus (``--config PATH``) und für Tests, die eine
@@ -278,7 +278,7 @@ class Einstellungen:
     @classmethod
     def laden_mit_benutzerkonfiguration(
         cls, standard_pfad: Path, benutzer_pfad: Path | None = None,
-    ) -> tuple["Einstellungen", str | None]:
+    ) -> tuple[Einstellungen, str | None]:
         """Lädt den ausgelieferten Standard, legt die Benutzerkonfiguration darüber.
 
         ``benutzer_pfad`` fehlt normalerweise und wird dann über
@@ -348,7 +348,7 @@ class Einstellungen:
         return einstellungen, ("\n".join(hinweise) if hinweise else None)
 
     @classmethod
-    def _aus_rohdaten(cls, roh: dict, *, benutzer_config_pfad: Path | None) -> "Einstellungen":
+    def _aus_rohdaten(cls, roh: dict, *, benutzer_config_pfad: Path | None) -> Einstellungen:
         """Validiert die zusammengeführten Rohdaten und baut die Einstellungen.
 
         Gemeinsamer Kern von ``laden`` und ``laden_mit_benutzerkonfiguration``,

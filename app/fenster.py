@@ -46,8 +46,9 @@ import threading
 import urllib.error
 import urllib.request
 import webbrowser
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 ZEITGRENZE = 30.0  # Sekunden. Die Anmeldung geht über IServ ins Netz.
 STATUS_TAKT_MS = 15_000  # Wie oft die Statuszeile nachfragt.

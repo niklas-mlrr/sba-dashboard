@@ -39,7 +39,7 @@ def zeile(jahrgang: int, *marken: str) -> Jahrgangszeile:
     return Jahrgangszeile(
         jahrgang=jahrgang,
         zellen=tuple(Zelle(fach=spalte.fach, marke=marke)
-                     for spalte, marke in zip(SPALTEN, marken)),
+                     for spalte, marke in zip(SPALTEN, marken, strict=True)),
     )
 
 

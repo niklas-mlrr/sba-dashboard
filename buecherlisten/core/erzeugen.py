@@ -327,7 +327,7 @@ def erzeuge_schuelerlisten_pdfs(
 
     if modus == "split":
         ergebnisse = []
-        for name, reader in zip(namen, leser):
+        for name, reader in zip(namen, leser, strict=True):
             titel = f"Bücherliste {name} {daten.schuljahr_id} (Schülerliste)"
             ergebnisse.append(ErzeugtesPdf(
                 schreibe([reader], titel), f"Bücherliste {name} {sy_label} (Schülerliste).pdf", titel,

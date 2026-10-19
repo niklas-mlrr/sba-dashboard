@@ -15,6 +15,7 @@ from openpyxl.cell.cell import MergedCell
 from openpyxl.utils.cell import range_boundaries
 
 from bestand.core import parse_grid, resolve_anchor
+from bestand.core.grid import Blatt
 
 WURZEL = Path(__file__).resolve().parent.parent
 STANDARD_EINGABE = (
@@ -23,7 +24,7 @@ STANDARD_EINGABE = (
 STANDARD_AUSGABE = WURZEL / "vorlage" / "Bestand- und Nachbestellungsliste 2026.xlsx"
 
 
-def _leere_rasterdaten(ws) -> None:
+def _leere_rasterdaten(ws: Blatt) -> None:
     """Löscht nur die Werte, die das Raster als veränderliche Zahlen kennt."""
     grid = parse_grid(ws)
     refs = set()
@@ -38,7 +39,7 @@ def _leere_rasterdaten(ws) -> None:
         ws[ref].value = None
 
 
-def _leere_tabellenkoerper(ws) -> None:
+def _leere_tabellenkoerper(ws: Blatt) -> None:
     """Entfernt alle eingegebenen Tabellenwerte, aber behält berechnete Spalten."""
     for tabelle in ws.tables.values():
         min_col, min_row, max_col, max_row = range_boundaries(tabelle.ref)

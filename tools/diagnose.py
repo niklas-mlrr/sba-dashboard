@@ -29,6 +29,12 @@ import socket
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Nur für die Annotationen: zur Laufzeit importiert jede Prüfung selbst,
+    # damit ein kaputter Programmimport den Bericht nicht verhindert.
+    from app.settings import Einstellungen
 
 _WURZEL = Path(__file__).resolve().parent.parent
 if str(_WURZEL) not in sys.path:
@@ -69,7 +75,7 @@ class Bericht:
 def _pruefe_system(bericht: Bericht) -> None:
     bericht.notiere("System", OK, f"{platform.platform()}")
     bericht.notiere("Python", OK, f"{sys.version.split()[0]} aus {sys.executable}")
-    if sys.version_info < (3, 10):
+    if sys.version_info < (3, 10):  # noqa: UP036 - prüft gerade das fremde Python
         bericht.notiere("Python", FEHLER,
                         "Das Dashboard braucht mindestens Python 3.10.")
     try:
@@ -137,7 +143,7 @@ def _pruefe_pakete(bericht: Bericht) -> None:
         bericht.notiere("PYTHONPATH", OK, "nicht gesetzt (so soll es sein)")
 
 
-def _pruefe_konfiguration(bericht: Bericht):
+def _pruefe_konfiguration(bericht: Bericht) -> Einstellungen | None:
     from app.paths import benutzer_konfigurationspfad
     from app.settings import Einstellungen
 
@@ -173,7 +179,7 @@ def _pruefe_konfiguration(bericht: Bericht):
     return einstellungen
 
 
-def _pruefe_mappe(bericht: Bericht, einstellungen) -> None:
+def _pruefe_mappe(bericht: Bericht, einstellungen: Einstellungen) -> None:
     from app.excel import lade_mappe, raster_blatt, sperr_benutzer, sperrdatei
 
     gefunden = None
@@ -248,7 +254,7 @@ def _pruefe_mappe(bericht: Bericht, einstellungen) -> None:
                     f"{anzahl} Stück in {backups}")
 
 
-def _pruefe_port(bericht: Bericht, einstellungen) -> None:
+def _pruefe_port(bericht: Bericht, einstellungen: Einstellungen | None) -> None:
     """Nur 127.0.0.1 - ein Bind auf 0.0.0.0 löst die Firewall-Abfrage aus."""
     from app.start import HOST, VERSUCHE
 

@@ -9,10 +9,11 @@ Umweg über eine Datei ausliefern kann.
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_JUSTIFY
@@ -280,7 +281,7 @@ def _split_titel_verlag(
         total_lines = 0
         max_titel_line = 0.0
         max_verlag_line = 0.0
-        for i, (t, v) in enumerate(zip(titel_vals, verlag_vals)):
+        for i, (t, v) in enumerate(zip(titel_vals, verlag_vals, strict=True)):
             lt, mt = _wrap_info(t, w)
             lv, mv = _wrap_info(v, verlag_w)
             total_lines += max(lt, lv) if zusatz_zeilen is None else max(lt, lv, zusatz_zeilen[i])
@@ -332,7 +333,7 @@ def _split_drei(
         _, _, erste_w, zweite_w = _split_titel_verlag(erste, zweite, available - dritte_w, zeilen)
         gesamt = sum(
             max(_wrap_info(a, erste_w)[0], _wrap_info(b, zweite_w)[0], n)
-            for a, b, n in zip(erste, zweite, zeilen)
+            for a, b, n in zip(erste, zweite, zeilen, strict=True)
         )
         key = (gesamt, erste_w + zweite_w + dritte_w)
         if best is None or key < best[0]:
@@ -637,7 +638,8 @@ class SubjectHeading(Flowable):
 
         Ohne Rückgabe-Angaben bleibt die Bestätigung wie bisher mittig auf der
         Seite (unveränderte Ausgabe für Läufe ohne --return-by/--return-to)."""
-        blocks = [[("Zu bestätigen durch", self.confirm_value)]]
+        # Nur aufgerufen, wenn confirm_value gesetzt ist (siehe draw()).
+        blocks: list[list[tuple[str, str]]] = [[("Zu bestätigen durch", self.confirm_value or "")]]
         return_columns = self._return_columns()
         if not return_columns:
             self._draw_centered_confirm(c, dx, dy)
@@ -679,9 +681,9 @@ class SubjectHeading(Flowable):
             value_fs -= 0.25
 
         x = dx + LEFT_MARGIN + left_w
-        for block, widths in zip(blocks, col_widths):
+        for block, widths in zip(blocks, col_widths, strict=True):
             x += gap
-            for (label, value), col_w in zip(block, widths):
+            for (label, value), col_w in zip(block, widths, strict=True):
                 center = x + col_w / 2
                 c.setFont(HEADER_LABEL_FONT, HEADER_LABEL_SIZE)
                 c.drawCentredString(center, dy + HEADER_LABEL_BASELINE, label)
@@ -869,7 +871,7 @@ class ConfirmationBlock(Flowable):
         c.setStrokeColor(colors.black)
         self._intro_par.drawOn(c, 0, self.height - self._intro_h)
         y = self.height - self._intro_h - self.INTRO_GAP
-        for par, par_h in zip(self._checkbox_pars, self._checkbox_heights):
+        for par, par_h in zip(self._checkbox_pars, self._checkbox_heights, strict=True):
             row_h = max(par_h, CHECKBOX_SIZE)
             # Mittig in dem Band, das die beiden Textzeilen aufspannen: von der
             # Versalhöhe der ersten Zeile bis zur Grundlinie der zweiten.
@@ -1181,7 +1183,7 @@ def footer_context(
 
 def make_footer(
     center_text: str, *, page_offset_holder: list | None = None, blank_pages: set[int] | None = None,
-):
+) -> Callable[[Canvas, BaseDocTemplate], None]:
     """onPage-Callback: Fußzeile wie in den offiziellen IServ-Bücherlisten.
 
     Gezeichnet wird hier noch nichts — die Fußzeile nennt "Seite n von N", und
@@ -1242,7 +1244,7 @@ class FooterCanvas(Canvas):
     hinterlegte Angaben (`--duplex`-Leerseiten) bleiben leer und zählen nicht
     mit."""
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._saved_states: list[dict] = []
         self._footer_specs: list[tuple | None] = []
@@ -1262,7 +1264,7 @@ class FooterCanvas(Canvas):
         for spec in specs:
             if spec is not None:
                 totals[spec[0]] = max(totals.get(spec[0], 0), spec[1])
-        for state, spec in zip(states, specs):
+        for state, spec in zip(states, specs, strict=True):
             self.__dict__.update(state)
             if spec is not None:
                 center_text, page_num, generated = spec

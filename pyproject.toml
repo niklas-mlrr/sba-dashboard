@@ -12,8 +12,7 @@ dependencies = [
     "isbnlib>=3.10",
     # Geschwister-Repo, siehe [tool.uv.sources] und ../README.md
     "iserv-ausleihe-api",
-    # Ab hier die Abhängigkeiten von bestand/ und buecherlisten/, die bis zur
-    # Zusammenlegung (2026-09-18) über "sba-bestand[pdf]" hereinkamen:
+    # Ab hier die Abhängigkeiten von bestand/ und buecherlisten/:
     #
     # dotenv und requests brauchen die beiden CLIs und trg_web.py
     # (bestand/update_bestand_auto.py liest ISERV_DOMAIN aus der .env,
@@ -22,11 +21,8 @@ dependencies = [
     "requests>=2.31,<3",
     # reportlab setzt die Bücherlisten-PDFs (buecherlisten/core/layout.py),
     # pypdf hängt die IServ-Druckversionen der Jahrgangslisten aneinander.
-    # Sie standen in sba-bestand hinter dem Extra "pdf", weil dessen andere
-    # Nutzer (das Bestands-CLI) die rund 15 MB nicht brauchten. Dieses Repo
-    # druckt die Listen selbst (app/api/buecherliste.py) und zog das Extra
-    # ohnehin immer mit - ein Extra ohne zweiten Nutzer ist nur eine
-    # Abhängigkeit mit einem Schalter davor.
+    # Kein Extra: das Dashboard druckt die Listen selbst
+    # (app/api/buecherliste.py), es gäbe keinen Nutzer ohne sie.
     "reportlab>=4,<5",
     "pypdf>=5,<7",
 ]
@@ -43,9 +39,7 @@ dev = ["pytest>=8,<9", "pytest-timeout>=2.3,<3", "pytest-cov>=5,<8", "httpx2>=0.
        "ruff>=0.8,<1", "mypy>=1.11,<2"]
 
 # Das Geschwister-Layout ist verbindlich: ausleihe-api und sba-dashboard liegen
-# nebeneinander. Wer eines woandershin klont, bricht beide. Bis 2026-09-18 stand
-# hier ein dritter Eintrag, sba-bestand; dessen Pakete liegen seither in diesem
-# Repo (bestand/, buecherlisten/) und brauchen keinen Pfad mehr.
+# nebeneinander. Wer eines woandershin klont, bricht beide.
 [tool.uv.sources]
 iserv-ausleihe-api = { path = "../ausleihe-api", editable = true }
 
@@ -82,19 +76,13 @@ testpaths = ["tests"]
 #
 # skip-covered kürzt die Tabelle auf die Dateien mit Lücken; bei 20 Modulen ist
 # eine Liste voller "100%" nur Rauschen über dem, worauf es ankommt.
-addopts = "-q --timeout=300 --timeout-method=thread --cov=app --cov-report=term-missing:skip-covered"
+addopts = "-q --timeout=300 --timeout-method=thread --cov --cov-report=term-missing:skip-covered"
 
 [tool.coverage.run]
-# Nur app/, obwohl bestand/ und buecherlisten/ seit 2026-09-18 im Repo liegen.
-# Die Zahl ist an eine Schwelle gebunden (--cov-fail-under=85 in der CI), und
-# sie soll dasselbe messen wie vorher: die Anwendung. Nimmt man die
-# übernommenen Pakete dazu, fällt sie - nicht weil an der Anwendung etwas
-# schlechter geprüft wäre, sondern weil zwei Ein-Schuss-CLIs dazukommen
-# (bestand/update_bestand.py ist ausdrücklich veraltet und wird nicht mehr
-# ausgeführt). Eine Schwelle, die sich durch eine Ordnerverschiebung ändert,
-# sagt über den nächsten Commit nichts mehr aus. Die Bibliothek hat ihre
-# eigenen Tests, tests/bibliothek/, und die laufen mit.
-source = ["app"]
+# Alle vier Pakete: die Bibliothek (tests/bibliothek/) läuft in derselben Suite
+# mit, und ungemessen fiele dort eine Lücke nie auf. "--cov" in addopts nimmt
+# diese Liste, statt sie zu überschreiben.
+source = ["app", "bestand", "buecherlisten", "mehrjahresbaende"]
 # Zweige zählen mit: eine Zeile "if pfad is None: return None" gilt sonst als
 # abgedeckt, sobald sie EINMAL durchlaufen wurde - egal in welche Richtung.
 # Genau die nie genommene Richtung ist aber der Fall, den niemand geprüft hat.
@@ -139,27 +127,19 @@ exclude_also = [
 # deren Typen erst über Plugins entstehen - dort wäre die Prüfung viel Lärm für
 # wenig Fund.
 #
-# bestand/ und die drei buecherlisten-Dateien stehen seit der Zusammenlegung
-# (2026-09-18) mit in dieser Liste, und zwar zwingend: sie tragen je einen
-# py.typed-Marker (bestand/py.typed, buecherlisten/core/py.typed), und der ist
-# ein Versprechen an jeden Leser dieser Signaturen ("die Annotationen hier
-# stimmen"). Vorher deckte der eigene mypy-Lauf von sba-bestand dieses
-# Versprechen; fällt er weg, ohne dass die Dateien hier einziehen, bliebe der
-# Marker ungedeckt - und app/refresh.py würde weiter mit Snapshot, GridEntry,
-# UpdateResult und BestandConfig arbeiten, ohne dass irgendwo geprüft wäre,
-# dass die noch stimmen.
+# Die Bibliothekspakete stehen zwingend mit in dieser Liste: sie tragen
+# py.typed-Marker, und der ist ein Versprechen an jeden Leser dieser
+# Signaturen ("die Annotationen hier stimmen") - app/refresh.py arbeitet mit
+# Snapshot, GridEntry, UpdateResult und BestandConfig und verlässt sich darauf.
 #
-# buecherlisten/core/layout.py fehlt bewusst: reportlab liefert kein py.typed,
-# und die Datei ist rund 1300 Zeilen ausgemessene Punkt-Konstanten. Sie stand
-# auch in sba-bestand außerhalb der Prüfung (siehe den Override weiter unten).
+# tools/ gehört dazu, weil diagnose.py gerade auf fremden Geräten laufen muss -
+# dort fällt ein Typfehler erst auf, wenn niemand mehr nachsehen kann.
 files = [
     "app",
     "bestand",
-    "buecherlisten/trg_web.py",
-    "buecherlisten/core/daten.py",
-    "buecherlisten/core/erzeugen.py",
-    "buecherlisten/planung",
+    "buecherlisten",
     "mehrjahresbaende",
+    "tools",
 ]
 python_version = "3.10"
 
@@ -173,11 +153,6 @@ python_version = "3.10"
 # nachgeprüft mit `reveal_type` (2026-09-05: viermal "Any" bei grünem Lauf).
 # Der relative Pfad ist zulässig, weil das Geschwister-Layout verbindlich ist
 # (siehe [tool.uv.sources] oben).
-#
-# Bis 2026-09-18 stand hier ein zweiter Pfad, "../sba-bestand", aus demselben
-# Grund. Er ist mit der Zusammenlegung weggefallen: bestand/ und
-# buecherlisten/ liegen jetzt im Projektbaum, mypy findet sie also ohne
-# Umweg - und prüft sie seither selbst (files oben).
 mypy_path = "../ausleihe-api"
 
 # Der eigentliche Zweck: eine Funktion ohne Annotationen überspringt mypy
@@ -194,8 +169,7 @@ warn_unused_ignores = true
 # Pfad-Auflösung oben lautlos verschlucken - bestand.core und ausleihe fielen
 # wieder auf `Any` zurück und die Prüfung an der Paketgrenze wäre weg, ohne
 # dass ein Lauf rot wird. Deshalb namentlich nur, was wirklich kein py.typed
-# liefert. Seit 2026-09-05 ist das nur noch openpyxl - `ausleihe.*` stand bis
-# dahin hier und ist die letzte Paketgrenze, die jetzt geprüft wird.
+# liefert.
 [[tool.mypy.overrides]]
 module = ["openpyxl.*", "isbnlib.*", "reportlab.*", "requests.*", "dotenv.*"]
 ignore_missing_imports = true
@@ -204,21 +178,8 @@ ignore_missing_imports = true
 # Bibliothekscode gehören in ausleihe-api, das dafür einen eigenen mypy-Lauf
 # hat, nicht in einen roten Lauf des Dashboards. `silent` heißt genau das -
 # Typen benutzen, Meldungen aus diesen Modulen unterdrücken.
-#
-# bestand.* und buecherlisten.* standen bis 2026-09-18 mit in dieser Liste, aus
-# demselben Grund (sie hatten ihren eigenen Lauf in sba-bestand). Diesen Lauf
-# gibt es nicht mehr, also wäre `silent` hier jetzt ein blinder Fleck statt
-# einer Arbeitsteilung: die Dateien stehen oben in `files` und werden geprüft.
 [[tool.mypy.overrides]]
 module = ["ausleihe.*"]
-follow_imports = "silent"
-
-# Das Layout bleibt ungeprüft (reportlab ohne py.typed, ~1300 Zeilen
-# ausgemessene Punkt-Konstanten - Begründung bei `files` oben); daten.py und
-# erzeugen.py werden geprüft und sehen es nur als Import. Übernommen aus
-# sba-bestand/pyproject.toml.
-[[tool.mypy.overrides]]
-module = ["buecherlisten.core.layout"]
 follow_imports = "silent"
 
 [tool.ruff]
@@ -226,21 +187,13 @@ target-version = "py310"
 line-length = 110
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
-
-# bestand/update_bestand.py ist der veraltete Vor-Refactor-Ansatz
-# (bestand/README.md markiert ihn "⚠️ veraltet — Nicht mehr verwenden",
-# update_bestand_auto.py ist der Ersatz) und bleibt bewusst unverändert
-# liegen: ihn anzufassen, nur um den Linter zufriedenzustellen, würde in Code
-# Unruhe stiften, den niemand mehr ausführt. Die Ignorierung ist auf genau
-# diesen einen Pfad begrenzt (nicht global E402/E501), damit eine neue Datei
-# diese Nachsicht nicht automatisch erbt. Übernommen aus
-# sba-bestand/pyproject.toml.
-[tool.ruff.lint.per-file-ignores]
-"bestand/update_bestand.py" = ["E402", "E501"]
+# B (bugbear) vor allem wegen B905: ein zip() über zwei Listen, die gleich lang
+# sein müssen, schneidet sonst eine Zeile stillschweigend ab. UP hält die
+# Schreibweise auf dem Stand von target-version (X | None statt Optional).
+select = ["E", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.isort]
 # "conftest" ist kein installiertes Paket, sondern das Modul neben den
 # Testdateien - pytest legt tests/ dafür auf den sys.path. Ohne diese Zeile
 # sortiert Ruff es zu den Fremdpaketen und meldet den Block als unsortiert.
-known-first-party = ["app", "bestand", "buecherlisten", "conftest"]
+known-first-party = ["app", "bestand", "buecherlisten", "mehrjahresbaende", "conftest"]

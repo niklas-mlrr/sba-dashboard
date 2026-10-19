@@ -11,9 +11,10 @@ liest zwischengespeicherte Werte und schreibt die Formeln beim Speichern platt.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ausleihe.inventory_excel import match_book
 from openpyxl.utils import get_column_letter, range_boundaries
@@ -51,7 +52,7 @@ HINT_EXPANSIONS: dict[str, str] = {
     "ga": "Grundlegendes",
 }
 
-Debug = Optional[Callable[[str], None]]
+Debug = Callable[[str], None] | None
 
 
 @dataclass(frozen=True)

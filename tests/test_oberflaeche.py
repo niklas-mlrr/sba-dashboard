@@ -186,9 +186,9 @@ def test_der_sortierschluessel_stimmt_mit_der_api_ueberein(client, seite: _Samml
     api = {z["key"]: z for z in client.get("/api/rows").json()["zeilen"]}
     spalten = ["fach", "jahrgang", "titel", "isbn",
                "angemeldet", "bestand", "bestellt", "zu_bestellen"]
-    for zeile, zellen in zip(seite.zeilen, seite.zellen_je_zeile):
+    for zeile, zellen in zip(seite.zeilen, seite.zellen_je_zeile, strict=True):
         daten = api[zeile["data-key"]]
-        for name, zelle in zip(spalten, zellen):
+        for name, zelle in zip(spalten, zellen, strict=True):
             erwartet = daten[name]
             roh = zelle["data-wert"] or ""
             assert roh == ("" if erwartet is None else str(erwartet).lower()), (name, zeile)
@@ -221,7 +221,7 @@ def test_jede_zahlenzelle_nennt_ihren_bezug_in_der_mappe(client, seite: _Sammler
     """
     api = {z["key"]: z for z in client.get("/api/rows").json()["zeilen"]}
     assert seite.zeilen, "ohne Zeilen prüft dieser Test nichts"
-    for zeile, zellen in zip(seite.zeilen, seite.zellen_je_zeile):
+    for zeile, zellen in zip(seite.zeilen, seite.zellen_je_zeile, strict=True):
         daten = api[zeile["data-key"]]
         angemeldet, bestand, bestellt = zellen[4], zellen[5], zellen[6]
         assert (angemeldet["data-refs"] or "").split() == list(daten["angemeldet_refs"])

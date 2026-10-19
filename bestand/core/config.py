@@ -31,7 +31,7 @@ class BestandConfig:
         excel: str | Path | None = None,
         sheet: str | None = None,
         safety_stock: int | None = None,
-    ) -> "BestandConfig":
+    ) -> BestandConfig:
         """Liest config.json neben dem Skript; Argumente haben Vorrang.
 
         Ein relativer ``excel``-Wert wird gegen das Verzeichnis der config.json

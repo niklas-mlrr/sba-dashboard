@@ -21,6 +21,7 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
+from itertools import pairwise
 from math import isfinite
 from typing import Any, TypeVar
 
@@ -320,7 +321,7 @@ def _pruefe_zeitraeume(zeilen: Sequence[Planungszeile]) -> None:
                 "nur einmal vorkommen - außer nacheinander, mit Ausmusterung und Einführung."
             )
         eigene.sort(key=zeitfolge)
-        for frueher, spaeter in zip(eigene, eigene[1:]):
+        for frueher, spaeter in pairwise(eigene):
             ende, beginn = frueher.ende, spaeter.beginn
             if ende is None or beginn is None or ende >= beginn:
                 raise UngueltigeEingabe(
