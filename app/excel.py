@@ -62,8 +62,8 @@ from bestand.core import GridEntry, atomic_save_workbook, parse_grid
 # sähe bis dahin aus wie eine Zahl, auf die man sich verlassen kann.
 # "zu bestellen" ist eine Formel, die ein Schreibzugriff plattmachen würde.
 # Bleibt "Bestellt": es kommt nicht aus IServ, sondern aus dem Blatt 'bestellt'
-# derselben Mappe, und was dort (noch) nicht steht, lässt der Abruf seit
-# 2026-09-05 unangetastet stehen (``bestand.core.update.apply_snapshot``).
+# derselben Mappe, und was dort (noch) nicht steht, lässt der Abruf
+# unangetastet stehen (``bestand.core.update._neuer_wert``).
 # Genau deshalb ist es die einzige Spalte, in der eine Eingabe von Hand Bestand
 # hat - und die einzige, die das Dashboard schreiben lässt.
 SCHREIBBARE_SPALTEN = ("bestellt",)

@@ -147,6 +147,162 @@ def _entry_key(grid: Grid, cell: GridCell) -> str | None:
     return None
 
 
+def _ist_schreibbar(cell: GridCell, res: UpdateResult, dbg: Callable[[str], None]) -> bool:
+    """Ob die Rasterzelle ueberhaupt einen Wert aus dem Snapshot bekommt.
+
+    Nur ein fehlendes Fach-Label ist ein Fehler (Diagnose); alles andere ist
+    eine Zelle, die das Raster bewusst nicht beschreibt.
+    """
+    letter = cell.col_letter
+    if cell.skip_reason == SKIP_NO_ZUSTAND:
+        dbg(f"    Sp.{letter}: kein Zustand-Label → skip")
+        return False
+    if cell.skip_reason and cell.zustand not in ("angemeldet", "bezahlt", "bestand", "bestellt"):
+        dbg(f"    Sp.{letter}: Zustand={cell.zustand_label!r} "
+            f"(nicht angemeldet/bezahlt/bestand/bestellt) → skip")
+        return False
+    # `subject is None` und SKIP_NO_FACH sind dieselbe Lage: parse_grid
+    # setzt subject genau dann, wenn es ein Fach-Label gab (grid.py, ueber
+    # strip_hint). Die Kopplung zweier Felder sieht mypy nicht, und
+    # match_book verlangt ein `str`. Also wird die Bedingung ausgeschrieben
+    # statt nur der Grund abgefragt.
+    if cell.skip_reason == SKIP_NO_FACH or cell.subject is None:
+        res.diagnostics.append(
+            f"Sp.{letter}/Zeile {cell.row}: kein Fach-Label für Zustand {cell.zustand_label!r}."
+        )
+        dbg(f"    Sp.{letter}: [{cell.zustand_label}] kein Fach-Label → skip")
+        return False
+    if cell.skip_reason is not None:
+        # Sperrflaeche: Merge ueber die volle Fachblockbreite = nicht angeboten.
+        dbg(f"    Sp.{letter}: [{cell.zustand_label}] Fach={cell.fach_label!r} "
+            f"→ {cell.skip_reason} → skip")
+        return False
+    # Unerreichbar, solange parse_grid ``zustand=None`` nur zusammen mit einem
+    # ``skip_reason`` setzt - beide Faelle sind oben schon aussortiert. Steht
+    # hier, weil die Invariante zwei Module ueberspannt: ein parse_grid, das
+    # den Zustand irgendwann ohne skip_reason leer laesst, soll auffallen,
+    # statt still eine None-Zeile mitzuzaehlen.
+    if cell.zustand is None:
+        dbg(f"    Sp.{letter}: kein Zustand trotz skip_reason=None → skip")
+        return False
+    return True
+
+
+def _waehle_buch(
+    cell: GridCell, books: list[Buch], config: BestandConfig,
+    res: UpdateResult, dbg: Callable[[str], None],
+) -> Buch | None:
+    """Das Buch der Buecherliste, das zu Fach und Hinweis der Zelle passt."""
+    assert cell.subject is not None  # von _ist_schreibbar zugesichert
+    letter = cell.col_letter
+    override_key = f"{cell.grade}|{cell.subject}|{cell.hint or ''}"
+    match = match_book(
+        books, cell.subject, cell.hint,
+        override_isbn=config.match_overrides.get(override_key),
+        hint_expansions=HINT_EXPANSIONS,
+    )
+    if match.book is not None:
+        return match.book
+    if match.error and match.error.startswith("Kein Buch-Match"):
+        # Fach in diesem Jahrgang schlicht nicht in der Buecherliste -
+        # normal, kein Abbruch.
+        res.skipped.append(f"Sp.{letter}/Zeile {cell.row}: {match.error}")
+        dbg(f"    Sp.{letter}: [{cell.zustand_label}] Fach={cell.fach_label!r} "
+            f"→ kein Buch-Match, übersprungen "
+            f"(subjects in Bücherliste: {[b['subjects'] for b in books]})")
+    else:
+        res.diagnostics.append(f"Sp.{letter}/Zeile {cell.row}: {match.error}")
+        dbg(f"    Sp.{letter}: [{cell.zustand_label}] Fach={cell.fach_label!r} "
+            f"→ {match.error}")
+    return None
+
+
+@dataclass
+class _Erledigt:
+    """Was schon geschrieben wurde - jede Groesse genau einmal.
+
+    * Zellenverbund: dieselbe Ankerzelle ueber mehrere Rasterzellen.
+    * Bestand und Bestellt: je ISBN einmal, auch ueber mehrere Jahrgaenge.
+    * Angemeldet und Bezahlt: je (Jahrgang, ISBN, Zustand) einmal.
+    """
+
+    anker: set[str] = field(default_factory=set)
+    bestand: set[str] = field(default_factory=set)
+    bestellt: set[str] = field(default_factory=set)
+    anmeldungen: set[tuple[int, str, str]] = field(default_factory=set)
+
+    def anker_neu(self, cell: GridCell, dbg: Callable[[str], None]) -> bool:
+        if cell.anchor_ref in self.anker:
+            dbg(f"    Sp.{cell.col_letter}: {cell.anchor_ref} bereits verarbeitet (Zellenverbund) → skip")
+            return False
+        self.anker.add(cell.anchor_ref)
+        return True
+
+    def wert_neu(self, cell: GridCell, zustand: str, isbn: str, dbg: Callable[[str], None]) -> bool:
+        letter = cell.col_letter
+        if zustand in ("bestand", "bestellt"):
+            gesehen = self.bestand if zustand == "bestand" else self.bestellt
+            if isbn in gesehen:
+                dbg(f"    Sp.{letter}: isbn={isbn}/{zustand.capitalize()} bereits eingetragen → skip")
+                return False
+            gesehen.add(isbn)
+            return True
+        schluessel = (cell.grade, isbn, zustand)
+        if schluessel in self.anmeldungen:
+            dbg(f"    Sp.{letter}: isbn={isbn}/{cell.zustand_label} Jg.{cell.grade} "
+                f"bereits eingetragen → skip")
+            return False
+        self.anmeldungen.add(schluessel)
+        return True
+
+
+def _neuer_wert(
+    zustand: str, grade: int, isbn: str, snapshot: Snapshot,
+    bestellt_counts: dict[str, int], alter_wert: Any,
+) -> tuple[int | None, bool]:
+    """(neuer Wert, behalten): was in die Zelle gehoert, und ob sie unberuehrt bleibt.
+
+    "Bestellt" ist die einzige Spalte, die auch von Hand gepflegt wird -
+    deshalb kann nur sie ``behalten`` sein.
+    """
+    if zustand == "angemeldet":
+        return snapshot.enrolled.get((grade, isbn), 0), False
+    if zustand == "bezahlt":
+        return snapshot.paid.get((grade, isbn), 0), False
+    if zustand == "bestand":
+        return snapshot.bestand_by_isbn.get(isbn, 0), False
+    isbn_norm = isbn.replace("-", "")
+    if isbn_norm in bestellt_counts:
+        return bestellt_counts[isbn_norm], False
+    # Nicht leeren: "Bestellt" kommt nicht aus IServ, sondern aus dem Blatt
+    # 'bestellt' derselben Mappe, und ein fehlender Eintrag dort heisst "ich
+    # weiss nichts darueber", nicht "es ist nichts bestellt". Eine von Hand
+    # eingetragene Zahl bleibt deshalb stehen und geht unveraendert in die
+    # Bedarfsrechnung ein.
+    return _ganzzahl(alter_wert), True
+
+
+def _merke_fuer_zu_bestellen(
+    res: UpdateResult, cell: GridCell, book: Buch, zustand: str, new_val: int | None,
+) -> None:
+    """Sammelt je ISBN, was :func:`compute_zu_bestellen_rows` spaeter verrechnet."""
+    entry = res.zu_bestellen_data.setdefault(book["isbn"], {
+        "angemeldet": 0,
+        "bestand": 0,
+        "bestellt": None,
+        "title": book["title"],
+        "grades": set(),
+        "fach": cell.fach_label,
+    })
+    entry["grades"].add(cell.grade)
+    if zustand == "angemeldet" and new_val is not None:
+        entry["angemeldet"] = (entry["angemeldet"] or 0) + new_val
+    elif zustand == "bestand" and new_val is not None:
+        entry["bestand"] = new_val
+    elif zustand == "bestellt":
+        entry["bestellt"] = new_val
+
+
 def apply_snapshot(
     ws: Blatt,
     grid: Grid,
@@ -167,22 +323,17 @@ def apply_snapshot(
     Drei der vier Spalten kommen aus IServ (Angemeldet, Bezahlt, Bestand) und
     werden bedingungslos ueberschrieben. **Bestellt nicht**: es kommt aus dem
     Blatt ``bestellt`` derselben Mappe und wird nur dort geschrieben, wo die
-    ISBN in ``bestellt_counts`` steht. Fehlt sie, bleibt die Zelle unberuehrt -
-    Begruendung am Zweig selbst.
+    ISBN in ``bestellt_counts`` steht. Fehlt sie, bleibt die Zelle unberuehrt
+    (siehe :func:`_neuer_wert`).
     """
-    def _dbg(msg: str) -> None:
+    def dbg(msg: str) -> None:
         if debug is not None:
             debug(msg)
 
     res = result if result is not None else UpdateResult()
     res.stand = stand or snapshot.fetched_at
     counts = bestellt_counts if bestellt_counts is not None else {}
-    bestand_counts = snapshot.bestand_by_isbn
-
-    processed_anchors: set[str] = set()                       # Zellenverbund-Dedup
-    processed_bestand_isbns: set[str] = set()                 # Bestand: je ISBN einmal
-    processed_bestellt_isbns: set[str] = set()                # Bestellt: je ISBN einmal
-    processed_enrollment: set[tuple[int, str, str]] = set()   # (Jahrgang, ISBN, Zustand)
+    erledigt = _Erledigt()
 
     current_row: int | None = None
     books: list[Buch] = []
@@ -191,153 +342,39 @@ def apply_snapshot(
         if cell.row != current_row:
             current_row = cell.row
             books = snapshot.books_for_grade(cell.grade)
-            _dbg(f"    {len(books)} Bücher geladen")
-            # Nicht `book`: so heisst unten das *ausgewaehlte* Buch, und das
-            # darf None sein. Ein Name fuer zwei Dinge hiess, dass mypy den
-            # nicht-optionalen Typ dieser Schleife festschrieb und die
-            # Zuweisung `book = match.book` dagegen lief.
+            dbg(f"    {len(books)} Bücher geladen")
             for geladenes in books:
-                _dbg(f"      isbn={geladenes['isbn']} subjects={geladenes['subjects']} "
-                     f"title={geladenes['title'][:50]!r}")
+                dbg(f"      isbn={geladenes['isbn']} subjects={geladenes['subjects']} "
+                    f"title={geladenes['title'][:50]!r}")
 
-        letter = cell.col_letter
-        if cell.skip_reason == SKIP_NO_ZUSTAND:
-            _dbg(f"    Sp.{letter}: kein Zustand-Label → skip")
+        if not _ist_schreibbar(cell, res, dbg):
             continue
-        if cell.skip_reason and cell.zustand not in ("angemeldet", "bezahlt", "bestand", "bestellt"):
-            _dbg(f"    Sp.{letter}: Zustand={cell.zustand_label!r} "
-                 f"(nicht angemeldet/bezahlt/bestand/bestellt) → skip")
+        book = _waehle_buch(cell, books, config, res, dbg)
+        if book is None or not erledigt.anker_neu(cell, dbg):
             continue
-        # `subject is None` und SKIP_NO_FACH sind dieselbe Lage: parse_grid
-        # setzt subject genau dann, wenn es ein Fach-Label gab (grid.py, ueber
-        # strip_hint). Die Kopplung zweier Felder sieht mypy nicht, und seit
-        # ausleihe-api py.typed liefert, verlangt match_book unten ein `str`.
-        # Also wird die Bedingung ausgeschrieben statt nur der Grund abgefragt.
-        if cell.skip_reason == SKIP_NO_FACH or cell.subject is None:
-            res.diagnostics.append(
-                f"Sp.{letter}/Zeile {cell.row}: kein Fach-Label für Zustand {cell.zustand_label!r}."
-            )
-            _dbg(f"    Sp.{letter}: [{cell.zustand_label}] kein Fach-Label → skip")
-            continue
-        if cell.skip_reason is not None:
-            # Sperrflaeche: Merge ueber die volle Fachblockbreite = nicht angeboten.
-            _dbg(f"    Sp.{letter}: [{cell.zustand_label}] Fach={cell.fach_label!r} "
-                 f"→ {cell.skip_reason} → skip")
-            continue
-
-        override_key = f"{cell.grade}|{cell.subject}|{cell.hint or ''}"
-        match = match_book(
-            books, cell.subject, cell.hint,
-            override_isbn=config.match_overrides.get(override_key),
-            hint_expansions=HINT_EXPANSIONS,
-        )
-        book = match.book
-        if book is None:
-            if match.error and match.error.startswith("Kein Buch-Match"):
-                # Fach in diesem Jahrgang schlicht nicht in der Buecherliste -
-                # normal, kein Abbruch.
-                res.skipped.append(f"Sp.{letter}/Zeile {cell.row}: {match.error}")
-                _dbg(f"    Sp.{letter}: [{cell.zustand_label}] Fach={cell.fach_label!r} "
-                     f"→ kein Buch-Match, übersprungen "
-                     f"(subjects in Bücherliste: {[b['subjects'] for b in books]})")
-            else:
-                res.diagnostics.append(f"Sp.{letter}/Zeile {cell.row}: {match.error}")
-                _dbg(f"    Sp.{letter}: [{cell.zustand_label}] Fach={cell.fach_label!r} "
-                     f"→ {match.error}")
-            continue
-
-        anchor_ref = cell.anchor_ref
-        if anchor_ref in processed_anchors:
-            _dbg(f"    Sp.{letter}: {anchor_ref} bereits verarbeitet (Zellenverbund) → skip")
-            continue
-        processed_anchors.add(anchor_ref)
-
         isbn = book["isbn"]
         zustand = cell.zustand
-        if zustand is None:
-            # Unerreichbar, solange parse_grid ``zustand=None`` nur zusammen mit
-            # einem ``skip_reason`` setzt (SKIP_NO_ZUSTAND beim fehlenden Label,
-            # SKIP_ZUSTAND_NOT_WRITABLE beim leeren) - beide Faelle haben die
-            # Waechter oben schon aussortiert. Steht hier, weil die Invariante
-            # zwei Module ueberspannt und ``processed_enrollment`` sie annimmt:
-            # ohne diese Zeile waere sein Schluessel
-            # ``tuple[int, str, str | None]``, und ein parse_grid, das den
-            # Zustand irgendwann ohne skip_reason leer laesst, zaehlte hier
-            # still eine None-Zeile mit statt aufzufallen.
-            _dbg(f"    Sp.{letter}: kein Zustand trotz skip_reason=None → skip")
+        assert zustand is not None  # von _ist_schreibbar zugesichert
+        if not erledigt.wert_neu(cell, zustand, isbn, dbg):
             continue
         if zustand == "bestand":
-            if isbn in processed_bestand_isbns:
-                _dbg(f"    Sp.{letter}: isbn={isbn}/Bestand bereits eingetragen → skip")
-                continue
-            processed_bestand_isbns.add(isbn)
             key = _entry_key(grid, cell)
             if key is not None:
                 res.isbn_by_entry[key] = isbn
-        elif zustand == "bestellt":
-            if isbn in processed_bestellt_isbns:
-                _dbg(f"    Sp.{letter}: isbn={isbn}/Bestellt bereits eingetragen → skip")
-                continue
-            processed_bestellt_isbns.add(isbn)
-        else:
-            enr_key = (cell.grade, isbn, zustand)
-            if enr_key in processed_enrollment:
-                _dbg(f"    Sp.{letter}: isbn={isbn}/{cell.zustand_label} Jg.{cell.grade} "
-                     f"bereits eingetragen → skip")
-                continue
-            processed_enrollment.add(enr_key)
 
-        lookup = (cell.grade, isbn)
-        # "Bestellt" ist die einzige Spalte, die auch von Hand gepflegt wird -
-        # deshalb kann sie hier ausgelassen werden, siehe unten.
-        behalten = False
-        if zustand == "angemeldet":
-            new_val: int | None = snapshot.enrolled.get(lookup, 0)
-        elif zustand == "bezahlt":
-            new_val = snapshot.paid.get(lookup, 0)
-        elif zustand == "bestand":
-            new_val = bestand_counts.get(isbn, 0)
-        else:  # bestellt
-            isbn_norm = isbn.replace("-", "")
-            if isbn_norm in counts:
-                new_val = counts[isbn_norm]
-            else:
-                # Bis 2026-09-05 stand hier None, die Zelle wurde also GELEERT.
-                # Das war der einzige Ort, an dem ein Abruf eine Eingabe von
-                # Hand vernichtete: "Bestellt" kommt nicht aus IServ, sondern
-                # aus dem Blatt 'bestellt' derselben Mappe, und wer eine
-                # Bestellung dort (noch) nicht eingetragen hat, aber die Zahl
-                # schon im Raster stehen hatte, fand sie nach dem Abruf leer
-                # vor. Ein fehlender Eintrag im Blatt heisst "ich weiss nichts
-                # darueber", nicht "es ist nichts bestellt" - deshalb bleibt
-                # die Zelle jetzt stehen, und der vorhandene Wert geht
-                # unveraendert in die Bedarfsrechnung ein.
-                behalten = True
-                new_val = _ganzzahl(ws[anchor_ref].value)
-
-        entry = res.zu_bestellen_data.setdefault(isbn, {
-            "angemeldet": 0,
-            "bestand": 0,
-            "bestellt": None,
-            "title": book["title"],
-            "grades": set(),
-            "fach": cell.fach_label,
-        })
-        entry["grades"].add(cell.grade)
-        if zustand == "angemeldet" and new_val is not None:
-            entry["angemeldet"] = (entry["angemeldet"] or 0) + new_val
-        elif zustand == "bestand" and new_val is not None:
-            entry["bestand"] = new_val
-        elif zustand == "bestellt":
-            entry["bestellt"] = new_val
+        anchor_ref = cell.anchor_ref
+        new_val, behalten = _neuer_wert(zustand, cell.grade, isbn, snapshot, counts,
+                                        ws[anchor_ref].value)
+        _merke_fuer_zu_bestellen(res, cell, book, zustand, new_val)
 
         if debug is not None:
-            isbn_norm = isbn.replace("-", "")
-            _dbg(
-                f"    Sp.{letter}: {anchor_ref} {cell.fach_label!r}/{cell.zustand_label} → "
+            lookup = (cell.grade, isbn)
+            dbg(
+                f"    Sp.{cell.col_letter}: {anchor_ref} {cell.fach_label!r}/{cell.zustand_label} → "
                 f"isbn={isbn}, enrolled={snapshot.enrolled.get(lookup, '–')}, "
-                f"paid={snapshot.paid.get(lookup, '–')}, bestand={bestand_counts.get(isbn, '–')}, "
-                f"bestellt_sheet={counts.get(isbn_norm, '–')}, new_val={new_val}"
+                f"paid={snapshot.paid.get(lookup, '–')}, "
+                f"bestand={snapshot.bestand_by_isbn.get(isbn, '–')}, "
+                f"bestellt_sheet={counts.get(isbn.replace('-', ''), '–')}, new_val={new_val}"
             )
 
         if behalten:
