@@ -251,6 +251,44 @@ def test_ohne_bildschirm_faellt_der_start_auf_die_konsole_zurueck(tmp_path, monk
     assert server_stub.letzte.gelaufen_in == threading.main_thread().name
 
 
+# ── Die Adresse im Tailnet (SBA_ZUSATZ_HOSTS, Tailscale Serve auf dem VPS) ────
+
+def test_mit_zusatz_hosts_nennt_der_start_die_tailnet_adressen(tmp_path, monkeypatch,
+                                                              server_stub, capsys):
+    monkeypatch.setenv("SBA_ZUSATZ_HOSTS", "vps-name,vps-name.tailnet.example")
+
+    assert main(["--config", str(_config(tmp_path)), "--kein-browser", "--kein-fenster"]) == 0
+
+    ausgabe = capsys.readouterr().out
+    assert "Im Tailnet:              http://vps-name:18765/" in ausgabe
+    assert "http://vps-name.tailnet.example:18765/" in ausgabe
+
+
+def test_ohne_zusatz_hosts_bleibt_es_bei_127_0_0_1(tmp_path, monkeypatch, server_stub, capsys):
+    """Der Schulrechner: keine Variable, keine Tailnet-Zeile."""
+    monkeypatch.delenv("SBA_ZUSATZ_HOSTS", raising=False)
+
+    assert main(["--config", str(_config(tmp_path)), "--kein-browser", "--kein-fenster"]) == 0
+
+    ausgabe = capsys.readouterr().out
+    assert f"http://{HOST}:18765/" in ausgabe
+    assert "Tailnet" not in ausgabe
+
+
+def test_ausgewichener_port_ist_im_tailnet_nicht_erreichbar(tmp_path, monkeypatch,
+                                                           server_stub, capsys):
+    """Serve leitet nur den Wunschport weiter; eine Adresse mit 18766 wäre falsch."""
+    monkeypatch.setenv("SBA_ZUSATZ_HOSTS", "vps-name")
+    monkeypatch.setattr("app.start.freier_port", lambda port: port + 1)
+
+    assert main(["--config", str(_config(tmp_path)), "--kein-browser", "--kein-fenster"]) == 0
+
+    ausgabe = capsys.readouterr().out
+    assert "Port 18765 war belegt" in ausgabe
+    assert "im Tailnet ist sie so nicht erreichbar" in ausgabe
+    assert "http://vps-name" not in ausgabe
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="START.sh ist nur für macOS und Linux")
 def test_macos_start_wechselt_ins_projektverzeichnis(tmp_path):
     """Der macOS-Start kommt oft aus dem Home-Ordner, nicht aus dem Checkout.

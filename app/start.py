@@ -28,6 +28,15 @@ gestartet wird der Server derweil im Nebenthread (:func:`fenster.starte`).
 
 Ohne Bildschirm (Entwicklungs-VPS, CI) oder mit ``--kein-fenster`` bleibt es beim
 alten Ablauf: der Server läuft auf dem Hauptthread bis Strg+C.
+
+## Die Adresse im Tailnet
+
+Auf dem Entwicklungs-VPS reicht Tailscale Serve den Port unter den Namen aus
+``SBA_ZUSATZ_HOSTS`` ins Tailnet weiter (siehe :mod:`app.sicherheit`). Die
+Konsole nennt dann auch diese Adressen, denn ``127.0.0.1`` hilft dem zweiten
+Rechner nicht. Serve kennt nur den Wunschport; ist der belegt und der Start
+weicht aus, sagt die Konsole stattdessen, dass diese Instanz im Tailnet nicht
+erreichbar ist.
 """
 from __future__ import annotations
 
@@ -38,6 +47,7 @@ import time
 import webbrowser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .fenster import tkinter_verfuegbar
 
@@ -76,8 +86,11 @@ def oeffne_browser(url: str, verzoegerung: float = 1.0) -> None:
     threading.Timer(verzoegerung, lambda: webbrowser.open(url)).start()
 
 
-def baue_server(config_pfad: Path | None) -> tuple[Any, str]:
-    """Konfiguration, Anwendung, Port und uvicorn-Server; gibt Server und Adresse zurück.
+def baue_server(config_pfad: Path | None) -> tuple[Any, str, int]:
+    """Konfiguration, Anwendung, Port und uvicorn-Server.
+
+    Gibt Server, Adresse und den Wunschport aus der Konfiguration zurück; an
+    Letzterem erkennt :func:`_drucke_hinweis`, ob ``freier_port`` ausgewichen ist.
 
     Hier liegen die langsamen Importe. Mit Fenster läuft das deshalb im
     Nebenthread, während das Fenster schon steht.
@@ -112,7 +125,7 @@ def baue_server(config_pfad: Path | None) -> tuple[Any, str]:
     # Über diese Referenz beendet sich der Server aus /api/beenden selbst - der
     # Knopf im Fenster und der Knopf auf der Seite nehmen denselben Weg.
     app.state.server = server
-    return server, url
+    return server, url, einstellungen.port
 
 
 def warte_auf_server(server: Any, lauf: threading.Thread,
@@ -144,8 +157,26 @@ def _drucke_kopf(version: str) -> None:
     print()
 
 
-def _drucke_hinweis(url: str, *, mit_fenster: bool, grund: str) -> None:
+def tailnet_adressen(port: int) -> list[str]:
+    """Die Adressen unter den Namen aus ``SBA_ZUSATZ_HOSTS``; ohne die Variable leer."""
+    # Erst hier importiert: sicherheit zieht Starlette nach, und das soll beim
+    # Start nicht vor dem Fenster laden (Modulkopf).
+    from .sicherheit import FESTE_HOSTS, erlaubte_hosts
+
+    return [f"http://{name}:{port}/" for name in erlaubte_hosts() if name not in FESTE_HOSTS]
+
+
+def _drucke_hinweis(url: str, *, wunschport: int, mit_fenster: bool, grund: str) -> None:
     print(f"  Die Seite laeuft unter:  {url}")
+    port = urlsplit(url).port
+    tailnet = tailnet_adressen(wunschport)
+    if tailnet and port != wunschport:
+        print(f"  Achtung: Port {wunschport} war belegt (laeuft das Dashboard schon?),")
+        print(f"  diese Instanz laeuft auf {port}. Tailscale Serve leitet nur {wunschport}")
+        print("  weiter - im Tailnet ist sie so nicht erreichbar.")
+    else:
+        for nummer, adresse in enumerate(tailnet):
+            print(f"  {'Im Tailnet:' if nummer == 0 else '':<25}{adresse}")
     print()
     if mit_fenster:
         print("  Bedient wird das Programm ueber sein eigenes Fenster:")
@@ -190,11 +221,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if not mit_fenster:
         try:
-            server, url = baue_server(argumente.config)
+            server, url, wunschport = baue_server(argumente.config)
         except Startfehler as exc:
             print(exc)
             return 2
-        _drucke_hinweis(url, mit_fenster=False, grund=grund)
+        _drucke_hinweis(url, wunschport=wunschport, mit_fenster=False, grund=grund)
         # Ohne Fenster ist die Seite die einzige Oberfläche, also gleich auf.
         # Mit Fenster kommt zuerst die Anmeldung; die Seite öffnet das Fenster
         # nach der ersten erfolgreichen Anmeldung selbst (app/fenster.py).
@@ -213,14 +244,14 @@ def main(argv: list[str] | None = None) -> int:
 
     def hochfahren() -> str:
         try:
-            server, url = baue_server(argumente.config)
+            server, url, wunschport = baue_server(argumente.config)
         except Startfehler as exc:
             gestartet["fehler"] = True
             print(exc)
             raise
         if abgebrochen.is_set():
             raise Startfehler("Der Start wurde abgebrochen.")
-        _drucke_hinweis(url, mit_fenster=True, grund="")
+        _drucke_hinweis(url, wunschport=wunschport, mit_fenster=True, grund="")
         lauf = threading.Thread(target=server.run, name="sba-server", daemon=True)
         gestartet.update(server=server, lauf=lauf)
         lauf.start()

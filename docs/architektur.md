@@ -311,6 +311,12 @@ Anmeldung gilt je laufender Instanz und damit für alle, die sie gerade
 benutzen. Weicht `freier_port` auf 8766 aus, verfehlt die Serve-Zuordnung den
 Port.
 
+Die Konsole nennt seit 2026-10-30 unter „Im Tailnet:" die Adressen
+`http://<name>:<port>/` für jeden Namen aus `SBA_ZUSATZ_HOSTS`, weil
+`127.0.0.1` dem zweiten Rechner nichts nützt. Ist der Start ausgewichen,
+steht dort stattdessen, dass diese Instanz im Tailnet nicht erreichbar ist
+(`app/start.py`, `tailnet_adressen`).
+
 ## Warum die Mappe nie im Speicher bleibt
 
 Sie liegt auf einem Netzlaufwerk und kann jederzeit in Excel geöffnet oder von
