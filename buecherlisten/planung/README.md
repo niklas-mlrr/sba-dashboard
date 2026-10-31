@@ -328,7 +328,12 @@ Buchreihe nicht verglichen.
 **ISBN nur auf einer Seite:** Steht das Buch dieses Schuljahr in keiner
 IServ-Liste, ist jedes Feld der Zeile blau markiert; steht es nur in IServ,
 rot („nur in IServ“, ohne Menü). Führt nur IServ es in einem Fach, ist es aber
-anderswo geplant, sind nur die Jahrgänge rot markiert.
+anderswo geplant, sind nur die Jahrgänge rot markiert. Den Zusatz „nicht in
+IServ“ trägt der Titel nur, wenn das Buch dieses Schuljahr eingeführt wird und
+in IServ in keiner Liste steht. Ist es geplant, aber noch nicht in IServ, und
+wird es nicht dieses Jahr eingeführt, kommt es wohl noch: kein Zusatz. Als
+„nur in IServ“ ausgewiesen wird ein Buch nur, wenn die Planung es gar nicht
+kennt.
 
 **Einführung und Ausmusterung zugleich** (etwa eingeführt zu diesem Schuljahr,
 ausgemustert nach einem späteren, oder einjährig): Der Jahrgang ist blau,

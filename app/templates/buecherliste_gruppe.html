@@ -306,7 +306,6 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif -%}
 {%- else -%}
 {{ iserv_feld(iserv, "titel", buch.titel) }}
-{%- if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif -%}
 {%- endif -%}
 {%- endmacro %}
 {% macro fachzeile(buch, iserv, mit_jahrgang, mit_ruecklagen, fach) %}

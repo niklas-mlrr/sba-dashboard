@@ -1071,7 +1071,7 @@ def test_ein_hinzugefuegtes_buch_steht_danach_in_der_liste(
     assert "7 (ab" not in _ohne_tags(seiten.get("/buecherliste/fach/Erdkunde").text)
 
 
-def test_eine_neue_isbn_steht_als_nicht_in_iserv_in_der_liste_und_bleibt(
+def test_eine_neue_isbn_steht_ohne_zusatz_in_der_liste_und_bleibt(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     stand = _hinzufuegen(seiten, abgeglichen["mtime"], NEU, titel="Neues Deutschbuch 7",
@@ -1081,7 +1081,9 @@ def test_eine_neue_isbn_steht_als_nicht_in_iserv_in_der_liste_und_bleibt(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = text.split(f'<tr data-isbn="{NEU}"')[1].split("</tr>")[0]
     assert "Neues Deutschbuch 7" in zeile
-    assert "nicht in IServ" in zeile
+    # Noch nicht in IServ, aber nicht dieses Jahr eingeführt: ein Buch, das wohl
+    # noch kommt - kein Zusatz „nicht in IServ“ an der Zeile.
+    assert "nicht in IServ" not in zeile
     assert "Dieses Buch steht nicht in IServ" in text
 
     neu = seiten.post("/api/buchplanung/abgleich", json={"schuljahr": "2026/2027"}).json()
