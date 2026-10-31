@@ -472,21 +472,23 @@ bleibt die Mappe durch **eine** Regel: aus jedem Blatt wird nur seine eigene
 Eintragungs-Spalte zurückgelesen, alles andere wird bei jedem Schreiben neu
 gesetzt. Dieselbe Regel wie beim Mehrjahresbände-Blatt.
 
-**Bestätigt wird je Zeile, nicht je Fach.** Kürzel und Datum der
-Fachkonferenzleitung stehen in der Zeile, die sie bestätigen. Der Knopf „Liste
-bestätigen" setzt sie in alle Zeilen des Fachs — eine Sammelgeste. Vorher gab es dafür ein eigenes Blatt, das
-den bestätigten Stand als ISBN-Liste mitführte, um „veraltet" erkennen zu
-können. Das entfällt: ein neu dazugekommenes Buch bringt eine Zeile ohne
-Kürzel mit, und das Fach fällt von allein auf „teilweise" zurück.
+**Gespeichert je Zeile, bestätigt je Fach — ganz oder gar nicht
+(2026-10-30).** Kürzel und Datum der Fachkonferenzleitung stehen in den
+Zeilen auf `Fächer & Jahrgang`, gesetzt und gelöscht werden sie aber immer für
+das ganze Fach. Eine Liste ist `offen`, `Antrag ausstehend` oder `bestätigt`;
+einen Zwischenstand „teilweise" gibt es nicht mehr. Bestätigen lässt sie sich
+erst, wenn kein Antrag auf Einführung zum laufenden oder Ausmusterung nach dem
+vorigen Schuljahr mehr offen ist.
 
-Eingetragen wird die Bestätigung **nur** dort, oben auf der Fach-Seite — das
-Planungsmenü eines Buchs kennt weder Kürzel noch Datum. Ändert sich eine schon
-bestätigte Zeile, entscheidet **das laufende Schuljahr**, ob die Bestätigung
-stehen bleibt (`wirkt_im_schuljahr`, `setze_buchplanung`): eine Ausmusterung,
-die erst in drei Jahren greift, ändert nichts an der Liste, die bestätigt
-wurde, und das Kürzel bleibt. Wird ein Buch dagegen ab sofort eingeführt oder
-ist es ab sofort weg, fällt die Bestätigung dieser Zeile — die
-Fachkonferenzleitung hat diese Liste nie gesehen.
+Eingetragen wird die Bestätigung **nur** über das Menü „Liste bestätigen" oben
+auf der Fach-Seite — das Planungsmenü eines Buchs kennt weder Kürzel noch
+Datum. Nach jeder Eintragung entscheidet `halte_bestaetigung` für jedes
+bestätigte Fach: ändert sich die Liste **des laufenden Schuljahrs**
+(`verfallsgruende`), verfällt die Bestätigung in allen Zeilen; sonst übernimmt
+eine neue Zeile sie. Eine Ausmusterung, die erst in drei Jahren greift, ändert
+nichts an der Liste, die bestätigt wurde. Wird ein Buch dagegen ab sofort
+eingeführt oder ist es ab sofort weg — die Fachkonferenzleitung hat diese
+Liste nie gesehen. Die Regeln stehen in `buecherlisten/planung/README.md`.
 
 **Die Einführung sagt, ob ein Jahrgang eingeführt oder geplant ist.** Eine
 Zeile auf `Fächer & Jahrgang` ohne Einführung ist eingeführt — so kommen die
@@ -520,11 +522,9 @@ ausgemustert wird eine Bücherliste, nicht ein Bestand. Auch ein Kaufbuch steht
 bis zu einem Schuljahr auf der Liste und danach nicht mehr.
 
 **Kein Status wird gespeichert, jeder wird gerechnet.** „bestätigt",
-„teilweise", „läuft aus" folgen aus den eingetragenen Werten
+„Antrag ausstehend", „läuft aus" folgen aus den eingetragenen Werten
 (`buecherlisten/planung/modelle.py`). Ein gespeicherter Status könnte den Werten
-widersprechen, aus denen er stammt, und niemand wüsste, welcher recht hat. Ein neu
-eingeführtes Buch bringt eine Zeile ohne Kürzel mit, und das Fach fällt von
-allein auf „teilweise" zurück.
+widersprechen, aus denen er stammt, und niemand wüsste, welcher recht hat.
 
 **Preise werden nicht bestätigt (seit 2026-09-24).** Die Preisprüfung — je Buch
 und je Verlagsliste, mit „geprüfter Preis", Kürzel und Datum auf `Buchreihen` —
@@ -563,6 +563,25 @@ Verlassen. Beides ist entfallen:
   der Darstellung in JavaScript wäre die Doppelung, die mit der Vorlage
   auseinanderläuft; ein `<tr hidden>` je Buch war es nicht, wurde aber von
   `static/sortieren.js` beim Sortieren von seiner Buchzeile getrennt.
+
+**Verglichen wird der Eintrag, nicht die Datei (2026-10-30).** Die Menüs der
+Fach-Seite (Buchmenü, „Liste bestätigen", „Bestätigung zurückziehen") schicken
+statt der `mtime` den Schnappschuss des Eintrags mit, den sie beim Öffnen
+gezeigt haben (`vorher`, gebaut von `eintrag_stand`/`fach_stand` in
+`app/planungsansicht.py`). Der Server rechnet denselben Schnappschuss unter dem
+Schloss aus der Datei neu (`_aendere`, `Eintrag`): ist er gleich, wird
+gespeichert — auch wenn inzwischen jemand ein anderes Buch geändert hat. Ist
+er anders, antwortet er mit 409 und dem neuen Stand; das Menü „Unterschiede"
+legt dann neuen Stand und Eingabe nebeneinander, führt zusammen, was nur eine
+Seite geändert hat, und lässt je Widerspruch per Haken wählen (`dreiwege` in
+`static/buchplanung.js`). Die Anträge-Seite und der Abgleich bleiben beim
+`mtime`-Vergleich.
+
+**Erst warnen, dann verfallen lassen.** Kostet eine Eintragung im Buchmenü die
+Bestätigung der Fachliste (`verfallsgruende`), schreibt der Server ohne
+`verfall_ok` nichts, sondern antwortet mit den Gründen (`warnung`). Das Menü
+zeigt sie über den Knöpfen, und „Speichern" heißt dann „Trotzdem speichern";
+jede weitere Eingabe nimmt das zurück.
 
 Im Menü wird der **Stand** einer Rücklage (`gewünscht`/`zugesagt`/
 `zurückgelegt`) nicht gesetzt: die Fachschaft äußert einen Wunsch, sie sagt ihn

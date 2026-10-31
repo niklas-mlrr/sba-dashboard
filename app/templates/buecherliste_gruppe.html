@@ -2,7 +2,12 @@
 {% import "_buchplanung.html" as bp with context %}
 {% block titel %}Bücherliste {{ titel }} — Schulbuchausleihe{% endblock %}
 {% block seitenklasse %}seite-voll{% endblock %}
-{% block ueberschrift %}Bücherliste {{ titel }}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
+{#
+  In der Fach-Ansicht wie bei IServ: hinter dem Namen der Stand der Liste als
+  Label (dort „veröffentlicht“, hier offen/Antrag ausstehend/bestätigt), ohne
+  Schuljahr.
+#}
+{% block ueberschrift %}Bücherliste {{ titel }}{% if ansicht == "fach" and not liste %} {{ bp.fachlabel(planung.fach_je_name.get(gruppe.name)) }}{% else %}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endif %}{% endblock %}
 {#
   "Paketansicht" nur bei Paketausleihe: an = Grundpaket und Wahlbereiche
   getrennt wie bei IServ, aus = alle Bücher in einer Tabelle. Beide Ansichten
@@ -25,8 +30,8 @@
   {% if planung.mtime is not none %}data-mtime="{{ planung.mtime }}"{% endif %}
   data-planungsjahr="{{ planung.planungsjahr }}" data-vorjahr="{{ planung.vorjahr }}"
   data-ansicht="{{ ansicht }}"></div>
-<p id="planung-meldung" class="hinweis meldung" hidden></p>
-{{ bp.hinweise(planung, ansicht, gruppe.name if gruppe else none) }}
+{{ bp.fehlermenue(planung) }}
+{% if ansicht == "fach" and gruppe and planung.mtime is not none %}{{ bp.bestaetigungsmenues(planung, gruppe.name) }}{% endif %}
 {% endblock %}
 
 {#
@@ -46,6 +51,11 @@
 
   Die Freigabe durch die Fachkonferenz gilt der Liste als Ganzes und steht
   deshalb oben, nicht je Zeile.
+
+  Die Fach-Ansicht färbt seit 2026-10-30 nach der Planung, nicht nach IServ
+  (``buch.farben``, ``fachzeile`` unten, Regeln in
+  buecherlisten/planung/farben.py); nur Titel, Verlag und Preise vergleicht
+  auch sie mit IServ. Was folgt, gilt für Verlag und Jahrgang.
 
   Gezeigt wird der Stand der Buchplanungs-Datei, verglichen mit IServ
   (``app/buecherlisten.py``), in drei Farben:
@@ -79,10 +89,17 @@
   Gelb ist das Häkchen, wenn IServ „leihbar“ in einem Jahrgang dieser Zeile
   anders führt (``leihbar_iserv``) - beim Überfahren steht, wo.
 #}
-{% macro leihbaeckchen(buch) -%}
-{%- set anders = buch.leihbar_iserv or () -%}
+{#
+  In der Fach-Ansicht (``f``, die Farben aus der Planung) zählt IServ hier
+  nicht: gelb ist das Häkchen bei einem Wechsel von „leihbar“ in der Planung,
+  ``extra`` färbt es zusätzlich (rot in den Ausmusterungen).
+#}
+{% macro leihbaeckchen(buch, f=none, extra="") -%}
+{%- set anders = (buch.leihbar_iserv or ()) if f is none else () -%}
+{%- set klasse = f.zelle("leihbar", extra) if f is not none else ("aenderung" if anders else "") -%}
 <td data-wert="{{ 0.5 if buch.leihbar_teilweise else (1 if buch.leihbar else 0) }}"
-  {%- if anders %} class="aenderung" title="In IServ: {% for paar, wert in anders %}{{ paar[0] }} Jg. {{ paar[1] }} {{ 'ja' if wert else 'nein' }}{{ '; ' if not loop.last }}{% endfor %}"
+  {%- if klasse %} class="{{ klasse }}"{% endif %}
+  {%- if anders %} title="In IServ: {% for paar, wert in anders %}{{ paar[0] }} Jg. {{ paar[1] }} {{ 'ja' if wert else 'nein' }}{{ '; ' if not loop.last }}{% endfor %}"
   {%- elif buch.leihbar_titel %} title="{{ buch.leihbar_titel }}"{% endif %}><input type="checkbox"
   class="nur-lesen" tabindex="-1" aria-readonly="true"
   {%- if buch.leihbar %} checked{% endif %}{% if buch.leihbar_teilweise %} data-teilweise{% endif %}
@@ -121,11 +138,18 @@
     {% set menue = planbar and buch.isbn in planung.isbns %}
     {% set iserv = dict(buch.iserv or ()) %}
     {% set klassen = ["aufklappbar"] if menue else [] %}
+    {% if buch.farben %}
+    {% set klassen = klassen + ([buch.farben.strich_klasse(
+         "aenderung" if iserv.keys() | select("in", ["titel", "verlag", "neupreis", "leihgebuehr"]) | list else "")]
+         | select | list) %}
+    {% else %}
     {% if buch.art %}{% set klassen = klassen + ["zeile-" ~ buch.art] %}{% endif %}
     {% if buch.reihe %}{% set klassen = klassen + ["reihe-" ~ buch.reihe] %}{% endif %}
+    {% endif %}
     <tr data-isbn="{{ buch.isbn }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}{% if menue %}
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
+    {% if buch.farben %}{{ fachzeile(buch, iserv, mit_jahrgang, mit_ruecklagen, fach) }}{% else %}
       <td{{ feldabweichung(iserv, "titel") }}>{{ buch.titel }}
         {%- if buch.von_hand and not buch.art %} <span class="klein grau">nicht in IServ</span>{% endif %}
         {%- if ohne == "verlag" and "verlag" in iserv %}<br><span class="hinweis-aenderung">Verlag in IServ: {{ iserv.verlag or "–" }}</span>{% endif %}
@@ -145,6 +169,7 @@
       {{ leihbaeckchen(buch) }}
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
+    {% endif %}
     </tr>
     {% endfor %}
   </tbody>
@@ -169,11 +194,53 @@
 {%- elif neu %} class="einfuehrung" title="{{ saetze | join('; ') }}"{% endif -%}
 {%- endmacro %}
 {% macro feldabweichung(iserv, feld) -%}
-{%- if feld in iserv -%}
-{%- set wert = iserv[feld] %}
- class="aenderung" title="In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}"
-{%- endif -%}
+{%- if feld in iserv %} class="aenderung" title="{{ iserv_wert(iserv, feld) }}"{% endif -%}
 {%- endmacro %}
+{% macro iserv_wert(iserv, feld) -%}
+{%- set wert = iserv[feld] -%}
+In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}
+{%- endmacro %}
+
+{#
+  Eine Zeile der Fach-Ansicht, gefärbt nach der Planung (``buch.farben``,
+  buecherlisten/planung/farben.py): jede Zelle trägt die Farben der ganzen
+  Zeile, dazu ihre eigenen - Jahrgang (Einführung, Ausmusterung), Leihbar
+  (Wechsel) und gelb, was IServ bei Titel, Verlag und Preisen anders nennt.
+  Mehrere Farben teilen die Zelle in waagerechte Bänder: rot über gelb über
+  blau (``band-…`` in static/app.css).
+#}
+{% macro fachzelle(f, art="", iserv={}, feld="") -%}
+{%- set klasse = f.zelle(art, "aenderung" if feld and feld in iserv else "") -%}
+{%- if klasse %} class="{{ klasse }}"{% endif -%}
+{%- if feld and feld in iserv %} title="{{ iserv_wert(iserv, feld) }}"{% endif -%}
+{%- endmacro %}
+{#
+  Die Jahrgänge mit „(ab …)“/„(bis …)“ - blau die Zahl einer Einführung zum
+  laufenden Schuljahr, rot und durchgestrichen die einer Ausmusterung nach dem
+  Vorjahr. Dieselbe Spalte in der Liste und unter „Ausmusterungen“. Sortiert
+  wird nach den nackten Jahrgängen (``data-wert``).
+#}
+{% macro fachjahrgaenge(f, extra="") -%}
+<td data-wert="{{ f.jahrgaenge | map(attribute='jahrgang') | join(', ') }}"{% set klasse = f.zelle("jahrgang", extra) %}{% if klasse %} class="{{ klasse }}"{% endif %}>
+{%- for j in f.jahrgaenge -%}
+{%- if j.farbe %}<span class="wert-{{ j.farbe }}">{{ j.jahrgang }}</span>{% else %}{{ j.jahrgang }}{% endif -%}
+{%- if j.zusatz %} ({{ j.zusatz }}){% endif %}{{ ", " if not loop.last }}
+{%- endfor -%}
+</td>
+{%- endmacro %}
+{% macro fachzeile(buch, iserv, mit_jahrgang, mit_ruecklagen, fach) %}
+{% set f = buch.farben %}
+      <td{{ fachzelle(f, "", iserv, "titel") }}>{{ buch.titel }}
+        {%- if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif %}</td>
+      {% if mit_jahrgang %}{{ fachjahrgaenge(f) }}{% endif %}
+      <td{{ fachzelle(f, "", iserv, "verlag") }}>{{ buch.verlag }}</td>
+      <td data-wert="{{ buch.isbn }}"{{ fachzelle(f) }}><samp>{{ buch.isbn_anzeige }}</samp></td>
+      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}"{{ fachzelle(f, "", iserv, "neupreis") }}>{{ euro(buch.neupreis) }}</td>
+      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}"{{ fachzelle(f, "", iserv, "leihgebuehr") }}>{{ euro(buch.leihgebuehr) }}</td>
+      {{ leihbaeckchen(buch, f) }}
+      {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
+      <td data-wert="{{ zurueck }}"{{ fachzelle(f) }}>{{ zurueck }}</td>{% endif %}
+{% endmacro %}
 {% macro euro(wert) -%}
 {%- if wert is not none -%}{{ "%.2f"|format(wert)|replace(".", ",") }}&nbsp;€{%- endif -%}
 {%- endmacro %}
@@ -222,14 +289,15 @@
 {% set ausgemustert = planung.ausmusterungen_je_fach.get(gruppe.name, []) %}
 {% if ausgemustert %}
 {#
-  Hier stehen nur Bücher, die zu diesem Schuljahr überall ausgemustert sind
-  (``zum_schuljahr_ausgemustert``); die normale Liste oben führt sie nicht.
-  Und nur, wenn sie dort in mindestens einem Jahrgang leihbar waren - ein
-  reines Kaufbuch steht nirgends (``_ausmusterungen_je_fach`` in app/planungsansicht.py).
+  Hier steht, was die Schule im Fach verliehen hat und zu diesem Schuljahr aus
+  den Regalen nimmt (``in_ausmusterungen`` in buecherlisten/planung/farben.py).
+  Läuft ein Buch als Kaufbuch in einem anderen Jahrgang weiter, steht es auch
+  oben, mit derselben Jahrgang-Spalte („7 (bis 2025/2026), 8“).
   Die Rücklagen stehen mit dabei: was aus den Regalen geht, ist genau das,
   wovon die Fachschaft noch etwas behalten will.
-  Die Spalten sind die der normalen Liste; wann ein Jahrgang ausläuft, steht
-  wie dort als „(bis …)“ an jedem Jahrgang.
+
+  Rot ist hier alles: die ganze Zeile, wenn es das Buch danach in keinem Fach
+  und Jahrgang mehr gibt, sonst die Zellen Jahrgang und Leihbar.
 #}
 {% set mit_ruecklagen = bp.ruecklagen_vorhanden(planung, ausgemustert, gruppe.name) | trim %}
 <h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
@@ -249,36 +317,28 @@
   </thead>
   <tbody>
     {% for e in ausgemustert %}
-    {#- Führt IServ das Buch hier noch, ist die Ausmusterung dort nicht erledigt: rot. -#}
-    {% set in_iserv, ganz = (ausmusterung_in_iserv | default({})).get(e.isbn, ([], false)) %}
-    {% set jahrgaenge = (e.jahrgaenge + in_iserv) | unique | sort | list %}
-    {% set zusatz = {} %}
-    {% for zeile in planung.planung_je_isbn_und_fach.get(e.isbn, {}).get(gruppe.name, []) if zeile.zusatz %}
-      {%- set _ = zusatz.update({zeile.jahrgang: zeile.zusatz}) -%}
-    {% endfor %}
-    <tr data-isbn="{{ e.isbn }}" class="aufklappbar
-      {%- if in_iserv %} zeile-ausmusterung{% endif %}{% if ganz %} reihe-weg{% endif %}" data-planung="aufklappen"
-      data-fach="{{ gruppe.name }}" role="button" tabindex="0"
+    {% set f = e.farben %}
+    {#- Nicht ganz weg: die Zellen Jahrgang und Leihbar rot, und der Strich. -#}
+    {% set rot = "" if "ausmusterung" in f.ganz else "ausmusterung" %}
+    <tr data-isbn="{{ e.isbn }}" class="aufklappbar {{ f.strich_klasse('ausmusterung') }}"
+      data-planung="aufklappen" data-fach="{{ gruppe.name }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage">
-      <td>{{ e.titel }}</td>
-      <td data-wert="{{ jahrgaenge | join(', ') }}"{% if in_iserv %} class="ausmusterung"
-        title="Ausmusterung, in IServ noch: {{ gruppe.name }} Jg. {{ in_iserv | join(', ') }}"{% endif %}>
-        {%- for jahrgang in jahrgaenge -%}
-        {%- if jahrgang in in_iserv %}<span class="wert-ausmusterung">{{ jahrgang }}</span>{% else %}{{ jahrgang }}{% endif %}
-        {%- if jahrgang in e.jahrgaenge %} ({{ zusatz.get(jahrgang) or "bis " ~ planung.vorjahr }}){% endif %}{{ ", " if not loop.last }}
-        {%- endfor %}</td>
-      <td>{{ e.verlag }}</td>
-      <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
-      <td data-wert="{{ e.neupreis if e.neupreis is not none else '' }}">{{ euro(e.neupreis) }}</td>
-      <td data-wert="{{ e.leihgebuehr if e.leihgebuehr is not none else '' }}">{{ euro(e.leihgebuehr) }}</td>
-      {{ leihbaeckchen(e) }}
+      <td{{ fachzelle(f) }}>{{ e.titel }}</td>
+      {{ fachjahrgaenge(f, rot) }}
+      <td{{ fachzelle(f) }}>{{ e.verlag }}</td>
+      <td data-wert="{{ e.isbn }}"{{ fachzelle(f) }}><samp>{{ e.isbn_anzeige }}</samp></td>
+      <td data-wert="{{ e.neupreis if e.neupreis is not none else '' }}"{{ fachzelle(f) }}>{{ euro(e.neupreis) }}</td>
+      <td data-wert="{{ e.leihgebuehr if e.leihgebuehr is not none else '' }}"{{ fachzelle(f) }}>{{ euro(e.leihgebuehr) }}</td>
+      {{ leihbaeckchen(e, f, rot) }}
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, e, gruppe.name) | trim %}
-      <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
+      <td data-wert="{{ zurueck }}"{{ fachzelle(f) }}>{{ zurueck }}</td>{% endif %}
     </tr>
     {% endfor %}
   </tbody>
 </table>
-{% for e in ausgemustert %}{{ bp.planungsvorlage(planung, e, gruppe.name) }}{% endfor %}
+{# Steht ein Buch auch oben, hat es seine Menü-Vorlage schon von dort. #}
+{% set oben = gruppe.buecher | map(attribute="isbn") | list %}
+{% for e in ausgemustert if e.isbn not in oben %}{{ bp.planungsvorlage(planung, e, gruppe.name) }}{% endfor %}
 </div>
 {% endif %}
 {{ bp.planungsmenue(verlage, vorschlaege | default([])) }}{% endif %}

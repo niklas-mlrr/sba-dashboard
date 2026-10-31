@@ -12,8 +12,7 @@
 <div id="buchplanung" data-schuljahr="{{ planung.schuljahr }}"
   {% if planung.mtime is not none %}data-mtime="{{ planung.mtime }}"{% endif %}
   data-ansicht="{{ ansicht }}"></div>
-<p id="planung-meldung" class="hinweis meldung" hidden></p>
-{{ bp.hinweise(planung, ansicht, none) }}
+{{ bp.fehlermenue(planung) }}
 {% endblock %}
 
 {#
@@ -71,13 +70,7 @@
     {% for gruppe in gruppen %}
     <tr>
       <td><a href="/buecherliste/{{ ansicht }}/{{ gruppe.name|urlencode }}">{{ gruppe.name }}</a></td>
-      {% if ansicht == "fach" %}<td>
-        {% if planung.mtime is none %}<span class="label label-status">offen</span>
-        {% else %}
-          {% set stand = planung.fach_je_name.get(gruppe.name) %}
-          {{ bp.statuslabel(stand.status if stand else "offen") }}
-        {% endif %}
-      </td>{% endif %}
+      {% if ansicht == "fach" %}<td>{{ bp.fachlabel(planung.fach_je_name.get(gruppe.name)) }}</td>{% endif %}
     </tr>
     {% endfor %}
   </tbody>

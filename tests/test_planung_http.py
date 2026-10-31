@@ -228,8 +228,8 @@ def test_ein_neues_buch_macht_das_fach_wieder_unbestaetigt(
     assert antwort.status_code == 200, antwort.text
     assert bestaetigt["mtime"] != antwort.json()["mtime"]
     fach = next(f for f in antwort.json()["planung"]["faecher"] if f["fach"] == "Deutsch")
-    assert fach["status"] == "teilweise"
-    assert "Deutschbuch 6 (Jg. 5)" in fach["hinweis"]
+    # Ganz oder gar nicht: mit einer unbestätigten Zeile ist die Liste offen.
+    assert (fach["status"], fach["text"]) == ("offen", "offen")
     # Das Kürzel bleibt lesbar stehen - man soll sehen, wer zuletzt bestätigt hat.
     assert fach["kuerzel"] == "ABC"
 
@@ -450,17 +450,24 @@ def test_ausmusterung_im_laufenden_schuljahr_nimmt_die_bestaetigung_zurueck(
         "mtime": abgeglichen["mtime"],
     }).json()
 
-    antwort = seiten.post("/api/buchplanung/buch", json={
+    eintragung = {
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
         "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026"}],
         "mtime": stand["mtime"],
-    })
+    }
+    # Erst die Warnung - geschrieben wird nichts …
+    antwort = seiten.post("/api/buchplanung/buch", json=eintragung)
+    assert antwort.status_code == 200, antwort.text
+    assert antwort.json() == {"ok": False,
+                              "warnung": ["Jg. 5: Ausmusterung nach 2025/2026 (leihbar)"]}
+    # … dann „Trotzdem speichern“. Die mtime ist noch dieselbe.
+    antwort = seiten.post("/api/buchplanung/buch", json={**eintragung, "verfall_ok": True})
     assert antwort.status_code == 200, antwort.text
     assert _zeilen(antwort.json(), DEUTSCH, "Deutsch")[5]["status"] == "ausgemustert"
     fach = next(f for f in antwort.json()["planung"]["faecher"] if f["fach"] == "Deutsch")
-    # Deutsch hat genau diese eine Zeile; ohne ihr Kürzel ist nicht "teilweise"
-    # bestätigt, sondern gar nichts.
-    assert fach["status"] == "offen"
+    # Die Ausmusterung nach dem Vorjahr ist ein offener Antrag: bis er
+    # entschieden ist, lässt sich die Liste nicht wieder bestätigen.
+    assert (fach["status"], fach["text"]) == ("Antrag ausstehend", "1 Antrag ausstehend")
     assert fach["kuerzel"] == ""
 
 
@@ -495,9 +502,16 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     }).json()
     text = seiten.get("/buecherliste/fach/Erdkunde").text
     # Verschiedene Zusätze: jeder hängt an seinem Jahrgang.
-    assert "5 (bis 2025/2026), 6 (bis 2029/2030), 7 (ab 2028/2029)" in text
+    assert "5 (bis 2025/2026), 6 (bis 2029/2030), 7 (ab 2028/2029)" in _ohne_tags(text)
     # Sortiert wird weiter nach den nackten Jahrgängen.
     assert 'data-wert="5, 6, 7"' in text
+    # Nach der Planung gefärbt: nach dem Vorjahr ausgemustert ist die Zahl rot
+    # und durchgestrichen; die Zelle trägt rot (Ausmusterungen) über blau
+    # (die Einführung ab 2028/2029), der Strich vorn ebenso.
+    zeile = _zeile_von(text, TERRA)
+    assert '<span class="wert-ausmusterung">5</span>' in zeile
+    assert 'class="band-ausmusterung-einfuehrung">' in zeile
+    assert "strich-ausmusterung-einfuehrung" in zeile.split(">")[0]
 
     # Derselbe Zusatz für alle: er steht trotzdem an jedem Jahrgang einzeln.
     seiten.post("/api/buchplanung/buch", json={
@@ -637,7 +651,8 @@ def test_fachseite_bietet_freigabe_und_planungsmenue(
 ) -> None:
     """Die Buchzeile ist der Knopf, und das Menü steht fertig als Vorlage da."""
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    assert 'data-planung="fach"' in text                     # Freigabe, oben
+    assert 'data-menue="bestaetigen-menue"' in text          # Freigabe, oben
+    assert '<dialog id="bestaetigen-menue"' in text
     assert 'class="aufklappbar"' in text                     # die Zeile öffnet das Menü
     assert 'data-planung="aufklappen"' in text
     assert 'class="planung-vorlage"' in text
@@ -669,7 +684,7 @@ def test_jahrgang_eines_laufenden_buchs_traegt_nur_die_ausmusterung(
     """
     text = seiten.get("/buecherliste/fach/Deutsch").text
     vorlage = text.split('class="planung-vorlage"')[1].split("</template>")[0]
-    zeile = " ".join(vorlage.split("<tr data-planung-zeile")[1].split("</tr>")[0].split())
+    zeile = " ".join(vorlage.split("<tbody data-planung-zeile")[1].split("</tbody>")[0].split())
     assert "data-aktuell" in zeile
     # Jahrgang und Einführung nur als verstecktes Feld - der Server bekommt sie
     # zurück, aber niemand tippt sie um.
@@ -690,7 +705,12 @@ def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(
         "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
         "mtime": abgeglichen["mtime"],
     })
-    assert "label-success" in seiten.get("/buecherliste/fach/Deutsch").text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    kopf = text.split("<h1>")[1].split("</h1>")[0]
+    assert '<span class="label label-success">bestätigt</span>' in kopf
+    assert "Bestätigung zurückziehen" in text
+    assert '<dialog id="zurueckziehen-menue"' in text
+    assert "Bestätigt von ABC am 03.09.2026." in text
 
     _BUECHER["2026/2027"][5].append(
         ("9783060000012", "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0, True))
@@ -699,8 +719,12 @@ def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(
         text = seiten.get("/buecherliste/fach/Deutsch").text
     finally:
         _BUECHER["2026/2027"][5].pop()
-    assert "teilweise" in text
-    assert "Deutschbuch 6 (Jg. 5)" in text
+    kopf = text.split("<h1>")[1].split("</h1>")[0]
+    assert '<span class="label label-status">offen</span>' in kopf
+    assert "2026/2027" not in kopf
+    assert ">Liste bestätigen</button>" in text
+    # Keine Zeile mit Hinweisen mehr unter dem Kopf.
+    assert 'class="hinweis warnung"' not in text
 
 
 def test_druckmenue_kennt_die_nicht_bestaetigten_faecher(
@@ -726,7 +750,10 @@ def test_kaputte_datei_macht_die_buecherliste_nicht_unbrauchbar(
     antwort = seiten.get("/buecherliste/fach/Deutsch")
     assert antwort.status_code == 200
     assert "Deutschbuch 5" in antwort.text
-    assert "nicht lesbar" in antwort.text
+    # Gesagt wird es im Fehlermenü, das sich beim Laden gleich öffnet.
+    fehlermenue = antwort.text.split('<dialog id="fehlermenue"')[1].split("</dialog>")[0]
+    assert "data-sofort" in fehlermenue
+    assert "nicht lesbar" in fehlermenue
 
 
 def test_vorjahresbuch_steht_mit_dem_vorjahr_als_ausmusterung_in_der_datei(
@@ -776,7 +803,7 @@ def test_ausgemustertes_buch_laesst_sich_wie_die_anderen_planen(
     assert "Ausmusterungen zu diesem Schuljahr" in text
     tabelle = text.split('id="ausmusterungen"')[1]
     assert 'data-planung="aufklappen"' in tabelle
-    assert f'<template class="planung-vorlage" data-isbn="{TERRA}" data-fach="Erdkunde">' in text
+    assert f'<template class="planung-vorlage" data-isbn="{TERRA}" data-fach="Erdkunde"' in text
     assert 'data-planung-feld="anzahl"' in text.split("planung-vorlage")[-1]
 
 
@@ -795,9 +822,13 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
     assert f'data-isbn="{TERRA}"' in tabelle
     assert "<th data-sort=\"zahl\">Rücklagen</th>" in tabelle
     assert '<td data-wert="4">4</td>' in tabelle
-    # Weil IServ es in Erdkunde Jg. 6 noch führt, ist die Ausmusterung rot markiert.
-    assert 'zeile-ausmusterung' in tabelle
-    assert '<span class="wert-ausmusterung">6</span>' in tabelle
+    # In Politik läuft Terra weiter, es ist also nicht ganz weg: rot sind der
+    # Strich, die Jahrgänge (Schrift und Zelle) und das Häkchen „Leihbar“.
+    zeile = _zeile_von(tabelle, TERRA)
+    assert "strich-ausmusterung" in zeile.split(">")[0]
+    assert '<span class="wert-ausmusterung">6</span>' in zeile
+    assert zeile.count('class="band-ausmusterung"') == 2
+    assert f'<td>{"Terra 5/6"}</td>' in zeile
     # Dieselben Spalten wie die normale Liste, das Ende steht am Jahrgang.
     assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
         "Titel", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Leihbar", "Rücklagen"]
@@ -807,12 +838,17 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
 def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Excel führt Terra dieses Jahr nirgends mehr, IServ schon: die ganze Zeile rot."""
+    """Die Datei führt Terra danach nirgends mehr: in den Fächern die ganze Zeile rot.
+
+    Die Jahrgangsansicht vergleicht weiter mit IServ - dort führt IServ Terra
+    dieses Jahr noch in Jg. 6.
+    """
     _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde", "Politik")
     for fach in ("Erdkunde", "Politik"):
         tabelle = seiten.get(f"/buecherliste/fach/{fach}").text.split('id="ausmusterungen"')[1]
-        assert "reihe-weg" in _zeile_von(tabelle, TERRA)
-    # IServ führt Terra dieses Jahr in Jg. 6.
+        zeile = _zeile_von(tabelle, TERRA)
+        assert '<td class="band-ausmusterung">Terra 5/6</td>' in zeile
+        assert 'data-wert="1" class="band-ausmusterung"' in zeile
     assert "reihe-weg" in _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, TERRA)
 
 
@@ -838,7 +874,7 @@ def test_buch_das_im_selben_fach_weiterlaeuft_steht_in_der_normalen_liste(
     text = seiten.get("/buecherliste/fach/Erdkunde").text
     assert "Ausmusterungen zu diesem Schuljahr" not in text
     assert f'<tr data-isbn="{TERRA}"' in text
-    assert "5 (bis 2025/2026), 6" in text
+    assert "5 (bis 2025/2026), 6" in _ohne_tags(text)
 
 
 def test_handeingetragene_ausmusterung_bleibt_beim_naechsten_abgleich(
@@ -876,7 +912,7 @@ def test_das_menue_zeigt_die_buchreihe_vor_der_planung(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
+    vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch"')[1].split("</template>")[0]
     # Erst die Buchreihe, dann Einführung/Ausmusterung, dann die Rücklage.
     assert vorlage.index("data-buchreihe") < vorlage.index("Einführung und Ausmusterung") \
         < vorlage.index("Rücklage für")
@@ -930,8 +966,19 @@ def test_korrektur_uebersteht_den_abgleich(
 def test_eine_isbn_im_koerper_der_buchreihe_aendert_nichts(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Die ISBN steht im Menü nur zum Lesen; der Server nimmt keine an."""
-    stand = _korrigiere_deutsch(seiten, abgeglichen["mtime"], isbn="9783161484100")
+    """Die ISBN steht im Menü nur zum Lesen; der Server weist eine andere ab.
+
+    Nachtragen lässt sie sich nur bei einem Buch unter „ISBN folgt“.
+    """
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5}],
+        "buchreihe": {**_buchreihe("Deutschbuch 5", "Cornelsen"), "isbn": "9783161484100"},
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert antwort.json()["fehler"] == "Die ISBN eines Buchs lässt sich nicht ändern."
+    stand = seiten.get("/api/buchplanung", params={"schuljahr": "2026/2027"}).json()
     assert any(b["isbn"] == DEUTSCH for b in stand["planung"]["buecher"])
     assert not any(b["isbn"] == "9783161484100" for b in stand["planung"]["buecher"])
 
@@ -1000,7 +1047,7 @@ def test_ein_hinzugefuegtes_buch_steht_danach_in_der_liste(
     assert "7 (ab 2027/2028)" in zeile
     assert 'data-planung="aufklappen"' in zeile
     # Und es lässt sich öffnen wie jede andere Zeile.
-    assert f'data-isbn="{TERRA}" data-fach="Deutsch">' in text
+    assert f'data-isbn="{TERRA}" data-fach="Deutsch"' in text
     # Aus den Vorschlägen ist es verschwunden.
     vorschlaege = json.loads(text.split('id="planung-buecher">')[1].split("</script>")[0])
     assert TERRA not in {buch["isbn"] for buch in vorschlaege}
@@ -1045,14 +1092,14 @@ def test_das_menue_heisst_wie_in_iserv_und_fragt_nach_leihbar(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
+    vorlage = text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch"')[1].split("</template>")[0]
     assert "Buchreihe bearbeiten" in vorlage
     # „Leihbar“ steht nicht bei der Buchreihe, sondern je Zeile - als Spalte
     # hinter dem Jahrgang.
     assert 'data-buchreihe-feld="leihbar"' not in vorlage
     assert vorlage.index("Einführung und Ausmusterung") < vorlage.index("<th>Leihbar</th>") \
         < vorlage.index("Einführung<br>zum Schuljahr")
-    zeile = vorlage.split("<tr data-planung-zeile")[1].split("</tr>")[0]
+    zeile = vorlage.split("<tbody data-planung-zeile")[1].split("</tbody>")[0]
     leihbar = zeile.split('data-planung-feld="leihbar"')[1].split(">")[0]
     assert "checked" in leihbar and "disabled" not in leihbar
     assert 'data-bisher-ab=""' in zeile and "data-alt" in zeile
@@ -1075,9 +1122,14 @@ def test_korrigiertes_leihbar_steht_in_der_liste(seiten: TestClient, abgeglichen
     wb = openpyxl.load_workbook(antwort.json()["datei"])
     assert "leihbar" not in [z.value for z in wb["Buchreihen"][1]]
     text = seiten.get("/buecherliste/fach/Latein").text
-    zeile = text.split(f'<tr data-isbn="{KAUF}"')[1].split("</tr>")[0]
-    assert 'data-wert="1" class="aenderung" title="In IServ: Latein Jg. 5 nein"' in zeile
-    assert "in IServ: nein" in text
+    zeile = _zeile_von(text, KAUF)
+    # Die Fach-Ansicht färbt nach der Planung, nicht nach IServ (2026-10-30):
+    # das Häkchen steht, wie die Datei es sagt, ohne Vergleich.
+    assert 'data-wert="1"' in zeile and "In IServ" not in zeile
+    assert "in IServ: nein" not in _vorlage(text, KAUF, "Latein")
+    # Die Jahrgangsansicht vergleicht weiter mit IServ.
+    jahrgang = _zeile_von(seiten.get("/buecherliste/jahrgang/5").text, KAUF)
+    assert 'data-wert="1" class="aenderung" title="In IServ: Latein Jg. 5 nein"' in jahrgang
     # Jetzt gibt es auch den Rücklage-Block.
     assert "Rücklage für die Fachschaft Latein" in text
 
@@ -1098,7 +1150,7 @@ def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dic
     assert [(z["jahrgang"], z["leihbar"], z["eingefuehrt_ab"], z["ausgemustert_nach"])
             for z in planung] == [(5, True, "", "2025/2026"), (5, False, "2026/2027", "")]
     vorlage = _deutsch_vorlage(seiten)
-    alt, neu = vorlage.split("<tr data-planung-zeile")[1:3]
+    alt, neu = vorlage.split("<tbody data-planung-zeile")[1:3]
     assert "disabled" in alt.split('data-planung-feld="leihbar"')[1].split(">")[0]
     assert 'data-bisher-ab="2026/2027"' in neu and "data-alt" not in neu.split(">")[0]
     # Auf der Seite steht das Buch weiter in Jahrgang 5 - als Kaufbuch.
@@ -1135,7 +1187,7 @@ def test_gleich_leihbar_anschliessende_zeilen_werden_fortlaufend_gespeichert(
 
 def _deutsch_vorlage(seiten: TestClient) -> str:
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    return text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch">')[1].split("</template>")[0]
+    return text.split(f'data-isbn="{DEUTSCH}" data-fach="Deutsch"')[1].split("</template>")[0]
 
 
 def test_das_menue_fragt_unter_den_preisen_nach_der_bemerkung(
@@ -1232,8 +1284,10 @@ def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = _zeile_von(text, DEUTSCH)
     assert "22,50" in zeile
-    assert 'class="aenderung" title="In IServ: 24,00 €"' in zeile
-    assert "zeile-aenderung" in zeile and not re.search(r"reihe-(neu|weg)", zeile)
+    # Titel, Verlag und Preise vergleicht auch die Fach-Ansicht mit IServ: gelb.
+    assert 'class="band-aenderung" title="In IServ: 24,00 €"' in zeile
+    assert "strich-aenderung" in zeile.split(">")[0]
+    assert "band-einfuehrung" not in zeile and "band-ausmusterung" not in zeile
     # Graue Hinweiskästen gibt es auf den Bücherlisten nicht.
     assert 'class="hinweis"' not in text
 
@@ -1251,12 +1305,13 @@ def test_ein_buch_nur_in_iserv_steht_markiert_und_ohne_menue(
     _iserv_aendern(monkeypatch, 5, [*_BUECHER["2026/2027"][5],
                                     (neu, "Deutschbuch 6", ["Deutsch"], "Cornelsen", 23.0, True)])
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    zeile = _zeile_von(text, neu)
-    # Die ganze Reihe führt nur IServ: roter Strich, ganze Zeile rot hinterlegt.
+    # Die Fach-Ansicht zeigt die Datei: was nur IServ führt, steht dort nicht.
+    assert f'<tr data-isbn="{neu}"' not in text
+    assert f'data-isbn="{neu}" data-fach="Deutsch"' not in text
+    # Die Jahrgangsansicht vergleicht weiter mit IServ: roter Strich, ganze Zeile rot.
+    zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/5").text, neu)
     assert "zeile-ausmusterung reihe-weg" in zeile
-    assert '<span class="wert-ausmusterung">5</span>' in zeile
     assert "aufklappbar" not in zeile
-    assert f'data-isbn="{neu}" data-fach="Deutsch">' not in text
 
 
 def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
@@ -1265,11 +1320,9 @@ def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
     _iserv_aendern(monkeypatch, 5, [
         (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    # In keiner IServ-Liste mehr, die Buchreihe gibt es aber im Inventar: die
-    # Zeile ist nicht hinterlegt, nur der Jahrgang blau.
-    assert "zeile-einfuehrung" in zeile and "reihe-" not in zeile
-    assert '<span class="wert-einfuehrung">5</span>' in zeile
-    assert 'class="aenderung"' not in zeile
+    # In keiner IServ-Liste mehr - die Fach-Ansicht färbt aber nach der
+    # Planung, und dort ist an Deutschbuch 5 nichts geplant.
+    assert "band-" not in zeile and "strich-" not in zeile
     # Das Menü bleibt: das Buch steht in der Datei.
     assert "aufklappbar" in zeile
 
@@ -1281,7 +1334,7 @@ def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
     # Weicht die Datei von der Buchreihe im Inventar ab, ist das gelb.
     _korrigiere_deutsch(seiten, abgeglichen["mtime"], titel="Deutschbuch 5 NRW")
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert 'class="aenderung"' in zeile and "In IServ: Deutschbuch 5" in zeile
+    assert 'class="band-aenderung"' in zeile and "In IServ: Deutschbuch 5" in zeile
 
 
 def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
@@ -1299,8 +1352,13 @@ def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
+    # In der Fach-Ansicht: zum ersten Mal überhaupt eingeführt, zum laufenden
+    # Schuljahr - die ganze Zeile blau, die Jahrgangszahl auch.
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
-    assert "reihe-unbekannt" in zeile and "reihe-neu" not in zeile
+    assert '<td class="band-einfuehrung">Neues Deutschbuch' in zeile
+    assert '<span class="wert-einfuehrung">5</span>' in zeile
+    assert "strich-einfuehrung" in zeile.split(">")[0]
+    # Die Jahrgangsansicht vergleicht weiter mit IServ.
     fehlend = seiten.get("/buecherliste/jahrgang/5").text.split("Nicht in IServ")[1]
     assert "reihe-unbekannt" in _zeile_von(fehlend, NEU)
 
@@ -1310,11 +1368,11 @@ def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
 ) -> None:
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
                                     (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
+    # Die Fach-Ansicht färbt nach der Planung: dort ist nichts ausgemustert.
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert 'class="ausmusterung" title="Ausmusterung, in IServ noch: Deutsch Jg. 6"' in zeile
-    assert '<span class="wert-ausmusterung">6</span>' in zeile
-    assert "zeile-ausmusterung" in zeile and not re.search(r"reihe-(neu|weg)", zeile)
-    # Auf der Jahrgangsseite steht es beim Fach.
+    assert "band-" not in zeile and "strich-" not in zeile
+    assert '<td data-wert="5">5</td>' in zeile
+    # Die Jahrgangsseite vergleicht mit IServ; dort steht es beim Fach.
     zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH)
     assert "Ausmusterung, in IServ noch: Deutsch Jg. 6" in zeile
     assert '<span class="wert-ausmusterung">Deutsch</span>' in zeile
@@ -1331,8 +1389,12 @@ def test_eine_eingefuehrte_planung_gleicht_iserv(
     })
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
                                     (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
-    text = seiten.get("/buecherliste/fach/Deutsch").text
-    assert not _markiert(text)
+    # Gegen IServ (Jahrgangsansicht) ist nichts abweichend …
+    assert not _markiert(_zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH))
+    # … in der Fach-Ansicht ist es eine Einführung zum laufenden Schuljahr: blau.
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert '<span class="wert-einfuehrung">6</span>' in zeile
+    assert 'class="band-einfuehrung"' in zeile
 
 
 def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(
@@ -1573,8 +1635,12 @@ def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
     text = seiten.get("/buecherliste/aenderungen").text
     assert 'data-status="genehmigt"' in text and "neuer Lehrplan" in text
     assert f"b.lehrer, {heute:%d.%m.%Y}" in text
-    # Das Planungsmenü zeigt die Entscheidung mit, nur zum Lesen.
-    assert "planung-antrag" in seiten.get("/buecherliste/fach/Deutsch").text
+    # Das Planungsmenü zeigt die Entscheidung unter der Zeile, nur zum Lesen.
+    menue = " ".join(_vorlage(seiten.get("/buecherliste/fach/Deutsch").text,
+                              DEUTSCH, "Deutsch").split())
+    assert ('<tr class="planung-entscheidung"><td colspan="6"> <span class="entscheidung-genehmigt">'
+            'Einführung <span class="label label-success">genehmigt</span> durch b.lehrer am '
+            f'{heute:%d.%m.%Y}. Begründung: neuer Lehrplan</span>') in menue
 
     zurueck = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
@@ -1623,7 +1689,7 @@ def test_ein_antrag_auf_eine_alte_fassung_ist_409(
 
 def _vorlage(text: str, isbn: str, fach: str) -> str:
     """Das gerenderte Planungsmenü eines Buchs in einem Fach."""
-    kopf = f'<template class="planung-vorlage" data-isbn="{isbn}" data-fach="{fach}">'
+    kopf = f'<template class="planung-vorlage" data-isbn="{isbn}" data-fach="{fach}"'
     return text.split(kopf)[1].split("</template>")[0]
 
 
@@ -1656,27 +1722,50 @@ def test_genehmigte_zeilen_sind_in_der_farbe_ihres_status_hinterlegt(
 
     def zeile_ab(ab: str) -> str:
         menue = _vorlage(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH, "Deutsch")
-        treffer = re.search(rf'<tr data-planung-zeile data-bisher-ab="{re.escape(ab)}"([^>]*)>', menue)
+        treffer = re.search(rf'<tbody data-planung-zeile data-bisher-jahrgang="\d+"\s+'
+                            rf'data-bisher-ab="{re.escape(ab)}"\s+class="([^"]*)"', menue)
         assert treffer, menue
         return treffer.group(1)
 
-    # Ohne Antrag ist nichts offen: hinterlegt. Die offene Einführung nicht.
-    assert 'class="genehmigt status-im-einsatz"' in zeile_ab("")
-    assert "genehmigt" not in zeile_ab("2027/2028")
+    # Ohne Antrag ist nichts offen: ganz hinterlegt. Die offene Einführung weiß.
+    assert zeile_ab("") == "status-im-einsatz oben-genehmigt unten-genehmigt"
+    assert zeile_ab("2027/2028") == "status-geplant oben-offen unten-offen"
 
     antwort = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
         "art": "einfuehrung", "ergebnis": "abgelehnt", "mtime": stand["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
-    assert "genehmigt" not in zeile_ab("2027/2028")
+    assert zeile_ab("2027/2028") == "status-geplant oben-abgelehnt unten-abgelehnt"
 
     antwort = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
         "art": "einfuehrung", "ergebnis": "genehmigt", "mtime": antwort.json()["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
-    assert 'class="genehmigt status-geplant"' in zeile_ab("2027/2028")
+    assert zeile_ab("2027/2028") == "status-geplant oben-genehmigt unten-genehmigt"
+
+
+def test_eine_zeile_mit_zwei_antraegen_ist_halb_halb(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Oben die Einführung, unten die Ausmusterung - je nach ihrer Entscheidung."""
+    stand = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "bisher_ab": ""},
+                   {"jahrgang": 8, "eingefuehrt_ab": "2027/2028",
+                    "ausgemustert_nach": "2028/2029", "neu": True}],
+        "mtime": abgeglichen["mtime"],
+    }).json()
+    for art, ergebnis in (("einfuehrung", "genehmigt"), ("ausmusterung", "abgelehnt")):
+        stand = seiten.post("/api/buchplanung/antrag", json={
+            "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 8,
+            "art": art, "ergebnis": ergebnis, "mtime": stand["mtime"],
+        }).json()
+    menue = " ".join(_vorlage(seiten.get("/buecherliste/fach/Deutsch").text,
+                              DEUTSCH, "Deutsch").split())
+    assert 'class="status-geplant oben-genehmigt unten-abgelehnt"' in menue
+    assert "Einführung <span" in menue and "Ausmusterung <span" in menue
 
 
 def test_liste_bestaetigen_braucht_ein_datum(seiten: TestClient, abgeglichen: dict) -> None:
@@ -1692,8 +1781,30 @@ def test_liste_bestaetigen_braucht_ein_datum(seiten: TestClient, abgeglichen: di
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
-    assert 'required aria-label="Datum der Bestätigung"' in seiten.get(
+    assert 'id="bestaetigen-datum" data-planung-feld="datum"' in seiten.get(
         "/buecherliste/fach/Deutsch").text
+
+
+def test_liste_mit_offenem_antrag_laesst_sich_nicht_bestaetigen(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    stand = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026"}],
+        "mtime": abgeglichen["mtime"],
+    }).json()
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
+        "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 400
+    assert "1 Antrag ausstehend" in antwort.json()["fehler"]
+    # Übersicht und Kopf zeigen den Stand; der Knopf ist grau und sagt warum.
+    assert '<span class="label label-warning">1 Antrag ausstehend</span>' in seiten.get(
+        "/buecherliste/fach").text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    knopf = text.split('data-menue="bestaetigen-menue"')[1].split("</button>")[0]
+    assert "disabled" in knopf and 'title="1 Antrag noch nicht entschieden"' in knopf
 
 
 def test_antraege_zeigen_null_euro_als_betrag(seiten: TestClient, abgeglichen: dict) -> None:
@@ -1714,3 +1825,137 @@ def test_antraege_zeigen_null_euro_als_betrag(seiten: TestClient, abgeglichen: d
     text = seiten.get("/buecherliste/aenderungen").text
     assert "<dt>Leihgebühr</dt><dd>0,00 €</dd>" in text
     assert "<dt>Neupreis</dt><dd>0,00 €</dd>" in text
+
+
+# ── Entscheidungen 2026-10-30: Konflikt je Eintrag ───────────────────────────
+
+
+def _vorher(text: str, isbn: str, fach: str) -> dict:
+    """Der Schnappschuss, den das Menü eines Buchs beim Öffnen gesehen hat."""
+    kopf = f'<template class="planung-vorlage" data-isbn="{isbn}" data-fach="{fach}"'
+    return json.loads(text.split(kopf)[1].split("data-vorher='")[1].split("'>")[0])
+
+
+def _menueeintrag(vorher: dict, **zusatz) -> dict:
+    """Was das Buchmenü von Deutschbuch 5 unverändert speichern würde."""
+    return {
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": z["jahrgang"], "eingefuehrt_ab": z["eingefuehrt_ab"],
+                    "ausgemustert_nach": z["ausgemustert_nach"], "leihbar": z["leihbar"],
+                    "bemerkung": z["bemerkung"], "bisher_ab": z["eingefuehrt_ab"]}
+                   for z in vorher["zeilen"].values()],
+        "buchreihe": vorher["buchreihe"], "ruecklage": vorher["ruecklage"],
+        "vorher": vorher, **zusatz,
+    }
+
+
+def test_das_menue_traegt_den_eintrag_wie_er_in_der_datei_steht(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    vorher = _vorher(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH, "Deutsch")
+    assert vorher["buchreihe"]["titel"] == "Deutschbuch 5"
+    assert list(vorher["zeilen"]) == ["5|"]
+    assert vorher["ruecklage"] == {"anzahl": None, "bemerkung": ""}
+
+
+def test_eine_aenderung_an_einem_anderen_buch_stoert_nicht(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Die Datei ist inzwischen eine andere (mtime), der Eintrag aber derselbe."""
+    vorher = _vorher(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH, "Deutsch")
+    anderes = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [{"jahrgang": 5, "bisher_ab": "", "bemerkung": "neu"},
+                   {"jahrgang": 6, "bisher_ab": ""}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert anderes.status_code == 200, anderes.text
+    eintragung = _menueeintrag(vorher, mtime=abgeglichen["mtime"])
+    eintragung["buchreihe"] = {**vorher["buchreihe"], "titel": "Deutschbuch 5 neu"}
+    antwort = seiten.post("/api/buchplanung/buch", json=eintragung)
+    assert antwort.status_code == 200, antwort.text
+    buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert buch["titel"] == "Deutschbuch 5 neu"
+
+
+def test_ein_inzwischen_geaenderter_eintrag_ist_409_mit_dem_neuen_stand(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    vorher = _vorher(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH, "Deutsch")
+    erst = _menueeintrag(vorher)
+    erst["zeilen"][0]["ausgemustert_nach"] = "2028/2029"
+    assert seiten.post("/api/buchplanung/buch", json=erst).status_code == 200
+    # Ein zweites Menü, mit demselben alten Stand geöffnet, speichert danach.
+    zweit = _menueeintrag(vorher)
+    zweit["zeilen"][0]["bemerkung"] = "von mir"
+    antwort = seiten.post("/api/buchplanung/buch", json=zweit)
+    assert antwort.status_code == 409
+    aktuell = antwort.json()["konflikt"]
+    assert aktuell["zeilen"]["5|"]["ausgemustert_nach"] == "2028/2029"
+    # Mit dem neuen Stand als ``vorher`` geht es durch.
+    zweit["vorher"] = aktuell
+    zweit["zeilen"][0]["ausgemustert_nach"] = "2028/2029"
+    antwort = seiten.post("/api/buchplanung/buch", json=zweit)
+    assert antwort.status_code == 200, antwort.text
+    zeile = _zeilen(antwort.json(), DEUTSCH, "Deutsch")[5]
+    assert (zeile["ausgemustert_nach"], zeile["bemerkung"]) == ("2028/2029", "von mir")
+
+
+def test_die_kopfmenues_vergleichen_die_bestaetigung(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    vorher = json.loads(text.split('<dialog id="bestaetigen-menue"')[1]
+                        .split("data-vorher='")[1].split("'>")[0])
+    assert vorher == {"fach": {"kuerzel": "", "datum": None}}
+    bestaetigt = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC",
+        "datum": "2026-09-03", "vorher": vorher,
+    })
+    assert bestaetigt.status_code == 200, bestaetigt.text
+    # Wer mit dem alten Stand noch einmal bestätigt, sieht den neuen.
+    antwort = seiten.post("/api/buchplanung/fach", json={
+        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "XY",
+        "datum": "2026-09-04", "vorher": vorher,
+    })
+    assert antwort.status_code == 409
+    assert antwort.json()["konflikt"] == {"fach": {"kuerzel": "ABC", "datum": "2026-09-03"}}
+
+
+def test_ein_neues_buch_kommt_ohne_mtime_dazu(seiten: TestClient, abgeglichen: dict) -> None:
+    """„+ Buch hinzufügen“ ändert keinen bestehenden Eintrag."""
+    seiten.post("/api/buchplanung/planung", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 5,
+        "bemerkung": "derweil", "mtime": abgeglichen["mtime"],
+    })
+    antwort = seiten.post("/api/buchplanung/buch/neu", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Deutsch", "mtime": None,
+        "buchreihe": {"titel": "Terra 5/6", "verlag": "Klett"},
+        "zeilen": [{"jahrgang": 7, "eingefuehrt_ab": "2027/2028"}],
+    })
+    assert antwort.status_code == 200, antwort.text
+
+
+def test_ein_buch_ohne_isbn_steht_unter_isbn_folgt_bis_sie_nachgetragen_ist(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    antwort = _hinzufuegen(seiten, abgeglichen["mtime"], "", titel="Neues Lesebuch")
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = _zeile_von(text, "OHNE-ISBN-1")
+    assert "<samp>ISBN folgt</samp>" in zeile
+    # Im Menü ist das Feld offen - und leer, bis die ISBN da ist.
+    menue = _vorlage(text, "OHNE-ISBN-1", "Deutsch")
+    feld = menue.split('data-buchreihe-feld="isbn"')[1].split(">")[0]
+    assert 'placeholder="ISBN folgt"' in feld and "disabled" not in feld
+    vorher = _vorher(text, "OHNE-ISBN-1", "Deutsch")
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": "OHNE-ISBN-1", "fach": "Deutsch",
+        "zeilen": [{**z, "bisher_ab": z["eingefuehrt_ab"]} for z in vorher["zeilen"].values()],
+        "buchreihe": {**vorher["buchreihe"], "isbn": "978-3-16-148410-0"},
+        "ruecklage": vorher["ruecklage"], "vorher": vorher,
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    assert "OHNE-ISBN-1" not in text
+    assert "<samp>978-3-16-148410-0</samp>" in _zeile_von(text, NEU)

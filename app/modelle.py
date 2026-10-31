@@ -33,7 +33,7 @@ scheitert.
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, StringConstraints
 
@@ -117,11 +117,13 @@ class _BuchplanungAnfrage(BaseModel):
 
     ``schuljahr`` steht hier, weil es je Schuljahr **eine eigene Datei** gibt -
     es sagt nicht, was eingetragen wird, sondern wohin. ``mtime`` ist wie
-    überall der beim Laden gesehene Stand: ohne ihn wird nicht geschrieben.
+    überall der beim Laden gesehene Stand: ohne ihn wird nicht geschrieben -
+    außer eine Anfrage bringt stattdessen ``vorher`` mit, den Stand des einen
+    Eintrags, den sie ändert (``app/buchplanung.py::Eintrag``).
     """
 
     schuljahr: NichtLeer
-    mtime: float
+    mtime: float | None = None
 
 
 class FachbestaetigungAnfrage(_BuchplanungAnfrage):
@@ -135,6 +137,8 @@ class FachbestaetigungAnfrage(_BuchplanungAnfrage):
     fach: NichtLeer
     kuerzel: str = ""
     datum: date | None = None
+    # Der Stand der Bestätigung, den das Kopfmenü gesehen hat.
+    vorher: dict[str, Any] | None = None
 
 
 class PlanungsAnfrage(_BuchplanungAnfrage):
@@ -205,6 +209,8 @@ class BuchreiheEingabe(BaseModel):
     neupreis: float | None = None
     leihgebuehr: float | None = None
     bemerkung: str | None = None
+    # Nur bei einem Buch unter „ISBN folgt“: die nachgetragene ISBN.
+    isbn: str | None = None
 
 
 class BuchplanungsAnfrage(_BuchplanungAnfrage):
@@ -218,6 +224,11 @@ class BuchplanungsAnfrage(_BuchplanungAnfrage):
     ``buchreihe`` ist der Stand des Blocks „Buchreihe“. Was davon als
     Korrektur gilt, entscheidet der Server gegen die IServ-Werte, die die
     Datei zu jedem Buch kennt.
+
+    ``vorher`` ist der Eintrag, wie das Menü ihn beim Öffnen gesehen hat; ist
+    er inzwischen ein anderer, antwortet der Server mit 409 und dem neuen.
+    Ohne ``verfall_ok`` wird nicht gespeichert, was die Bestätigung des Fachs
+    kosten würde - die Antwort nennt dann nur die Gründe (``warnung``).
     """
 
     isbn: NichtLeer
@@ -225,6 +236,8 @@ class BuchplanungsAnfrage(_BuchplanungAnfrage):
     zeilen: list[JahrgangEingabe] = []
     ruecklage: RuecklageEingabe | None = None
     buchreihe: BuchreiheEingabe | None = None
+    vorher: dict[str, Any] | None = None
+    verfall_ok: bool = False
 
 
 class BuchHinzufuegenAnfrage(_BuchplanungAnfrage):
@@ -233,12 +246,18 @@ class BuchHinzufuegenAnfrage(_BuchplanungAnfrage):
     Anders als im Bearbeiten-Menü ist die ISBN hier eine Eingabe: sie wählt ein
     Buch aus einem anderen Fach oder legt ein neues an. Die Prüfung, ob sie
     eine ISBN ist, steht im Kern (``fuege_buch_hinzu``) - hier nur, dass sie da ist.
+
+    Ohne ``mtime`` wird geschrieben, auch wenn sich die Datei inzwischen
+    geändert hat: das Menü ändert keinen bestehenden Eintrag. ``verfall_ok``
+    wie bei ``BuchplanungsAnfrage``. Eine leere ``isbn`` legt das Buch unter
+    einem Platzhalter an („ISBN folgt“).
     """
 
-    isbn: NichtLeer
+    isbn: str = ""
     fach: NichtLeer
     zeilen: list[JahrgangEingabe] = []
     buchreihe: BuchreiheEingabe
+    verfall_ok: bool = False
 
 
 class RuecklageAnfrage(_BuchplanungAnfrage):

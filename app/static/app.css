@@ -570,6 +570,52 @@ td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: hel
 /* In Jahrgang und Fach ist nur der geänderte Wert farbig, nicht die ganze Zelle. */
 .wert-einfuehrung { color: var(--einfuehrung); }
 .wert-ausmusterung { color: var(--ausmusterung); text-decoration: line-through; }
+/* Fach-Ansicht: die Farben aus der Planung (buecherlisten/planung/farben.py).
+   Mehrere Farben teilen eine Zelle in gleich hohe waagerechte Bänder, immer
+   rot über gelb über blau; ebenso den Strich vorn. */
+.iserv-tabelle > tbody > tr > td.band-ausmusterung { background: var(--ausmusterung-grund); }
+.iserv-tabelle > tbody > tr > td.band-aenderung { background: var(--aenderung-grund); }
+.iserv-tabelle > tbody > tr > td.band-einfuehrung { background: var(--einfuehrung-grund); }
+.iserv-tabelle > tbody > tr > td.band-ausmusterung-aenderung {
+  background: linear-gradient(var(--ausmusterung-grund) 0 50%, var(--aenderung-grund) 50% 100%);
+}
+.iserv-tabelle > tbody > tr > td.band-ausmusterung-einfuehrung {
+  background: linear-gradient(var(--ausmusterung-grund) 0 50%, var(--einfuehrung-grund) 50% 100%);
+}
+.iserv-tabelle > tbody > tr > td.band-aenderung-einfuehrung {
+  background: linear-gradient(var(--aenderung-grund) 0 50%, var(--einfuehrung-grund) 50% 100%);
+}
+.iserv-tabelle > tbody > tr > td.band-ausmusterung-aenderung-einfuehrung {
+  background: linear-gradient(var(--ausmusterung-grund) 0 33.333%, var(--aenderung-grund) 33.333% 66.667%,
+                              var(--einfuehrung-grund) 66.667% 100%);
+}
+.iserv-tabelle > tbody > tr > td[class^="band-"][title] { cursor: help; }
+tr[class*="strich-"] > td:first-child { position: relative; }
+tr[class*="strich-"] > td:first-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: var(--strich);
+}
+tr.strich-ausmusterung { --strich: var(--ausmusterung-strich); }
+tr.strich-aenderung { --strich: var(--aenderung-strich); }
+tr.strich-einfuehrung { --strich: var(--einfuehrung-strich); }
+tr.strich-ausmusterung-aenderung {
+  --strich: linear-gradient(var(--ausmusterung-strich) 0 50%, var(--aenderung-strich) 50% 100%);
+}
+tr.strich-ausmusterung-einfuehrung {
+  --strich: linear-gradient(var(--ausmusterung-strich) 0 50%, var(--einfuehrung-strich) 50% 100%);
+}
+tr.strich-aenderung-einfuehrung {
+  --strich: linear-gradient(var(--aenderung-strich) 0 50%, var(--einfuehrung-strich) 50% 100%);
+}
+tr.strich-ausmusterung-aenderung-einfuehrung {
+  --strich: linear-gradient(var(--ausmusterung-strich) 0 33.333%, var(--aenderung-strich) 33.333% 66.667%,
+                            var(--einfuehrung-strich) 66.667% 100%);
+}
 tr.zeile-aenderung > td:first-child { box-shadow: inset 4px 0 0 var(--aenderung-strich); }
 tr.zeile-einfuehrung > td:first-child { box-shadow: inset 4px 0 0 var(--einfuehrung-strich); }
 tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmusterung-strich); }
@@ -809,12 +855,6 @@ tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmust
    nicht auf einer eigenen Seite. Sie sollen dort sichtbar, aber ruhig sein:
    die Bücherliste bleibt das, was man liest. */
 
-.planung-formular {
-  display: inline-flex;
-  align-items: center;
-  gap: .4rem;
-  margin-right: .6rem;
-}
 .planung-feld {
   padding: .25rem .4rem;
   border: 1px solid var(--rand);
@@ -985,16 +1025,45 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 /* `tbody tr:hover` der Seite hebt Zeilen hervor, die sich anklicken lassen.
    Hier lässt sich nichts anklicken - nur die Felder darin. */
 .planung-tabelle tbody tr:hover { background: none; }
-/* Alle Anträge der Zeile genehmigt (oder keiner offen): hell in der Farbe des
-   Status-Labels dahinter - grün, blau, gelb, rot wie .label-success/-info/
-   -warning/-danger. */
-.planung-tabelle tr.genehmigt.status-im-einsatz > td { background: #dff0d8; }
-.planung-tabelle tr.genehmigt.status-geplant > td { background: var(--einfuehrung-grund); }
-.planung-tabelle tr.genehmigt.status-laeuft-aus > td { background: #fcf8e3; }
-.planung-tabelle tr.genehmigt.status-ausgemustert > td { background: var(--ausmusterung-grund); }
+/* Jede Jahrgangszeile ist ein eigenes <tbody>: die Eingaben und darunter ihre
+   Entscheidungen. Hinterlegt wird sie in zwei Hälften - oben nach dem Antrag
+   auf Einführung, unten nach dem auf Ausmusterung:
+     genehmigt - hell in der Farbe des Status-Labels dahinter (grün, blau,
+                 gelb, rot wie .label-success/-info/-warning/-danger),
+     offen     - weiß,
+     abgelehnt - dieselbe Farbe, grau-transparent überdeckt.
+   Der Hintergrund liegt am <tbody>, nicht an den Zellen: so laufen die Hälften
+   über beide Zeilen der Gruppe. */
+.planung-tabelle tbody[data-planung-zeile] {
+  --zeilenfarbe: transparent;
+  --oben: transparent;
+  --unten: transparent;
+  --oben-grau: transparent;
+  --unten-grau: transparent;
+  background:
+    linear-gradient(to bottom, var(--oben-grau) 0 50%, var(--unten-grau) 50% 100%),
+    linear-gradient(to bottom, var(--oben) 0 50%, var(--unten) 50% 100%);
+  border-top: 2px solid #fff;
+}
+.planung-tabelle tbody.status-im-einsatz { --zeilenfarbe: #dff0d8; }
+.planung-tabelle tbody.status-geplant { --zeilenfarbe: var(--einfuehrung-grund); }
+.planung-tabelle tbody.status-laeuft-aus { --zeilenfarbe: #fcf8e3; }
+.planung-tabelle tbody.status-ausgemustert { --zeilenfarbe: var(--ausmusterung-grund); }
+.planung-tabelle tbody.oben-genehmigt,
+.planung-tabelle tbody.oben-abgelehnt { --oben: var(--zeilenfarbe); }
+.planung-tabelle tbody.unten-genehmigt,
+.planung-tabelle tbody.unten-abgelehnt { --unten: var(--zeilenfarbe); }
+.planung-tabelle tbody.oben-abgelehnt { --oben-grau: rgb(120 120 120 / .4); }
+.planung-tabelle tbody.unten-abgelehnt { --unten-grau: rgb(120 120 120 / .4); }
 /* Hinterlegt braucht die Zeile außen etwas Luft, sonst klebt der Jahrgang am Rand. */
-.planung-tabelle tr.genehmigt > td:first-child { padding-left: .4rem; }
-.planung-tabelle tr.genehmigt > td:last-child { padding-right: .4rem; }
+.planung-tabelle tbody[data-planung-zeile] td:first-child { padding-left: .4rem; }
+.planung-tabelle tbody[data-planung-zeile] td:last-child { padding-right: .4rem; }
+
+/* Die Entscheidungen unter einer Zeile: über die ganze Breite, je Antrag eine
+   Zeile, umgebrochen an Leerzeichen und nie abgeschnitten. */
+.planung-entscheidung > td { padding-top: 0; font-size: 12px; white-space: normal; }
+.planung-entscheidung span { display: block; overflow-wrap: normal; }
+.planung-entscheidung .label { font-size: 10px; }
 /* Ein Eingabefeld steht als `inline-block` auf der Grundlinie und säße damit
    etwas tiefer als bloßer Text wie der Jahrgang daneben. */
 .planung-tabelle .planung-feld,
@@ -1095,19 +1164,47 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
    rutschten die Knöpfe sonst an den linken Rand. */
 #planungsmenue .modal-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: .8rem;
 }
 /* Den Abstand der Knöpfe regelt hier `gap`, nicht mehr der Rand des zweiten. */
 #planungsmenue .modal-footer .btn + .btn { margin-left: 0; }
+/* Die Meldung eines Menüs - ein Eingabefehler, die Warnung vor dem Verfall
+   der Bestätigung - steht über den Knöpfen, über die ganze Breite. */
 .planung-menue-meldung {
-  flex: 1;
+  flex: 0 0 100%;
   min-width: 0;
-  margin: 0;
+  margin: 0 0 10px;
   text-align: left;
   font-size: .875rem;
 }
+#planungsmenue .planung-menue-meldung { margin: 0; }
+
+/* Während gespeichert wird: ein grauer Schleier über dem ganzen Menü, in der
+   Mitte „Wird gespeichert…“ bzw. „Gespeichert“. Ohne Menü (der Abgleich)
+   deckt er die Seite ab. */
+.iserv-modal { position: relative; }
+.speicher-schleier {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgb(120 120 120 / .55);
+}
+.speicher-schleier > span {
+  padding: .6rem 1.2rem;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / .3);
+  font-size: 16px;
+  font-weight: 500;
+}
+.seiten-schleier { position: fixed; z-index: 1000; border-radius: 0; }
 
 /* Rücklage: Exemplare und Stand in einer Zeile, die Bemerkung darunter über
    die ganze Breite - sie ist meist ein Satz, kein Wort. */
@@ -1145,18 +1242,18 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);
 }
 
-/* Im Planungsmenü: die Entscheidung der Änderungsliste unter dem Schuljahr. */
-.planung-antrag {
-  display: block;
-  max-width: 16rem;
-  margin-top: .2rem;
-  overflow: hidden;
-  color: #777;
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+/* Das Menü „Unterschiede“: je Unterschied eine Zeile, links der neue Stand,
+   rechts die Eingabe, je mit dem Haken, der wählt, was bleibt. */
+.unterschiede-tabelle td { vertical-align: top; }
+.unterschiede-tabelle td + td { width: 40%; }
+.unterschiede-tabelle label { display: flex; gap: .4rem; align-items: flex-start; font-weight: 400; }
+.unterschiede-tabelle tbody tr + tr td { border-top: 1px solid #e5e5e5; }
+/* Die Warnung, dass die Bestätigung der Liste verfällt - gelb, nicht rot: es
+   ist eine Frage, kein Fehler. */
+.planung-menue-meldung.warnung:not(.fehlerhaft) {
+  background: var(--warnung-grund);
+  border-color: var(--warnung-rand);
 }
-.planung-antrag .label { font-size: 10px; }
 /* Das Raster (app/aenderungsliste.py): je Titel und je Jahrgangszeile eine
    Tabellenzeile, damit gleiche Jahrgänge links und rechts auf einer Höhe
    stehen. Ein Buch ist eine Zelle über seine Zeilen; darin ein farbiger

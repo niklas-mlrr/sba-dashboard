@@ -142,35 +142,54 @@ Die Paare kommen aus den Bücherlisten selbst (`collect_entries` in
 Band, der in Jahrgang 7 zu Mathematik und in Jahrgang 8 zu Informatik gehört,
 hat zwei Zeilen, nicht vier.
 
-## Die Bestätigung steht in der Zeile, die sie bestätigt
+## Eine Fachliste ist ganz oder gar nicht bestätigt
 
 Kürzel und Datum der Fachkonferenzleitung sind zwei Spalten auf
-`Fächer & Jahrgang`. Der Knopf „Liste bestätigen" setzt sie in **alle** Zeilen
-des Fachs — eine Sammelgeste wie „Preise bestätigen" beim Verlag.
+`Fächer & Jahrgang`. Gesetzt und gelöscht werden sie aber immer für **alle**
+Zeilen des Fachs (Entscheidung 2026-10-30): „Liste bestätigen" schreibt sie in
+jede Zeile, „Bestätigung zurückziehen" löscht sie überall. Eine Liste kennt
+genau drei Stände (`fach_status`):
 
-Damit braucht es keinen gespeicherten „bestätigten Stand" mehr, gegen den zu
-prüfen wäre, ob sich die Liste seither geändert hat: kommt ein Buch dazu,
-bringt es eine Zeile ohne Kürzel mit, und das Fach steht von allein wieder auf
-`teilweise`.
+| Stand | wann |
+|-------|------|
+| `Antrag ausstehend` | ein Antrag auf Einführung **zum** laufenden oder Ausmusterung **nach dem** vorigen Schuljahr ist noch offen (`blockierende_antraege`) — angezeigt als „1 Antrag ausstehend" / „N Anträge ausstehend" |
+| `bestätigt` | sonst, wenn jede Zeile des Fachs ein Kürzel trägt |
+| `offen` | sonst |
+
+Solange ein Antrag aussteht, lehnt `bestaetige_fach` ab. Ein abgelehnter Antrag
+ist entschieden und hält nichts auf; eine spätere Einführung (2027/2028) auch
+nicht.
 
 ### Wann eine Änderung die Bestätigung kostet
 
-Eingetragen wird die Bestätigung nur über „Liste bestätigen"; das Planungsmenü
-eines Buchs kennt weder Kürzel noch Datum. Ändert `setze_buchplanung` eine
-schon bestätigte Zeile, entscheidet das **laufende** Schuljahr, ob sie stehen
-bleibt — `wirkt_im_schuljahr` fragt dazu nur eines: steht das Buch dieses Jahr
-in diesem Fach und Jahrgang im Regal?
+Nach jeder Eintragung prüft `halte_bestaetigung` jedes vorher bestätigte Fach
+(`app/buchplanung.py::_aendere`, einmal für alle Eintragungen):
 
-| Änderung | Status vorher → nachher | Kürzel |
-|----------|------------------------|--------|
-| Ausmusterung nach 2029/2030 eingetragen | `im Einsatz` → `läuft aus` | bleibt |
-| Ausmusterung nach 2025/2026 eingetragen | `im Einsatz` → `ausgemustert` | fällt weg |
-| Einführung ab 2028/2029 eingetragen | `im Einsatz` → `geplant` | fällt weg |
-| geplante Einführung vorgezogen | `geplant` → `im Einsatz` | fällt weg |
+* **Sie verfällt** — in allen Zeilen des Fachs —, wenn `verfallsgruende` etwas
+  nennt: eine Einführung zum laufenden oder eine Ausmusterung nach dem vorigen
+  Schuljahr kommt dazu, fällt weg oder verschiebt sich (auch nur in „leihbar"),
+  oder die Liste dieses Schuljahrs führt sonst ein Buch mehr oder weniger.
+  Ebenso, wenn danach ein Antrag aussteht (etwa nach „Zurücksetzen" auf der
+  Änderungsliste).
+* **Sie bleibt** bei allem anderen — eine Bemerkung, eine Ausmusterung nach
+  2029/2030, eine Einführung ab 2028/2029 für einen neuen Jahrgang. Eine Zeile,
+  die es vorher nicht gab, übernimmt dann Kürzel und Datum des Fachs.
+
+| Änderung | Bestätigung |
+|----------|-------------|
+| Ausmusterung nach 2029/2030 eingetragen | bleibt |
+| Ausmusterung nach 2025/2026 eingetragen | verfällt, Antrag steht aus |
+| laufendes Buch erst ab 2028/2029 | verfällt |
+| neuer Jahrgang ab 2027/2028 | bleibt, die Zeile übernimmt sie |
+| Bemerkung geändert | bleibt |
 
 Der Gedanke dahinter: die Fachkonferenzleitung hat eine Liste bestätigt. Was
 erst in drei Jahren greift, ändert diese Liste nicht. Was das laufende Jahr
 betrifft, schon — und diese Liste hat sie nie gesehen.
+
+Ein Abgleich, der ein Buch aus IServ mitbringt, geht nicht durch
+`halte_bestaetigung`: die neue Zeile hat kein Kürzel, und die Liste ist damit
+`offen`, bis sie neu bestätigt wird.
 
 ### Eingeführt oder geplant
 
@@ -247,11 +266,12 @@ Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
 * **Entschieden wird mit Kürzel.** Kürzel und Datum stehen einmal oben auf der
   Seite und gelten für jeden Klick; ohne Datum gilt heute. „Zurücksetzen“
   macht den Antrag wieder offen.
-* **Die Entscheidung gilt dem Schuljahr, über das entschieden wurde.** Ändert
-  es sich - im Planungsmenü oder in Excel -, fällt sie beim nächsten Speichern
-  weg (`_setze_zeile`), die Begründung bleibt. Jede andere Eintragung
-  (Bemerkung, „Liste bestätigen“, Abgleich) lässt sie stehen. „2027/28“ und
-  „2027/2028“ sind dasselbe Schuljahr.
+* **Die Entscheidung gilt dem, worüber entschieden wurde.** Ändert sich das
+  Schuljahr oder „leihbar“ der Zeile (seit 2026-10-30) - im Planungsmenü oder
+  in Excel -, fällt sie beim nächsten Speichern weg (`_neue_zeile`), die
+  Begründung bleibt. Ein anderer Jahrgang ist ohnehin eine andere Zeile. Jede
+  andere Eintragung (Bemerkung, „Liste bestätigen“, Abgleich) lässt sie
+  stehen. „2027/28“ und „2027/2028“ sind dasselbe Schuljahr.
 * **„Abgelehnt“ ändert nichts von selbst.** Das Buch bleibt geplant, bis
   jemand die Planung im Menü ändert; die Entscheidung ist ein Vermerk, keine
   Löschung. Die Bücherlisten und PDFs bleiben, wie sie sind.
@@ -259,8 +279,34 @@ Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
   Datei stehen und gilt als offen. Eine Datei ohne die Spalten liest sich als
   „alles offen“ und bekommt sie beim nächsten Speichern.
 
-Das Planungsmenü zeigt die Entscheidung klein unter dem Schuljahr und die
-Begründung unter der Bemerkung, nur zum Lesen.
+Das Planungsmenü zeigt die Entscheidungen unter der Zeile, über die ganze
+Breite und nur zum Lesen: „Einführung [genehmigt] durch MÜ am 12.10.2026.
+Begründung: …“. Die Zeile ist in zwei Hälften hinterlegt - oben nach dem
+Antrag auf Einführung, unten nach dem auf Ausmusterung: genehmigt in der Farbe
+ihres Status, offen weiß, abgelehnt grau überdeckt.
+
+## Farben der Fach-Ansicht
+
+Seit 2026-10-30 färbt die Bücherliste eines Fachs nach der Planung, nicht nach
+dem Vergleich mit IServ (`farben.py`; Verlag und Jahrgang vergleichen weiter
+mit IServ):
+
+| Farbe | wann | ganze Zeile | sonst | Jahrgangszahl |
+|-------|------|-------------|-------|---------------|
+| rot | Ausmusterung nach dem Vorjahr oder später | das Buch steht danach in keinem Fach und Jahrgang mehr | Zelle „Jahrgang“ | rot und durchgestrichen bei „nach dem Vorjahr“ |
+| gelb | Wechsel von „leihbar“ (eine Zeile endet, im selben Jahrgang beginnt eine mit dem anderen Häkchen) | — | Zelle „Leihbar“ | — |
+| gelb | Titel, Verlag, Preise weichen von IServ ab | — | die Zelle | — |
+| blau | Einführung zum laufenden Schuljahr oder später | das Buch wird zum ersten Mal überhaupt eingeführt | Zelle „Jahrgang“ | blau bei „zum laufenden Schuljahr“ |
+
+Ein Wechsel zählt nur gelb, nicht zugleich rot und blau. Mehrere Farben teilen
+den Strich vorn und jede Zelle in gleich hohe Bänder, rot über gelb über blau.
+
+„Ausmusterungen zu diesem Schuljahr“ (`in_ausmusterungen`) führt ein Buch, wenn
+jeder Jahrgang, in dem es im Fach leihbar war, spätestens nach dem Vorjahr
+ausgemustert ist (der letzte genau dann) und es im Fach nicht wieder eingeführt
+wird. Läuft es als Kaufbuch weiter, steht es in beiden Listen, mit derselben
+Jahrgang-Spalte. Dort ist es ganz rot, wenn es danach nirgends mehr steht, sonst
+sind Jahrgang und Leihbar rot.
 
 ## Status werden gerechnet, nie eingetragen
 
@@ -270,12 +316,8 @@ denen er stammt — und niemand wüsste, welcher von beiden recht hat.
 
 | Status | wann |
 |--------|------|
-| `bestätigt` (Fach) | jede Zeile des Fachs trägt ein Kürzel |
-| `teilweise` (Fach) | einzelne Zeilen sind noch ohne Kürzel — mit Angabe, welche |
+| `offen` / `Antrag ausstehend` / `bestätigt` (Fach) | siehe „Eine Fachliste ist ganz oder gar nicht bestätigt" |
 | `geplant` / `im Einsatz` / `läuft aus` / `ausgemustert` | aus den beiden Schuljahren der Zeile gegen das Schuljahr der Datei |
-
-Ein **neu eingeführtes Buch** bringt eine Zeile ohne Kürzel mit; das Fach fällt
-damit von selbst auf `teilweise` zurück.
 
 ## Preise werden nicht bestätigt
 
@@ -384,6 +426,14 @@ Planungszeile verschwindet.
   bleiben seine Werte und die Planung die der Datei, und Abweichungen zu IServ
   werden markiert. Den Hinweis „nicht in IServ“ auf den Seiten prüft das
   Dashboard live.
+* **Keine ISBN** (seit 2026-10-30): Das Buch kommt erst kurz vor den Ferien,
+  und noch kennt niemand seine ISBN. Es bekommt einen Platzhalter
+  (`OHNE-ISBN-1`, `-2`, …), der nie eine echte ISBN sein kann, und steht
+  überall als „ISBN folgt“. In seinem Menü ist das ISBN-Feld dann offen:
+  dort eingetragen, prüft `ersetze_isbn` sie wie eine neue ISBN, lehnt eine
+  ab, die schon zu einem Buch der Datei gehört, und zieht Jahrgänge,
+  Anträge, Bestätigung, Rücklagen und Bemerkung auf die echte ISBN um. Eine
+  echte ISBN lässt sich so nicht ändern.
 
 Werden im Menü alle Jahrgänge eines Buchs entfernt, fällt es aus der Datei -
 das gilt für jedes Buch ohne Jahrgang. Ein Buch aus IServ trifft das nur, wenn

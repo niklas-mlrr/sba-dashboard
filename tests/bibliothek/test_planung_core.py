@@ -21,9 +21,9 @@ from buecherlisten.planung import (
     ANTRAG_OFFEN,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
+    FACH_AUSSTEHEND,
     FACH_BESTAETIGT,
     FACH_OFFEN,
-    FACH_TEILWEISE,
     PLANUNG_AUSGEMUSTERT,
     PLANUNG_GEPLANT,
     PLANUNG_LAEUFT_AUS,
@@ -33,6 +33,7 @@ from buecherlisten.planung import (
     Buch,
     Buchplanung,
     Buchreiheneingabe,
+    Fachstatus,
     Jahrgangseingabe,
     Ruecklageneingabe,
     Schnappschuss,
@@ -43,8 +44,10 @@ from buecherlisten.planung import (
     alles_genehmigt,
     bestaetige_fach,
     entscheide_antrag,
+    ersetze_isbn,
     fach_status,
     fuege_buch_hinzu,
+    halte_bestaetigung,
     lade_schnappschuss,
     lies_datei,
     lies_rang,
@@ -60,6 +63,7 @@ from buecherlisten.planung import (
     setze_ruecklage,
     verbinde_fortlaufende,
     verbleib_der_buecher,
+    verfallsgruende,
     wirkt_im_schuljahr,
     zu_entscheidende_antraege,
     zusammenfuehren,
@@ -326,35 +330,63 @@ def test_fehlendes_vorjahr_ist_kein_fehler_sondern_eine_warnung(stand):
 def test_ein_neues_buch_wirft_das_fach_aus_seiner_bestaetigung(stand):
     stand, anzahl = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     assert anzahl == 1
-    assert fach_status(stand, "Deutsch")[0] == FACH_BESTAETIGT
+    assert fach_status(stand, "Deutsch").status == FACH_BESTAETIGT
 
     zusaetzlich = _buecher() + (
         Buch(isbn="9783060000012", titel="Deutschbuch 6", verlag="Cornelsen",
              kombinationen=(("Deutsch", 6),), leihbar_paare=(("Deutsch", 6),), neupreis=23.0),
     )
     neu = zusammenfuehren(stand, _schnappschuss(zusaetzlich))
-    status, hinweis = fach_status(neu, "Deutsch")
-    assert status == FACH_TEILWEISE
-    assert "Deutschbuch 6 (Jg. 6)" in hinweis
+    # Ganz oder gar nicht: eine Liste mit einer unbestätigten Zeile ist offen.
+    assert fach_status(neu, "Deutsch") == Fachstatus(FACH_OFFEN)
+
+
+def test_ein_offener_antrag_zum_schuljahr_haelt_die_bestaetigung_auf(stand):
+    stand = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5),
+        Jahrgangseingabe(jahrgang=6, eingefuehrt_ab="2026/2027", neu=True),
+        Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2026/2027", neu=True),
+        # Eine spätere Einführung ändert die Liste dieses Jahres nicht.
+        Jahrgangseingabe(jahrgang=8, eingefuehrt_ab="2027/2028", neu=True),
+    ])
+    status = fach_status(stand, "Deutsch")
+    assert status == Fachstatus(FACH_AUSSTEHEND, 2)
+    assert status.text == "2 Anträge ausstehend"
+    with pytest.raises(UngueltigeEingabe, match="2 Anträge ausstehend"):
+        bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
+    # Abgelehnt ist entschieden: es hält nichts mehr auf.
+    for jahrgang, ergebnis in ((6, ANTRAG_GENEHMIGT), (7, ANTRAG_ABGELEHNT)):
+        stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=jahrgang,
+                                  art=ART_EINFUEHRUNG, ergebnis=ergebnis, kuerzel="SL")
+    assert fach_status(stand, "Deutsch").text == "offen"
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
+    assert fach_status(stand, "Deutsch").status == FACH_BESTAETIGT
+
+
+def test_ein_offener_antrag_nach_dem_vorjahr_zaehlt_auch(stand):
+    stand = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026"),
+    ])
+    assert fach_status(stand, "Deutsch").text == "1 Antrag ausstehend"
 
 
 def test_bestaetigung_gilt_nur_dem_eigenen_fach(stand):
     """Terra steht in Erdkunde und Politik - Erdkunde bestätigt nicht für Politik."""
     stand, anzahl = bestaetige_fach(stand, fach="Erdkunde", kuerzel="ABC", datum=date(2026, 9, 3))
     assert anzahl == 2
-    assert fach_status(stand, "Erdkunde")[0] == FACH_BESTAETIGT
-    assert fach_status(stand, "Politik")[0] == FACH_OFFEN
+    assert fach_status(stand, "Erdkunde").status == FACH_BESTAETIGT
+    assert fach_status(stand, "Politik").status == FACH_OFFEN
 
 
 def test_leeres_kuerzel_nimmt_die_bestaetigung_zurueck(stand):
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     zurueck, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="", datum=None)
-    assert fach_status(zurueck, "Deutsch")[0] == FACH_OFFEN
+    assert fach_status(zurueck, "Deutsch").status == FACH_OFFEN
     assert not zurueck.planungszeile(DEUTSCH, "Deutsch", 5).bestaetigt
 
 
 def test_fach_ohne_bestaetigung_ist_offen(stand):
-    assert fach_status(stand, "Erdkunde")[0] == FACH_OFFEN
+    assert fach_status(stand, "Erdkunde").status == FACH_OFFEN
 
 
 @pytest.mark.parametrize(("zeile", "erwartet"), [
@@ -597,26 +629,58 @@ def test_eine_alte_datei_bekommt_leihbar_je_zeile_aus_buchreihen(tmp_path, stand
 def test_bestaetigung_bleibt_bei_einer_aenderung_fuer_ein_kuenftiges_jahr(stand):
     """Was erst 2029 greift, ändert die Liste nicht, die 2026 bestätigt wurde."""
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
-    neu = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+    neu = halte_bestaetigung(stand, setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
         Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2029/2030"),
-    ])
-    zeile = neu.planungszeile(DEUTSCH, "Deutsch", 5)
-    assert (zeile.kuerzel, zeile.datum) == ("ABC", date(2026, 9, 3))
-    assert fach_status(neu, "Deutsch")[0] == FACH_BESTAETIGT
+        # Eine neue Zeile für später übernimmt die Bestätigung des Fachs.
+        Jahrgangseingabe(jahrgang=6, eingefuehrt_ab="2027/2028", neu=True),
+    ]))
+    for jahrgang in (5, 6):
+        zeile = neu.planungszeile(DEUTSCH, "Deutsch", jahrgang)
+        assert (zeile.kuerzel, zeile.datum) == ("ABC", date(2026, 9, 3))
+    assert verfallsgruende(stand, neu, "Deutsch") == ()
+    assert fach_status(neu, "Deutsch").status == FACH_BESTAETIGT
 
 
-@pytest.mark.parametrize("eingabe", [
-    # Ab sofort weg …
-    Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026"),
+@pytest.mark.parametrize(("eingabe", "status", "grund"), [
+    # Ab sofort weg: zugleich ein offener Antrag, der das Bestätigen aufhält …
+    (Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026"), FACH_AUSSTEHEND,
+     "Jg. 5: Ausmusterung nach 2025/2026 (leihbar)"),
     # … und ab sofort erst geplant: beides ändert die Liste dieses Schuljahrs.
-    Jahrgangseingabe(jahrgang=5, eingefuehrt_ab="2028/2029"),
+    (Jahrgangseingabe(jahrgang=5, eingefuehrt_ab="2028/2029"), FACH_OFFEN,
+     "Jg. 5: steht nicht mehr in der Liste dieses Schuljahrs (leihbar)"),
 ])
-def test_bestaetigung_faellt_weg_wenn_sich_das_laufende_schuljahr_aendert(stand, eingabe):
+def test_bestaetigung_faellt_weg_wenn_sich_das_laufende_schuljahr_aendert(
+        stand, eingabe, status, grund):
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
-    neu = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[eingabe])
-    zeile = neu.planungszeile(DEUTSCH, "Deutsch", 5)
-    assert (zeile.kuerzel, zeile.datum) == ("", None)
-    assert fach_status(neu, "Deutsch")[0] == FACH_OFFEN
+    geaendert = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[eingabe])
+    assert verfallsgruende(stand, geaendert, "Deutsch") == (grund,)
+    neu = halte_bestaetigung(stand, geaendert)
+    assert not any(z.bestaetigt for z in neu.planung_des_fachs("Deutsch"))
+    assert fach_status(neu, "Deutsch").status == status
+
+
+def test_eine_bemerkung_laesst_die_bestaetigung_stehen(stand):
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
+    neu = halte_bestaetigung(stand, setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, bemerkung="neue Auflage prüfen"),
+    ]))
+    assert fach_status(neu, "Deutsch").status == FACH_BESTAETIGT
+
+
+def test_ein_verschobener_eintrag_laesst_die_bestaetigung_verfallen(stand):
+    """Eine Ausmusterung nach dem Vorjahr, die auf später verschoben wird, ändert die Liste."""
+    stand = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026"),
+    ])
+    stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
+                              art=ART_AUSMUSTERUNG, ergebnis=ANTRAG_GENEHMIGT, kuerzel="SL")
+    stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
+    geaendert = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2026/2027"),
+    ])
+    assert verfallsgruende(stand, geaendert, "Deutsch") == (
+        "Jg. 5: Ausmusterung nach 2025/2026 (leihbar) (entfernt)",)
+    assert fach_status(halte_bestaetigung(stand, geaendert), "Deutsch").status == FACH_OFFEN
 
 
 def test_das_menue_weist_ein_fremdes_fach_ab(stand):
@@ -885,11 +949,19 @@ def test_ein_buch_aus_einem_anderen_fach_kommt_ueber_seine_jahrgaenge_dazu(stand
     # Dasselbe Buch, keine Kopie, mit denselben Werten.
     assert len(neu.buecher) == len(stand.buecher)
     assert neu.buch(TERRA) == terra
-    # Die neue Zeile ist unbestätigt, das Fach damit nicht mehr ganz bestätigt.
+    # Für später eingeführt: die Liste dieses Schuljahrs bleibt, wie sie
+    # bestätigt wurde, und die neue Zeile übernimmt die Bestätigung …
     bestaetigt, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
-    nachher = fuege_buch_hinzu(bestaetigt, isbn=TERRA, fach="Deutsch",
-                               buchreihe=_reihe(terra), zeilen=_einfuehrung(7))
-    assert fach_status(nachher, "Deutsch")[0] == FACH_TEILWEISE
+    nachher = halte_bestaetigung(bestaetigt, fuege_buch_hinzu(
+        bestaetigt, isbn=TERRA, fach="Deutsch", buchreihe=_reihe(terra), zeilen=_einfuehrung(7)))
+    assert fach_status(nachher, "Deutsch").status == FACH_BESTAETIGT
+    assert nachher.planungszeile(TERRA, "Deutsch", 7).kuerzel == "ABC"
+    # … zum laufenden Schuljahr eingeführt verfällt sie, und der Antrag steht aus.
+    nachher = halte_bestaetigung(bestaetigt, fuege_buch_hinzu(
+        bestaetigt, isbn=TERRA, fach="Deutsch", buchreihe=_reihe(terra),
+        zeilen=_einfuehrung(7, ab="2026/2027")))
+    assert fach_status(nachher, "Deutsch").text == "1 Antrag ausstehend"
+    assert not nachher.planungszeile(DEUTSCH, "Deutsch", 5).bestaetigt
 
 
 def test_eine_abweichende_buchreihe_gilt(stand):
@@ -924,7 +996,7 @@ def test_eine_neue_isbn_legt_das_buch_an(stand):
     (NEU, _einfuehrung(20), "kein Jahrgang"),
     (NEU, _einfuehrung(7, ab="2027"), "keine Schuljahresangabe"),
     ("9783161484101", _einfuehrung(7), "keine gültige ISBN"),
-    ("", _einfuehrung(7), "Bitte die ISBN"),
+    # Eine leere ISBN ist kein Fehler mehr: das Buch steht dann unter „ISBN folgt“.
     (DEUTSCH, _einfuehrung(7), "gehört schon zum Fach Deutsch"),
 ])
 def test_ungueltiges_hinzufuegen_wird_abgelehnt(stand, isbn, zeilen, teil):
@@ -1336,11 +1408,28 @@ def test_bemerkung_und_listenbestaetigung_lassen_die_entscheidung_stehen(stand):
         Jahrgangseingabe(9, eingefuehrt_ab="2027/2028", ausgemustert_nach="2027/2028",
                          bemerkung="neu"),
     ])
+    # Bestätigen geht erst, wenn die Einführung zum laufenden Schuljahr entschieden ist.
+    stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", kuerzel="MÜ")
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="FK", datum=date(2026, 10, 1))
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
     assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
     assert zeile.antrag_ausmusterung.status == ANTRAG_GENEHMIGT
     assert (zeile.kuerzel, zeile.bemerkung, zeile.begruendung) == ("FK", "neu", "Grund")
+
+
+def test_ein_geaendertes_leihbar_setzt_die_entscheidungen_zurueck(stand):
+    """Über ein Leihbuch wurde entschieden, nicht über ein Kaufbuch (2026-10-30)."""
+    stand = setze_buchplanung(_genehmigt(stand), isbn=DEUTSCH, fach="Deutsch", zeilen=[
+        Jahrgangseingabe(5),
+        Jahrgangseingabe(7, eingefuehrt_ab="2026/2027"),
+        Jahrgangseingabe(8, eingefuehrt_ab="2025/2026"),
+        Jahrgangseingabe(9, eingefuehrt_ab="2027/2028", ausgemustert_nach="2027/2028",
+                         leihbar=True),
+    ])
+    zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
+    assert zeile.antrag_einfuehrung.leer and zeile.antrag_ausmusterung.leer
+    assert zeile.begruendung == "Grund"
 
 
 def test_ein_im_menue_entfernter_jahrgang_nimmt_seine_begruendung_mit(stand):
@@ -1422,3 +1511,54 @@ def test_alles_genehmigt_zaehlt_nur_antraege_der_aenderungsliste():
                           ausgemustert_nach="2029/2030", antrag_einfuehrung=genehmigt)
     assert not alles_genehmigt(beide, "2026/2027")
     assert alles_genehmigt(replace(beide, antrag_ausmusterung=genehmigt), "2026/2027")
+
+
+# ── Ein Buch ohne ISBN (2026-10-30) ──────────────────────────────────────────
+
+
+def test_ein_buch_ohne_isbn_bekommt_einen_platzhalter(tmp_path, stand):
+    eins = fuege_buch_hinzu(stand, isbn="", fach="Deutsch",
+                            buchreihe=Buchreiheneingabe(titel="Neu A", verlag="Klett"),
+                            zeilen=[Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2027/2028")])
+    zwei = fuege_buch_hinzu(eins, isbn="  ", fach="Latein",
+                            buchreihe=Buchreiheneingabe(titel="Neu B", verlag="Klett"),
+                            zeilen=[Jahrgangseingabe(jahrgang=8, eingefuehrt_ab="2027/2028")])
+    assert [b.isbn for b in zwei.buecher if b.isbn.startswith("OHNE-ISBN-")] == [
+        "OHNE-ISBN-1", "OHNE-ISBN-2"]
+    # Über seinen Platzhalter kommt dasselbe Buch in ein weiteres Fach - kein drittes.
+    drei = fuege_buch_hinzu(zwei, isbn="OHNE-ISBN-1", fach="Chemie",
+                            buchreihe=Buchreiheneingabe(titel="Neu A", verlag="Klett"),
+                            zeilen=[Jahrgangseingabe(jahrgang=9, eingefuehrt_ab="2027/2028")])
+    assert len(drei.buecher) == len(zwei.buecher)
+    # Die Datei hält es, und ein Abgleich verwirft es nicht.
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, drei)
+    gelesen = lies_datei(pfad)
+    assert gelesen.planungszeile("OHNE-ISBN-1", "Chemie", 9).eingefuehrt_ab == "2027/2028"
+    assert zusammenfuehren(gelesen, _schnappschuss()).buch("OHNE-ISBN-2").titel == "Neu B"
+
+
+def test_die_isbn_wird_nachgetragen_und_alles_zieht_mit(stand):
+    stand = fuege_buch_hinzu(stand, isbn="", fach="Deutsch",
+                             buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett",
+                                                         bemerkung="kommt im Juli"),
+                             zeilen=[Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2027/2028")])
+    stand = entscheide_antrag(stand, isbn="OHNE-ISBN-1", fach="Deutsch", jahrgang=7,
+                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", kuerzel="SL")
+    neu = ersetze_isbn(stand, alt="OHNE-ISBN-1", neu="978-3-16-148410-0")
+    assert neu.buch("OHNE-ISBN-1") is None
+    zeile = neu.planungszeile("9783161484100", "Deutsch", 7)
+    assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
+    assert neu.bemerkung("9783161484100").bemerkung == "kommt im Juli"
+
+
+def test_eine_isbn_laesst_sich_nur_fuer_einen_platzhalter_und_nur_neu_nachtragen(stand):
+    stand = fuege_buch_hinzu(stand, isbn="", fach="Deutsch",
+                             buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett"),
+                             zeilen=[Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2027/2028")])
+    with pytest.raises(UngueltigeEingabe, match="gehört schon zu „Deutschbuch 5“"):
+        ersetze_isbn(stand, alt="OHNE-ISBN-1", neu=DEUTSCH)
+    with pytest.raises(UngueltigeEingabe, match="keine gültige ISBN"):
+        ersetze_isbn(stand, alt="OHNE-ISBN-1", neu="12345")
+    with pytest.raises(UngueltigeEingabe, match="lässt sich nicht ändern"):
+        ersetze_isbn(stand, alt=DEUTSCH, neu="9783161484100")

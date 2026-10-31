@@ -13,6 +13,7 @@ Die Fehlerabbildung steht wie überall in ``app/fehler.py``.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -110,12 +111,13 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
 
     faecher = []
     for fach in stand.faecher:
-        status, hinweis = fach_status(stand, fach)
+        status = fach_status(stand, fach)
         kuerzel, datum = fach_bestaetigung(stand, fach)
         faecher.append({
             "fach": fach,
-            "status": status,
-            "hinweis": hinweis,
+            "status": status.status,
+            "text": status.text,
+            "ausstehend": status.ausstehend,
             "kuerzel": kuerzel,
             "datum": datum.isoformat() if datum else None,
         })
@@ -189,15 +191,40 @@ async def api_abgleich(request: Request, anfrage: AbgleichAnfrage) -> JSONRespon
     return _antwort(stand)
 
 
+def _menueantwort(schreiben: Callable[[], domaene.Stand],
+                  zusatz: Callable[[], dict[str, Any]] | None = None) -> JSONResponse:
+    """Schreibt für ein Menü der Fach-Seite - und sagt, wenn erst nachzufragen ist.
+
+    * ``warnung`` (200, nichts geschrieben): die Eintragung kostet die
+      Bestätigung der Liste. Das Menü zeigt die Gründe und fragt nach.
+    * ``konflikt`` (409, nichts geschrieben): der Eintrag steht nicht mehr so
+      in der Datei, wie das Menü ihn gesehen hat. Mit dem neuen Stand legt der
+      Browser beide nebeneinander.
+    """
+    try:
+        stand = schreiben()
+    except domaene.BestaetigungVerfaellt as exc:
+        return JSONResponse({"ok": False, "warnung": list(exc.gruende)})
+    except domaene.EintragGeaendert as exc:
+        return JSONResponse({"fehler": str(exc), "konflikt": exc.aktuell}, status_code=409)
+    return _antwort(stand, **(zusatz() if zusatz else {}))
+
+
 @router.post("/api/buchplanung/fach")
 def api_fach(request: Request, anfrage: FachbestaetigungAnfrage) -> JSONResponse:
     """Die Freigabe einer Fach-Bücherliste durch die Fachkonferenzleitung."""
-    stand, anzahl = domaene.schreibe_fachbestaetigung(
-        aktuelle_einstellungen(request),
-        schuljahr=anfrage.schuljahr, fach=anfrage.fach, kuerzel=anfrage.kuerzel,
-        datum=anfrage.datum, mtime=anfrage.mtime,
-    )
-    return _antwort(stand, bestaetigt=anzahl)
+    gezaehlt: list[int] = []
+
+    def schreiben() -> domaene.Stand:
+        stand, anzahl = domaene.schreibe_fachbestaetigung(
+            aktuelle_einstellungen(request),
+            schuljahr=anfrage.schuljahr, fach=anfrage.fach, kuerzel=anfrage.kuerzel,
+            datum=anfrage.datum, mtime=anfrage.mtime, vorher=anfrage.vorher,
+        )
+        gezaehlt.append(anzahl)
+        return stand
+
+    return _menueantwort(schreiben, lambda: {"bestaetigt": gezaehlt[0]})
 
 
 @router.post("/api/buchplanung/buch")
@@ -208,7 +235,7 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
     Schreibvorgang. Die beiden Einzelrouten darunter bleiben als kleinste
     mögliche Eintragung bestehen.
     """
-    stand = domaene.schreibe_buchplanung(
+    return _menueantwort(lambda: domaene.schreibe_buchplanung(
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
         zeilen=_jahrgaenge(anfrage.zeilen),
@@ -218,17 +245,16 @@ def api_buch(request: Request, anfrage: BuchplanungsAnfrage) -> JSONResponse:
         buchreihe=None if anfrage.buchreihe is None else Buchreiheneingabe(
             titel=anfrage.buchreihe.titel, verlag=anfrage.buchreihe.verlag,
             neupreis=anfrage.buchreihe.neupreis, leihgebuehr=anfrage.buchreihe.leihgebuehr,
-            bemerkung=anfrage.buchreihe.bemerkung,
+            bemerkung=anfrage.buchreihe.bemerkung, isbn=anfrage.buchreihe.isbn,
         ),
-        mtime=anfrage.mtime,
-    )
-    return _antwort(stand)
+        mtime=anfrage.mtime, vorher=anfrage.vorher, verfall_ok=anfrage.verfall_ok,
+    ))
 
 
 @router.post("/api/buchplanung/buch/neu")
 def api_buch_neu(request: Request, anfrage: BuchHinzufuegenAnfrage) -> JSONResponse:
     """„+ Buch hinzufügen“ unter der Fach-Liste: Buchreihe und Jahrgänge in einem Zug."""
-    stand = domaene.schreibe_neues_buch(
+    return _menueantwort(lambda: domaene.schreibe_neues_buch(
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
         buchreihe=Buchreiheneingabe(
@@ -237,9 +263,8 @@ def api_buch_neu(request: Request, anfrage: BuchHinzufuegenAnfrage) -> JSONRespo
             bemerkung=anfrage.buchreihe.bemerkung,
         ),
         zeilen=_jahrgaenge(anfrage.zeilen),
-        mtime=anfrage.mtime,
-    )
-    return _antwort(stand)
+        mtime=anfrage.mtime, verfall_ok=anfrage.verfall_ok, ohne_mtime=anfrage.mtime is None,
+    ))
 
 
 @router.post("/api/buchplanung/planung")

@@ -265,8 +265,8 @@ nichts zu sichern.
 | G5-2 | „Aus IServ aktualisieren" | Dauer? Danach liegt die Datei im Ordner der Bestandsmappe |
 | G5-3 | Die Datei in Excel öffnen | Vier Blätter („Buchreihen", „Fächer & Jahrgang", „Rücklage", „Info"); die eintragbaren Spalten hell hinterlegt; im Blatt „Info" Schuljahr, Vorjahr, Stand |
 | G5-4 | Blatt „Buchreihen" durchsehen | Jeder Titel genau einmal; enthält auch **leihbare** Bücher, die es nur im Vorjahr gab — das sind die ausgemusterten. Kaufbücher des Vorjahres fehlen |
-| G5-7 | Fach-Ansicht: Kürzel + Datum, „Liste bestätigen" | Status „bestätigt"; auf „Fächer & Jahrgang" tragen alle Zeilen dieses Fachs Kürzel und Datum |
-| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Status „teilweise", darunter „Noch ohne Kürzel: …" |
+| G5-7 | Fach-Ansicht: „Liste bestätigen", im Menü Kürzel + Datum, „Bestätigen" | Label „bestätigt" hinter dem Namen; auf „Fächer & Jahrgang" tragen alle Zeilen dieses Fachs Kürzel und Datum |
+| G5-8 | Ein Buch in IServ zur Fachliste hinzufügen, aktualisieren | Label „offen", Knopf wieder „Liste bestätigen" |
 | G5-9 | „Planung…" bei einem Leihbuch: Ausmusterung eintragen | Status der Zeile wechselt; in Excel steht das Schuljahr in „Ausmusterung nach Schuljahr" |
 | G5-9b | „Planung…" bei einem **Kaufbuch** | Das Feld „Ausmusterung nach Schuljahr" ist gesperrt |
 | G5-10 | „Planung…": weiterer Jahrgang mit „Einführung" | Neue Zeile auf „Fächer & Jahrgang" mit diesem Fach, Status „geplant" |

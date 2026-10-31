@@ -28,9 +28,11 @@ from dataclasses import dataclass
 from datetime import date
 from math import isfinite
 from pathlib import Path
+from typing import Any
 
 from buecherlisten.core.daten import UnbekanntesSchuljahr
 from buecherlisten.planung import (
+    FACH_BESTAETIGT,
     Buchplanung,
     Buchreiheneingabe,
     Jahrgangseingabe,
@@ -40,7 +42,10 @@ from buecherlisten.planung import (
     UngueltigeEingabe,
     bestaetige_fach,
     entscheide_antrag,
+    ersetze_isbn,
+    fach_status,
     fuege_buch_hinzu,
+    halte_bestaetigung,
     lade_schnappschuss,
     lies_datei,
     lies_mappe,
@@ -51,6 +56,7 @@ from buecherlisten.planung import (
     setze_planung,
     setze_ruecklage,
     verbinde_fortlaufende,
+    verfallsgruende,
     zusammenfuehren,
 )
 from buecherlisten.planung.laden import AusleiheClient
@@ -64,6 +70,7 @@ from .excel import (
     lade_mappe,
     speichere_mappe,
 )
+from .planungsansicht import eintrag_stand, fach_stand
 from .settings import Einstellungen
 
 
@@ -146,17 +153,62 @@ def gleiche_ab(
     return Stand(planung=stand, pfad=pfad, zustand=Dateizustand.von(pfad))
 
 
+@dataclass(frozen=True)
+class Eintrag:
+    """Der Eintrag, den ein Menü ändert - so, wie es ihn beim Öffnen gesehen hat.
+
+    ``vorher`` ist der Schnappschuss aus der Seite, ``stand_von`` rechnet
+    denselben aus der Datei (``app/planungsansicht.py``). Mit einem ``Eintrag``
+    zählt nicht mehr, ob sich die **Datei** geändert hat (``mtime``), sondern
+    nur, ob sich **dieser Eintrag** geändert hat: was zwei Leute an zwei
+    Büchern tun, stört sich nicht (Entscheidung 2026-10-30).
+    """
+
+    vorher: Any
+    stand_von: Callable[[Buchplanung], Any]
+
+
+class EintragGeaendert(Exception):
+    """Der Eintrag steht nicht mehr so in der Datei, wie das Menü ihn gesehen hat.
+
+    ``aktuell`` ist der Schnappschuss von jetzt: der Browser legt ihn neben
+    die Eingabe und lässt wählen, was bleibt.
+    """
+
+    def __init__(self, aktuell: Any) -> None:
+        super().__init__("Dieser Eintrag wurde inzwischen geändert.")
+        self.aktuell = aktuell
+
+
+class BestaetigungVerfaellt(Exception):
+    """Die Eintragung würde die Bestätigung einer Fachliste kosten - und das ist
+    noch nicht bestätigt (``verfall_ok``). ``gruende`` nennt, woran es liegt."""
+
+    def __init__(self, gruende: Sequence[str]) -> None:
+        super().__init__("Die Bestätigung der Liste würde verfallen.")
+        self.gruende = tuple(gruende)
+
+
 def _aendere(
     einstellungen: Einstellungen,
     schuljahr: str,
-    mtime: float,
+    mtime: float | None,
     aenderung: Callable[[Buchplanung], Buchplanung],
+    *,
+    eintrag: Eintrag | None = None,
+    verfall_fach: str | None = None,
+    verfall_ok: bool = True,
 ) -> Stand:
     """Die gemeinsame Kette jeder Eintragung: sperren, prüfen, ändern, sichern.
 
     Sie steht **einmal** hier und nicht fünfmal in den Routen: Preis,
     Sammelbestätigung, Fachbestätigung, Planung und Rücklage unterscheiden sich
     nur in der Funktion, die den Stand umbaut.
+
+    Geprüft wird entweder die ganze Datei (``mtime``) oder, mit ``eintrag``,
+    nur der Eintrag, den das Menü ändert. Mit ``verfall_fach`` und ohne
+    ``verfall_ok`` wird nicht geschrieben, wenn die Eintragung die Bestätigung
+    dieser Fachliste kosten würde - der Browser fragt erst nach.
     """
     pfad = _pfad(einstellungen, schuljahr)
     if not pfad.is_file():
@@ -164,12 +216,13 @@ def _aendere(
             "Für dieses Schuljahr gibt es noch keine Buchplanungs-Datei. Bitte zuerst "
             "„Aus IServ aktualisieren“."
         )
-    if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):
+    if eintrag is None and (isinstance(mtime, bool) or not isinstance(mtime, (int, float))
+                            or not isfinite(mtime)):
         raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
 
     with arbeitsmappe_sperren(pfad):
         zustand = Dateizustand.von(pfad)
-        if abs(zustand.mtime - float(mtime)) > 1e-6:
+        if eintrag is None and abs(zustand.mtime - float(mtime or 0)) > 1e-6:
             raise Konflikt(
                 "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
                 "die Änderung erneut eintragen.",
@@ -180,12 +233,23 @@ def _aendere(
             vorher = lies_mappe(wb)
         except MappeUnlesbar as exc:
             raise UngueltigeAenderung(str(exc)) from exc
+        if eintrag is not None:
+            aktuell = eintrag.stand_von(vorher)
+            if aktuell != eintrag.vorher:
+                raise EintragGeaendert(aktuell)
         try:
             nachher = aenderung(vorher)
         except (UnbekanntesBuch, UngueltigeEingabe) as exc:
             raise UngueltigeAenderung(str(exc)) from exc
         # Lückenlos anschließende Zeilen mit gleichem „leihbar“ sind eine.
         nachher = verbinde_fortlaufende(nachher)
+        if (verfall_fach is not None and not verfall_ok
+                and fach_status(vorher, verfall_fach).status == FACH_BESTAETIGT):
+            gruende = verfallsgruende(vorher, nachher, verfall_fach)
+            if gruende:
+                raise BestaetigungVerfaellt(gruende)
+        # Jede Fachliste ist danach ganz oder gar nicht bestätigt.
+        nachher = halte_bestaetigung(vorher, nachher)
         schreibe_mappe(wb, nachher)
         speichere_mappe(wb, pfad, backups_behalten=einstellungen.backups_behalten)
     return Stand(planung=nachher, pfad=pfad, zustand=Dateizustand.von(pfad))
@@ -193,9 +257,13 @@ def _aendere(
 
 def schreibe_fachbestaetigung(
     einstellungen: Einstellungen, *, schuljahr: str, fach: str, kuerzel: str,
-    datum: date | None, mtime: float,
+    datum: date | None, mtime: float | None, vorher: Any = None,
 ) -> tuple[Stand, int]:
-    """Setzt Kürzel und Datum der Fachkonferenzleitung in alle Zeilen des Fachs."""
+    """Setzt Kürzel und Datum der Fachkonferenzleitung in alle Zeilen des Fachs.
+
+    Mit ``vorher`` (dem Schnappschuss der Kopfmenüs) zählt nur, ob sich die
+    Bestätigung dieses Fachs inzwischen geändert hat.
+    """
     gezaehlt = 0
 
     def aenderung(stand: Buchplanung) -> Buchplanung:
@@ -203,14 +271,16 @@ def schreibe_fachbestaetigung(
         neu, gezaehlt = bestaetige_fach(stand, fach=fach, kuerzel=kuerzel, datum=datum)
         return neu
 
-    return _aendere(einstellungen, schuljahr, mtime, aenderung), gezaehlt
+    eintrag = None if vorher is None else Eintrag(
+        vorher=vorher, stand_von=lambda stand: fach_stand(stand, fach))
+    return _aendere(einstellungen, schuljahr, mtime, aenderung, eintrag=eintrag), gezaehlt
 
 
 def schreibe_planung(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
     eingefuehrt_ab: str = "", ausgemustert_nach: str = "", kuerzel: str = "",
     datum: date | None = None, bemerkung: str = "", leihbar: bool | None = None,
-    mtime: float,
+    mtime: float | None,
 ) -> Stand:
     """Trägt die Zeile eines Buchs in **einem** Fach und Jahrgang ein."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_planung(
@@ -224,37 +294,54 @@ def schreibe_buchplanung(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str,
     zeilen: Sequence[Jahrgangseingabe], ruecklage: Ruecklageneingabe | None = None,
     buchreihe: Buchreiheneingabe | None = None,
-    mtime: float,
+    mtime: float | None, vorher: Any = None, verfall_ok: bool = True,
 ) -> Stand:
     """Alles, was das Planungsmenü eines Buchs einträgt - in **einem** Schreibvorgang.
 
     Das Menü kennt nur Speichern und Abbrechen; ein halb geschriebener Stand
     wäre genau das, was die Sperre und der ``mtime``-Vergleich sonst verhindern.
+    Mit ``vorher`` zählt nur, ob sich dieser Eintrag geändert hat
+    (:class:`Eintrag`); ohne ``verfall_ok`` fragt eine Eintragung, die die
+    Bestätigung des Fachs kostet, erst nach (:class:`BestaetigungVerfaellt`).
     """
     def aenderung(stand: Buchplanung) -> Buchplanung:
         if buchreihe is not None:
             stand = setze_buchreihe(stand, isbn=isbn, eingabe=buchreihe)
-        return setze_buchplanung(
+        stand = setze_buchplanung(
             stand, isbn=isbn, fach=fach, zeilen=zeilen, ruecklage=ruecklage,
         )
+        # Zuletzt: die ISBN eines Buchs, das bisher „ISBN folgt“ hieß.
+        if buchreihe is not None and (buchreihe.isbn or "").strip():
+            stand = ersetze_isbn(stand, alt=isbn, neu=buchreihe.isbn or "")
+        return stand
 
-    return _aendere(einstellungen, schuljahr, mtime, aenderung)
+    eintrag = None if vorher is None else Eintrag(
+        vorher=vorher, stand_von=lambda stand: eintrag_stand(stand, isbn, fach))
+    return _aendere(einstellungen, schuljahr, mtime, aenderung, eintrag=eintrag,
+                    verfall_fach=fach, verfall_ok=verfall_ok)
 
 
 def schreibe_neues_buch(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str,
-    buchreihe: Buchreiheneingabe, zeilen: Sequence[Jahrgangseingabe], mtime: float,
+    buchreihe: Buchreiheneingabe, zeilen: Sequence[Jahrgangseingabe], mtime: float | None,
+    verfall_ok: bool = True, ohne_mtime: bool = False,
 ) -> Stand:
-    """Nimmt ein Buch in die Liste eines Fachs auf - aus einem anderen Fach oder neu."""
+    """Nimmt ein Buch in die Liste eines Fachs auf - aus einem anderen Fach oder neu.
+
+    ``ohne_mtime``: das Menü „+ Buch hinzufügen“ ändert keinen bestehenden
+    Eintrag, also gibt es auch keinen, der sich inzwischen geändert haben
+    könnte. Steht das Buch schon im Fach, sagt :func:`fuege_buch_hinzu` das.
+    """
+    eintrag = Eintrag(vorher=None, stand_von=lambda stand: None) if ohne_mtime else None
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: fuege_buch_hinzu(
         stand, isbn=isbn, fach=fach, buchreihe=buchreihe, zeilen=zeilen,
-    ))
+    ), eintrag=eintrag, verfall_fach=fach, verfall_ok=verfall_ok)
 
 
 def schreibe_antrag(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
     art: str, ergebnis: str | None, kuerzel: str = "", datum: date | None = None,
-    begruendung: str | None = None, eingefuehrt_ab: str | None = None, mtime: float,
+    begruendung: str | None = None, eingefuehrt_ab: str | None = None, mtime: float | None,
 ) -> Stand:
     """Genehmigt oder lehnt eine Einführung oder Ausmusterung ab - die Änderungsliste."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: entscheide_antrag(
@@ -266,7 +353,7 @@ def schreibe_antrag(
 def schreibe_ruecklage(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str,
     anzahl: int | None, status: str = "", kuerzel: str = "", datum: date | None = None,
-    bemerkung: str = "", mtime: float,
+    bemerkung: str = "", mtime: float | None,
 ) -> Stand:
     """Hält fest, wie viele Exemplare eine Fachschaft behalten möchte."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: setze_ruecklage(

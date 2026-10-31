@@ -36,9 +36,12 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Protocol
 
-import isbnlib
-
-from buecherlisten.core.daten import Korrekturen, korrigiere_eintrag
+from buecherlisten.core.daten import (
+    Korrekturen,
+    format_isbn,
+    ist_platzhalter_isbn,
+    korrigiere_eintrag,
+)
 from buecherlisten.planung import (
     BEIDE,
     NUR_EXCEL,
@@ -52,9 +55,9 @@ from buecherlisten.planung import (
     planungs_status,
     vergleiche,
     wirkt_im_schuljahr,
-    zum_schuljahr_ausgemustert,
 )
 from buecherlisten.planung import Buch as PlanBuch
+from buecherlisten.planung.farben import Markierung, in_ausmusterungen, markierung
 
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
@@ -127,6 +130,10 @@ class Buch:
     leihbar_teilweise: bool = False
     leihbar_titel: str = ""
     leihbar_iserv: tuple[tuple[Paar, bool], ...] = ()
+    # Nur in der Fach-Ansicht: die Farben aus der Planung
+    # (``buecherlisten/planung/farben.py``). Steht sie da, färbt die Vorlage
+    # Einführung, Ausmusterung und „leihbar“ danach statt nach ``neu``/``weg``.
+    farben: Markierung | None = None
 
     @property
     def abweichend(self) -> bool:
@@ -174,7 +181,12 @@ class Buch:
 
     @property
     def isbn_anzeige(self) -> str:
-        return isbnlib.mask(self.isbn) or self.isbn
+        return format_isbn(self.isbn)
+
+    @property
+    def isbn_fehlt(self) -> bool:
+        """Ein Buch, dessen ISBN noch niemand kennt: im Menü lässt sie sich nachtragen."""
+        return ist_platzhalter_isbn(self.isbn)
 
     @property
     def fach_anzeige(self) -> str:
@@ -481,14 +493,6 @@ class Vergleich:
                    or [None])
         )
 
-    def zum_schuljahr_ausgemustert(self, buch: PlanBuch) -> frozenset[str]:
-        """Die Fächer, in denen das Buch zu diesem Schuljahr ausgemustert ist:
-        dort steht es nur unter „Ausmusterungen“."""
-        return frozenset(
-            fach for fach, _ in self.planung.zeilen_des_buchs(buch)
-            if zum_schuljahr_ausgemustert(self.planung, buch, fach)
-        )
-
     @property
     def anzahl_abweichungen(self) -> int:
         return sum(1 for abweichung in self.ergebnis.values() if not abweichung.gleich)
@@ -598,49 +602,34 @@ def _im_fach(fach: str) -> Callable[[Paar], bool]:
 
 
 def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
-    """Eine Gruppe je Fach, aus der Datei - und je Fach die Bücher, die nur IServ dort führt.
+    """Eine Gruppe je Fach, aus der Datei - gefärbt nach der Planung.
 
-    Aus der Datei steht in einem Fach jedes Buch, das dort dieses Schuljahr
-    geführt wird **oder** erst noch eingeführt wird: die geplante Einführung
-    soll man in der Liste sehen und im Planungsmenü ändern können. Ist es in
-    einem Fach zu diesem Schuljahr ausgemustert, steht es dort nur unter
-    „Ausmusterungen“ (``zum_schuljahr_ausgemustert``) - auch wenn IServ es
-    noch führt. Gezeigt
-    werden die Jahrgänge, die dieses Schuljahr gelten; „(ab …)“ und „(bis …)“
-    hängt die Vorlage an (``jahrgangsspalte``).
+    In einem Fach steht jedes Buch, das dort dieses Schuljahr geführt wird
+    **oder** erst noch eingeführt wird: die geplante Einführung soll man in der
+    Liste sehen und im Planungsmenü ändern können. Was dort zu diesem
+    Schuljahr aus den Regalen geht, steht zusätzlich unter „Ausmusterungen“
+    (``in_ausmusterungen``) - läuft es als Kaufbuch weiter, in beiden Listen.
+
+    Seit 2026-10-30 färbt die Fach-Ansicht nach der Planung (``farben``), und
+    Bücher, die nur IServ in einem Fach führt, stehen nicht mehr darin: die
+    Datei ist der Stand, den die Fachkonferenz bestätigt. Titel, Verlag und
+    Preise vergleicht die Vorlage weiter mit IServ (``iserv``).
     """
     zeilen: dict[str, dict[str, Buch]] = {}
-    ausgemustert: set[tuple[str, str]] = set()  # (ISBN, Fach)
     for buch in v.planung.buecher:
         # Ein Fach, in dem nur noch Ausgemustertes steht, behält seine Seite:
         # dort stehen die Ausmusterungen und ihre Rücklagen.
-        for fach in v.zum_schuljahr_ausgemustert(buch):
-            ausgemustert.add((buch.isbn, fach))
-            zeilen.setdefault(fach, {})
+        for fach in {fach for fach, _ in v.planung.zeilen_des_buchs(buch)}:
+            if in_ausmusterungen(v.planung, buch, fach):
+                zeilen.setdefault(fach, {})
         offen = v.nicht_ausgemustert(buch)
-        aktiv = v.aktiv(buch)
-        ist = v.iserv.get(buch.isbn)
-        abweichung = v.ergebnis.get(buch.isbn)
         for fach in {fach for fach, _ in offen}:
-            in_iserv = ist is not None and any(f == fach for f, _ in ist.paare)
-            hier_aktiv = any(f == fach for f, _ in aktiv)
-            if hier_aktiv and not in_iserv:
-                herkunft = NUR_EXCEL
-            elif in_iserv and abweichung is not None and abweichung.art == NUR_ISERV:
-                # Nur geplant laut Datei, in IServ aber schon auf der Liste.
-                herkunft = NUR_ISERV
-            else:
-                herkunft = BEIDE
-            zeilen.setdefault(fach, {})[buch.isbn] = _aus_datei(
-                v, buch, aktiv | {paar for paar in offen if paar[0] == fach},
-                _im_fach(fach), herkunft,
-                jahrgaenge=tuple(sorted(j for f, j in aktiv if f == fach)),
-            )
-    for isbn, ist in v.iserv.items():
-        for fach in {fach for fach, _ in ist.paare}:
-            if isbn not in zeilen.get(fach, {}) and (isbn, fach) not in ausgemustert:
-                zeilen.setdefault(fach, {})[isbn] = _aus_iserv(
-                    v, ist, frozenset(paar for paar in ist.paare if paar[0] == fach))
+            farben = markierung(v.planung, buch, fach)
+            zeilen.setdefault(fach, {})[buch.isbn] = replace(_aus_datei(
+                v, buch, tuple(paar for paar in offen if paar[0] == fach),
+                _im_fach(fach), BEIDE,
+                jahrgaenge=tuple(j.jahrgang for j in farben.jahrgaenge),
+            ), farben=farben)
     return tuple(Gruppe(name=name, buecher=_sortiert(list(je_isbn.values())))
                  for name, je_isbn in sorted(zeilen.items(), key=lambda e: e[0].casefold()))
 

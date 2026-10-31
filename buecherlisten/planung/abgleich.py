@@ -27,11 +27,14 @@ from typing import Any, TypeVar
 
 import isbnlib
 
+from ..core.daten import PLATZHALTER_ISBN, format_isbn, ist_platzhalter_isbn
 from .laden import Schnappschuss
 from .modelle import (
     ANTRAG_ERGEBNISSE,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
+    FACH_AUSSTEHEND,
+    FACH_BESTAETIGT,
     OHNE_FACH,
     RUECKLAGE_GEWUENSCHT,
     RUECKLAGE_STATUS,
@@ -42,8 +45,12 @@ from .modelle import (
     Planungszeile,
     Ruecklage,
     UngueltigesSchuljahr,
+    blockierende_antraege,
+    fach_bestaetigung,
+    fach_status,
     schuljahr_zahl,
-    wirkt_im_schuljahr,
+    verfallsgruende,
+    zeilen_des_fachs,
     zeitfolge,
 )
 
@@ -240,9 +247,11 @@ def _neue_zeile(
     Die Entscheidungen über die Anträge, die Begründung und ``leihbar`` kommen,
     wenn sie nicht mitgegeben werden (``None``), aus der bisherigen Zeile - so
     behält jede Eintragung sie, ohne sie zu kennen: das Planungsmenü, „Liste
-    bestätigen“, der Abgleich. Eine Entscheidung gilt aber nur dem Schuljahr,
-    über das entschieden wurde. Ändert es sich, fällt sie weg: über das neue
-    hat niemand entschieden.
+    bestätigen“, der Abgleich. Eine Entscheidung gilt aber nur dem, worüber
+    entschieden wurde: ändert sich ihr Schuljahr oder „leihbar“, fällt sie weg
+    (Entscheidung 2026-10-30) - über das neue hat niemand entschieden. Ein
+    anderer Jahrgang ist ohnehin eine andere Zeile (:func:`_finde_bisher`).
+    Eine Bemerkung lässt sie stehen.
     """
     if not _JAHRGANG_VON <= jahrgang <= _JAHRGANG_BIS:
         raise UngueltigeEingabe(
@@ -265,6 +274,8 @@ def _neue_zeile(
     def behalten(art: str, neues_schuljahr: str) -> Antragsentscheidung:
         if bisher is None or not _gleiches_schuljahr(
                 bisher.schuljahr_des_antrags(art), neues_schuljahr):
+            return Antragsentscheidung()
+        if leihbar is not None and leihbar != bisher.leihbar:
             return Antragsentscheidung()
         return bisher.antrag(art)
 
@@ -423,13 +434,9 @@ def setze_buchplanung(
     Zeiträume dürfen sich nicht überschneiden (:func:`_pruefe_zeitraeume`).
 
     ``kuerzel`` und ``datum`` der Fachkonferenzleitung kommen nicht aus dem
-    Menü, gehen aber auch nicht verloren. Sie bleiben genau dann stehen, wenn
-    die Änderung das **laufende** Schuljahr nicht berührt
-    (:func:`~buecherlisten.planung.modelle.wirkt_im_schuljahr`): eine
-    Ausmusterung, die erst in drei Jahren greift, ändert nichts an der Liste,
-    die bestätigt wurde. Wird ein Buch dagegen ab sofort eingeführt oder ist es
-    ab sofort weg, fällt die Bestätigung dieser Zeile - und damit das Fach auf
-    "teilweise". Eine neue Zeile ist unbestätigt.
+    Menü; eine Zeile behält ihre. Ob die Bestätigung des Fachs die Änderung
+    übersteht, entscheidet danach :func:`halte_bestaetigung` - für das ganze
+    Fach, nicht für die einzelne Zeile.
     """
     buch = _geprueftes_buch(stand, isbn)
     _geprueftes_fach(stand, buch, fach)
@@ -460,10 +467,6 @@ def setze_buchplanung(
             kuerzel=bisher.kuerzel if bisher else "", datum=bisher.datum if bisher else None,
             bemerkung=eingabe.bemerkung, leihbar=eingabe.leihbar,
         )
-        if bisher is not None and bisher.bestaetigt and (
-                wirkt_im_schuljahr(bisher, stand.schuljahr)
-                != wirkt_im_schuljahr(zeile, stand.schuljahr)):
-            zeile = replace(zeile, kuerzel="", datum=None)
         neue.append(zeile)
 
     for alte in stand.planung:
@@ -578,6 +581,9 @@ class Buchreiheneingabe:
     # Die Spalte ``Bemerkung`` auf ``Buchreihen`` - eine je Buch, für alle
     # Fächer. ``None`` heißt: bleibt, wie es dasteht.
     bemerkung: str | None = None
+    # Nur bei einem Buch, das noch unter einem Platzhalter steht: die
+    # nachgetragene ISBN (:func:`ersetze_isbn`). Leer oder ``None``: bleibt.
+    isbn: str | None = None
 
 
 # Ein Preis, den es für ein Schulbuch geben kann. Geprüft wird wie beim
@@ -660,6 +666,44 @@ def _gepruefte_isbn(stand: Buchplanung, eingabe: str) -> str:
     )
 
 
+def _naechster_platzhalter(stand: Buchplanung) -> str:
+    """``OHNE-ISBN-1``, ``-2``, … - der erste, den die Datei noch nicht vergeben hat."""
+    vergeben = {
+        int(nummer) for buch in stand.buecher if ist_platzhalter_isbn(buch.isbn)
+        for nummer in (buch.isbn[len(PLATZHALTER_ISBN):],) if nummer.isdigit()
+    }
+    return f"{PLATZHALTER_ISBN}{max(vergeben, default=0) + 1}"
+
+
+def ersetze_isbn(stand: Buchplanung, *, alt: str, neu: str) -> Buchplanung:
+    """Trägt die ISBN eines Buchs nach, das bisher unter einem Platzhalter stand.
+
+    Nur ein Platzhalter lässt sich ersetzen: eine echte ISBN ist der Schlüssel
+    des Buchs und bleibt. Die neue muss gültig sein und darf noch zu keinem
+    Buch der Datei gehören - zwei Einträge für ein Buch würden sonst still
+    zusammenlaufen. Mit dem Buch ziehen seine Jahrgänge, Rücklagen und die
+    Bemerkung um; Anträge und Bestätigungen hängen an den Jahrgängen.
+    """
+    buch = _geprueftes_buch(stand, alt)
+    if not ist_platzhalter_isbn(alt):
+        raise UngueltigeEingabe("Die ISBN eines Buchs lässt sich nicht ändern.")
+    isbn = _gepruefte_isbn(stand, neu)
+    vorhanden = stand.buch(isbn)
+    if vorhanden is not None:
+        raise UngueltigeEingabe(
+            f"Die ISBN {format_isbn(isbn)} gehört schon zu „{vorhanden.titel}“. Bitte "
+            "die ISBN prüfen - oder dort weiterplanen und diesen Eintrag entfernen."
+        )
+    return _ersetzt(
+        stand,
+        buecher=tuple(replace(b, isbn=isbn) if b is buch else b for b in stand.buecher),
+        planung=tuple(replace(z, isbn=isbn) if z.isbn == alt else z for z in stand.planung),
+        ruecklagen=tuple(replace(r, isbn=isbn) if r.isbn == alt else r for r in stand.ruecklagen),
+        bemerkungen=tuple(replace(b, isbn=isbn) if b.isbn == alt else b
+                          for b in stand.bemerkungen),
+    )
+
+
 def fuege_buch_hinzu(
     stand: Buchplanung, *, isbn: str, fach: str, buchreihe: Buchreiheneingabe,
     zeilen: Sequence[Jahrgangseingabe],
@@ -674,12 +718,20 @@ def fuege_buch_hinzu(
       (:func:`setze_buchreihe`).
     * Die ISBN ist neu. Das Buch steht dann nur in der Datei und bleibt beim
       Abgleich, solange es einen Jahrgang hat.
+    * Die ISBN ist leer: das Buch kommt erst kurz vor den Ferien, und noch
+      kennt sie niemand. Es bekommt einen Platzhalter (``OHNE-ISBN-1``, …),
+      angezeigt als „ISBN folgt“; nachgetragen wird sie im Buchmenü
+      (:func:`ersetze_isbn`).
 
     In das Fach kommt es über seine Jahrgänge. Jeder braucht deshalb ein
     Schuljahr der Einführung: eine Zeile, auf der nichts eingetragen ist,
     verschwindet in :func:`setze_planung` - und mit ihr das Buch aus dem Fach.
     """
-    isbn = _gepruefte_isbn(stand, isbn)
+    isbn = (isbn or "").strip()
+    if not isbn:
+        isbn = _naechster_platzhalter(stand)
+    elif not (ist_platzhalter_isbn(isbn) and stand.buch(isbn) is not None):
+        isbn = _gepruefte_isbn(stand, isbn)
     titel, verlag = _gepruefte_buchreihe(buchreihe)
     if not zeilen:
         raise UngueltigeEingabe(
@@ -723,27 +775,68 @@ def bestaetige_fach(
 ) -> tuple[Buchplanung, int]:
     """Setzt Kürzel und Datum in **alle** Zeilen eines Fachs.
 
-    Die Fachkonferenzleitung gibt ihre Liste als Ganzes frei. Bestätigt
-    wird aber je Zeile, und genau deshalb braucht es keinen zweiten Zustand
-    "bestätigter Stand": kommt später ein Buch dazu, ist seine Zeile leer, und
-    das Fach ist wieder nur teilweise bestätigt.
-
-    Ein leeres Kürzel nimmt die Bestätigung des ganzen Fachs zurück. Wer
-    bestätigt, braucht ein Datum (Entscheidung 2026-10-10).
+    Die Fachkonferenzleitung gibt ihre Liste als Ganzes frei; gespeichert wird
+    die Freigabe je Zeile. Ein leeres Kürzel nimmt die Bestätigung des ganzen
+    Fachs zurück. Wer bestätigt, braucht ein Datum (Entscheidung 2026-10-10)
+    und eine Liste ohne offenen Antrag, der sie in diesem Schuljahr ändert
+    (:func:`~buecherlisten.planung.modelle.blockierende_antraege`).
     """
     if fach not in stand.faecher:
         raise UngueltigeEingabe(f"„{fach}“ kommt in dieser Datei als Fach nicht vor.")
-    if kuerzel.strip() and datum is None:
-        raise UngueltigeEingabe("Bitte das Datum der Bestätigung eintragen.")
-    isbns = {buch.isbn for buch in stand.buecher_je_fach(fach)}
-    geaendert = 0
-    planung: list[Planungszeile] = []
-    for zeile in stand.planung:
-        if zeile.fach == fach and zeile.isbn in isbns:
-            zeile = replace(zeile, kuerzel=kuerzel.strip(), datum=datum)
-            geaendert += 1
-        planung.append(zeile)
-    return _ersetzt(stand, planung=tuple(planung)), geaendert
+    if kuerzel.strip():
+        if datum is None:
+            raise UngueltigeEingabe("Bitte das Datum der Bestätigung eintragen.")
+        ausstehend = fach_status(stand, fach)
+        if ausstehend.status == FACH_AUSSTEHEND:
+            raise UngueltigeEingabe(
+                f"Die Liste lässt sich noch nicht bestätigen: {ausstehend.text}. Erst wenn "
+                "über alle Einführungen zu diesem und Ausmusterungen nach dem vorigen "
+                "Schuljahr entschieden ist, geht es."
+            )
+    return _mit_bestaetigung(stand, fach, kuerzel.strip(), datum)
+
+
+def _mit_bestaetigung(stand: Buchplanung, fach: str, kuerzel: str,
+                      datum: date | None) -> tuple[Buchplanung, int]:
+    """Kürzel und Datum in jede Zeile des Fachs - leer nimmt die Bestätigung zurück."""
+    betroffen = {z.schluessel for z in zeilen_des_fachs(stand, fach)}
+    planung = tuple(replace(z, kuerzel=kuerzel, datum=datum) if z.schluessel in betroffen else z
+                    for z in stand.planung)
+    return _ersetzt(stand, planung=planung), len(betroffen)
+
+
+def halte_bestaetigung(vorher: Buchplanung, nachher: Buchplanung) -> Buchplanung:
+    """Sorgt nach jeder Eintragung dafür, dass jede Fachliste ganz oder gar nicht bestätigt ist.
+
+    Für jedes Fach, das ``vorher`` bestätigt war:
+
+    * Ändert die Eintragung die Liste dieses Schuljahrs
+      (:func:`~buecherlisten.planung.modelle.verfallsgruende`) oder steht danach
+      ein Antrag aus, der das Bestätigen aufhält, verfällt die Bestätigung -
+      in **allen** Zeilen des Fachs.
+    * Sonst übernimmt jede Zeile, die es vorher nicht gab (ein Jahrgang ab
+      2028/2029, ein Buch für später), Kürzel und Datum des Fachs. Eine Zeile,
+      die es gab und deren Kürzel gelöscht wurde, bleibt leer: das ist das
+      Zurückziehen.
+
+    Ein Fach, das vorher nicht bestätigt war, bleibt, wie die Eintragung es
+    hinterlässt.
+    """
+    for fach in nachher.faecher:
+        if fach_status(vorher, fach).status != FACH_BESTAETIGT:
+            continue
+        if verfallsgruende(vorher, nachher, fach) or blockierende_antraege(nachher, fach):
+            nachher, _ = _mit_bestaetigung(nachher, fach, "", None)
+            continue
+        kuerzel, datum = fach_bestaetigung(vorher, fach)
+        bekannt = {z.schluessel for z in zeilen_des_fachs(vorher, fach)}
+        neu = {z.schluessel for z in zeilen_des_fachs(nachher, fach)
+               if z.schluessel not in bekannt and not z.bestaetigt}
+        if neu and kuerzel:
+            nachher = _ersetzt(nachher, planung=tuple(
+                replace(z, kuerzel=kuerzel, datum=datum) if z.schluessel in neu else z
+                for z in nachher.planung))
+    return nachher
 
 
 def entscheide_antrag(

@@ -239,14 +239,18 @@ Jahrgänge und Preise kommen frisch aus IServ.
 
 ### Schritt 1: die Fachkonferenzen (Ansicht „Fach")
 
-Öffnen Sie ein Fach. Oben stehen Kürzel, Datum und **„Liste bestätigen"** — die
-Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch. Ohne Datum
-lässt sich nicht bestätigen; nur zum Zurücknehmen (Kürzel leeren) braucht es keins.
+Öffnen Sie ein Fach. Hinter dem Namen steht der Stand der Liste: **offen**
+(grau), **„N Anträge ausstehend"** (orange) oder **bestätigt** (grün). Rechts
+öffnet **„Liste bestätigen"** ein Menü mit Kürzel und Datum (vorbelegt mit
+heute) — die Liste wird immer als **Ganzes** freigegeben, nicht Buch für Buch.
+Bei einer bestätigten Liste steht dort stattdessen **„Bestätigung
+zurückziehen"**.
 
-Der Knopf setzt Kürzel und Datum in jede Zeile dieses Fachs. Kommt danach ein
-Buch hinzu, hat es noch kein Kürzel: der Status wechselt auf **„teilweise"**,
-und darunter steht, welche Titel noch fehlen. Kürzel und Datum der letzten
-Freigabe bleiben lesbar stehen.
+Solange über eine Einführung zu diesem oder eine Ausmusterung nach dem vorigen
+Schuljahr nicht entschieden ist (Ansicht „Anträge"), ist „Liste bestätigen"
+grau. Ändert sich danach etwas an der Liste dieses Schuljahrs, verfällt die
+Bestätigung — das Buchmenü warnt vorher. Kommt beim Aktualisieren aus IServ ein
+Buch dazu, ist die Liste wieder **offen**.
 
 Im Druckmenü wählt **„nicht bestätigte"** genau die Fächer aus, deren Freigabe
 noch fehlt oder unvollständig ist.

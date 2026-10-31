@@ -17,23 +17,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from buecherlisten.core.daten import format_isbn
+from buecherlisten.core.daten import format_isbn, ist_platzhalter_isbn
 from buecherlisten.planung import (
+    ANTRAG_GENEHMIGT,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
+    FACH_BESTAETIGT,
     OHNE_VERLAG,
     PLANUNG_AUSGEMUSTERT,
     Buchplanung,
+    Planungszeile,
     UngueltigesSchuljahr,
-    alles_genehmigt,
-    endet_mit_vorjahr,
     fach_bestaetigung,
     fach_status,
     planungs_status,
     planungs_zusatz,
     schuljahr_zahl,
-    zum_schuljahr_ausgemustert,
+    zu_entscheidende_antraege,
 )
+from buecherlisten.planung.farben import in_ausmusterungen, markierung
 
 
 def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, Any]:
@@ -44,7 +46,61 @@ def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, An
         "ruecklage_je_isbn": {}, "bemerkung_je_isbn": {}, "ausmusterungen_je_fach": {},
         "vorjahr": "", "planungsjahr": "", "leihbar_isbns": set(),
         "verlage": [], "buecher": [], "isbns": set(),
+        "eintrag": lambda isbn, fach: None, "fachstand": lambda fach: None,
     }
+
+
+# ── Was ein Menü beim Öffnen gesehen hat ─────────────────────────────────────
+#
+# Jedes Menü der Fach-Seite bekommt beim Rendern den Stand des Eintrags mit,
+# den es ändert, und schickt ihn beim Speichern als ``vorher`` zurück. Der
+# Server rechnet denselben Schnappschuss aus der Datei neu (``app/buchplanung.py``):
+# ist er gleich, wird gespeichert - auch wenn sich an anderen Büchern etwas
+# geändert hat; ist er anders, bekommt der Browser den neuen und legt beide
+# nebeneinander (Entscheidung 2026-10-30). Deshalb steht er hier, an **einer**
+# Stelle, und nur in JSON-Werten: Vorlage und Server müssen ihn gleich bauen.
+
+
+def eintrag_stand(planung: Buchplanung, isbn: str, fach: str) -> dict[str, Any] | None:
+    """Das Buchmenü eines Buchs in einem Fach als Schnappschuss - ``None`` ohne Buch.
+
+    Die Zeilen sind nach „Jahrgang|Einführung“ geschlüsselt, so wie das Menü
+    sie kennt (``data-bisher-jahrgang``/``data-bisher-ab``). ``ruecklage`` ist
+    ``None`` bei einem Buch, für das es keine geben kann - dann hat das Menü
+    keinen Block dafür.
+    """
+    buch = planung.buch(isbn)
+    if buch is None:
+        return None
+    bemerkung = planung.bemerkung(isbn)
+    ruecklage = planung.ruecklage(isbn, fach)
+    return {
+        "buchreihe": {
+            "titel": buch.titel, "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
+            "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
+            "bemerkung": bemerkung.bemerkung if bemerkung else "",
+        },
+        "zeilen": {
+            f"{zeile.jahrgang}|{zeile.eingefuehrt_ab}": {
+                "jahrgang": zeile.jahrgang, "eingefuehrt_ab": zeile.eingefuehrt_ab,
+                "ausgemustert_nach": zeile.ausgemustert_nach, "leihbar": zeile.leihbar,
+                "bemerkung": zeile.bemerkung,
+            }
+            for zeile in planung.planung if (zeile.isbn, zeile.fach) == (isbn, fach)
+        },
+        "ruecklage": {
+            "anzahl": ruecklage.anzahl if ruecklage else None,
+            "bemerkung": ruecklage.bemerkung if ruecklage else "",
+        } if planung.leihbar(isbn) else None,
+    }
+
+
+def fach_stand(planung: Buchplanung, fach: str) -> dict[str, Any]:
+    """Die Bestätigung einer Fachliste als Schnappschuss - für die beiden Kopfmenüs."""
+    kuerzel, datum = fach_bestaetigung(planung, fach)
+    if fach_status(planung, fach).status != FACH_BESTAETIGT:
+        kuerzel, datum = "", None
+    return {"fach": {"kuerzel": kuerzel, "datum": datum.isoformat() if datum else None}}
 
 
 def planungskontext(planung: Buchplanung, *, schuljahr: str, mtime: float) -> dict[str, Any]:
@@ -77,6 +133,9 @@ def planungskontext(planung: Buchplanung, *, schuljahr: str, mtime: float) -> di
         "buecher": _vorschlaege(planung, bemerkungen),
         # Die Bücher der Datei: nur ihre Zeilen haben ein Planungsmenü.
         "isbns": {buch.isbn for buch in planung.buecher},
+        # Was die Menüs beim Öffnen gesehen haben (``vorher`` beim Speichern).
+        "eintrag": lambda isbn, fach: eintrag_stand(planung, isbn, fach),
+        "fachstand": lambda fach: fach_stand(planung, fach),
     }
 
 
@@ -119,9 +178,9 @@ def _zeilen_je_isbn_und_fach(planung: Buchplanung) -> dict[str, dict[str, list[d
                     "datum": zeile.datum,
                     "bemerkung": zeile.bemerkung,
                     "status": status,
-                    # Sind alle Anträge der Zeile genehmigt (oder gibt es
-                    # keinen), hinterlegt das Menü sie in der Farbe des Status.
-                    "genehmigt": alles_genehmigt(zeile, planung.schuljahr),
+                    # Die beiden Hälften der Zeile im Menü: oben der Antrag auf
+                    # Einführung, unten der auf Ausmusterung (``_haelften``).
+                    "haelften": _haelften(zeile, planung.schuljahr),
                     # Der Zusatz „(ab …)“/„(bis …)“ in der Bücherliste kommt von
                     # der Zeile, die für dieses Schuljahr spricht.
                     "zusatz": planungs_zusatz(zeile, planung.schuljahr)
@@ -140,6 +199,22 @@ def _zeilen_je_isbn_und_fach(planung: Buchplanung) -> dict[str, dict[str, list[d
     return zeilen
 
 
+def _haelften(zeile: Planungszeile, schuljahr: str) -> tuple[str, str]:
+    """Wie die obere und die untere Hälfte einer Zeile im Buchmenü aussehen.
+
+    Oben richtet sich nach dem Antrag auf Einführung, unten nach dem auf
+    Ausmusterung - je ``genehmigt`` (in der Farbe des Status hinterlegt),
+    ``offen`` (weiß) oder ``abgelehnt`` (hinterlegt und grau überdeckt). Hat
+    die Zeile nur einen Antrag, gilt er für beide Hälften; ohne einen ist an
+    ihr nichts offen, und sie gilt als genehmigt (Entscheidung 2026-10-10).
+    """
+    antraege = [zeile.antrag(art).status
+                for art in zu_entscheidende_antraege(zeile, schuljahr)]
+    if not antraege:
+        return ANTRAG_GENEHMIGT, ANTRAG_GENEHMIGT
+    return antraege[0], antraege[-1]
+
+
 def _ruecklagen(planung: Buchplanung) -> dict[str, dict[str, Any]]:
     """Die Rücklagen je Buch und Fach."""
     ruecklagen: dict[str, dict[str, Any]] = {}
@@ -153,44 +228,42 @@ def _ruecklagen(planung: Buchplanung) -> dict[str, dict[str, Any]]:
 
 
 def _ausmusterungen_je_fach(planung: Buchplanung) -> dict[str, list[dict[str, Any]]]:
-    """Was mit dem Vorjahr endete: in diesem Schuljahr nicht mehr auf der Liste.
+    """„Ausmusterungen zu diesem Schuljahr“ je Fach: was aus den Regalen geht.
 
-    Nur vollständig ausgemustert - in keinem Jahrgang dieses Fachs bleibt das
-    Buch danach noch stehen; ein anderes Fach zählt nicht. Sonst steht es in
-    der normalen Liste.
+    Welche Bücher, entscheidet ``in_ausmusterungen`` (buecherlisten/planung/
+    farben.py): jeder Jahrgang, in dem das Buch im Fach leihbar war, endete
+    spätestens mit dem Vorjahr, der letzte genau damit, und im Fach wird es
+    nicht wieder eingeführt. Läuft es als Kaufbuch weiter, steht es auch in
+    der Liste darüber - mit derselben Jahrgang-Spalte (``farben``).
 
-    Gezeigt wird nur, was die Schule dort verliehen hat - mindestens ein
-    Jahrgang leihbar. Um die Ausmusterungen geht es wegen der Rücklagen und der
-    Regale; ein reines Kaufbuch hat keine.
+    „Leihbar“ gilt für die Jahrgänge, die mit dem Vorjahr endeten - um die
+    geht es hier.
     """
-    je_fach: dict[str, dict[str, dict[str, Any]]] = {}
-    for zeile in planung.planung:
-        altes = planung.buch(zeile.isbn)
-        if altes is None or not endet_mit_vorjahr(zeile, planung.schuljahr) \
-                or not zum_schuljahr_ausgemustert(planung, altes, zeile.fach):
-            continue
-        eintrag = je_fach.setdefault(zeile.fach, {}).setdefault(altes.isbn, {
-            "titel": altes.titel, "verlag": altes.verlag, "isbn": altes.isbn,
-            "isbn_anzeige": format_isbn(altes.isbn),
-            "neupreis": altes.neupreis, "leihgebuehr": altes.leihgebuehr,
-            "jahrgaenge": [], "ja": [], "nein": [],
-        })
-        if zeile.jahrgang not in eintrag["jahrgaenge"]:
-            eintrag["jahrgaenge"].append(zeile.jahrgang)
-        eintrag["ja" if zeile.leihbar else "nein"].append(zeile.jahrgang)
-
+    try:
+        vorjahr = schuljahr_zahl(planung.schuljahr) - 1
+    except UngueltigesSchuljahr:
+        return {}
     ausgemustert: dict[str, list[dict[str, Any]]] = {}
-    for fach, je_buch in je_fach.items():
-        eintraege = sorted(je_buch.values(), key=lambda e: e["titel"].casefold())
-        for eintrag in eintraege:
-            eintrag["jahrgaenge"].sort()
-            ja, nein = sorted(eintrag.pop("ja")), sorted(eintrag.pop("nein"))
-            eintrag["leihbar"] = bool(ja)
-            eintrag["leihbar_teilweise"] = bool(ja and nein)
-            eintrag["leihbar_titel"] = (
-                f"leihbar: Jg. {', '.join(map(str, ja))} · Kaufbuch: Jg. {', '.join(map(str, nein))}"
-                if ja and nein else "")
-        ausgemustert[fach] = [eintrag for eintrag in eintraege if eintrag["leihbar"]]
+    for buch in planung.buecher:
+        for fach in sorted({fach for fach, _ in planung.zeilen_des_buchs(buch)}):
+            if not in_ausmusterungen(planung, buch, fach):
+                continue
+            weg = [z for z in planung.planung
+                   if (z.isbn, z.fach) == (buch.isbn, fach) and z.ende == vorjahr]
+            ja = sorted({z.jahrgang for z in weg if z.leihbar})
+            nein = sorted({z.jahrgang for z in weg if not z.leihbar})
+            ausgemustert.setdefault(fach, []).append({
+                "titel": buch.titel, "verlag": buch.verlag, "isbn": buch.isbn,
+                "isbn_anzeige": format_isbn(buch.isbn), "isbn_fehlt": ist_platzhalter_isbn(buch.isbn),
+                "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
+                "farben": markierung(planung, buch, fach),
+                "leihbar": bool(ja), "leihbar_teilweise": bool(ja and nein),
+                "leihbar_titel": (
+                    f"leihbar: Jg. {', '.join(map(str, ja))} · "
+                    f"Kaufbuch: Jg. {', '.join(map(str, nein))}" if ja and nein else ""),
+            })
+    for eintraege in ausgemustert.values():
+        eintraege.sort(key=lambda e: e["titel"].casefold())
     return ausgemustert
 
 
@@ -201,6 +274,7 @@ def _vorschlaege(planung: Buchplanung, bemerkungen: dict[str, str]) -> list[dict
     """
     return [
         {"isbn": buch.isbn, "isbn_anzeige": format_isbn(buch.isbn), "titel": buch.titel,
+         "platzhalter": ist_platzhalter_isbn(buch.isbn),
          "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
          "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
          "leihbar": planung.leihbar(buch.isbn),
@@ -213,12 +287,16 @@ def _vorschlaege(planung: Buchplanung, bemerkungen: dict[str, str]) -> list[dict
 
 
 def _faecher(planung: Buchplanung) -> dict[str, dict[str, Any]]:
-    """Status und Bestätigung der Fachkonferenzleitung je Fach."""
+    """Status und Bestätigung der Fachkonferenzleitung je Fach.
+
+    ``text`` steht im Label („2 Anträge ausstehend“), ``status`` wählt dessen Farbe.
+    """
     faecher: dict[str, dict[str, Any]] = {}
     for fach in planung.faecher:
-        status, hinweis = fach_status(planung, fach)
+        status = fach_status(planung, fach)
         kuerzel, datum = fach_bestaetigung(planung, fach)
         faecher[fach] = {
-            "status": status, "hinweis": hinweis, "kuerzel": kuerzel, "datum": datum,
+            "status": status.status, "text": status.text, "ausstehend": status.ausstehend,
+            "kuerzel": kuerzel, "datum": datum,
         }
     return faecher

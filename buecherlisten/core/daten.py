@@ -43,7 +43,21 @@ class BuecherlistenClient(SchuljahreClient, Protocol):
     def admin(self) -> Any: ...
 
 
+# Ein Buch, das es schon geben soll, dessen ISBN aber noch niemand kennt - es
+# kommt erst kurz vor den Ferien (Entscheidung 2026-10-30). Die Buchplanung
+# führt es unter einem Platzhalter, der nie eine echte ISBN sein kann, bis die
+# ISBN im Buchmenü nachgetragen wird.
+PLATZHALTER_ISBN = "OHNE-ISBN-"
+ISBN_FOLGT = "ISBN folgt"
+
+
+def ist_platzhalter_isbn(isbn: str) -> bool:
+    return (isbn or "").startswith(PLATZHALTER_ISBN)
+
+
 def format_isbn(isbn: str) -> str:
+    if ist_platzhalter_isbn(isbn):
+        return ISBN_FOLGT
     try:
         masked = isbnlib.mask(isbn)
         return masked if masked else isbn

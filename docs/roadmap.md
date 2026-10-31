@@ -48,6 +48,12 @@ davon geändert waren, weiß die Datei ohne Kommentar nicht mehr. Ebenfalls offe
 Kommandozeilen-Skript `buecherlisten/generate_booklists.py` kennt die
 Korrekturen nicht.
 
+**Festgelegt am 2026-10-30: Grundlage der Farben je Ansicht.** In der
+Fach-Ansicht färben Einführung und Ausmusterung nach der Planung (Einführungs-
+und Ausmusterungsjahr), nicht nach dem Vergleich mit IServ. In der **Verlags-
+und Jahrgangsansicht** bleibt der Vergleich mit IServ - wie genau, wird
+festgelegt, wenn diese Ansichten an der Reihe sind.
+
 ## Der Reiter „Mehrjahresbände" (2026-09-19) — gebaut, zwei Punkte offen
 
 Neu sind das Paket `mehrjahresbaende/`, der gleichnamige Reiter zwischen

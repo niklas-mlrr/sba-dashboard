@@ -37,13 +37,15 @@ from datetime import date
 
 # ── Status eines Fachs ───────────────────────────────────────────────────────
 #
-# Bestätigt wird je Zeile (Buch, Fach, Jahrgang); der Status des ganzen Fachs
-# ist die Zusammenfassung seiner Zeilen. Ein Fach kann deshalb nicht
-# "veralten": kommt ein Buch dazu, bringt es eine Zeile ohne Kürzel mit, und
-# das Fach fällt von allein auf "teilweise" zurück.
+# Eine Fachliste ist ganz oder gar nicht bestätigt (Entscheidung 2026-10-30).
+# Gespeichert wird die Bestätigung weiter je Zeile (Buch, Fach, Jahrgang),
+# gesetzt und gelöscht aber immer für alle Zeilen des Fachs
+# (``halte_bestaetigung`` in abgleich.py). Solange ein Antrag offen ist, der
+# die Liste dieses Schuljahrs ändert, lässt sie sich nicht bestätigen - dann
+# heißt sie "Antrag ausstehend" (:func:`blockierende_antraege`).
 
 FACH_OFFEN = "offen"
-FACH_TEILWEISE = "teilweise"
+FACH_AUSSTEHEND = "Antrag ausstehend"
 FACH_BESTAETIGT = "bestätigt"
 
 # ── Status einer Planungszeile ───────────────────────────────────────────────
@@ -98,9 +100,10 @@ ISERV_FELD: dict[str, str] = {
 # Die Legende, die im Blatt "Info" steht: Status → was er bedeutet. Sie steht
 # in der Datei, weil die Datei ohne das Dashboard lesbar sein soll.
 LEGENDE: tuple[tuple[str, str], ...] = (
-    (FACH_TEILWEISE,
-     "einige Zeilen dieses Fachs tragen noch kein Kürzel der Fachkonferenzleitung"),
-    (FACH_BESTAETIGT, "die Fachkonferenzleitung hat alle Zeilen dieses Fachs bestätigt"),
+    (FACH_AUSSTEHEND,
+     "über eine Einführung zu diesem oder eine Ausmusterung nach dem vorigen Schuljahr "
+     "ist noch nicht entschieden - so lange lässt sich die Liste nicht bestätigen"),
+    (FACH_BESTAETIGT, "die Fachkonferenzleitung hat die Liste dieses Fachs bestätigt"),
     (PLANUNG_GEPLANT, "wird hier erst in einem späteren Schuljahr eingeführt"),
     (PLANUNG_IM_EINSATZ, "wird hier geführt"),
     (PLANUNG_LAEUFT_AUS, "wird nach dem angegebenen Schuljahr ausgemustert"),
@@ -512,36 +515,118 @@ class Buchplanung:
 # ── Die gerechneten Status ───────────────────────────────────────────────────
 
 
-def fach_status(
-    stand: Buchplanung, fach: str,
-) -> tuple[str, str]:
-    """(Status, Klartext) der Freigabe eines Fachs, aus seinen Zeilen gerechnet.
+def zeilen_des_fachs(stand: Buchplanung, fach: str) -> tuple[Planungszeile, ...]:
+    """Die Zeilen, über die die Bestätigung eines Fachs spricht: jede Zeile des
+    Fachs zu einem Buch, das die Datei kennt."""
+    bekannt = {buch.isbn for buch in stand.buecher}
+    return tuple(z for z in stand.planung_des_fachs(fach) if z.isbn in bekannt)
 
-    Gezählt werden die Zeilen, die dieses Fach heute hat - jede von ihnen ist
-    ein Buch in einem Jahrgang. ``bestätigt`` heißt: jede trägt ein Kürzel.
-    Kommt ein Buch dazu, ist seine Zeile unbestätigt, und das Fach fällt von
-    allein zurück; einen Zustand "veraltet" braucht es dafür nicht.
+
+def blockierende_antraege(stand: Buchplanung, fach: str) -> tuple[tuple[Planungszeile, str], ...]:
+    """Die offenen Anträge, die das Bestätigen der Fachliste aufhalten - als (Zeile, Art).
+
+    Das sind die, die die Liste **dieses** Schuljahrs ändern: eine Einführung
+    zum laufenden Schuljahr und eine Ausmusterung nach dem Vorjahr. Eine
+    spätere Einführung hält nichts auf, sie ändert die bestätigte Liste nicht.
+    Ein abgelehnter Antrag ist entschieden und hält ebenfalls nichts auf.
     """
-    offen: list[str] = []
-    gesamt = 0
-    for buch in stand.buecher_je_fach(fach):
-        for eigenes, jahrgang in stand.zeilen_des_buchs(buch):
-            if eigenes != fach:
-                continue
-            for zeile in stand.zeilen_des_paars(buch.isbn, fach, jahrgang):
-                gesamt += 1
-                if not zeile.bestaetigt:
-                    offen.append(f"{buch.titel} (Jg. {jahrgang})")
-    offen = list(dict.fromkeys(offen))
-    if gesamt == 0:
-        return FACH_OFFEN, "Zu diesem Fach steht kein Buch in der Datei."
-    if not offen:
-        return FACH_BESTAETIGT, ""
-    if len(offen) == gesamt:
-        return FACH_OFFEN, "Noch nicht von der Fachkonferenzleitung bestätigt."
-    namen = ", ".join(sorted(offen)[:5])
-    mehr = "" if len(offen) <= 5 else f" und {len(offen) - 5} weitere"
-    return FACH_TEILWEISE, f"Noch ohne Kürzel: {namen}{mehr}."
+    jetzt = _jahr_oder_none(stand.schuljahr)
+    if jetzt is None:
+        return ()
+    heraus: list[tuple[Planungszeile, str]] = []
+    for zeile in zeilen_des_fachs(stand, fach):
+        for art, jahr in ((ART_EINFUEHRUNG, jetzt), (ART_AUSMUSTERUNG, jetzt - 1)):
+            if (_jahr_oder_none(zeile.schuljahr_des_antrags(art)) == jahr
+                    and zeile.antrag(art).status == ANTRAG_OFFEN):
+                heraus.append((zeile, art))
+    return tuple(heraus)
+
+
+@dataclass(frozen=True)
+class Fachstatus:
+    """Der Stand der Bestätigung einer Fachliste - einer von drei.
+
+    ``ausstehend`` zählt die Anträge, die das Bestätigen aufhalten
+    (:func:`blockierende_antraege`); ``text`` ist das, was im Label steht.
+    """
+
+    status: str
+    ausstehend: int = 0
+
+    @property
+    def text(self) -> str:
+        if self.status != FACH_AUSSTEHEND:
+            return self.status
+        return ("1 Antrag ausstehend" if self.ausstehend == 1
+                else f"{self.ausstehend} Anträge ausstehend")
+
+
+def fach_status(stand: Buchplanung, fach: str) -> Fachstatus:
+    """Wie weit die Fachliste ist, aus ihren Zeilen gerechnet.
+
+    * Antrag ausstehend - ein Antrag, der die Liste dieses Schuljahrs ändert,
+      ist noch offen. Das geht vor: bestätigen lässt sich die Liste so nicht.
+    * bestätigt - jede Zeile des Fachs trägt ein Kürzel.
+    * offen - sonst, auch wenn nur einige Zeilen eines tragen (etwa nach einem
+      Abgleich, der ein Buch aus IServ mitgebracht hat).
+    """
+    ausstehend = len(blockierende_antraege(stand, fach))
+    if ausstehend:
+        return Fachstatus(FACH_AUSSTEHEND, ausstehend)
+    zeilen = zeilen_des_fachs(stand, fach)
+    if zeilen and all(zeile.bestaetigt for zeile in zeilen):
+        return Fachstatus(FACH_BESTAETIGT)
+    return Fachstatus(FACH_OFFEN)
+
+
+def verfallsgruende(vorher: Buchplanung, nachher: Buchplanung, fach: str) -> tuple[str, ...]:
+    """Was an einer Änderung die Bestätigung der Fachliste verfallen lässt - als Sätze.
+
+    Verfallen lässt sie alles, was die Liste dieses Schuljahrs ändert: eine
+    Einführung zum laufenden Schuljahr oder eine Ausmusterung nach dem Vorjahr,
+    die dazukommt, wegfällt oder sich verschiebt - auch, wenn sich nur
+    „leihbar“ daran ändert. Eine Bemerkung, eine spätere Einführung oder eine
+    spätere Ausmusterung lässt sie stehen. Leer heißt: nichts verfällt.
+    """
+    alt, neu = _listeneintraege(vorher, fach), _listeneintraege(nachher, fach)
+    gruende = ([text for schluessel, text in neu.items() if schluessel not in alt]
+               + [f"{text} (entfernt)" for schluessel, text in alt.items() if schluessel not in neu])
+    # Was die Liste dieses Schuljahrs sonst ändert - etwa ein laufendes Buch,
+    # das erst ab einem späteren Schuljahr gelten soll. Nur, wo die Einträge
+    # oben nicht schon dasselbe Buch und denselben Jahrgang nennen.
+    genannt = {schluessel[:2] for schluessel in alt.keys() ^ neu.keys()}
+    liste_alt, liste_neu = _liste_im_schuljahr(vorher, fach), _liste_im_schuljahr(nachher, fach)
+    for schluessel in sorted(liste_alt ^ liste_neu, key=lambda s: (s[1], s[0], s[2])):
+        if schluessel[:2] in genannt:
+            continue
+        isbn, jahrgang, leihbar = schluessel
+        art_text = "leihbar" if leihbar else "Kaufbuch"
+        wie = "steht neu" if schluessel in liste_neu else "steht nicht mehr"
+        gruende.append(f"Jg. {jahrgang}: {wie} in der Liste dieses Schuljahrs ({art_text})")
+    return tuple(gruende)
+
+
+def _listeneintraege(stand: Buchplanung, fach: str) -> dict[tuple, str]:
+    """Die Einführungen zum laufenden und Ausmusterungen nach dem vorigen Schuljahr."""
+    jetzt = _jahr_oder_none(stand.schuljahr)
+    if jetzt is None:
+        return {}
+    eintraege: dict[tuple, str] = {}
+    for zeile in zeilen_des_fachs(stand, fach):
+        for art, jahr, wort in ((ART_EINFUEHRUNG, jetzt, "Einführung zum"),
+                                (ART_AUSMUSTERUNG, jetzt - 1, "Ausmusterung nach")):
+            angabe = zeile.schuljahr_des_antrags(art)
+            if _jahr_oder_none(angabe) == jahr:
+                art_text = "leihbar" if zeile.leihbar else "Kaufbuch"
+                eintraege[(zeile.isbn, zeile.jahrgang, art, jahr, zeile.leihbar)] = (
+                    f"Jg. {zeile.jahrgang}: {wort} {angabe} ({art_text})")
+    return eintraege
+
+
+def _liste_im_schuljahr(stand: Buchplanung, fach: str) -> set[tuple[str, int, bool]]:
+    """Was die Liste dieses Fachs im laufenden Schuljahr führt: (ISBN, Jahrgang, leihbar)."""
+    return {(z.isbn, z.jahrgang, z.leihbar) for z in zeilen_des_fachs(stand, fach)
+            if wirkt_im_schuljahr(z, stand.schuljahr)}
 
 
 def fach_bestaetigung(stand: Buchplanung, fach: str) -> tuple[str, date | None]:
@@ -552,7 +637,7 @@ def fach_bestaetigung(stand: Buchplanung, fach: str) -> tuple[str, date | None]:
     kommt nichts zurück: ein herausgegriffenes davon wäre eine Behauptung über
     die anderen.
     """
-    zeilen = [zeile for zeile in stand.planung_des_fachs(fach) if zeile.bestaetigt]
+    zeilen = [zeile for zeile in zeilen_des_fachs(stand, fach) if zeile.bestaetigt]
     kuerzel = {zeile.kuerzel for zeile in zeilen}
     daten = {zeile.datum for zeile in zeilen}
     return (
@@ -632,9 +717,7 @@ def wirkt_im_schuljahr(zeile: Planungszeile | None, schuljahr: str) -> bool:
     Das ist die Frage, an der die Bestätigung der Fachkonferenzleitung hängt:
     eine Änderung, die nur ein künftiges Schuljahr betrifft ("wird nach
     2029/2030 ausgemustert"), ändert nichts an der Liste, die bestätigt wurde -
-    eine, die das laufende Schuljahr betrifft, schon. Welche der beiden
-    vorliegt, entscheidet :func:`setze_buchplanung`
-    (``buecherlisten/planung/abgleich.py``) mit genau dieser Funktion.
+    eine, die das laufende Schuljahr betrifft, schon (:func:`verfallsgruende`).
     """
     return planungs_status(zeile, schuljahr) in _ANWESEND
 

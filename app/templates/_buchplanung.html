@@ -11,46 +11,128 @@
   Ohne gespeicherten Stand (``planung.mtime is none``) steht statt allem der
   Knopf „Aus IServ aktualisieren": vorher gibt es keine Datei, in die etwas
   eingetragen werden könnte.
+
+  Eine Zeile mit Meldungen unter dem Kopf gibt es nicht mehr (Entscheidung
+  2026-10-30): was ein Menü meldet, steht in dessen Fuß, alles andere im
+  Fehlermenü (``fehlermenue``).
 #}
 
 {% macro statuslabel(status) -%}
 {%- set klasse = {"bestätigt": "label-success",
-                  "teilweise": "label-warning", "offen": "label-status",
+                  "Antrag ausstehend": "label-warning", "offen": "label-status",
                   "geplant": "label-info", "läuft aus": "label-warning",
                   "ausgemustert": "label-danger", "im Einsatz": "label-success",
                   "genehmigt": "label-success", "abgelehnt": "label-danger"}.get(status, "label-status") -%}
 <span class="label {{ klasse }}">{{ status }}</span>
 {%- endmacro %}
 
+{#
+  Der Stand einer Fachliste als Label: offen (grau), „2 Anträge ausstehend“
+  (orange), bestätigt (grün). Ohne Datei ist jede Liste offen.
+#}
+{% macro fachlabel(stand) -%}
+{%- if stand -%}
+<span class="label {{ {'bestätigt': 'label-success', 'Antrag ausstehend': 'label-warning'}.get(stand.status, 'label-status') }}">{{ stand.text }}</span>
+{%- else -%}
+<span class="label label-status">offen</span>
+{%- endif -%}
+{%- endmacro %}
+
+{#
+  Rechts im Kopf einer Fachliste: „Liste bestätigen“ oder „Bestätigung
+  zurückziehen“, je nach Stand. Beide öffnen ein Menü (``bestaetigungsmenues``).
+  Solange ein Antrag aussteht, lässt sich nicht bestätigen - der Knopf ist
+  grau und sagt beim Überfahren, warum.
+#}
 {% macro kopfknoepfe(planung, ansicht, gruppe) %}
 {% if planung.mtime is none %}
 <button type="button" class="btn btn-default" data-planung="abgleich">Aus IServ aktualisieren</button>
 {% elif gruppe and ansicht == "fach" %}
-<span class="planung-formular">
   {% set stand = planung.fach_je_name.get(gruppe) %}
-  {% if stand %}{{ statuslabel(stand.status) }}{% endif %}
-  <input type="text" class="planung-feld" data-planung-feld="kuerzel" maxlength="10"
-    placeholder="Kürzel" value="{{ stand.kuerzel if stand else '' }}"
-    aria-label="Kürzel der Fachkonferenzleitung">
-  <input type="date" class="planung-feld" data-planung-feld="datum"
-    value="{{ stand.datum.isoformat() if stand and stand.datum else '' }}"
-    required aria-label="Datum der Bestätigung">
-  <button type="button" class="btn btn-default" data-planung="fach" data-fach="{{ gruppe }}"
-    title="Diese Bücherliste als bestätigt eintragen">Liste bestätigen</button>
-</span>
+  {% if stand and stand.status == "bestätigt" %}
+<button type="button" class="btn btn-default" data-planung="menue-oeffnen"
+  data-menue="zurueckziehen-menue">Bestätigung zurückziehen</button>
+  {% else %}
+<button type="button" class="btn btn-default" data-planung="menue-oeffnen"
+  data-menue="bestaetigen-menue"
+  {%- if stand and stand.status == "Antrag ausstehend" %} disabled
+  title="{{ stand.ausstehend }} {{ 'Antrag' if stand.ausstehend == 1 else 'Anträge' }} noch nicht entschieden"{% endif %}>Liste bestätigen</button>
+  {% endif %}
 {% endif %}
 {% endmacro %}
 
-{% macro hinweise(planung, ansicht, gruppe) %}
-{% if planung.fehler %}<p class="hinweis warnung">{{ planung.fehler }}</p>{% endif %}
-{% if gruppe and ansicht == "fach" %}
-  {% set stand = planung.fach_je_name.get(gruppe) %}
-  {# Nur die gelbe Warnung (teilweise bestätigt); graue Hinweise stehen hier
-     nicht mehr (Entscheidung 2026-09-25). #}
-  {% if stand and stand.hinweis and stand.status == 'teilweise' %}
-  <p class="hinweis warnung">{{ stand.hinweis }}</p>
-  {% endif %}
-{% endif %}
+{#
+  Die beiden Menüs hinter den Kopfknöpfen - aufgebaut wie das Druckmenü
+  (``_druckmenue.html``): Beschriftung links, Eingabe rechts, unten die Knöpfe.
+  Die Meldung des Servers (etwa „Bitte das Datum eintragen“) steht im Fuß.
+#}
+{% macro bestaetigungsmenues(planung, fach) %}
+{% set stand = planung.fach_je_name.get(fach) %}
+<dialog id="bestaetigen-menue" class="iserv-modal" aria-labelledby="bestaetigen-titel"
+  data-fach="{{ fach }}" data-vorher='{{ planung.fachstand(fach) | tojson }}'>
+  <div class="modal-header">
+    <h3 class="modal-title" id="bestaetigen-titel">Bücherliste {{ fach }} bestätigen</h3>
+  </div>
+  <div class="modal-body">
+    <div class="form-group">
+      <label class="control-label spalte-beschriftung" for="bestaetigen-kuerzel">Kürzel:</label>
+      <div class="spalte-inhalt">
+        <input type="text" class="form-control" id="bestaetigen-kuerzel" data-planung-feld="kuerzel"
+          maxlength="10" autocomplete="off">
+        <p class="small help-block">Kürzel der Fachkonferenzleitung, die die Liste bestätigt.</p>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="control-label spalte-beschriftung" for="bestaetigen-datum">Datum:</label>
+      <div class="spalte-inhalt">
+        {# Vorbelegt mit heute (static/buchplanung.js, beim Öffnen). #}
+        <input type="date" class="form-control" id="bestaetigen-datum" data-planung-feld="datum">
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
+    <button type="button" class="btn btn-default" data-planung="abbrechen">Abbrechen</button>
+    <button type="button" class="btn btn-primary" data-planung="bestaetigen">Bestätigen</button>
+  </div>
+</dialog>
+<dialog id="zurueckziehen-menue" class="iserv-modal" aria-labelledby="zurueckziehen-titel"
+  data-fach="{{ fach }}" data-vorher='{{ planung.fachstand(fach) | tojson }}'>
+  <div class="modal-header">
+    <h3 class="modal-title" id="zurueckziehen-titel">Bestätigung zurückziehen</h3>
+  </div>
+  <div class="modal-body">
+    <p>Bestätigt{% if stand and stand.kuerzel %} von {{ stand.kuerzel }}{% endif %}
+      {%- if stand and stand.datum %} am {{ stand.datum.strftime("%d.%m.%Y") }}{% endif %}.</p>
+    <p class="small help-block">Danach ist die Bücherliste {{ fach }} wieder offen.</p>
+  </div>
+  <div class="modal-footer">
+    <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
+    <button type="button" class="btn btn-default" data-planung="abbrechen">Abbrechen</button>
+    <button type="button" class="btn btn-primary" data-planung="zurueckziehen">Zurückziehen</button>
+  </div>
+</dialog>
+{% endmacro %}
+
+{#
+  Das Fehlermenü: alles, was nicht aus einem Menü heraus gemeldet wird - der
+  Server ist nicht erreichbar, die Datei ist nicht lesbar, der Abgleich ist
+  gescheitert. Steht beim Laden schon ein Fehler fest (``planung.fehler``),
+  öffnet es sich gleich (``data-sofort``).
+#}
+{% macro fehlermenue(planung) %}
+<dialog id="fehlermenue" class="iserv-modal" aria-labelledby="fehlermenue-titel"
+  {%- if planung.fehler %} data-sofort{% endif %}>
+  <div class="modal-header">
+    <h3 class="modal-title" id="fehlermenue-titel">Fehler</h3>
+  </div>
+  <div class="modal-body">
+    <p data-fehlermenue-text>{{ planung.fehler or "" }}</p>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-primary" data-planung="meldung-schliessen">Meldung schließen</button>
+  </div>
+</dialog>
 {% endmacro %}
 
 {#
@@ -145,15 +227,29 @@
 {% endmacro %}
 
 {#
-  Was die Änderungsliste über das Schuljahr daneben entschieden hat - hier nur
-  zum Lesen. Ändert sich das Schuljahr beim Speichern, steht der Antrag danach
-  wieder auf offen.
+  Die Entscheidungen der Änderungsliste über eine Zeile - über die ganze Breite
+  unter ihr: „Einführung [genehmigt] durch MÜ am 12.10.2026.“, je Antrag eine
+  Zeile, die Begründung (eine je Zeile) einmal am Ende. Ein offener Antrag
+  steht hier nicht; sein Stand steht hinten in der Zeile. Bricht an
+  Leerzeichen um und wird nie abgeschnitten.
 #}
-{% macro antragshinweis(antrag) -%}
-{%- if antrag -%}
-<span class="planung-antrag">Antrag {{ statuslabel(antrag.status) }}
-{%- if antrag.kuerzel %} {{ antrag.kuerzel }}{% endif %}
-{%- if antrag.datum %}, {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}</span>
+{% macro entscheidungen(zeile) -%}
+{%- set entschieden = [] -%}
+{%- for art, wort in (("einfuehrung", "Einführung"), ("ausmusterung", "Ausmusterung")) -%}
+  {%- set antrag = zeile["antrag_" ~ art] -%}
+  {%- if antrag and antrag.status != "offen" %}{% set _ = entschieden.append((wort, antrag)) %}{% endif -%}
+{%- endfor -%}
+{%- if entschieden or zeile.begruendung %}
+<tr class="planung-entscheidung"><td colspan="6">
+  {%- for wort, antrag in entschieden %}
+  <span class="entscheidung-{{ antrag.status }}">{{ wort }} {{ statuslabel(antrag.status) }}
+    {%- if antrag.kuerzel %} durch {{ antrag.kuerzel }}{% endif %}
+    {%- if antrag.datum %} am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}.
+    {%- if loop.last and zeile.begruendung %} Begründung: {{ zeile.begruendung }}{% endif %}</span>
+  {%- else %}
+  <span>Begründung: {{ zeile.begruendung }}</span>
+  {%- endfor %}
+</td></tr>
 {%- endif -%}
 {%- endmacro %}
 
@@ -168,20 +264,24 @@
   Schuljahr - umgeschaltet wird dann nicht sie, sondern sie endet mit dem
   Vorjahr, und darunter beginnt eine neue (``static/buchplanung.js``). Eine
   ausgemusterte Zeile (``zeile.gesperrt``) hat ein graues Häkchen.
-  ``data-bisher-ab`` sagt dem Server, welche Zeile des Jahrgangs gemeint ist.
+  ``data-bisher-jahrgang`` und ``data-bisher-ab`` sagen, welche Zeile der Datei
+  gemeint ist - dem Server und dem Abgleich bei einem Konflikt.
+
+  Jede Zeile ist ein eigenes ``<tbody>``: die Eingaben und darunter ihre
+  Entscheidungen (``entscheidungen``) gehören zusammen und werden gemeinsam
+  hinterlegt. Die obere Hälfte richtet sich nach dem Antrag auf Einführung,
+  die untere nach dem auf Ausmusterung (``zeile.haelften``,
+  app/planungsansicht.py): genehmigt ist in der Farbe des Status hinterlegt,
+  offen weiß, abgelehnt hinterlegt und grau überdeckt - bearbeiten lässt sich
+  die Zeile trotzdem.
 #}
-{#
-  Sind alle Anträge der Zeile genehmigt - oder gibt es keinen -, ist sie in
-  der Farbe ihres Status hinterlegt (``zeile.genehmigt``, gerechnet von
-  ``alles_genehmigt`` in buecherlisten/planung/aenderungen.py). Solange etwas
-  offen oder abgelehnt ist, bleibt sie weiß.
-#}
-{% set iserv_leihbar = dict(buch.leihbar_iserv or ()) if buch else {} %}
 {% set statusklasse = {"im Einsatz": "im-einsatz", "geplant": "geplant",
                        "läuft aus": "laeuft-aus", "ausgemustert": "ausgemustert"}.get(zeile.status) %}
-<tr data-planung-zeile data-bisher-ab="{{ zeile.eingefuehrt_ab }}"
-  {%- if zeile.genehmigt and statusklasse %} class="genehmigt status-{{ statusklasse }}"{% endif %}
+<tbody data-planung-zeile data-bisher-jahrgang="{{ zeile.jahrgang }}"
+  data-bisher-ab="{{ zeile.eingefuehrt_ab }}"
+  class="status-{{ statusklasse }} oben-{{ zeile.haelften[0] }} unten-{{ zeile.haelften[1] }}"
   {%- if zeile.aktuell %} data-aktuell{% endif %}{% if zeile.alt %} data-alt{% endif %}>
+<tr class="planung-eingabe">
   <td class="planung-spalte-jahrgang">
     {% if zeile.aktuell %}{{ zeile.jahrgang }}<input type="hidden"
       data-planung-feld="jahrgang" value="{{ zeile.jahrgang }}">
@@ -191,10 +291,7 @@
   </td>
   <td class="planung-spalte-leihbar"><input type="checkbox" data-planung-feld="leihbar"
     {%- if zeile.leihbar %} checked{% endif %}{% if zeile.gesperrt %} disabled
-    title="ausgemustert - nicht mehr umschaltbar"{% endif %} aria-label="leihbar">
-    {%- if zeile.status in ("im Einsatz", "läuft aus") and (fach, zeile.jahrgang) in iserv_leihbar %}
-    <span class="buchreihe-iserv">in IServ: {{ "ja" if iserv_leihbar[(fach, zeile.jahrgang)] else "nein" }}</span>
-    {%- endif %}</td>
+    title="ausgemustert - nicht mehr umschaltbar"{% endif %} aria-label="leihbar"></td>
   <td>
     {% if zeile.aktuell %}
     <span class="klein grau">{{ zeile.eingefuehrt_ab or "eingeführt" }}</span>
@@ -202,7 +299,6 @@
     {% else %}<input type="text" class="planung-feld planung-feld-schuljahr"
       data-planung-feld="eingefuehrt_ab" value="{{ zeile.eingefuehrt_ab }}"
       placeholder="JJJJ/JJJJ" aria-label="eingeführt zum Schuljahr">{% endif %}
-    {{ antragshinweis(zeile.antrag_einfuehrung) }}
   </td>
   {#
     Ausgemustert wird auch ein Kaufbuch: ausgemustert wird die Bücherliste,
@@ -213,18 +309,18 @@
   #}
   <td><input type="text" class="planung-feld planung-feld-schuljahr"
     data-planung-feld="ausgemustert_nach" value="{{ zeile.ausgemustert_nach }}"
-    placeholder="JJJJ/JJJJ" aria-label="ausgemustert nach Schuljahr">
-    {{ antragshinweis(zeile.antrag_ausmusterung) }}</td>
+    placeholder="JJJJ/JJJJ" aria-label="ausgemustert nach Schuljahr"></td>
   <td class="planung-spalte-bemerkung"><span class="planung-bemerkung-rahmen"><textarea
     class="planung-feld planung-bemerkung" rows="1" data-planung-feld="bemerkung"
-    placeholder="Bemerkung" aria-label="Bemerkung zu diesem Jahrgang">{{ zeile.bemerkung }}</textarea></span>
-    {%- if zeile.begruendung %}<span class="planung-antrag" title="{{ zeile.begruendung }}">Begründung: {{ zeile.begruendung }}</span>{% endif %}</td>
+    placeholder="Bemerkung" aria-label="Bemerkung zu diesem Jahrgang">{{ zeile.bemerkung }}</textarea></span></td>
   <td class="planung-zeilenende">{{ statuslabel(zeile.status) }}
     {% if not zeile.aktuell %}<button type="button" class="knopf-klein"
       data-planung="jahrgang-entfernen" title="Diesen Jahrgang entfernen"
       aria-label="Jahrgang entfernen">✕</button>{% endif %}
   </td>
 </tr>
+{{ entscheidungen(zeile) }}
+</tbody>
 {% endmacro %}
 
 {#
@@ -268,9 +364,15 @@
   <div class="form-group">
     <label class="control-label">ISBN</label>
     {% if neu %}
+    {# Leer erlaubt: dann steht das Buch unter „ISBN folgt“, bis sie da ist. #}
     <span class="typeahead"><input class="form-control" data-buchreihe-feld="isbn"
-      data-vorschlag="isbn" required aria-label="ISBN" autocomplete="off" spellcheck="false"
+      data-vorschlag="isbn" placeholder="leer lassen, wenn sie noch fehlt" aria-label="ISBN"
+      autocomplete="off" spellcheck="false"
       inputmode="numeric" role="combobox" aria-autocomplete="list" aria-expanded="false"></span>
+    {% elif buch.isbn_fehlt %}
+    {# Das Buch steht unter einem Platzhalter: hier wird die ISBN nachgetragen. #}
+    <input class="form-control" data-buchreihe-feld="isbn" placeholder="ISBN folgt"
+      aria-label="ISBN" autocomplete="off" spellcheck="false" inputmode="numeric">
     {% else %}
     {# Gesperrt (Entscheidung 2026-09-24): die ISBN ist der Schlüssel des Buchs
        und wird im Menü nicht geändert. ``disabled`` wie die Felder eines
@@ -337,7 +439,11 @@
   {% if neu %}
   <p class="small help-block">ISBN oder Titel eintippen: Bücher aus anderen Fächern werden
     vorgeschlagen und bringen Titel, Verlag, Preise und die Bemerkung mit. Eine neue ISBN legt das Buch nur
-    im Dashboard an - in IServ ändert sich nichts.</p>
+    im Dashboard an - in IServ ändert sich nichts. Gibt es noch keine ISBN, bleibt das Feld leer:
+    das Buch steht dann unter „ISBN folgt“, und sie wird später in seinem Menü nachgetragen.</p>
+  {% elif buch.isbn_fehlt %}
+  <p class="small help-block">Für dieses Buch fehlt noch die ISBN. Sobald sie bekannt ist, hier
+    eintragen - Jahrgänge, Anträge und Rücklage bleiben dabei erhalten.</p>
   {% elif buch.von_hand %}
   <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
     hinzugefügt. Titel, Verlag und Preise gelten, wie sie hier stehen.</p>
@@ -353,12 +459,19 @@
   <th>Ausmusterung<br>nach Schuljahr</th><th>Bemerkung</th><th></th></tr></thead>
 {% endmacro %}
 
+{#
+  ``data-vorher`` ist der Eintrag, wie das Menü ihn beim Öffnen zeigt
+  (``eintrag_stand`` in app/planungsansicht.py). Er geht beim Speichern mit;
+  hat ihn inzwischen jemand anderes geändert, legt das Menü „Unterschiede“
+  beide Stände nebeneinander.
+#}
 {% macro planungsvorlage(planung, buch, fach) %}
 {% set zeilen = planung.planung_je_isbn_und_fach.get(buch.isbn, {}).get(fach, []) %}
 {% set ruecklage = planung.ruecklage_je_isbn.get(buch.isbn, {}).get(fach) %}
-<template class="planung-vorlage" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}">
+<template class="planung-vorlage" data-isbn="{{ buch.isbn }}" data-fach="{{ fach }}"
+  data-vorher='{{ planung.eintrag(buch.isbn, fach) | tojson }}'>
   <div class="modal-header">
-    <h3 class="modal-title">Buchreihe bearbeiten<small>&nbsp;–&nbsp;</small><small class="label-text">{{ fach }}</small></h3>
+    <h3 class="modal-title">Buchreihe bearbeiten</h3>
   </div>
   <div class="modal-body">
     {{ buchreihe(buch, planung.bemerkung_je_isbn.get(buch.isbn, "")) }}
@@ -370,11 +483,9 @@
         Schrift soll sie lieber rollen als über den Rand hinausstehen.
       #}
       <div class="planung-tabellenrahmen">
-        <table class="planung-tabelle">
+        <table class="planung-tabelle" data-planung-zeilen>
           {{ tabellenkopf() }}
-          <tbody data-planung-zeilen>
-            {% for zeile in zeilen %}{{ jahrgangszeile(planung, buch, zeile, fach) }}{% endfor %}
-          </tbody>
+          {% for zeile in zeilen %}{{ jahrgangszeile(planung, buch, zeile, fach) }}{% endfor %}
         </table>
       </div>
       <p class="planung-anfuegen">
@@ -412,8 +523,9 @@
   {#
     Die Meldung steht im Menü, nicht auf der Seite dahinter: was das Speichern
     von hier aus meldet, gehört dorthin, wo gespeichert wurde - hinter dem
-    Dialog wäre es vom Abdunkeln verdeckt. Links neben den Knöpfen, damit es
-    dort auftaucht, wo gerade hingesehen wird.
+    Dialog wäre es vom Abdunkeln verdeckt. Über den Knöpfen, über die ganze
+    Breite: ein Eingabefehler oder die Warnung, dass die Bestätigung der Liste
+    verfällt (dann heißt „Speichern“ „Trotzdem speichern“).
   #}
   <div class="modal-footer">
     <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
@@ -455,9 +567,8 @@
     <div class="planung-block">
       <h4>Einführung und Ausmusterung</h4>
       <div class="planung-tabellenrahmen">
-        <table class="planung-tabelle">
+        <table class="planung-tabelle" data-planung-zeilen>
           {{ tabellenkopf() }}
-          <tbody data-planung-zeilen></tbody>
         </table>
       </div>
       <p class="planung-anfuegen">
@@ -480,7 +591,7 @@
 {# Die Bücher, die „+ Buch hinzufügen“ bei ISBN und Titel vorschlägt. #}
 <script type="application/json" id="planung-buecher">{{ buecher | list | tojson }}</script>
 <template id="planung-leerzeile">
-  <tr data-planung-zeile>
+  <tbody data-planung-zeile><tr class="planung-eingabe">
     <td class="planung-spalte-jahrgang"><input type="number"
       class="planung-feld planung-feld-jahrgang" data-planung-feld="jahrgang"
       min="1" max="13" placeholder="Jg." aria-label="Jahrgang"></td>
@@ -498,8 +609,32 @@
     <td class="planung-zeilenende"><span class="klein grau">neu</span>
       <button type="button" class="knopf-klein" data-planung="jahrgang-entfernen"
         title="Diesen Jahrgang entfernen" aria-label="Jahrgang entfernen">✕</button></td>
-  </tr>
+  </tr></tbody>
 </template>
 <dialog id="planungsmenue" class="iserv-modal iserv-modal-breit"
   aria-labelledby="planungsmenue-titel"></dialog>
+{#
+  Das Menü „Unterschiede“: hat jemand anderes einen Eintrag geändert, während
+  er hier offen war, stehen links der neue Stand und rechts die Eingabe - je
+  Unterschied ein Haken auf der Seite, die bleiben soll (static/buchplanung.js,
+  ``dreiwege``). Was nur eine Seite geändert hat, wird ohne Frage übernommen.
+#}
+<dialog id="unterschiede-menue" class="iserv-modal iserv-modal-breit"
+  aria-labelledby="unterschiede-titel">
+  <div class="modal-header">
+    <h3 class="modal-title" id="unterschiede-titel">Inzwischen geändert</h3>
+  </div>
+  <div class="modal-body">
+    <p data-unterschiede-text></p>
+    <table class="planung-tabelle unterschiede-tabelle">
+      <thead><tr><th>Feld</th><th>Neuer Stand</th><th>Deine Eingabe</th></tr></thead>
+      <tbody data-unterschiede></tbody>
+    </table>
+  </div>
+  <div class="modal-footer">
+    <p class="hinweis meldung planung-menue-meldung" data-planung-meldung role="alert" hidden></p>
+    <button type="button" class="btn btn-default" data-planung="abbrechen">Abbrechen</button>
+    <button type="button" class="btn btn-primary" data-planung="unterschiede-speichern">Übernehmen und speichern</button>
+  </div>
+</dialog>
 {% endmacro %}
