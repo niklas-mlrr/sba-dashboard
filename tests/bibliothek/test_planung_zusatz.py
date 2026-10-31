@@ -33,8 +33,7 @@ def _text(zeile: Planungszeile) -> str | None:
     ("2020/2021", "2026/2027", "bis 2026/2027"),
     ("2020/2021", "2028/2029", "bis 2028/2029"),
     ("", "2027/2028", "bis 2027/2028"),
-    ("2026/2027", "2026/2027", "bis 2026/2027"),
-    # SJ < ESJ = ASJ: nur dieses Jahr (ohne Anträge nicht genehmigt: siehe unten).
+    # SJ < ESJ = ASJ: nur dieses Jahr (ohne genehmigte Anträge: siehe unten).
     # SJ < ESJ < ASJ: „von ESJ bis ASJ“.
     ("2027/2028", "2029/2030", "von 2027/2028 bis 2029/2030"),
     # SJ < ESJ, ohne ASJ: „ab ESJ“.
@@ -42,10 +41,29 @@ def _text(zeile: Planungszeile) -> str | None:
     # Sonst nichts: längst eingeführt, nie ausgemustert; ausgemustert nach dem Vorjahr.
     ("2020/2021", "", None),
     ("", "", None),
-    ("2020/2021", "2025/2026", None),
 ])
 def test_die_vier_regeln(ab, nach, erwartet):
     assert _text(_zeile(ab, nach)) == erwartet
+
+
+def test_zum_laufenden_schuljahr_eingefuehrt_zeigt_die_einfuehrung_bis_sie_genehmigt_ist():
+    """Sonst hätte ihr offener oder abgelehnter Antrag kein Jahr für den Kasten."""
+    assert _text(_zeile("2026/2027", "2028/2029")) == "von 2026/2027 bis 2028/2029"
+    assert _text(_zeile("2026/2027", "2026/2027")) == "von 2026/2027 bis 2026/2027"
+    assert _text(_zeile("2026/2027")) == "ab 2026/2027"
+    assert _text(_zeile("2026/2027", einfuehrung="abgelehnt")) == "ab 2026/2027"
+    # Genehmigt: die Einführung ist vollzogen, es bleibt, was sie nicht sagt.
+    assert _text(_zeile("2026/2027", "2028/2029", einfuehrung="genehmigt")) == "bis 2028/2029"
+    assert _text(_zeile("2026/2027", "2026/2027", einfuehrung="genehmigt")) == "bis 2026/2027"
+    assert _text(_zeile("2026/2027", einfuehrung="genehmigt")) is None
+
+
+def test_nach_dem_vorjahr_ausgemustert_zeigt_die_ausmusterung_bis_sie_genehmigt_ist():
+    assert _text(_zeile("2020/2021", "2025/2026")) == "bis 2025/2026"
+    assert _text(_zeile("", "2025/2026", ausmusterung="abgelehnt")) == "bis 2025/2026"
+    assert _text(_zeile("2020/2021", "2025/2026", ausmusterung="genehmigt")) is None
+    # Früher ausgemustert: nichts, auch ohne Entscheidung.
+    assert _text(_zeile("2020/2021", "2024/2025")) is None
 
 
 def test_einfuehrung_und_ausmusterung_im_selben_jahr_bis_beide_genehmigt_sind():
@@ -74,8 +92,13 @@ def test_ein_offener_oder_abgelehnter_antrag_hat_einen_kasten_ein_genehmigter_ni
         ("2027/2028", "einfuehrung", ""), ("2029/2030", "ausmusterung", "offen")]
 
 
-def test_eine_ausmusterung_nach_dem_vorjahr_ist_kein_zusatz_also_kein_kasten():
-    assert zusatz_der_zeile(_zeile("2020/2021", "2025/2026"), SJ) is None
+def test_die_kaesten_der_einfuehrung_zum_laufenden_und_der_ausmusterung_nach_dem_vorjahr():
+    einf = zusatz_der_zeile(_zeile("2026/2027"), SJ)
+    assert einf is not None
+    assert einf.teile == (Teil("ab "), Teil("2026/2027", art="einfuehrung", antrag="offen"))
+    ausm = zusatz_der_zeile(_zeile("2020/2021", "2025/2026", ausmusterung="abgelehnt"), SJ)
+    assert ausm is not None
+    assert ausm.teile == (Teil("bis "), Teil("2025/2026", art="ausmusterung", antrag="abgelehnt"))
 
 
 def test_mehrere_zeilen_ergeben_je_eines_in_der_reihenfolge_der_uebergabe():

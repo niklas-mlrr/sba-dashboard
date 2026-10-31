@@ -625,45 +625,49 @@ tr.strich.strich-gelb > td:first-child::after { left: 6px; }
    um die Jahreszahl in der Farbe des Status (grau offen, rot abgelehnt), unten
    ein Kasten mit dem Status, oben einer mit der Art (Einführung/Ausmusterung).
    Beide Kästen liegen über der Jahreszahl und unter ihr (absolut), damit die
-   Jahreszahl allein auf der Grundlinie des übrigen Textes steht. Der Rahmen ist
-   ein Ring (``box-shadow``), die Kästen schneidet ``overflow`` an den Ecken
-   rund. 2px: ganze Pixel sind scharf. */
-.zusatzzeile { white-space: nowrap; }
+   Jahreszahl allein auf der Grundlinie des übrigen Textes steht. Der Rahmen
+   ist ein Ring (``box-shadow``, ``--t`` dick, ganze Pixel sind scharf); die
+   Kästen reichen bis an seine Außenkante und haben außen denselben Radius
+   (``--r`` + ``--t``), so liegen ihre Ecken genau auf denen des Rahmens. Ihre
+   Höhe ``--kh`` lässt der Schrift (62 %) noch Platz zum Rand. */
+.zusatzantrag-art, .zusatzantrag-status { font-size: 62%; }
 .zusatzantrag {
   --rahmen: #777;
+  --t: 2px;
+  --r: 2.5px;
+  --kh: 1.5em;
   position: relative;
   display: inline-flex;
-  margin: 2px 3px;
-  padding: .8928em 0;
-  overflow: hidden;
+  margin: var(--t) 4px;
+  /* Der Kasten ist 1,5em seiner 62 % hoch, ein Stück davon liegt im Ring. */
+  padding: calc(.93em - var(--t)) 0;
   font-weight: 400;
   line-height: 1.2;
   color: var(--iserv-text);
-  border-radius: 2.5px;
-  box-shadow: 0 0 0 2px var(--rahmen);
+  border-radius: var(--r);
+  box-shadow: 0 0 0 var(--t) var(--rahmen);
 }
 .zusatzantrag-abgelehnt { --rahmen: #d9534f; }
 .zusatzantrag-jahr { padding: 0 5px; white-space: nowrap; }
 .zusatzantrag-abgelehnt .zusatzantrag-jahr { color: var(--grau-schrift); }
 .zusatzantrag-art, .zusatzantrag-status {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: calc(-1 * var(--t));
+  right: calc(-1 * var(--t));
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 1.44em;
+  height: var(--kh);
   padding: 0 .4em;
-  font-size: 62%;
   font-weight: 700;
   line-height: 1;
   color: #fff;
   white-space: nowrap;
   background: var(--rahmen);
 }
-.zusatzantrag-art { top: 0; }
-.zusatzantrag-status { bottom: 0; }
+.zusatzantrag-art { top: calc(-1 * var(--t)); border-radius: calc(var(--r) + var(--t)) calc(var(--r) + var(--t)) 0 0; }
+.zusatzantrag-status { bottom: calc(-1 * var(--t)); border-radius: 0 0 calc(var(--r) + var(--t)) calc(var(--r) + var(--t)); }
 tr.zeile-aenderung > td:first-child { box-shadow: inset 4px 0 0 var(--aenderung-strich); }
 tr.zeile-einfuehrung > td:first-child { box-shadow: inset 4px 0 0 var(--einfuehrung-strich); }
 tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmusterung-strich); }

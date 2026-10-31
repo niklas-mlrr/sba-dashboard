@@ -355,15 +355,23 @@ Einführungsjahr ESJ und dem Ausmusterungsjahr ASJ der Zeile:
 | SJ < ESJ = ASJ | `ESJ` - aber `von ESJ bis ASJ`, bis **beide** Anträge genehmigt sind |
 | SJ < ESJ < ASJ | `von ESJ bis ASJ` |
 | SJ < ESJ, ohne ASJ | `ab ESJ` |
-| sonst (auch ASJ = SJ-1) | nichts |
+| sonst | nichts |
+
+Zwei Ausnahmen, damit jeder Antrag, über den noch zu entscheiden ist (oder der
+abgelehnt wurde), ein Jahr mit Kasten hat: Ist die Einführung zum **laufenden**
+Schuljahr (ESJ = SJ) nicht genehmigt, steht `von ESJ bis ASJ` (ohne ASJ: `ab
+ESJ`) statt `bis ASJ`. Ist die Ausmusterung **nach dem Vorjahr** (ASJ = SJ-1)
+nicht genehmigt, steht `bis ASJ` statt nichts. Genehmigt, gilt wieder die
+Tabelle.
 
 An jeder Jahreszahl, deren Antrag noch offen oder abgelehnt ist, hängt ein
 Kasten (`zusatzantrag` in `app.css`): ein Rahmen in der Farbe des Status (grau
 offen, rot abgelehnt), unten „offen“/„abgelehnt“, oben die Art
 („Einführung“/„Ausmusterung“). Ein genehmigter Antrag hat keinen Kasten; ein
 Antrag, über den nicht zu entscheiden ist (`zu_entscheidende_antraege`), auch
-nicht. Eine Einführung zum laufenden Schuljahr steht nicht im Zusatz („bis
-ASJ“ nennt nur die Ausmusterung) und hat deshalb keinen Kasten.
+nicht. Der Rahmen ist 2 px dick (ganze Pixel sind scharf); die beiden kleinen
+Kästen reichen bis an seine Außenkante und haben außen denselben Radius, ihre
+Ecken liegen also genau auf denen des Rahmens.
 
 **Abgelehnte Anträge** gelten in der Fach-Ansicht nicht
 (`ohne_abgelehnte_ausmusterungen`, `Vergleich.original`): eine abgelehnte

@@ -63,7 +63,7 @@ def test_eine_einfuehrung_ist_blau_geschrieben_auch_eine_kuenftige():
     m = _markierung(_zeile(5), _zeile(6, ab="2026/2027"), _zeile(7, ab="2027/2028"))
     assert m.ganz == ""
     assert _werte(m) == [("5", "", "", False, ""),
-                         ("6", "", EINFUEHRUNG, False, ""),
+                         ("6", "ab 2026/2027", EINFUEHRUNG, False, ""),
                          ("7", "ab 2027/2028", EINFUEHRUNG, False, "")]
     # Ein Abschnitt je vorkommender Farbe; ist sie überall blau, ist der Strich blau.
     assert m.strich() == (EINFUEHRUNG,)
@@ -81,8 +81,8 @@ def test_ein_ganz_neues_buch_hinterlegt_die_zeile():
 
 def test_eine_ausmusterung_nach_dem_vorjahr_ist_rot_und_durchgestrichen():
     m = _markierung(_zeile(5, nach="2025/2026"), _zeile(6))
-    # Eine Ausmusterung nach dem Vorjahr hat keinen Zusatz: keine Regel trifft zu.
-    assert _werte(m) == [("5", "", AUSMUSTERUNG, True, ""),
+    # Der Antrag ist noch offen: das Jahr steht da, mit Kasten.
+    assert _werte(m) == [("5", "bis 2025/2026", AUSMUSTERUNG, True, ""),
                          ("6", "", "", False, "")]
     assert m.werte[0].hinweis == "Planung: als Leihbuch ausgemustert nach 2025/2026"
     # Was früher endete, steht nicht mehr in der Spalte.
@@ -299,7 +299,7 @@ def test_nach_dem_vorjahr_ausgemustert_und_spaeter_wieder_eingefuehrt():
     m = _markierung(*zeilen, abweichung=noch)
     assert [(w.text, w.plan, w.durch) for w in m.werte] == [
         ("5", AUSMUSTERUNG, True), ("6", "", False)]
-    assert m.werte[0].zusatz == "ab 2028/2029" and m.werte[0].iserv == STEHT_NOCH
+    assert m.werte[0].zusatz == "bis 2025/2026; ab 2028/2029" and m.werte[0].iserv == STEHT_NOCH
     # In IServ ist er weg: die Wiedereinführung ist das Nächste, blau, nicht durchgestrichen.
     m = _markierung(*zeilen, abweichung=Abweichung(ISBN, BEIDE))
     assert [(w.text, w.plan, w.durch) for w in m.werte] == [
@@ -315,12 +315,12 @@ def test_mehrere_zeilen_im_eintrag_haben_je_ein_ergebnis_im_zusatz():
     assert m.werte[0].zusatz == "bis 2026/2027; ab 2029/2030"
     # Das nächste Ereignis ist die Ausmusterung: rot.
     assert m.werte[0].plan == AUSMUSTERUNG
-    # Im Folgejahr hat die erste Zeile kein Ergebnis mehr; IServ führt den Jahrgang nicht mehr.
+    # Im Folgejahr endete die erste Zeile mit dem Vorjahr; IServ führt den Jahrgang nicht mehr.
     stand = _stand(_zeile(5, ab="2020/2021", nach="2026/2027"), _zeile(5, ab="2029/2030"))
     from dataclasses import replace
     spaeter = replace(stand, schuljahr="2027/2028", vorjahr="2026/2027")
     m = markierung(spaeter, spaeter.buecher[0], Abweichung(ISBN, BEIDE), im=im_fach("Deutsch"))
-    assert m.werte[0].zusatz == "ab 2029/2030" and m.werte[0].plan == EINFUEHRUNG
+    assert m.werte[0].zusatz == "bis 2026/2027; ab 2029/2030" and m.werte[0].plan == EINFUEHRUNG
 
 
 def _abgelehnt(zeile: Planungszeile, *, einfuehrung: bool = False, ausmusterung: bool = False,
