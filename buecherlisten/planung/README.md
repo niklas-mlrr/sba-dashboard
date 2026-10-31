@@ -328,8 +328,14 @@ Buchreihe nicht verglichen.
 **ISBN nur auf einer Seite:** Steht das Buch dieses Schuljahr in keiner
 IServ-Liste, ist jedes Feld der Zeile blau markiert; steht es nur in IServ,
 rot („nur in IServ“, ohne Menü). Führt nur IServ es in einem Fach, ist es aber
-anderswo geplant, sind nur die Jahrgänge rot markiert. Trifft auf einer
-einjährigen Zeile Einführung und Ausmusterung zusammen, gilt Rot.
+anderswo geplant, sind nur die Jahrgänge rot markiert.
+
+**Einführung und Ausmusterung zugleich** (etwa eingeführt zu diesem Schuljahr,
+ausgemustert nach einem späteren, oder einjährig): Der Jahrgang ist blau,
+solange IServ ihn noch nicht führt - er fehlt in der Bücherliste oder an der
+Buchreihe - oder er noch nicht verglichen wird (eine spätere Einführung).
+Liefert der Vergleich am Jahrgang keine Differenz mehr, wird er rot (läuft aus).
+Strich und Hintergrund folgen der Schrift.
 
 „Leihbar“ hängt am Jahrgang: gefärbt und verglichen wird je **Eintrag**
 (Fach, Jahrgang, leihbar; `aktive_eintraege`, `Abweichung.eintraege_fehlen` /

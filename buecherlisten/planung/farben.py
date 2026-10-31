@@ -7,8 +7,11 @@ ausgewählte, vorerst immer das laufende (``stand.schuljahr``).
 
 * **Schrift = Planung**, je Wert (Jahrgang, in Verlag/Jahrgang später auch
   Fach): blau eine Einführung zu diesem Schuljahr oder später, rot eine
-  Ausmusterung nach dem Vorjahr oder später. Durchgestrichen ist nur ein
-  Wert, der nach dem Vorjahr ausgemustert wurde - er gilt nicht mehr.
+  Ausmusterung nach dem Vorjahr oder später. Ist beides geplant, bleibt der
+  Wert blau, bis IServ ihn führt (Bücherliste und Buchreihe ohne Differenz;
+  eine spätere Einführung wird noch nicht verglichen), dann wird er rot.
+  Durchgestrichen ist nur ein Wert, der nach dem Vorjahr ausgemustert wurde -
+  er gilt nicht mehr.
 * **Markierung = IServ**, je Wert (helle Hinterlegung, farbiger Strich
   darunter): blau, was in IServ noch fehlt, rot, was dort noch steht. Ein
   Jahrgang fehlt, wenn er in der Bücherliste fehlt (je Eintrag, mit
@@ -249,10 +252,17 @@ class _Plan:
     wirkt: bool = False
 
 
-def _planung_je_eintrag(stand: Buchplanung, buch: Buch, jetzt: int) -> dict[Eintrag, _Plan]:
+def _planung_je_eintrag(stand: Buchplanung, buch: Buch, jetzt: int,
+                        offen: Callable[[Eintrag], bool] = lambda _: False,
+                        ) -> dict[Eintrag, _Plan]:
     """Jeder Eintrag, der in diesem Schuljahr gilt, noch kommt oder nach dem
     Vorjahr endete - mit seiner Planung. Was früher endete, gehört nicht mehr
-    in die Liste."""
+    in die Liste.
+
+    Sind Einführung und Ausmusterung geplant, ist der Eintrag blau, solange
+    IServ ihn noch nicht führt (``offen``: Bücherliste oder Buchreihe weicht
+    ab) oder er noch nicht verglichen wird (eine spätere Einführung); erst
+    danach rot (Entscheidung 2026-10-31)."""
     je_eintrag: dict[Eintrag, list[Planungszeile]] = {}
     for zeile in stand.planung:
         if zeile.isbn == buch.isbn:
@@ -267,14 +277,19 @@ def _planung_je_eintrag(stand: Buchplanung, buch: Buch, jetzt: int) -> dict[Eint
         enden = [z.ende for z in zeilen if z.ende is not None and z.ende >= jetzt - 1]
         fach, jahrgang, leihbar = eintrag
         massgeblich = stand.massgebliche_zeile(buch.isbn, fach, jahrgang, leihbar=leihbar)
-        # Wird eine Zeile im selben Jahr eingeführt und ausgemustert, gilt Rot.
-        farbe = AUSMUSTERUNG if enden else EINFUEHRUNG if beginne else ""
+        wirkt = any(wirkt_im_schuljahr(z, stand.schuljahr) for z in zeilen)
+        if beginne and (not enden or not wirkt or offen(eintrag)):
+            farbe, jahr = EINFUEHRUNG, min(beginne)
+        elif enden:
+            farbe, jahr = AUSMUSTERUNG, min(enden)
+        else:
+            farbe, jahr = "", 0
         ergebnis[eintrag] = _Plan(
             farbe=farbe,
             weg=not laufend,
             zusatz=planungs_zusatz(massgeblich, stand.schuljahr),
-            jahr=min(enden) if enden else min(beginne) if beginne else 0,
-            wirkt=any(wirkt_im_schuljahr(z, stand.schuljahr) for z in zeilen),
+            jahr=jahr,
+            wirkt=wirkt,
         )
     return ergebnis
 
@@ -284,8 +299,14 @@ def _hinweis(plan: _Plan | None, liste: str, reihe: bool, jahrgang: int, leihbar
     als = "als Leihbuch" if leihbar else "als Kaufbuch"
     teile = []
     if plan is not None and plan.farbe == EINFUEHRUNG:
-        teile.append(f"Planung: {als} eingeführt "
-                     + (plan.zusatz if plan.zusatz.startswith("ab ") else f"zu {stand.schuljahr}"))
+        # Zusatz: „ab …“ (kommt noch), „bis …“ (läuft schon und endet), das
+        # Schuljahr allein (kommt nur für ein Jahr) oder nichts.
+        zusatz = plan.zusatz
+        teile.append(f"Planung: {als} eingeführt " + (
+            zusatz if zusatz.startswith("ab ")
+            else f"zu {stand.schuljahr} ({zusatz})" if zusatz.startswith("bis ")
+            else f"nur für {zusatz}" if zusatz
+            else f"zu {stand.schuljahr}"))
     elif plan is not None and plan.farbe == AUSMUSTERUNG:
         teile.append(f"Planung: {als} ausgemustert nach {stand.vorjahr}" if plan.weg
                      else f"Planung: {als} läuft aus ({plan.zusatz})" if plan.zusatz
@@ -335,10 +356,12 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     Vergleich mit IServ; ohne ihn bleibt jede Markierung weg.
     """
     jetzt = _jahr(stand.schuljahr)
-    planung = _planung_je_eintrag(stand, buch, jetzt) if jetzt is not None else {}
     fehlt = set(abweichung.eintraege_fehlen) if abweichung else set()
     nur_iserv = set(abweichung.eintraege_nur_iserv) if abweichung else set()
     buchreihe = set(abweichung.buchreihe_fehlt) if abweichung else set()
+    planung = _planung_je_eintrag(
+        stand, buch, jetzt, lambda e: e in fehlt or e[1] in buchreihe,
+    ) if jetzt is not None else {}
     eintraege = sorted((e for e in set(planung) | nur_iserv if im(e)),
                        key=lambda e: (e[0].casefold(), e[1], not e[2]))
 

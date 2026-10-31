@@ -256,3 +256,34 @@ def test_steht_die_isbn_nur_auf_einer_seite_ist_die_ganze_zeile_markiert():
     assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, NUR_EXCEL)).zeile == EINFUEHRUNG
     assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, NUR_ISERV)).zeile == AUSMUSTERUNG
     assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, BEIDE)).zeile == ""
+
+
+def test_einfuehrung_mit_ausmusterung_ist_blau_bis_iserv_den_jahrgang_fuehrt():
+    """Entscheidung 2026-10-31: erst blau (noch einzutragen), dann rot (läuft aus)."""
+    zeile = _zeile(6, ab="2026/2027", nach="2029/2030")
+    # In IServ fehlt Jg. 6 noch in der Bücherliste …
+    m = _markierung(zeile, abweichung=Abweichung(
+        ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 6, True),)))
+    assert (m.werte[0].plan, m.werte[0].jahr) == (EINFUEHRUNG, 2026)
+    assert m.werte[0].hinweis == (
+        "Planung: als Leihbuch eingeführt zu 2026/2027 (bis 2029/2030)"
+        " · IServ-Bücherliste: als Leihbuch noch nicht eingetragen")
+    # … oder an der Buchreihe: blau.
+    m = _markierung(zeile, abweichung=Abweichung(ISBN, BEIDE, buchreihe_fehlt=(6,)))
+    assert m.werte[0].plan == EINFUEHRUNG
+    # Führt IServ ihn, ist er rot.
+    m = _markierung(zeile, abweichung=Abweichung(ISBN, BEIDE))
+    assert (m.werte[0].plan, m.werte[0].jahr, m.ganz) == (AUSMUSTERUNG, 2029, AUSMUSTERUNG)
+    # Einjährig im laufenden Schuljahr: genauso.
+    m = _markierung(_zeile(6, ab="2026/2027", nach="2026/2027"), abweichung=Abweichung(ISBN, BEIDE))
+    assert m.werte[0].plan == AUSMUSTERUNG
+
+
+def test_eine_spaetere_einfuehrung_mit_ausmusterung_bleibt_blau():
+    """Sie wird noch nicht mit IServ verglichen."""
+    m = _markierung(_zeile(5), _zeile(7, ab="2027/2028", nach="2027/2028"),
+                    _zeile(8, ab="2027/2028", nach="2030/2031"), abweichung=Abweichung(ISBN, BEIDE))
+    assert [(w.text, w.plan, w.iserv) for w in m.werte] == [
+        ("5", "", ""), ("7", EINFUEHRUNG, ""), ("8", EINFUEHRUNG, "")]
+    assert m.werte[1].hinweis == "Planung: als Leihbuch eingeführt nur für 2027/2028"
+    assert m.werte[2].hinweis == "Planung: als Leihbuch eingeführt ab 2027/2028"
