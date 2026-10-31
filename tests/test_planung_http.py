@@ -1635,12 +1635,15 @@ def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
     text = seiten.get("/buecherliste/aenderungen").text
     assert 'data-status="genehmigt"' in text and "neuer Lehrplan" in text
     assert f"b.lehrer, {heute:%d.%m.%Y}" in text
-    # Das Planungsmenü zeigt die Entscheidung unter der Zeile, nur zum Lesen.
+    # Das Planungsmenü zeigt die Entscheidung unter der Zeile, nur zum Lesen -
+    # jeder Teil in seiner Spalte, damit er in allen Zeilen bündig beginnt.
     menue = " ".join(_vorlage(seiten.get("/buecherliste/fach/Deutsch").text,
                               DEUTSCH, "Deutsch").split())
-    assert ('<tr class="planung-entscheidung"><td colspan="6"> <span class="entscheidung-genehmigt">'
-            'Einführung <span class="label label-success">genehmigt</span> am '
-            f'{heute:%d.%m.%Y} durch b.lehrer Begründung: neuer Lehrplan</span>') in menue
+    assert ('<tr class="planung-entscheidung"><td colspan="6"><div class="entscheidungen"> '
+            '<div class="entscheidung entscheidung-genehmigt"><span>Einführung</span>'
+            '<span><span class="label label-success">genehmigt</span></span>'
+            f'<span>am {heute:%d.%m.%Y}</span><span>durch b.lehrer</span>'
+            '<span>Begründung:</span><span>neuer Lehrplan</span></div> </div></td></tr>') in menue
 
     zurueck = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
@@ -1765,7 +1768,7 @@ def test_eine_zeile_mit_zwei_antraegen_ist_halb_halb(
     menue = " ".join(_vorlage(seiten.get("/buecherliste/fach/Deutsch").text,
                               DEUTSCH, "Deutsch").split())
     assert 'class="status-geplant oben-genehmigt unten-abgelehnt abgelehnt"' in menue
-    assert "Einführung <span" in menue and "Ausmusterung <span" in menue
+    assert "<span>Einführung</span><span><span" in menue and "<span>Ausmusterung</span><span><span" in menue
 
 
 def test_liste_bestaetigen_braucht_ein_datum(seiten: TestClient, abgeglichen: dict) -> None:

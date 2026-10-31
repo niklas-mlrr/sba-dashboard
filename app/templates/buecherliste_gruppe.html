@@ -112,7 +112,7 @@
 {% set mit_ruecklagen = planung.mtime is not none
    and bp.ruecklagen_vorhanden(planung, buecher, fach) | trim %}
 <div class="tabellenrahmen">
-<table class="iserv-tabelle sortierbar"{% if gesamt %} data-gesamt{% endif %}>
+<table class="iserv-tabelle sortierbar{% if fach %} fach-tabelle{% endif %}"{% if gesamt %} data-gesamt{% endif %}>
   <thead>
     <tr>
       <th data-sort="text">Titel</th>
@@ -259,7 +259,7 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- if gruppen | length > 1 -%}
 <td data-wert="{{ wert }}" class="teilzeilen">
   {%- for g in gruppen %}{% set klasse = f.teilzelle(g, "jahrgang") %}
-  <div class="teilzeile{{ ' ' ~ klasse if klasse }}">{{ jahrgangsliste(g.jahrgaenge) }}</div>
+  <div class="teilzeile{{ ' ' ~ klasse if klasse }}"><span>{{ jahrgangsliste(g.jahrgaenge) }}</span></div>
   {%- endfor %}</td>
 {%- else -%}
 {%- set klasse = f.teilzelle(gruppen[0], "jahrgang") if gruppen else f.zelle() -%}
@@ -340,7 +340,7 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {% set mit_ruecklagen = bp.ruecklagen_vorhanden(planung, ausgemustert, gruppe.name) | trim %}
 <h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
 <div class="tabellenrahmen">
-<table class="iserv-tabelle sortierbar" id="ausmusterungen">
+<table class="iserv-tabelle sortierbar fach-tabelle" id="ausmusterungen">
   <thead>
     <tr>
       <th data-sort="text">Titel</th>

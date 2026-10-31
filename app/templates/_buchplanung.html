@@ -232,6 +232,12 @@
   Zeile, die Begründung (eine je Zeile) einmal am Ende. Ein offener Antrag
   steht hier nicht; sein Stand steht hinten in der Zeile. Bricht an
   Leerzeichen um und wird nie abgeschnitten.
+
+  Die Teile stehen in einem Raster (2026-10-31): Art, Label, „am …“,
+  „durch …“, „Begründung:“ und ihr Text je in einer Spalte, damit sie in
+  beiden Zeilen bündig beginnen; die Begründung bricht unter ihrem eigenen
+  Anfang um. Leere Teile bleiben als leere ``<span>`` stehen und halten so
+  ihre Spalte.
 #}
 {% macro entscheidungen(zeile) -%}
 {%- set entschieden = [] -%}
@@ -240,16 +246,17 @@
   {%- if antrag and antrag.status != "offen" %}{% set _ = entschieden.append((wort, antrag)) %}{% endif -%}
 {%- endfor -%}
 {%- if entschieden or zeile.begruendung %}
-<tr class="planung-entscheidung"><td colspan="6">
+<tr class="planung-entscheidung"><td colspan="6"><div class="entscheidungen">
   {%- for wort, antrag in entschieden %}
-  <span class="entscheidung-{{ antrag.status }}">{{ wort }} {{ statuslabel(antrag.status) }}
-    {%- if antrag.datum %} am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}
-    {%- if antrag.kuerzel %} durch {{ antrag.kuerzel }}{% endif %}
-    {%- if loop.last and zeile.begruendung %} Begründung: {{ zeile.begruendung }}{% endif %}</span>
+  <div class="entscheidung entscheidung-{{ antrag.status }}"><span>{{ wort }}</span>
+    {#- -#}<span>{{ statuslabel(antrag.status) }}</span>
+    {#- -#}<span>{% if antrag.datum %}am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}</span>
+    {#- -#}<span>{% if antrag.kuerzel %}durch {{ antrag.kuerzel }}{% endif %}</span>
+    {%- if loop.last and zeile.begruendung %}<span>Begründung:</span><span>{{ zeile.begruendung }}</span>{% endif %}</div>
   {%- else %}
-  <span>Begründung: {{ zeile.begruendung }}</span>
+  <div class="entscheidung"><span class="entscheidung-begruendung">Begründung:</span><span>{{ zeile.begruendung }}</span></div>
   {%- endfor %}
-</td></tr>
+</div></td></tr>
 {%- endif -%}
 {%- endmacro %}
 

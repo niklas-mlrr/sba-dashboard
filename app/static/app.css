@@ -1070,9 +1070,26 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 
 /* Die Entscheidungen unter einer Zeile: über die ganze Breite, je Antrag eine
    Zeile, umgebrochen an Leerzeichen und nie abgeschnitten. Das Label
-   „genehmigt“/„abgelehnt“ steht im Text, so breit wie sein Wort. */
+   „genehmigt“/„abgelehnt“ steht im Text, so breit wie sein Wort.
+   Ein Raster über alle Zeilen (2026-10-31): Art, Label, „am …“, „durch …“,
+   „Begründung:“ und ihr Text beginnen je in ihrer Spalte bündig, und die
+   Begründung bricht unter ihrem eigenen Anfang um. Abstand gibt es nur hinter
+   einem Teil mit Inhalt - eine leere Spalte (etwa ohne Entscheidung nur die
+   Begründung) ist so null breit und rückt nichts ein. */
 .planung-entscheidung > td { padding-top: 0; font-size: 12px; white-space: normal; }
-.planung-entscheidung > td > span { display: block; overflow-wrap: normal; }
+.planung-entscheidung .entscheidungen {
+  display: grid;
+  grid-template-columns: repeat(5, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  justify-items: start;
+}
+.planung-entscheidung .entscheidung { display: contents; }
+.planung-entscheidung .entscheidung > span { overflow-wrap: normal; }
+.planung-entscheidung .entscheidung > span:not(:empty):not(:last-child) { padding-right: .35em; }
+/* Jede Entscheidung beginnt eine neue Rasterzeile; ohne Entscheidung steht
+   die Begründung trotzdem in ihrer Spalte. */
+.planung-entscheidung .entscheidung > span:first-child { grid-column: 1; }
+.planung-entscheidung .entscheidung > span.entscheidung-begruendung { grid-column: 5; }
 .planung-entscheidung .label { font-size: 10px; }
 
 /* Die Bücherliste eines Fachs: ist ein Buch teils leihbar, teils nicht, stehen
@@ -1088,6 +1105,14 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
   padding: 8px;
 }
 .iserv-tabelle .teilzeile + .teilzeile { border-top: 1px dashed #ddd; }
+/* In den Tabellen der Fach-Ansicht steht alles senkrecht mittig (2026-10-31):
+   eine Zelle über die ganze Zeile in deren Mitte, eine Teilzeile in der Mitte
+   ihrer Teilzeile - auch wenn buchplanung.js sie höher gemacht hat, als ihr
+   Inhalt braucht. Der Inhalt einer Teilzeile ist dafür ein einziges Element
+   (Häkchen bzw. ``<span>`` um die Jahrgänge), damit er als Ganzes umbricht. */
+.fach-tabelle.iserv-tabelle > tbody > tr > td { vertical-align: middle; }
+.fach-tabelle .teilzeile { display: flex; align-items: center; }
+.fach-tabelle input[type="checkbox"] { margin: 0; vertical-align: middle; }
 /* Ein Eingabefeld steht als `inline-block` auf der Grundlinie und säße damit
    etwas tiefer als bloßer Text wie der Jahrgang daneben. */
 .planung-tabelle .planung-feld,
