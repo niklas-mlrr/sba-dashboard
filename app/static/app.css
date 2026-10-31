@@ -631,6 +631,8 @@ tr.strich.strich-gelb > td:first-child::after { left: 6px; }
    (``--r`` + ``--t``), so liegen ihre Ecken genau auf denen des Rahmens. Ihre
    Höhe ``--kh`` lässt der Schrift (62 %) noch Platz zum Rand. */
 .zusatzantrag-art, .zusatzantrag-status { font-size: 62%; }
+/* Ein Ergebnis des Zusatzes bricht nicht auseinander („(bis [Kasten])“). */
+.zusatzzeile { white-space: nowrap; }
 .zusatzantrag {
   --rahmen: #777;
   --t: 2px;
@@ -638,7 +640,9 @@ tr.strich.strich-gelb > td:first-child::after { left: 6px; }
   --kh: 1.5em;
   position: relative;
   display: inline-flex;
-  margin: var(--t) 4px;
+  /* Oben und unten ein Abstand über den Ring hinaus: bricht die Zeile um, stoßen
+     die Kästen zweier Zeilen sonst aneinander. */
+  margin: calc(var(--t) + 2px) 4px;
   /* Der Kasten ist 1,5em seiner 62 % hoch, ein Stück davon liegt im Ring. */
   padding: calc(.93em - var(--t)) 0;
   font-weight: 400;
