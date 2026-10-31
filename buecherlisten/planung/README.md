@@ -381,7 +381,10 @@ offen, rot abgelehnt), unten „offen“/„abgelehnt“, oben die Art
 Antrag, über den nicht zu entscheiden ist (`zu_entscheidende_antraege`), auch
 nicht. Der Rahmen ist 2 px dick (ganze Pixel sind scharf); die beiden kleinen
 Kästen reichen bis an seine Außenkante und haben außen denselben Radius, ihre
-Ecken liegen also genau auf denen des Rahmens.
+Ecken liegen also genau auf denen des Rahmens. Zwischen zwei Kästen nach
+einem Umbruch bleiben 4 px; ebenso weit steht ein Kasten von der Zeilengrenze
+(bzw. der gestrichelten Linie zwischen zwei Teilzeilen) ab: Zelle und Teilzeile
+mit Kasten tragen `mit-antrag` und haben dort 2 px statt 8 px Zellrand.
 
 **Abgelehnte Anträge** gelten in der Fach-Ansicht nicht
 (`ohne_abgelehnte_ausmusterungen`, `Vergleich.original`): eine abgelehnte

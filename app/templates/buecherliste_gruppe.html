@@ -295,11 +295,12 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- if teile | length > 1 -%}
 <td data-wert="{{ sortwert }}" class="teilzeilen">
   {%- for t in teile %}
-  <div class="teilzeile{{ ' ganz-' ~ t.ganz if t.ganz }}" data-leihbar="{{ 0 if t.leihbar else 1 }}"
+  <div class="teilzeile{{ ' ganz-' ~ t.ganz if t.ganz }}{{ ' mit-antrag' if art == 'jahrgang' and t.hat_antrag }}" data-leihbar="{{ 0 if t.leihbar else 1 }}"
     data-jahrgaenge="{{ t.jahrgaenge | join(',') }}" data-farben="{{ t.farben | join(' ') }}">{{ inhalt(t) }}</div>
   {%- endfor %}</td>
 {%- else -%}
-<td data-wert="{{ sortwert }}"{% if teile and teile[0].ganz %} class="ganz-{{ teile[0].ganz }}"{% endif %}>
+{%- set klassen = (["ganz-" ~ teile[0].ganz] if teile and teile[0].ganz else []) + (["mit-antrag"] if art == "jahrgang" and teile and teile[0].hat_antrag else []) -%}
+<td data-wert="{{ sortwert }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}>
   {%- if teile %}{{ inhalt(teile[0]) }}{% endif %}</td>
 {%- endif -%}
 {%- endmacro %}

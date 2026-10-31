@@ -652,6 +652,11 @@ tr.strich.strich-gelb > td:first-child::after { left: 6px; }
   box-shadow: 0 0 0 var(--t) var(--rahmen);
 }
 .zusatzantrag-abgelehnt { --rahmen: #d9534f; }
+/* Eine Zelle (oder Teilzeile) mit Kasten: von seinem Rand bis zur Zeilengrenze
+   derselbe Abstand wie zwischen zwei Kästen nach einem Umbruch (4px), statt des
+   gewöhnlichen Zellrands von 8px. */
+.iserv-tabelle > tbody > tr > td.mit-antrag,
+.iserv-tabelle .teilzeile.mit-antrag { padding-top: 2px; padding-bottom: 2px; }
 .zusatzantrag-jahr { padding: 0 5px; white-space: nowrap; }
 .zusatzantrag-abgelehnt .zusatzantrag-jahr { color: var(--grau-schrift); }
 .zusatzantrag-art, .zusatzantrag-status {

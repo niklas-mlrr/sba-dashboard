@@ -1190,7 +1190,10 @@ def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dic
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = text.split(f'<tr data-isbn="{DEUTSCH}"')[1].split("</tr>")[0]
     teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
-    assert [klasse for klasse, _ in teile] == [" ganz-ausmusterung", " ganz-einfuehrung"] * 2
+    # Die Jahrgang-Zelle (hinten) trägt zusätzlich ``mit-antrag``: an beiden Jahren hängt ein Kasten.
+    assert [klasse for klasse, _ in teile] == [
+        " ganz-ausmusterung", " ganz-einfuehrung",
+        " ganz-ausmusterung mit-antrag", " ganz-einfuehrung mit-antrag"]
     assert '<span class="schrift-ausmusterung durch">5</span></span>' in teile[2][1]
     assert '<span class="schrift-einfuehrung">5</span>' in teile[3][1]
     # Die Änderungsliste führt beides als Antrag.
@@ -1812,7 +1815,8 @@ def test_ausmusterungen_zeigen_kein_reines_kaufbuch(
     teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
     # Oben die Teilzeile mit den kleineren Jahrgängen (Kaufbuch 5, 6), darunter das,
     # was nur IServ als Leihbuch führt (6).
-    assert [klasse for klasse, _ in teile] == [" ganz-ausmusterung", ""] * 2
+    assert [klasse for klasse, _ in teile] == [
+        " ganz-ausmusterung", "", " ganz-ausmusterung mit-antrag", ""]
     assert '<span class="markierung markierung-ausmusterung">6</span>' in teile[3][1]
     assert _ohne_tags(teile[2][1]) == (
         "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)")
@@ -2092,7 +2096,7 @@ def test_teils_leihbar_steht_in_zwei_teilzeilen_je_fuer_sich_gefaerbt(
     (haken_ja, _), (haken_nein, _), (jg_ja, text_ja), (jg_nein, text_nein) = teile
     # Kaufbuch ist Terra zum ersten Mal: die Teilzeile ist ganz neu hinterlegt.
     assert (haken_ja, haken_nein) == ("", " ganz-einfuehrung")
-    assert (jg_ja, jg_nein) == ("", " ganz-einfuehrung")
+    assert (jg_ja, jg_nein) == (" mit-antrag", " ganz-einfuehrung mit-antrag")
     assert _ohne_tags(text_ja) == "5 (bis Ausmusterung2025/2026offen), 6"
     assert _ohne_tags(text_nein) == "7 (ab Einführung2028/2029offen)"
     assert '<span class="schrift-ausmusterung durch">5</span>' in text_ja
@@ -2143,3 +2147,20 @@ def test_eine_abgelehnte_ausmusterung_laesst_das_buch_in_der_liste(
     text = seiten.get("/buecherliste/fach/Erdkunde").text
     zeile = _zeile_von(text, TERRA)
     assert 'class="schrift-ausmusterung durch">5<' not in zeile
+
+
+def test_eine_zelle_mit_antragskasten_hat_den_engen_zellrand(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Der Abstand des Kastens zur Zeilengrenze ist so groß wie zwischen zwei Kästen
+    (``mit-antrag`` in app.css): nur die Teilzeile mit Kasten trägt die Klasse, die
+    Leihbar-Spalte nie."""
+    _mit_einfuehrung(seiten, abgeglichen)
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    zeile = " ".join(_zeile_von(text, DEUTSCH).split())
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>', zeile)
+    # Leihbar: zwei Teilzeilen ohne die Klasse; Jahrgang: nur die mit dem Kasten (Jg. 7).
+    assert teile == ["", " ganz-einfuehrung", "", " ganz-einfuehrung mit-antrag"]
+    # Eine Zelle ohne Teilzeilen trägt sie selbst.
+    einfach = " ".join(_zeile_von(seiten.get("/buecherliste/fach/Erdkunde").text, TERRA).split())
+    assert re.search(r'<td data-wert="[^"]*" class="mit-antrag">', einfach)

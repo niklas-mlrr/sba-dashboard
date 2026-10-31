@@ -161,6 +161,12 @@ class Teilzeile:
         return tuple(wert.jahrgang for wert in self.werte)
 
     @property
+    def hat_antrag(self) -> bool:
+        """Hängt an einer ihrer Jahreszahlen ein Antragskasten?"""
+        return any(teil.antrag for wert in self.werte
+                   for zeile in wert.zusaetze for teil in zeile.teile)
+
+    @property
     def farben(self) -> tuple[str, ...]:
         """Ihre Schriftfarben in Lesefolge, jede einmal (für den Strich vorn)."""
         farben: list[str] = []
