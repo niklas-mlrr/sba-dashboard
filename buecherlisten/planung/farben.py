@@ -52,11 +52,32 @@ def geordnet(*mengen: Iterable[str]) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Jahrgangswert:
-    """Ein Jahrgang in der Spalte „Jahrgang“: die Zahl, ihr Zusatz, ihre Schriftfarbe."""
+    """Ein Jahrgang in der Spalte „Jahrgang“: die Zahl, ihr Zusatz, ihre Schriftfarbe.
+
+    ``leihbar`` ist das Häkchen der Zeile, die für dieses Schuljahr spricht -
+    danach kommt der Jahrgang in seine Leihgruppe (:class:`Leihgruppe`).
+    """
 
     jahrgang: int
     zusatz: str = ""
     farbe: str = ""
+    leihbar: bool = True
+
+
+@dataclass(frozen=True)
+class Leihgruppe:
+    """Die leihbaren oder die nicht leihbaren Jahrgänge eines Buchs - je eine Teilzeile.
+
+    Ist ein Buch in einigen Jahrgängen leihbar und in anderen nicht, stehen in
+    den Spalten „Leihbar“ und „Jahrgang“ zwei Teilzeilen (Entscheidung
+    2026-10-31), und jede wird für sich gefärbt: ``jahrgang`` und ``haekchen``
+    sind die Farben ihrer beiden Teilzellen.
+    """
+
+    leihbar: bool
+    jahrgaenge: tuple[Jahrgangswert, ...]
+    jahrgang: frozenset[str] = frozenset()
+    haekchen: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -72,10 +93,18 @@ class Markierung:
     jahrgang: frozenset[str] = frozenset()
     leihbar: frozenset[str] = frozenset()
     jahrgaenge: tuple[Jahrgangswert, ...] = field(default_factory=tuple)
+    # Die Teilzeilen: erst die leihbaren, dann die nicht leihbaren Jahrgänge.
+    gruppen: tuple[Leihgruppe, ...] = field(default_factory=tuple)
 
     @property
     def strich(self) -> tuple[str, ...]:
         return geordnet(self.ganz, self.jahrgang, self.leihbar)
+
+    def teilzelle(self, gruppe: Leihgruppe, art: str, *zusaetzlich: str) -> str:
+        """Wie :meth:`zelle`, für die Teilzelle ``art`` (``jahrgang``/``leihbar``) einer Gruppe."""
+        eigene = gruppe.jahrgang if art == "jahrgang" else gruppe.haekchen
+        farben = geordnet(self.ganz, eigene, [farbe for farbe in zusaetzlich if farbe])
+        return "band-" + "-".join(farben) if farben else ""
 
     def zelle(self, art: str = "", *zusaetzlich: str) -> str:
         """Die CSS-Klasse einer Zelle: ``band-…`` aus den Farben der Zeile, der
@@ -140,8 +169,23 @@ def gezeigte_jahrgaenge(stand: Buchplanung, buch: Buch, fach: str) -> tuple[Jahr
         if not (laufend or eben_weg):
             continue
         massgeblich = stand.massgebliche_zeile(buch.isbn, fach, jahrgang)
-        gezeigt.append(Jahrgangswert(jahrgang, planungs_zusatz(massgeblich, stand.schuljahr)))
+        gezeigt.append(Jahrgangswert(jahrgang, planungs_zusatz(massgeblich, stand.schuljahr),
+                                     leihbar=bool(massgeblich and massgeblich.leihbar)))
     return tuple(gezeigt)
+
+
+def _gruppen(jahrgaenge: tuple[Jahrgangswert, ...],
+             zelle: dict[bool, set[str]] | None = None,
+             haekchen: dict[bool, set[str]] | None = None) -> tuple[Leihgruppe, ...]:
+    """Die Leihgruppen: erst die leihbaren, dann die nicht leihbaren - nur die mit Jahrgängen."""
+    return tuple(
+        Leihgruppe(leihbar=leihbar, jahrgaenge=teil,
+                   jahrgang=frozenset((zelle or {}).get(leihbar, ())),
+                   haekchen=frozenset((haekchen or {}).get(leihbar, ())))
+        for leihbar in (True, False)
+        for teil in (tuple(j for j in jahrgaenge if j.leihbar == leihbar),)
+        if teil
+    )
 
 
 def markierung(stand: Buchplanung, buch: Buch, fach: str) -> Markierung:
@@ -149,7 +193,7 @@ def markierung(stand: Buchplanung, buch: Buch, fach: str) -> Markierung:
     jetzt = _jahr(stand.schuljahr)
     jahrgaenge = gezeigte_jahrgaenge(stand, buch, fach)
     if jetzt is None:
-        return Markierung(jahrgaenge=jahrgaenge)
+        return Markierung(jahrgaenge=jahrgaenge, gruppen=_gruppen(jahrgaenge))
     eigene = _zeilen_im_fach(stand, buch.isbn, fach)
     alle = [z for z in stand.planung if z.isbn == buch.isbn]
     wechsel = _wechsel(eigene)
@@ -157,27 +201,34 @@ def markierung(stand: Buchplanung, buch: Buch, fach: str) -> Markierung:
     ganz_neu = bool(alle) and all(z.beginn is not None and z.beginn >= jetzt for z in alle)
     ganz_weg = bool(alle) and all(z.ende is not None for z in alle)
 
+    # Jede Farbe gehört zur Teilzeile ihres Jahrgangs: die Leihgruppe, in der
+    # er dieses Schuljahr steht (bei einem Wechsel die neue).
+    gruppe_von = {j.jahrgang: j.leihbar for j in jahrgaenge}
     ganz: set[str] = set()
-    zelle: set[str] = set()
-    leihbar: set[str] = set()
+    zelle: dict[bool, set[str]] = {True: set(), False: set()}
+    haekchen: dict[bool, set[str]] = {True: set(), False: set()}
     schrift: dict[int, str] = {}
     for zeile in eigene:
+        gruppe = gruppe_von.get(zeile.jahrgang, zeile.leihbar)
         if (zeile.jahrgang, zeile.eingefuehrt_ab) in wechsel:
             if zeile.beginn is not None and zeile.beginn >= jetzt:
-                leihbar.add(AENDERUNG)
+                haekchen[gruppe].add(AENDERUNG)
             continue
         if zeile.beginn is not None and zeile.beginn >= jetzt:
-            (ganz if ganz_neu else zelle).add(EINFUEHRUNG)
+            (ganz if ganz_neu else zelle[gruppe]).add(EINFUEHRUNG)
             if zeile.beginn == jetzt:
                 schrift[zeile.jahrgang] = EINFUEHRUNG
         if zeile.ende is not None and zeile.ende >= jetzt - 1:
-            (ganz if ganz_weg else zelle).add(AUSMUSTERUNG)
+            (ganz if ganz_weg else zelle[gruppe]).add(AUSMUSTERUNG)
             if zeile.ende == jetzt - 1:
                 schrift[zeile.jahrgang] = AUSMUSTERUNG
+    gefaerbt = tuple(Jahrgangswert(j.jahrgang, j.zusatz, schrift.get(j.jahrgang, ""), j.leihbar)
+                     for j in jahrgaenge)
     return Markierung(
-        ganz=frozenset(ganz), jahrgang=frozenset(zelle), leihbar=frozenset(leihbar),
-        jahrgaenge=tuple(Jahrgangswert(j.jahrgang, j.zusatz, schrift.get(j.jahrgang, ""))
-                         for j in jahrgaenge),
+        ganz=frozenset(ganz),
+        jahrgang=frozenset(zelle[True] | zelle[False]),
+        leihbar=frozenset(haekchen[True] | haekchen[False]),
+        jahrgaenge=gefaerbt, gruppen=_gruppen(gefaerbt, zelle, haekchen),
     )
 
 

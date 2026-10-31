@@ -497,7 +497,7 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
         # nach dem Vorjahr. Fehlte er, wäre er laut Datei wieder im Einsatz.
         "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026"},
                    {"jahrgang": 6, "ausgemustert_nach": "2029/2030"},
-                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"}],
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029", "leihbar": True}],
         "mtime": abgeglichen["mtime"],
     }).json()
     text = seiten.get("/buecherliste/fach/Erdkunde").text
@@ -517,8 +517,8 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
         "zeilen": [{"jahrgang": 6, "ausgemustert_nach": "2029/2030"},
-                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029"},
-                   {"jahrgang": 8, "eingefuehrt_ab": "2028/2029"}],
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029", "leihbar": True},
+                   {"jahrgang": 8, "eingefuehrt_ab": "2028/2029", "leihbar": True}],
         "mtime": stand["mtime"],
     })
     text = _ohne_tags(seiten.get("/buecherliste/fach/Erdkunde").text)
@@ -538,7 +538,7 @@ def test_ein_buch_fuer_nur_ein_schuljahr_zeigt_nur_dieses_jahr(
         "zeilen": [{"jahrgang": 6, "eingefuehrt_ab": "2026/2027",
                     "ausgemustert_nach": "2026/2027"},
                    {"jahrgang": 7, "eingefuehrt_ab": "2028/2029",
-                    "ausgemustert_nach": "2028/2029"}],
+                    "ausgemustert_nach": "2028/2029", "leihbar": True}],
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
@@ -831,7 +831,7 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
     assert f'<td>{"Terra 5/6"}</td>' in zeile
     # Dieselben Spalten wie die normale Liste, das Ende steht am Jahrgang.
     assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
-        "Titel", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Leihbar", "Rücklagen"]
+        "Titel", "Leihbar", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Rücklagen"]
     assert "5 (bis 2025/2026), 6 (bis 2025/2026)" in _ohne_tags(tabelle)
 
 
@@ -1639,8 +1639,8 @@ def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
     menue = " ".join(_vorlage(seiten.get("/buecherliste/fach/Deutsch").text,
                               DEUTSCH, "Deutsch").split())
     assert ('<tr class="planung-entscheidung"><td colspan="6"> <span class="entscheidung-genehmigt">'
-            'Einführung <span class="label label-success">genehmigt</span> durch b.lehrer am '
-            f'{heute:%d.%m.%Y}. Begründung: neuer Lehrplan</span>') in menue
+            'Einführung <span class="label label-success">genehmigt</span> am '
+            f'{heute:%d.%m.%Y} durch b.lehrer Begründung: neuer Lehrplan</span>') in menue
 
     zurueck = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
@@ -1736,7 +1736,7 @@ def test_genehmigte_zeilen_sind_in_der_farbe_ihres_status_hinterlegt(
         "art": "einfuehrung", "ergebnis": "abgelehnt", "mtime": stand["mtime"],
     })
     assert antwort.status_code == 200, antwort.text
-    assert zeile_ab("2027/2028") == "status-geplant oben-abgelehnt unten-abgelehnt"
+    assert zeile_ab("2027/2028") == "status-geplant oben-abgelehnt unten-abgelehnt abgelehnt"
 
     antwort = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
@@ -1764,7 +1764,7 @@ def test_eine_zeile_mit_zwei_antraegen_ist_halb_halb(
         }).json()
     menue = " ".join(_vorlage(seiten.get("/buecherliste/fach/Deutsch").text,
                               DEUTSCH, "Deutsch").split())
-    assert 'class="status-geplant oben-genehmigt unten-abgelehnt"' in menue
+    assert 'class="status-geplant oben-genehmigt unten-abgelehnt abgelehnt"' in menue
     assert "Einführung <span" in menue and "Ausmusterung <span" in menue
 
 
@@ -1959,3 +1959,31 @@ def test_ein_buch_ohne_isbn_steht_unter_isbn_folgt_bis_sie_nachgetragen_ist(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     assert "OHNE-ISBN-1" not in text
     assert "<samp>978-3-16-148410-0</samp>" in _zeile_von(text, NEU)
+
+
+def test_teils_leihbar_steht_in_zwei_teilzeilen_je_fuer_sich_gefaerbt(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Leihbar vor dem Jahrgang; oben die leihbaren, unten die Kaufbuch-Jahrgänge (2026-10-31)."""
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
+        "zeilen": [{"jahrgang": 5, "ausgemustert_nach": "2025/2026", "bisher_ab": ""},
+                   {"jahrgang": 6, "bisher_ab": ""},
+                   {"jahrgang": 7, "eingefuehrt_ab": "2028/2029", "leihbar": False, "neu": True}],
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    kopf = _haupttabelle(text).split("<thead>")[1].split("</thead>")[0]
+    assert re.findall(r"<th [^>]*>([^<]*)</th>", kopf)[:3] == ["Titel", "Leihbar", "Jahrgang"]
+    zeile = " ".join(_zeile_von(text, TERRA).split())
+    assert '<td data-wert="0.5" class="teilzeilen">' in zeile
+    teile = re.findall(r'<div class="teilzeile([^"]*)">(.*?)</div>', zeile)
+    assert len(teile) == 4
+    (haken_ja, _), (haken_nein, _), (jg_ja, text_ja), (jg_nein, text_nein) = teile
+    assert (haken_ja, haken_nein) == ("", "")
+    assert jg_ja == " band-ausmusterung" and jg_nein == " band-einfuehrung"
+    assert _ohne_tags(text_ja) == "5 (bis 2025/2026), 6"
+    assert _ohne_tags(text_nein) == "7 (ab 2028/2029)"
+    assert 'checked aria-label="leihbar: Jg. 5, 6"' in zeile
+    assert 'aria-label="nicht leihbar: Jg. 7"' in zeile

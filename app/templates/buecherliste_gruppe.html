@@ -89,17 +89,10 @@
   Gelb ist das Häkchen, wenn IServ „leihbar“ in einem Jahrgang dieser Zeile
   anders führt (``leihbar_iserv``) - beim Überfahren steht, wo.
 #}
-{#
-  In der Fach-Ansicht (``f``, die Farben aus der Planung) zählt IServ hier
-  nicht: gelb ist das Häkchen bei einem Wechsel von „leihbar“ in der Planung,
-  ``extra`` färbt es zusätzlich (rot in den Ausmusterungen).
-#}
-{% macro leihbaeckchen(buch, f=none, extra="") -%}
-{%- set anders = (buch.leihbar_iserv or ()) if f is none else () -%}
-{%- set klasse = f.zelle("leihbar", extra) if f is not none else ("aenderung" if anders else "") -%}
+{% macro leihbaeckchen(buch) -%}
+{%- set anders = buch.leihbar_iserv or () -%}
 <td data-wert="{{ 0.5 if buch.leihbar_teilweise else (1 if buch.leihbar else 0) }}"
-  {%- if klasse %} class="{{ klasse }}"{% endif %}
-  {%- if anders %} title="In IServ: {% for paar, wert in anders %}{{ paar[0] }} Jg. {{ paar[1] }} {{ 'ja' if wert else 'nein' }}{{ '; ' if not loop.last }}{% endfor %}"
+  {%- if anders %} class="aenderung" title="In IServ: {% for paar, wert in anders %}{{ paar[0] }} Jg. {{ paar[1] }} {{ 'ja' if wert else 'nein' }}{{ '; ' if not loop.last }}{% endfor %}"
   {%- elif buch.leihbar_titel %} title="{{ buch.leihbar_titel }}"{% endif %}><input type="checkbox"
   class="nur-lesen" tabindex="-1" aria-readonly="true"
   {%- if buch.leihbar %} checked{% endif %}{% if buch.leihbar_teilweise %} data-teilweise{% endif %}
@@ -123,13 +116,16 @@
   <thead>
     <tr>
       <th data-sort="text">Titel</th>
+      {#- In der Fach-Ansicht steht „Leihbar“ vor dem Jahrgang (2026-10-31):
+          die beiden Spalten teilen sich die Teilzeilen (``fachzeile``). -#}
+      {% if planbar %}<th data-sort="zahl">Leihbar</th>{% endif %}
       {% if mit_jahrgang %}<th data-sort="text">Jahrgang</th>{% endif %}
       {% if ohne != "fach" %}<th data-sort="text">Fach</th>{% endif %}
       {% if ohne != "verlag" %}<th data-sort="text">Verlag</th>{% endif %}
       <th data-sort="text">ISBN</th>
       <th data-sort="zahl">Neupreis</th>
       <th data-sort="zahl">Leihgebühr</th>
-      <th data-sort="zahl">Leihbar</th>
+      {% if not planbar %}<th data-sort="zahl">Leihbar</th>{% endif %}
       {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
     </tr>
   </thead>
@@ -220,24 +216,66 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   Vorjahr. Dieselbe Spalte in der Liste und unter „Ausmusterungen“. Sortiert
   wird nach den nackten Jahrgängen (``data-wert``).
 #}
-{% macro fachjahrgaenge(f, extra="") -%}
-<td data-wert="{{ f.jahrgaenge | map(attribute='jahrgang') | join(', ') }}"{% set klasse = f.zelle("jahrgang", extra) %}{% if klasse %} class="{{ klasse }}"{% endif %}>
-{%- for j in f.jahrgaenge -%}
+{% macro jahrgangsliste(jahrgaenge) -%}
+{%- for j in jahrgaenge -%}
 {%- if j.farbe %}<span class="wert-{{ j.farbe }}">{{ j.jahrgang }}</span>{% else %}{{ j.jahrgang }}{% endif -%}
 {%- if j.zusatz %} ({{ j.zusatz }}){% endif %}{{ ", " if not loop.last }}
 {%- endfor -%}
-</td>
+{%- endmacro %}
+{#
+  „Leihbar“ und „Jahrgang“ der Fach-Ansicht. Ist ein Buch in einigen
+  Jahrgängen leihbar und in anderen nicht, stehen in beiden Spalten zwei
+  Teilzeilen - oben die leihbaren, unten die nicht leihbaren Jahrgänge -, und
+  jede Teilzelle ist für sich gefärbt (``Leihgruppe`` in
+  buecherlisten/planung/farben.py). ``rot`` (die Ausmusterungen) färbt das
+  Häkchen der Teilzeile rot, deren Jahrgänge ausgemustert werden.
+#}
+{% macro fachleihbar(f, rot=false) -%}
+{%- set gruppen = f.gruppen -%}
+{%- set wert = 0.5 if gruppen | length > 1 else (1 if gruppen and gruppen[0].leihbar else 0) -%}
+{%- macro haekchen(g) -%}
+<input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
+  {%- if g.leihbar %} checked{% endif %} aria-label="{{ 'leihbar' if g.leihbar else 'nicht leihbar' }}: Jg. {{ g.jahrgaenge | map(attribute='jahrgang') | join(', ') }}">
+{%- endmacro -%}
+{%- if gruppen | length > 1 -%}
+<td data-wert="{{ wert }}" class="teilzeilen">
+  {%- for g in gruppen %}{% set klasse = f.teilzelle(g, "leihbar", "ausmusterung" if rot and "ausmusterung" in g.jahrgang else "") %}
+  <div class="teilzeile{{ ' ' ~ klasse if klasse }}">{{ haekchen(g) }}</div>
+  {%- endfor %}</td>
+{%- else -%}
+{%- set g = gruppen[0] if gruppen else none -%}
+{%- set klasse = f.teilzelle(g, "leihbar", "ausmusterung" if rot and "ausmusterung" in g.jahrgang else "") if g else f.zelle() -%}
+<td data-wert="{{ wert }}"{% if klasse %} class="{{ klasse }}"{% endif %}>{% if g %}{{ haekchen(g) }}{% endif %}</td>
+{%- endif -%}
+{%- endmacro %}
+{#
+  Die Jahrgänge mit „(ab …)“/„(bis …)“ - blau die Zahl einer Einführung zum
+  laufenden Schuljahr, rot und durchgestrichen die einer Ausmusterung nach dem
+  Vorjahr. Sortiert wird nach den nackten Jahrgängen (``data-wert``).
+#}
+{% macro fachjahrgaenge(f) -%}
+{%- set gruppen = f.gruppen -%}
+{%- set wert = f.jahrgaenge | map(attribute='jahrgang') | join(', ') -%}
+{%- if gruppen | length > 1 -%}
+<td data-wert="{{ wert }}" class="teilzeilen">
+  {%- for g in gruppen %}{% set klasse = f.teilzelle(g, "jahrgang") %}
+  <div class="teilzeile{{ ' ' ~ klasse if klasse }}">{{ jahrgangsliste(g.jahrgaenge) }}</div>
+  {%- endfor %}</td>
+{%- else -%}
+{%- set klasse = f.teilzelle(gruppen[0], "jahrgang") if gruppen else f.zelle() -%}
+<td data-wert="{{ wert }}"{% if klasse %} class="{{ klasse }}"{% endif %}>{{ jahrgangsliste(f.jahrgaenge) }}</td>
+{%- endif -%}
 {%- endmacro %}
 {% macro fachzeile(buch, iserv, mit_jahrgang, mit_ruecklagen, fach) %}
 {% set f = buch.farben %}
       <td{{ fachzelle(f, "", iserv, "titel") }}>{{ buch.titel }}
         {%- if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif %}</td>
+      {{ fachleihbar(f) }}
       {% if mit_jahrgang %}{{ fachjahrgaenge(f) }}{% endif %}
       <td{{ fachzelle(f, "", iserv, "verlag") }}>{{ buch.verlag }}</td>
       <td data-wert="{{ buch.isbn }}"{{ fachzelle(f) }}><samp>{{ buch.isbn_anzeige }}</samp></td>
       <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}"{{ fachzelle(f, "", iserv, "neupreis") }}>{{ euro(buch.neupreis) }}</td>
       <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}"{{ fachzelle(f, "", iserv, "leihgebuehr") }}>{{ euro(buch.leihgebuehr) }}</td>
-      {{ leihbaeckchen(buch, f) }}
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
       <td data-wert="{{ zurueck }}"{{ fachzelle(f) }}>{{ zurueck }}</td>{% endif %}
 {% endmacro %}
@@ -306,30 +344,29 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   <thead>
     <tr>
       <th data-sort="text">Titel</th>
+      <th data-sort="zahl">Leihbar</th>
       <th data-sort="text">Jahrgang</th>
       <th data-sort="text">Verlag</th>
       <th data-sort="text">ISBN</th>
       <th data-sort="zahl">Neupreis</th>
       <th data-sort="zahl">Leihgebühr</th>
-      <th data-sort="zahl">Leihbar</th>
       {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
     </tr>
   </thead>
   <tbody>
     {% for e in ausgemustert %}
     {% set f = e.farben %}
-    {#- Nicht ganz weg: die Zellen Jahrgang und Leihbar rot, und der Strich. -#}
-    {% set rot = "" if "ausmusterung" in f.ganz else "ausmusterung" %}
+    {#- Nicht ganz weg: Jahrgang und Häkchen der ausgemusterten Teilzeile rot, und der Strich. -#}
     <tr data-isbn="{{ e.isbn }}" class="aufklappbar {{ f.strich_klasse('ausmusterung') }}"
       data-planung="aufklappen" data-fach="{{ gruppe.name }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage">
       <td{{ fachzelle(f) }}>{{ e.titel }}</td>
-      {{ fachjahrgaenge(f, rot) }}
+      {{ fachleihbar(f, rot=true) }}
+      {{ fachjahrgaenge(f) }}
       <td{{ fachzelle(f) }}>{{ e.verlag }}</td>
       <td data-wert="{{ e.isbn }}"{{ fachzelle(f) }}><samp>{{ e.isbn_anzeige }}</samp></td>
       <td data-wert="{{ e.neupreis if e.neupreis is not none else '' }}"{{ fachzelle(f) }}>{{ euro(e.neupreis) }}</td>
       <td data-wert="{{ e.leihgebuehr if e.leihgebuehr is not none else '' }}"{{ fachzelle(f) }}>{{ euro(e.leihgebuehr) }}</td>
-      {{ leihbaeckchen(e, f, rot) }}
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, e, gruppe.name) | trim %}
       <td data-wert="{{ zurueck }}"{{ fachzelle(f) }}>{{ zurueck }}</td>{% endif %}
     </tr>

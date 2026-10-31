@@ -260,6 +260,48 @@ if (typeof document !== "undefined") {
   }
 }
 
+// Ist ein Buch teils leihbar, teils nicht, stehen in „Leihbar“ und „Jahrgang“
+// je zwei Teilzeilen (.teilzeile in buecherliste_gruppe.html). Die beiden
+// Teilzeilen einer Gruppe sind gleich hoch - die Gruppen untereinander nicht
+// (Entscheidung 2026-10-31). Das kann CSS über zwei Zellen hinweg nicht, also
+// misst es dieses Skript: beim Laden und wenn sich die Breite ändert. Die
+// letzte Gruppe reicht bis zum Boden der Zeile, falls die höher ist (etwa
+// durch einen umgebrochenen Titel).
+function gleicheTeilzeilenAn() {
+  for (const zeile of document.querySelectorAll("tr")) {
+    const zellen = [...zeile.querySelectorAll(":scope > td.teilzeilen")];
+    if (zellen.length < 2) continue;
+    const spalten = zellen.map((zelle) => [...zelle.querySelectorAll(":scope > .teilzeile")]);
+    for (const teile of spalten) for (const teil of teile) teil.style.minHeight = "";
+    const anzahl = Math.min(...spalten.map((teile) => teile.length));
+    let summe = 0;
+    for (let i = 0; i < anzahl; i += 1) {
+      const hoehe = Math.max(...spalten.map((teile) => teile[i].getBoundingClientRect().height));
+      for (const teile of spalten) teile[i].style.minHeight = hoehe + "px";
+      summe += hoehe;
+    }
+    const rest = zellen[0].getBoundingClientRect().height - summe;
+    if (rest > 0 && anzahl) {
+      for (const teile of spalten) {
+        teile[anzahl - 1].style.minHeight = parseFloat(teile[anzahl - 1].style.minHeight) + rest + "px";
+      }
+    }
+  }
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  gleicheTeilzeilenAn();
+  let geplant = false;
+  window.addEventListener("resize", () => {
+    if (geplant) return;
+    geplant = true;
+    window.requestAnimationFrame(() => {
+      geplant = false;
+      gleicheTeilzeilenAn();
+    });
+  });
+}
+
 (function () {
   if (typeof document === "undefined") return;
   const wurzel = document.getElementById("buchplanung");

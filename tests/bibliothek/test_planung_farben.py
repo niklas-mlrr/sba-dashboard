@@ -85,7 +85,7 @@ def test_ein_wechsel_von_leihbar_ist_nur_gelb():
     m = _markierung(_zeile(5, nach="2025/2026", leihbar=True),
                     _zeile(5, ab="2026/2027", leihbar=False))
     assert (m.ganz, m.jahrgang, m.leihbar) == (frozenset(), frozenset(), {AENDERUNG})
-    assert m.jahrgaenge == (Jahrgangswert(5),)
+    assert m.jahrgaenge == (Jahrgangswert(5, leihbar=False),)
     assert m.zelle("leihbar") == "band-aenderung"
 
 
@@ -112,7 +112,7 @@ def test_ausmusterungen_zeigen_was_aus_den_regalen_geht():
     stand = _stand(_zeile(7, nach="2025/2026"), _zeile(8, leihbar=False))
     assert in_ausmusterungen(stand, stand.buecher[0], "Deutsch")
     m = markierung(stand, stand.buecher[0], "Deutsch")
-    assert m.jahrgaenge == (Jahrgangswert(7, "bis 2025/2026", AUSMUSTERUNG), Jahrgangswert(8))
+    assert m.jahrgaenge == (Jahrgangswert(7, "bis 2025/2026", AUSMUSTERUNG), Jahrgangswert(8, leihbar=False))
 
 
 def test_keine_ausmusterung_ohne_leihbares_vor_zwei_jahren_oder_mit_neuer_einfuehrung():
@@ -123,3 +123,22 @@ def test_keine_ausmusterung_ohne_leihbares_vor_zwei_jahren_oder_mit_neuer_einfue
     ):
         stand = _stand(*zeilen)
         assert not in_ausmusterungen(stand, stand.buecher[0], "Deutsch"), zeilen
+
+
+def test_leihbare_und_nicht_leihbare_jahrgaenge_sind_zwei_teilzeilen():
+    """Jede Teilzeile wird für sich gefärbt (Entscheidung 2026-10-31)."""
+    m = _markierung(_zeile(5, nach="2025/2026", leihbar=True), _zeile(6, leihbar=True),
+                    _zeile(7, ab="2027/2028", leihbar=False),
+                    _zeile(8, nach="2027/2028", leihbar=True),
+                    _zeile(8, ab="2028/2029", leihbar=False))
+    leihbar, kauf = m.gruppen
+    assert [j.jahrgang for j in leihbar.jahrgaenge] == [5, 6, 8]
+    assert [j.jahrgang for j in kauf.jahrgaenge] == [7]
+    # Rot nur bei den leihbaren, blau nur bei den Kaufbüchern; der Wechsel in
+    # Jg. 8 färbt das Häkchen der Teilzeile, in der Jg. 8 jetzt steht.
+    assert (leihbar.jahrgang, kauf.jahrgang) == ({AUSMUSTERUNG}, {EINFUEHRUNG})
+    assert (leihbar.haekchen, kauf.haekchen) == ({AENDERUNG}, frozenset())
+    assert m.teilzelle(leihbar, "jahrgang") == "band-ausmusterung"
+    assert m.teilzelle(kauf, "leihbar") == ""
+    # Ein Buch, das überall gleich leihbar ist, hat nur eine Teilzeile.
+    assert len(_markierung(_zeile(5), _zeile(6)).gruppen) == 1

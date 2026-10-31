@@ -573,19 +573,19 @@ td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: hel
 /* Fach-Ansicht: die Farben aus der Planung (buecherlisten/planung/farben.py).
    Mehrere Farben teilen eine Zelle in gleich hohe waagerechte Bänder, immer
    rot über gelb über blau; ebenso den Strich vorn. */
-.iserv-tabelle > tbody > tr > td.band-ausmusterung { background: var(--ausmusterung-grund); }
-.iserv-tabelle > tbody > tr > td.band-aenderung { background: var(--aenderung-grund); }
-.iserv-tabelle > tbody > tr > td.band-einfuehrung { background: var(--einfuehrung-grund); }
-.iserv-tabelle > tbody > tr > td.band-ausmusterung-aenderung {
+.iserv-tabelle > tbody > tr > td.band-ausmusterung, .iserv-tabelle .teilzeile.band-ausmusterung { background: var(--ausmusterung-grund); }
+.iserv-tabelle > tbody > tr > td.band-aenderung, .iserv-tabelle .teilzeile.band-aenderung { background: var(--aenderung-grund); }
+.iserv-tabelle > tbody > tr > td.band-einfuehrung, .iserv-tabelle .teilzeile.band-einfuehrung { background: var(--einfuehrung-grund); }
+.iserv-tabelle > tbody > tr > td.band-ausmusterung-aenderung, .iserv-tabelle .teilzeile.band-ausmusterung-aenderung {
   background: linear-gradient(var(--ausmusterung-grund) 0 50%, var(--aenderung-grund) 50% 100%);
 }
-.iserv-tabelle > tbody > tr > td.band-ausmusterung-einfuehrung {
+.iserv-tabelle > tbody > tr > td.band-ausmusterung-einfuehrung, .iserv-tabelle .teilzeile.band-ausmusterung-einfuehrung {
   background: linear-gradient(var(--ausmusterung-grund) 0 50%, var(--einfuehrung-grund) 50% 100%);
 }
-.iserv-tabelle > tbody > tr > td.band-aenderung-einfuehrung {
+.iserv-tabelle > tbody > tr > td.band-aenderung-einfuehrung, .iserv-tabelle .teilzeile.band-aenderung-einfuehrung {
   background: linear-gradient(var(--aenderung-grund) 0 50%, var(--einfuehrung-grund) 50% 100%);
 }
-.iserv-tabelle > tbody > tr > td.band-ausmusterung-aenderung-einfuehrung {
+.iserv-tabelle > tbody > tr > td.band-ausmusterung-aenderung-einfuehrung, .iserv-tabelle .teilzeile.band-ausmusterung-aenderung-einfuehrung {
   background: linear-gradient(var(--ausmusterung-grund) 0 33.333%, var(--aenderung-grund) 33.333% 66.667%,
                               var(--einfuehrung-grund) 66.667% 100%);
 }
@@ -1031,20 +1031,31 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
      genehmigt - hell in der Farbe des Status-Labels dahinter (grün, blau,
                  gelb, rot wie .label-success/-info/-warning/-danger),
      offen     - weiß,
-     abgelehnt - dieselbe Farbe, grau-transparent überdeckt.
+     abgelehnt - dieselbe Farbe.
    Der Hintergrund liegt am <tbody>, nicht an den Zellen: so laufen die Hälften
-   über beide Zeilen der Gruppe. */
+   über beide Zeilen der Gruppe.
+
+   Ist ein Antrag der Zeile abgelehnt (``abgelehnt``), liegt über der ganzen
+   Gruppe ein grau-transparenter Schleier (Entscheidung 2026-10-31): über den
+   Eingaben, auch über ihren Feldern - bedienbar bleiben sie, der Schleier
+   lässt Klicks durch -, und hinter dem Text der Entscheidungen, der lesbar
+   darüber steht. */
 .planung-tabelle tbody[data-planung-zeile] {
   --zeilenfarbe: transparent;
   --oben: transparent;
   --unten: transparent;
-  --oben-grau: transparent;
-  --unten-grau: transparent;
-  background:
-    linear-gradient(to bottom, var(--oben-grau) 0 50%, var(--unten-grau) 50% 100%),
-    linear-gradient(to bottom, var(--oben) 0 50%, var(--unten) 50% 100%);
+  background: linear-gradient(to bottom, var(--oben) 0 50%, var(--unten) 50% 100%);
   border-top: 2px solid #fff;
 }
+.planung-tabelle tbody.abgelehnt > .planung-eingabe > td { position: relative; }
+.planung-tabelle tbody.abgelehnt > .planung-eingabe > td::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(120 120 120 / .4);
+  pointer-events: none;
+}
+.planung-tabelle tbody.abgelehnt > .planung-entscheidung > td { background: rgb(120 120 120 / .4); }
 .planung-tabelle tbody.status-im-einsatz { --zeilenfarbe: #dff0d8; }
 .planung-tabelle tbody.status-geplant { --zeilenfarbe: var(--einfuehrung-grund); }
 .planung-tabelle tbody.status-laeuft-aus { --zeilenfarbe: #fcf8e3; }
@@ -1053,17 +1064,30 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-tabelle tbody.oben-abgelehnt { --oben: var(--zeilenfarbe); }
 .planung-tabelle tbody.unten-genehmigt,
 .planung-tabelle tbody.unten-abgelehnt { --unten: var(--zeilenfarbe); }
-.planung-tabelle tbody.oben-abgelehnt { --oben-grau: rgb(120 120 120 / .4); }
-.planung-tabelle tbody.unten-abgelehnt { --unten-grau: rgb(120 120 120 / .4); }
 /* Hinterlegt braucht die Zeile außen etwas Luft, sonst klebt der Jahrgang am Rand. */
 .planung-tabelle tbody[data-planung-zeile] td:first-child { padding-left: .4rem; }
 .planung-tabelle tbody[data-planung-zeile] td:last-child { padding-right: .4rem; }
 
 /* Die Entscheidungen unter einer Zeile: über die ganze Breite, je Antrag eine
-   Zeile, umgebrochen an Leerzeichen und nie abgeschnitten. */
+   Zeile, umgebrochen an Leerzeichen und nie abgeschnitten. Das Label
+   „genehmigt“/„abgelehnt“ steht im Text, so breit wie sein Wort. */
 .planung-entscheidung > td { padding-top: 0; font-size: 12px; white-space: normal; }
-.planung-entscheidung span { display: block; overflow-wrap: normal; }
+.planung-entscheidung > td > span { display: block; overflow-wrap: normal; }
 .planung-entscheidung .label { font-size: 10px; }
+
+/* Die Bücherliste eines Fachs: ist ein Buch teils leihbar, teils nicht, stehen
+   in „Leihbar“ und „Jahrgang“ zwei Teilzeilen übereinander, jede mit ihrer
+   eigenen Farbe (``fachleihbar``/``fachjahrgaenge`` in buecherliste_gruppe.html).
+   Die Zelle selbst hat dann keinen Innenabstand - den tragen die Teilzeilen,
+   damit ihre Farbe bis an den Rand reicht. Umbrechen dürfen sie; gleich hoch
+   macht die Teilzeilen einer Gruppe in beiden Spalten static/buchplanung.js
+   (``gleicheTeilzeilenAn``). */
+.iserv-tabelle > tbody > tr > td.teilzeilen { padding: 0; }
+.iserv-tabelle .teilzeile {
+  min-height: calc(1.42857143em + 16px);
+  padding: 8px;
+}
+.iserv-tabelle .teilzeile + .teilzeile { border-top: 1px dashed #ddd; }
 /* Ein Eingabefeld steht als `inline-block` auf der Grundlinie und säße damit
    etwas tiefer als bloßer Text wie der Jahrgang daneben. */
 .planung-tabelle .planung-feld,
@@ -1185,7 +1209,6 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 /* Während gespeichert wird: ein grauer Schleier über dem ganzen Menü, in der
    Mitte „Wird gespeichert…“ bzw. „Gespeichert“. Ohne Menü (der Abgleich)
    deckt er die Seite ab. */
-.iserv-modal { position: relative; }
 .speicher-schleier {
   position: absolute;
   inset: 0;

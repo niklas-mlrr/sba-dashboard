@@ -243,8 +243,8 @@
 <tr class="planung-entscheidung"><td colspan="6">
   {%- for wort, antrag in entschieden %}
   <span class="entscheidung-{{ antrag.status }}">{{ wort }} {{ statuslabel(antrag.status) }}
+    {%- if antrag.datum %} am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}
     {%- if antrag.kuerzel %} durch {{ antrag.kuerzel }}{% endif %}
-    {%- if antrag.datum %} am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}.
     {%- if loop.last and zeile.begruendung %} Begründung: {{ zeile.begruendung }}{% endif %}</span>
   {%- else %}
   <span>Begründung: {{ zeile.begruendung }}</span>
@@ -271,15 +271,18 @@
   Entscheidungen (``entscheidungen``) gehören zusammen und werden gemeinsam
   hinterlegt. Die obere Hälfte richtet sich nach dem Antrag auf Einführung,
   die untere nach dem auf Ausmusterung (``zeile.haelften``,
-  app/planungsansicht.py): genehmigt ist in der Farbe des Status hinterlegt,
-  offen weiß, abgelehnt hinterlegt und grau überdeckt - bearbeiten lässt sich
-  die Zeile trotzdem.
+  app/planungsansicht.py): genehmigt und abgelehnt sind in der Farbe des
+  Status hinterlegt, offen weiß. Ist ein Antrag abgelehnt (``abgelehnt``),
+  liegt Grau über der ganzen Zeile, auch über den Feldern; nur der Text der
+  Entscheidungen steht darüber (Entscheidung 2026-10-31). Bearbeiten lässt
+  sich die Zeile trotzdem.
 #}
 {% set statusklasse = {"im Einsatz": "im-einsatz", "geplant": "geplant",
                        "läuft aus": "laeuft-aus", "ausgemustert": "ausgemustert"}.get(zeile.status) %}
 <tbody data-planung-zeile data-bisher-jahrgang="{{ zeile.jahrgang }}"
   data-bisher-ab="{{ zeile.eingefuehrt_ab }}"
-  class="status-{{ statusklasse }} oben-{{ zeile.haelften[0] }} unten-{{ zeile.haelften[1] }}"
+  class="status-{{ statusklasse }} oben-{{ zeile.haelften[0] }} unten-{{ zeile.haelften[1] }}
+  {%- if "abgelehnt" in zeile.haelften %} abgelehnt{% endif %}"
   {%- if zeile.aktuell %} data-aktuell{% endif %}{% if zeile.alt %} data-alt{% endif %}>
 <tr class="planung-eingabe">
   <td class="planung-spalte-jahrgang">

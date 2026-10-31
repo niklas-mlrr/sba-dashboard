@@ -301,6 +301,13 @@ mit IServ):
 Ein Wechsel zählt nur gelb, nicht zugleich rot und blau. Mehrere Farben teilen
 den Strich vorn und jede Zelle in gleich hohe Bänder, rot über gelb über blau.
 
+„Leihbar“ steht in der Fach-Ansicht vor „Jahrgang“. Ist ein Buch in einigen
+Jahrgängen leihbar und in anderen nicht, haben beide Spalten zwei Teilzeilen
+(seit 2026-10-31, `Leihgruppe`): oben die leihbaren, unten die nicht leihbaren
+Jahrgänge, jede Teilzelle für sich gefärbt. In welche ein Jahrgang gehört,
+sagt die Zeile, die dieses Schuljahr für ihn spricht - bei einem Wechsel die
+neue.
+
 „Ausmusterungen zu diesem Schuljahr“ (`in_ausmusterungen`) führt ein Buch, wenn
 jeder Jahrgang, in dem es im Fach leihbar war, spätestens nach dem Vorjahr
 ausgemustert ist (der letzte genau dann) und es im Fach nicht wieder eingeführt
