@@ -287,33 +287,42 @@ ihres Status, offen weiß, abgelehnt grau überdeckt.
 
 ## Farben der Fach-Ansicht
 
-Seit 2026-10-30 färbt die Bücherliste eines Fachs nach der Planung, nicht nach
-dem Vergleich mit IServ (`farben.py`; Verlag und Jahrgang vergleichen weiter
-mit IServ):
+Seit 2026-10-31 zeigt die Bücherliste eines Fachs Planung und IServ-Abgleich
+zugleich (`farben.py`, ersetzt die Regeln vom 2026-10-30). Jedes Mittel hat
+eine Bedeutung; Verlag und Jahrgang sollen folgen und vergleichen bis dahin
+weiter wie oben beschrieben:
 
-| Farbe | wann | ganze Zeile | sonst | Jahrgangszahl |
-|-------|------|-------------|-------|---------------|
-| rot | Ausmusterung nach dem Vorjahr oder später | das Buch steht danach in keinem Fach und Jahrgang mehr | Zelle „Jahrgang“ | rot und durchgestrichen bei „nach dem Vorjahr“ |
-| gelb | Wechsel von „leihbar“ (eine Zeile endet, im selben Jahrgang beginnt eine mit dem anderen Häkchen) | — | Zelle „Leihbar“ | — |
-| gelb | Titel, Verlag, Preise weichen von IServ ab | — | die Zelle | — |
-| blau | Einführung zum laufenden Schuljahr oder später | das Buch wird zum ersten Mal überhaupt eingeführt | Zelle „Jahrgang“ | blau bei „zum laufenden Schuljahr“ |
+| Mittel | zeigt | blau | rot | gelb |
+|--------|-------|------|-----|------|
+| Schrift (je Wert) | Planung | Einführung zu diesem Schuljahr oder später | Ausmusterung nach dem Vorjahr oder später; durchgestrichen, wenn nach dem Vorjahr | — |
+| Markierung (Textmarker je Wert) | IServ, nur laufendes Schuljahr | fehlt in IServ noch | steht dort noch (Wert durchgestrichen) | Titel, Verlag, Preise lauten dort anders (IServ-Wert im Tooltip) |
+| Hintergrund | Ganzes, laut Planung | Zeile: Buch ganz neu; Teilzeile: als Leih- bzw. Kaufbuch ganz neu | Zeile: Buch danach in keinem Fach und Jahrgang mehr; Teilzeile: so ganz weg | — |
+| Strich vorn | Schwerpunkt der Ansicht (Fach: Planung) | eine Einführung in der Zeile | eine Ausmusterung in der Zeile | — |
 
-Ein Wechsel zählt nur gelb, nicht zugleich rot und blau. Mehrere Farben teilen
-den Strich vorn und jede Zelle in gleich hohe Bänder, rot über gelb über blau.
+Der Titel ist blau markiert, wenn das Buch in IServ in keiner Liste steht, rot,
+wenn es im Fach nur noch in IServ steht. Solche Bücher stehen wieder in der
+Liste („nur in IServ“, ohne Menü). Trifft auf einer einjährigen Zeile
+Einführung und Ausmusterung zusammen, gilt Rot.
 
-„Leihbar“ steht in der Fach-Ansicht vor „Jahrgang“. Ist ein Buch in einigen
-Jahrgängen leihbar und in anderen nicht, haben beide Spalten zwei Teilzeilen
-(seit 2026-10-31, `Leihgruppe`): oben die leihbaren, unten die nicht leihbaren
-Jahrgänge, jede Teilzelle für sich gefärbt. In welche ein Jahrgang gehört,
-sagt die Zeile, die dieses Schuljahr für ihn spricht - bei einem Wechsel die
-neue.
+„Leihbar“ hängt am Jahrgang: gefärbt und verglichen wird je **Eintrag**
+(Fach, Jahrgang, leihbar; `aktive_eintraege`, `Abweichung.eintraege_fehlen` /
+`eintraege_nur_iserv`). „Leihbar“ steht vor „Jahrgang“; ein Buch mit Leih- und
+Kaufbuch-Jahrgängen hat in beiden Spalten zwei Teilzeilen (oben leihbar). Ein
+Wechsel ist eine Ausmusterung in der einen und eine Einführung in der anderen
+Teilzeile; das Häkchen wird nie gefärbt. Führt IServ einen Jahrgang mit dem
+anderen Häkchen, fehlt der Eintrag dort in der einen Teilzeile und steht noch in
+der anderen.
+
+`markierung(stand, buch, abweichung, im=…, nach=…)` ist für Verlag und Jahrgang
+vorbereitet: `im` wählt die Einträge der Zeile, `nach` die Wertspalte
+(`jahrgang` oder `fach`); `strich("iserv")` gibt den Strich einer Ansicht mit
+Schwerpunkt IServ.
 
 „Ausmusterungen zu diesem Schuljahr“ (`in_ausmusterungen`) führt ein Buch, wenn
 jeder Jahrgang, in dem es im Fach leihbar war, spätestens nach dem Vorjahr
 ausgemustert ist (der letzte genau dann) und es im Fach nicht wieder eingeführt
 wird. Läuft es als Kaufbuch weiter, steht es in beiden Listen, mit derselben
-Jahrgang-Spalte. Dort ist es ganz rot, wenn es danach nirgends mehr steht, sonst
-sind Jahrgang und Leihbar rot.
+Jahrgang-Spalte. Gefärbt wird es wie die Liste darüber.
 
 ## Status werden gerechnet, nie eingetragen
 
