@@ -174,7 +174,10 @@ body {
 @media (min-width: 768px) { .seite { width: 780px; margin: 0 auto; } }
 @media (min-width: 992px) { .seite { width: 1000px; } }
 @media (min-width: 1200px) { .seite { width: 1200px; } }
-.seite > * { margin-left: 15px !important; margin-right: 15px !important; }
+/* Ohne <dialog>: Menüs im Block `kopfzeile` (Bestätigen, Zurückziehen,
+   Fehler) sind direkte Kinder von .seite, und das `!important` hier schlüge
+   ihr `margin: 30px auto auto` - sie klebten links statt mittig zu stehen. */
+.seite > :not(dialog) { margin-left: 15px !important; margin-right: 15px !important; }
 
 .kopf {
   margin-top: 40px;
@@ -485,7 +488,7 @@ td.frisch {
 
 /* IServ zeigt die Bücherlisten in voller Breite (container-fluid). */
 @media (min-width: 768px) { .seite.seite-voll { width: auto; margin: 0; } }
-.seite-voll > * { margin-left: 0 !important; margin-right: 0 !important; }
+.seite-voll > :not(dialog) { margin-left: 0 !important; margin-right: 0 !important; }
 .seite-voll main {
   font-family: var(--iserv-schrift);
   font-size: 14px;
