@@ -114,17 +114,19 @@
 {% set mit_ruecklagen = planung.mtime is not none
    and bp.ruecklagen_vorhanden(planung, buecher, fach) | trim %}
 <div class="tabellenrahmen">
-<table class="iserv-tabelle sortierbar{% if fach %} fach-tabelle{% endif %}"{% if gesamt %} data-gesamt{% endif %}>
+<table class="iserv-tabelle sortierbar{% if fach %} fach-tabelle{% endif %}"{% if gesamt %} data-gesamt{% endif %}{% if planbar %} data-ebenen{% endif %}>
   <thead>
     <tr>
       <th data-sort="text">Titel</th>
       {#- In der Fach-Ansicht steht „Leihbar“ vor dem Jahrgang (2026-10-31):
           die beiden Spalten teilen sich die Teilzeilen (``fachzeile``). -#}
       {% if planbar %}<th data-sort="zahl">Leihbar</th>{% endif %}
-      {% if mit_jahrgang %}<th data-sort="text">Jahrgang</th>{% endif %}
+      {#- In der Fach-Ansicht mit Datei sortiert static/sortieren.js nach Ebenen:
+          zu Beginn Jahrgang (``liste``), dann ISBN (``data-ebene``). -#}
+      {% if mit_jahrgang %}<th data-sort="{{ 'liste' if planbar else 'text' }}"{% if planbar %} data-ebene="1"{% endif %}>Jahrgang</th>{% endif %}
       {% if ohne != "fach" %}<th data-sort="text">Fach</th>{% endif %}
       {% if ohne != "verlag" %}<th data-sort="text">Verlag</th>{% endif %}
-      <th data-sort="text">ISBN</th>
+      <th data-sort="text"{% if planbar %} data-ebene="2"{% endif %}>ISBN</th>
       <th data-sort="zahl">Neupreis</th>
       <th data-sort="zahl">Leihgebühr</th>
       {% if not planbar %}<th data-sort="zahl">Leihbar</th>{% endif %}
@@ -211,11 +213,15 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
     in der Bücherliste noch),
     ``markierung-aenderung`` (Titel, Verlag, Preise lauten dort anders; der
     IServ-Wert steht im Tooltip).
-  * Hintergrund nur für Ganzes: ``ganz-…`` an der Zeile oder einer Teilzeile.
-  * Strich vorn: ``strich`` mit ``--strich`` (die Planung, Abschnitte aus
-    ``strich_stil()``), ``strich-gelb`` als zweiter Strich, wenn ein Feld
-    abweicht. ``data-strich-teile``: der Strich teilt sich an der Grenze der
-    Teilzeilen; static/buchplanung.js setzt ``--teilung``.
+  * Hintergrund nur für Ganzes: ``ganz-…`` an der Zeile oder einer Teilzeile
+    (blau, rot - grau, wenn es das Buch nur wegen abgelehnter Einführungen gäbe).
+  * Zusatz hinter dem Jahrgang: je Planungszeile ein Ergebnis (``zusatz``),
+    an einer Jahreszahl mit offenem oder abgelehntem Antrag ein Kasten
+    ``zusatzantrag`` (oben die Art, unten „offen“/„abgelehnt“).
+  * Strich vorn: ``strich`` mit ``--strich`` (die Planung: ein gleich hoher
+    Abschnitt je vorkommender Schriftfarbe in Lesefolge, Grau für einen
+    abgelehnten Antrag; ``strich_stil()``), ``strich-gelb`` als zweiter
+    Strich, wenn ein Feld abweicht.
   * Steht die ISBN nur auf einer Seite (``f.zeile``), ist jedes Feld markiert.
 
   ``wert``, ``teilspalte`` und ``iserv_feld`` hängen an keiner Spalte der
@@ -224,7 +230,23 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 #}
 {% macro strich_attribute(f) -%}
 {%- if f.strich_stil() %} style="--strich: {{ f.strich_stil() }}"{% endif -%}
-{%- if f.strich_teile %} data-strich-teile="{{ f.strich_teile | join(' ') }}"{% endif -%}
+{%- endmacro %}
+{#
+  Der Zusatz in Klammern: je Planungszeile ein Ergebnis, mit „; “ getrennt.
+  Hängt an einer Jahreszahl ein Antrag, der offen oder abgelehnt ist, steht sie
+  in einem Rahmen in der Farbe des Status, mit einem Kasten für die Art
+  (Einführung/Ausmusterung) darüber und einem für den Status darunter.
+#}
+{% macro zusatz(w) -%}
+{%- if w.zusaetze %} ({% for zeile in w.zusaetze -%}
+<span class="zusatzzeile">
+{%- for teil in zeile.teile -%}
+{%- if teil.antrag -%}
+<span class="zusatzantrag zusatzantrag-{{ teil.antrag }}"><span class="zusatzantrag-art">{{ "Einführung" if teil.art == "einfuehrung" else "Ausmusterung" }}</span><span class="zusatzantrag-jahr">{{ teil.text }}</span><span class="zusatzantrag-status">{{ teil.antrag }}</span></span>
+{%- else -%}{{ teil.text }}{%- endif -%}
+{%- endfor -%}
+</span>{{ "; " if not loop.last }}
+{%- endfor %}){% endif -%}
 {%- endmacro %}
 {% macro wert(w) -%}
 {%- set schrift = (["schrift-" ~ w.plan] if w.plan else []) + (["durch"] if w.durch else []) -%}
@@ -233,7 +255,7 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- endset -%}
 {%- set inhalt -%}
 {%- if w.markierung %}<span class="markierung markierung-{{ w.markierung }}">{{ kern }}</span>{% else %}{{ kern }}{% endif -%}
-{%- if w.zusatz %} ({{ w.zusatz }}){% endif -%}
+{{- zusatz(w) -}}
 {%- endset -%}
 {%- if w.hinweis %}<span title="{{ w.hinweis }}">{{ inhalt }}</span>{% else %}{{ inhalt }}{% endif -%}
 {%- endmacro %}
@@ -244,14 +266,19 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   unten Kaufbuch -, gleich hoch gemacht von static/buchplanung.js
   (``gleicheTeilzeilenAn``). Das Häkchen wird nie gefärbt: ein Wechsel ist
   eine Ausmusterung in der einen und eine Einführung in der anderen Teilzeile.
-  Sortiert wird nach ``data-wert``: halb leihbar 0.5, Jahrgänge als nackte Zahlen.
+  Sortiert wird nach ``data-wert``: nur leihbar 0, beides 0.5, nur Kaufbuch 1; die Jahrgänge als
+  „5,6|7“ (leihbar | nicht leihbar), siehe static/sortieren.js.
 #}
 {% macro teilspalte(f, art) -%}
 {%- set teile = f.teilzeilen -%}
 {%- if art == "leihbar" -%}
-  {%- set sortwert = 0.5 if teile | length > 1 else (1 if teile and teile[0].leihbar else 0) -%}
+  {#- Aufsteigend: erst nur leihbar (0), dann beides (0,5), dann nur Kaufbuch (1). -#}
+  {%- set sortwert = 0.5 if teile | length > 1 else (0 if teile and teile[0].leihbar else 1) -%}
 {%- elif art == "jahrgang" -%}
-  {%- set sortwert = f.jahrgaenge | join(', ') -%}
+  {#- „5,6|7“: die leihbaren Jahrgänge vor dem Strich, die nicht leihbaren dahinter. -#}
+  {%- set ja = [] -%}{%- set nein = [] -%}
+  {%- for t in teile %}{% for w in t.werte %}{% set _ = (ja if t.leihbar else nein).append(w.jahrgang) %}{% endfor %}{% endfor -%}
+  {%- set sortwert = (ja | unique | sort | join(',')) ~ '|' ~ (nein | unique | sort | join(',')) -%}
 {%- else -%}
   {%- set sortwert = f.werte | map(attribute='text') | unique | join(', ') -%}
 {%- endif -%}
@@ -288,7 +315,8 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- else %}{{ sonst }}{% endif -%}
 {%- endmacro %}
 {#
-  Der Titel: blau markiert, wenn das Buch in IServ in keiner Liste steht, rot,
+  Der Titel (Entscheidung 2026-10-31): blau markiert, wenn das Buch in IServ in keiner Liste steht - ohne Hinweis,
+  die Markierung sagt es -, rot,
   wenn es dieses Schuljahr nur dort steht; sonst gelb, wenn IServ ihn anders
   nennt. Führt nur IServ es in diesem Fach, das Buch ist aber anderswo geplant,
   bleibt der Titel ungefärbt (rot sind dann die Jahrgänge). Nennt die
@@ -303,7 +331,6 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- elif f.iserv == "fehlt" -%}
 <span class="markierung markierung-einfuehrung" title="Steht in IServ in keiner Liste
   {%- if "titel" in iserv %} · {{ iserv_wert(iserv, "titel") }}{% endif %}">{{ buch.titel }}</span>
-{%- if buch.von_hand %} <span class="klein grau">nicht in IServ</span>{% endif -%}
 {%- else -%}
 {{ iserv_feld(iserv, "titel", buch.titel) }}
 {%- endif -%}
@@ -384,14 +411,14 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {% set mit_ruecklagen = bp.ruecklagen_vorhanden(planung, ausgemustert, gruppe.name) | trim %}
 <h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
 <div class="tabellenrahmen">
-<table class="iserv-tabelle sortierbar fach-tabelle" id="ausmusterungen">
+<table class="iserv-tabelle sortierbar fach-tabelle" id="ausmusterungen" data-ebenen>
   <thead>
     <tr>
       <th data-sort="text">Titel</th>
       <th data-sort="zahl">Leihbar</th>
-      <th data-sort="text">Jahrgang</th>
+      <th data-sort="liste" data-ebene="1">Jahrgang</th>
       <th data-sort="text">Verlag</th>
-      <th data-sort="text">ISBN</th>
+      <th data-sort="text" data-ebene="2">ISBN</th>
       <th data-sort="zahl">Neupreis</th>
       <th data-sort="zahl">Leihgebühr</th>
       {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}

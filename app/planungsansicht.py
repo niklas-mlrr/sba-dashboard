@@ -231,6 +231,7 @@ def _ruecklagen(planung: Buchplanung) -> dict[str, dict[str, Any]]:
 
 def ausmusterungen_je_fach(
     planung: Buchplanung, abweichungen: Mapping[str, Abweichung] | None = None,
+    original: Buchplanung | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """„Ausmusterungen zu diesem Schuljahr“ je Fach: was aus den Regalen geht.
 
@@ -246,6 +247,8 @@ def ausmusterungen_je_fach(
     ``abweichungen`` ist der Vergleich mit IServ (``vergleiche``); mit ihm
     zeigen die Jahrgänge auch, was IServ noch führt. Der Planungskontext
     kennt IServ nicht, die Fach-Seite rechnet die Liste deshalb damit neu.
+    ``original`` ist der Stand der Datei, wenn ``planung`` der wirksame ist
+    (``Vergleich.original``).
     """
     try:
         vorjahr = schuljahr_zahl(planung.schuljahr) - 1
@@ -265,7 +268,7 @@ def ausmusterungen_je_fach(
                 "isbn_anzeige": format_isbn(buch.isbn), "isbn_fehlt": ist_platzhalter_isbn(buch.isbn),
                 "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
                 "farben": markierung(planung, buch, (abweichungen or {}).get(buch.isbn),
-                                     im=im_fach(fach)),
+                                     im=im_fach(fach), original=original),
                 "leihbar": bool(ja), "leihbar_teilweise": bool(ja and nein),
                 "leihbar_titel": (
                     f"leihbar: Jg. {', '.join(map(str, ja))} · "

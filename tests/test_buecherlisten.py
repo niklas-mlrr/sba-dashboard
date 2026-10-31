@@ -272,7 +272,7 @@ def test_jede_tabelle_ist_sortierbar_und_vollstaendig(seiten: TestClient, pfad: 
     sammler.feed(text)
     assert sammler.tabellen
     for tabelle in sammler.tabellen:
-        assert all(k.get("data-sort") in {"text", "zahl"} for k in tabelle["koepfe"])
+        assert all(k.get("data-sort") in {"text", "zahl", "liste"} for k in tabelle["koepfe"])
         assert tabelle["zeilen"]
         for zeile in tabelle["zeilen"]:
             assert len(zeile) == len(tabelle["koepfe"])

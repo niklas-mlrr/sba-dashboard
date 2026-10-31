@@ -510,20 +510,22 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     }).json()
     text = seiten.get("/buecherliste/fach/Erdkunde").text
     # Verschiedene Zusätze: jeder hängt an seinem Jahrgang.
-    assert "5 (bis 2025/2026), 6 (bis 2029/2030), 7 (ab 2028/2029)" in _ohne_tags(text)
-    # Sortiert wird weiter nach den nackten Jahrgängen.
-    assert 'data-wert="5, 6, 7"' in text
+    # (Offene Anträge hängen als Kasten an der Jahreszahl: Art, Jahr, Status.)
+    assert ("5, 6 (bis Ausmusterung2029/2030offen), 7 (ab Einführung2028/2029offen)"
+            in _ohne_tags(text))
+    # Sortiert wird nach den nackten Jahrgängen: leihbare vor dem Strich, die übrigen dahinter.
+    assert 'data-wert="5,6,7|"' in text
     # Die Schrift zeigt die Planung je Jahrgang: nach dem Vorjahr ausgemustert
-    # rot und durchgestrichen, auslaufend rot, die Einführung ab 2028/2029
-    # blau; der Strich vorn trägt beide Farben (Entscheidung 2026-10-31).
+    # rot und durchgestrichen (ohne Zusatz), auslaufend rot, die Einführung ab
+    # 2028/2029 blau; der Strich vorn hat je Farbe einen Abschnitt, in der
+    # Reihenfolge des Lesens (Entscheidung 2026-10-31).
     zeile = _zeile_von(text, TERRA)
-    assert '<span class="schrift-ausmusterung durch">5</span> (bis 2025/2026)' in zeile
-    assert '<span class="schrift-ausmusterung">6</span> (bis 2029/2030)' in zeile
-    assert '<span class="schrift-einfuehrung">7</span> (ab 2028/2029)' in zeile
-    # Ein Abschnitt je farbigem Jahrgang, nach Jahrgang (2026-10-31).
+    assert '<span class="schrift-ausmusterung durch">5</span></span>, ' in zeile
+    assert '<span class="schrift-ausmusterung">6</span> (<span class="zusatzzeile">bis ' in zeile
+    assert '<span class="schrift-einfuehrung">7</span> (<span class="zusatzzeile">ab ' in zeile
     assert ('class="aufklappbar strich" style="--strich: linear-gradient('
-            'var(--ausmusterung-strich) 0% 33.333%, var(--ausmusterung-strich) 33.333% 66.667%, '
-            'var(--einfuehrung-strich) 66.667% 100%)"') in zeile.split(">")[0]
+            'var(--ausmusterung-strich) 0% 50%, '
+            'var(--einfuehrung-strich) 50% 100%)"') in zeile.split(">")[0]
     assert "band-" not in zeile
 
     # Derselbe Zusatz für alle: er steht trotzdem an jedem Jahrgang einzeln.
@@ -535,14 +537,16 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
         "mtime": stand["mtime"],
     })
     text = _ohne_tags(seiten.get("/buecherliste/fach/Erdkunde").text)
-    assert "6 (bis 2029/2030), 7 (ab 2028/2029), 8 (ab 2028/2029)" in text
+    assert ("6 (bis Ausmusterung2029/2030offen), 7 (ab Einführung2028/2029offen), "
+            "8 (ab Einführung2028/2029offen)") in text
     assert "7, 8 (ab" not in text
 
 
 def test_ein_buch_fuer_nur_ein_schuljahr_zeigt_nur_dieses_jahr(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Eingeführt und ausgemustert im selben Schuljahr: nur das Jahr, ohne „ab“/„bis“.
+    """Eingeführt und ausgemustert im selben Schuljahr: nur das Jahr, ohne „ab“/„bis“ -
+    aber erst, wenn beide Anträge genehmigt sind; bis dahin steht „von … bis …“.
 
     Ist es das laufende Schuljahr, bleibt es bei „bis …“.
     """
@@ -556,7 +560,8 @@ def test_ein_buch_fuer_nur_ein_schuljahr_zeigt_nur_dieses_jahr(
     })
     assert antwort.status_code == 200, antwort.text
     text = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert "6 (bis 2026/2027), 7 (2028/2029)" in _ohne_tags(text)
+    assert "6 (bis Ausmusterung2026/2027offen)" in _ohne_tags(text)
+    assert "7 (von Einführung2028/2029offen bis Ausmusterung2028/2029offen)" in _ohne_tags(text)
 
 
 def test_die_ruecklagen_spalte_erscheint_erst_mit_einer_ruecklage(
@@ -848,7 +853,7 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
     # Dieselben Spalten wie die normale Liste, das Ende steht am Jahrgang.
     assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
         "Titel", "Leihbar", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Rücklagen"]
-    assert "5 (bis 2025/2026), 6 (bis 2025/2026)" in _ohne_tags(tabelle)
+    assert "5, 6" in _ohne_tags(tabelle)
 
 
 def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
@@ -890,7 +895,7 @@ def test_buch_das_im_selben_fach_weiterlaeuft_steht_in_der_normalen_liste(
     text = seiten.get("/buecherliste/fach/Erdkunde").text
     assert "Ausmusterungen zu diesem Schuljahr" not in text
     assert f'<tr data-isbn="{TERRA}"' in text
-    assert "5 (bis 2025/2026), 6" in _ohne_tags(text)
+    assert "5, 6" in _ohne_tags(text)
 
 
 def test_handeingetragene_ausmusterung_bleibt_beim_naechsten_abgleich(
@@ -1060,7 +1065,7 @@ def test_ein_hinzugefuegtes_buch_steht_danach_in_der_liste(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = text.split(f'<tr data-isbn="{TERRA}"')[1].split("</tr>")[0]
     assert "Terra 5/6" in zeile
-    assert "7 (ab 2027/2028)" in _ohne_tags(zeile)
+    assert "7 (ab Einführung2027/2028offen)" in _ohne_tags(zeile)
     assert 'data-planung="aufklappen"' in zeile
     # Und es lässt sich öffnen wie jede andere Zeile.
     assert f'data-isbn="{TERRA}" data-fach="Deutsch"' in text
@@ -1184,7 +1189,7 @@ def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dic
     zeile = text.split(f'<tr data-isbn="{DEUTSCH}"')[1].split("</tr>")[0]
     teile = re.findall(r'<div class="teilzeile([^"]*)">(.*?)</div>', zeile)
     assert [klasse for klasse, _ in teile] == [" ganz-ausmusterung", " ganz-einfuehrung"] * 2
-    assert '<span class="schrift-ausmusterung durch">5</span></span> (bis 2025/2026)' in teile[2][1]
+    assert '<span class="schrift-ausmusterung durch">5</span></span>' in teile[2][1]
     assert '<span class="schrift-einfuehrung">5</span>' in teile[3][1]
     # Die Änderungsliste führt beides als Antrag.
     liste = seiten.get("/buecherliste/aenderungen").text
@@ -1454,7 +1459,7 @@ def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
     # markiert, nicht durchgestrichen.
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
     assert "strich" not in zeile.split(">")[0]
-    assert ('<td data-wert="5, 6"><span>5, <span title="IServ-Bücherliste: als Leihbuch noch '
+    assert ('<td data-wert="5,6|"><span>5, <span title="IServ-Bücherliste: als Leihbuch noch '
             'eingetragen"><span class="markierung markierung-ausmusterung">6</span>') in zeile
     # Die Jahrgangsseite vergleicht mit IServ; dort steht es beim Fach.
     zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH)
@@ -1805,7 +1810,7 @@ def test_ausmusterungen_zeigen_kein_reines_kaufbuch(
     teile = re.findall(r'<div class="teilzeile([^"]*)">(.*?)</div>', zeile)
     assert [klasse for klasse, _ in teile] == ["", " ganz-ausmusterung"] * 2
     assert '<span class="markierung markierung-ausmusterung">6</span>' in teile[2][1]
-    assert _ohne_tags(teile[3][1]) == "5 (bis 2025/2026), 6 (bis 2025/2026)"
+    assert _ohne_tags(teile[3][1]) == "5, 6"
 
 
 def test_ausgemustert_ist_im_menue_rot(seiten: TestClient, abgeglichen: dict) -> None:
@@ -2083,9 +2088,53 @@ def test_teils_leihbar_steht_in_zwei_teilzeilen_je_fuer_sich_gefaerbt(
     # Kaufbuch ist Terra zum ersten Mal: die Teilzeile ist ganz neu hinterlegt.
     assert (haken_ja, haken_nein) == ("", " ganz-einfuehrung")
     assert (jg_ja, jg_nein) == ("", " ganz-einfuehrung")
-    assert _ohne_tags(text_ja) == "5 (bis 2025/2026), 6"
-    assert _ohne_tags(text_nein) == "7 (ab 2028/2029)"
+    assert _ohne_tags(text_ja) == "5, 6"
+    assert _ohne_tags(text_nein) == "7 (ab Einführung2028/2029offen)"
     assert '<span class="schrift-ausmusterung durch">5</span>' in text_ja
     assert '<span class="schrift-einfuehrung">7</span>' in text_nein
     assert 'checked aria-label="leihbar: 5, 6"' in zeile
     assert 'aria-label="Kaufbuch: 7"' in zeile
+
+
+def _entscheide(seiten: TestClient, stand: dict, art: str, ergebnis: str) -> dict:
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch", "jahrgang": 7,
+        "art": art, "ergebnis": ergebnis, "mtime": stand["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    return antwort.json()
+
+
+def test_eine_abgelehnte_einfuehrung_steht_grau_im_kasten_und_zaehlt_nicht(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Jahrgang 7 ab 2027/2028 ist abgelehnt: der Kasten „abgelehnt“ hängt an der
+    grauen Jahreszahl, der Jahrgang hat keine Farbe, der Strich vorn ist grau."""
+    stand = _mit_einfuehrung(seiten, abgeglichen)
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert '<span class="zusatzantrag zusatzantrag-offen">' in zeile
+    _entscheide(seiten, stand, "einfuehrung", "abgelehnt")
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert ('<span class="zusatzantrag zusatzantrag-abgelehnt">'
+            '<span class="zusatzantrag-art">Einführung</span>'
+            '<span class="zusatzantrag-jahr">2027/2028</span>'
+            '<span class="zusatzantrag-status">abgelehnt</span></span>') in zeile
+    assert 'class="schrift-einfuehrung">7<' not in zeile
+    assert 'style="--strich: var(--grau-strich)"' in zeile
+
+
+def test_eine_abgelehnte_ausmusterung_laesst_das_buch_in_der_liste(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    """Erdkunde 5 ist nach 2025/2026 ausgemustert (Abgleich): ist die Ausmusterung
+    abgelehnt, bleibt das Buch in der Liste, ohne Durchstreichen."""
+    erst = seiten.get("/buecherliste/fach/Erdkunde").text
+    assert 'class="schrift-ausmusterung durch">5<' in erst or "Ausmusterungen zu diesem" in erst
+    antwort = seiten.post("/api/buchplanung/antrag", json={
+        "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "jahrgang": 5,
+        "art": "ausmusterung", "ergebnis": "abgelehnt", "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Erdkunde").text
+    zeile = _zeile_von(text, TERRA)
+    assert 'class="schrift-ausmusterung durch">5<' not in zeile

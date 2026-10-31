@@ -460,7 +460,8 @@ def uebersicht(request: Request, ansicht: str) -> Response:
     )
     kontext, stand = _planungskontext(request, daten.kennung)
     vergleich = vergleiche_mit_iserv(
-        daten, stand, _buchreihen(request) if ansicht == "fach" else None) if stand else None
+        daten, stand, _buchreihen(request) if ansicht == "fach" else None,
+        abgelehnte_gelten_nicht=ansicht == "fach") if stand else None
     gruppen = aus_datei(vergleich) if vergleich and aus_datei else iserv_gruppen
     return _seite(request, "buecherliste_uebersicht.html", {
         "planung": kontext,
@@ -492,12 +493,14 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     ansicht_name, gruppierung, aus_datei = _ANSICHTEN[ansicht]
     planung, stand = _planungskontext(request, daten.kennung)
     vergleich = vergleiche_mit_iserv(
-        daten, stand, _buchreihen(request) if ansicht == "fach" else None) if stand else None
+        daten, stand, _buchreihen(request) if ansicht == "fach" else None,
+        abgelehnte_gelten_nicht=ansicht == "fach") if stand else None
     if ansicht == "fach" and vergleich is not None:
         # Die Ausmusterungen zeigen auch, was IServ noch führt - das kennt der
         # Planungskontext nicht.
         planung = {**planung, "ausmusterungen_je_fach":
-                   ausmusterungen_je_fach(vergleich.planung, vergleich.ergebnis)}
+                   ausmusterungen_je_fach(vergleich.planung, vergleich.ergebnis,
+                                          vergleich.original)}
     werte: dict[str, Any] = {
         "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,

@@ -58,7 +58,13 @@ from buecherlisten.planung import (
     wirkt_im_schuljahr,
 )
 from buecherlisten.planung import Buch as PlanBuch
-from buecherlisten.planung.farben import Markierung, im_fach, in_ausmusterungen, markierung
+from buecherlisten.planung.farben import (
+    Markierung,
+    im_fach,
+    in_ausmusterungen,
+    markierung,
+    ohne_abgelehnte_ausmusterungen,
+)
 
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
@@ -504,6 +510,9 @@ class Vergleich:
     planung: Buchplanung
     iserv: dict[str, IservBuch]
     ergebnis: dict[str, Abweichung]
+    # Der Stand der Datei, wenn ``planung`` der wirksame ist (ohne abgelehnte
+    # Ausmusterungen, Fach-Ansicht); sonst ``None``.
+    original: Buchplanung | None = None
 
     def aktiv(self, buch: PlanBuch) -> frozenset[Paar]:
         return aktive_paare(self.planung, buch)
@@ -524,21 +533,30 @@ class Vergleich:
 
 def vergleiche_mit_iserv(daten: Buecherlisten, planung: Buchplanung,
                          buchreihen: Callable[[set[str]], dict[str, frozenset[int]]] | None = None,
-                         ) -> Vergleich:
+                         *, abgelehnte_gelten_nicht: bool = False) -> Vergleich:
     """Die Datei mit IServ vergleichen.
 
     ``buchreihen`` holt die Jahrgänge der Buchreihen aus dem IServ-Inventar,
     wenn die Bücherlisten sie für einige ISBNs nicht verraten (das Buch steht
     in keiner Liste, oder ``gradesFlat`` fehlt) - gerufen nur dann, mit
     diesen ISBNs.
+
+    ``abgelehnte_gelten_nicht``: eine abgelehnte Ausmusterung gilt nicht, das
+    Buch bleibt (Fach-Ansicht, ``ohne_abgelehnte_ausmusterungen``). Der
+    Vergleich rechnet dann mit diesem Stand; ``Vergleich.original`` hält den
+    der Datei.
     """
+    original = planung
+    if abgelehnte_gelten_nicht:
+        planung = ohne_abgelehnte_ausmusterungen(planung)
     iserv = iserv_je_isbn(daten)
     offen = {buch.isbn for buch in planung.buecher
              if aktive_eintraege(planung, buch)
              and (buch.isbn not in iserv or iserv[buch.isbn].buchreihe_jahrgaenge is None)}
     zusatz = buchreihen(offen) if buchreihen is not None and offen else {}
     return Vergleich(planung=planung, iserv=iserv,
-                     ergebnis=vergleiche(planung, iserv, zusatz))
+                     ergebnis=vergleiche(planung, iserv, zusatz),
+                     original=original if abgelehnte_gelten_nicht else None)
 
 
 def _paare_text(paare: tuple[Paar, ...] | list[Paar]) -> str:
@@ -635,6 +653,20 @@ def _sortiert(zeilen: list[Buch]) -> tuple[Buch, ...]:
     return tuple(sorted(zeilen, key=lambda b: (not b.jahrgaenge, b.jahrgaenge, b.titel.lower())))
 
 
+def _fach_reihenfolge(buch: Buch) -> tuple[Any, ...]:
+    """Die Anfangsreihenfolge der Fach-Ansicht: Jahrgang, dann ISBN, beide aufsteigend.
+
+    Wie static/sortieren.js sie beim Laden herstellt: erst die Liste der
+    leihbaren Jahrgänge, bei Gleichstand die der übrigen (jede Zahl für Zahl,
+    die kürzere zuerst), dann die ISBN nach Zahl - ein Platzhalter hinter allen.
+    """
+    teilzeilen = buch.farben.teilzeilen if buch.farben else ()
+    leihbar = tuple(w.jahrgang for t in teilzeilen if t.leihbar for w in t.werte)
+    sonst = tuple(w.jahrgang for t in teilzeilen if not t.leihbar for w in t.werte)
+    zahl = buch.isbn.isdigit()
+    return (leihbar, sonst, not zahl, int(buch.isbn) if zahl else 0, buch.isbn)
+
+
 def _im_fach(fach: str) -> Callable[[Paar], bool]:
     return lambda paar: paar[0] == fach
 
@@ -667,7 +699,8 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
                 gezeigt.add((fach, buch.isbn))
         offen = v.nicht_ausgemustert(buch)
         for fach in {fach for fach, _ in offen}:
-            farben = markierung(v.planung, buch, abweichung, im=im_fach(fach))
+            farben = markierung(v.planung, buch, abweichung, im=im_fach(fach),
+                                original=v.original)
             zeilen.setdefault(fach, {})[buch.isbn] = replace(_aus_datei(
                 v, buch, tuple(paar for paar in offen if paar[0] == fach),
                 _im_fach(fach), BEIDE, jahrgaenge=farben.jahrgaenge,
@@ -681,11 +714,12 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
             ist = v.iserv[isbn]
             eigenes = v.planung.buch(isbn) or PlanBuch(isbn=isbn, titel=ist.titel,
                                                        verlag=ist.verlag)
-            farben = markierung(v.planung, eigenes, abweichung, im=im_fach(fach))
+            farben = markierung(v.planung, eigenes, abweichung, im=im_fach(fach),
+                                original=v.original)
             zeilen.setdefault(fach, {})[isbn] = replace(_aus_iserv(
                 v, ist, frozenset(paar for paar in ist.paare if paar[0] == fach),
             ), farben=farben)
-    return tuple(Gruppe(name=name, buecher=_sortiert(list(je_isbn.values())))
+    return tuple(Gruppe(name=name, buecher=tuple(sorted(je_isbn.values(), key=_fach_reihenfolge)))
                  for name, je_isbn in sorted(zeilen.items(), key=lambda e: e[0].casefold()))
 
 

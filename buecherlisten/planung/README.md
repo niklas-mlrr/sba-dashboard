@@ -299,15 +299,15 @@ später in den Einstellungen wählbar.
 | Schrift (je Wert) | Planung | Einführung zu diesem Schuljahr oder später | Ausmusterung nach dem Vorjahr oder später; durchgestrichen nur, wenn nach dem Vorjahr | — |
 | Markierung (helle Hinterlegung, Strich darunter) | IServ, nur was dieses Schuljahr gilt | fehlt in der Bücherliste (je Eintrag) oder an der Buchreihe | steht in der Bücherliste noch (nicht durchgestrichen) | Titel, Verlag, Preise lauten dort anders (IServ-Wert im Tooltip) |
 | Hintergrund | Ganzes, über alle Fächer, nur gezeigte Einträge | Zeile: jeder Jahrgang neu; Teilzeile: jeder Jahrgang mit diesem „leihbar“ neu | dasselbe für „geht“ | — |
-| Strich vorn | Fach: die Schriftfarben der Zeile | je blauem Wert ein Abschnitt | je rotem Wert ein Abschnitt | zweiter Strich rechts daneben, wenn ein Feld abweicht |
+| Strich vorn | Fach: die Schriftfarben der Zeile | ein Abschnitt für Blau | ein Abschnitt für Rot (Grau: abgelehnter Antrag) | zweiter Strich rechts daneben, wenn ein Feld abweicht |
 
-**Strich vorn:** gleich hohe Abschnitte je farbigem Wert, von oben nach
-Jahrgang, dann Einführungs- bzw. Ausmusterungsjahr, dann rot vor blau
-(`Markierung.strich_planung`, `strich_stil()`). Haben zwei Teilzeilen je genau
-eine, verschiedene Farbe, teilt er sich an ihrer Grenze (`strich_teile`;
-`static/buchplanung.js` misst sie und setzt `--teilung`). Hat nur eine
-Teilzeile Farbe, ist der ganze Strich in ihr. Die IServ-Markierungen gehen
-nicht in den Strich ein.
+**Strich vorn:** ein gleich hoher Abschnitt je **vorkommender Farbe** (blau,
+grau, rot), in der Reihenfolge, in der die Farben beim Lesen auftauchen:
+Teilzeile für Teilzeile (leihbar zuerst), Jahrgang für Jahrgang aufsteigend,
+je Jahrgang erst die Jahrgangszahl, dann die Jahreszahlen des Zusatzes
+(`Markierung.strich_planung`, `strich_stil()`). Grau hat nur eine abgelehnte
+Jahreszahl; ein offener Antrag färbt den Strich nicht. Die IServ-Markierungen
+gehen nicht in den Strich ein.
 
 **Mit IServ verglichen** wird nur, was in diesem Schuljahr gilt (eingeführt zu
 diesem Schuljahr oder vorher, ausgemustert nach diesem oder später): eine
@@ -329,11 +329,55 @@ Buchreihe nicht verglichen.
 IServ-Liste, ist jedes Feld der Zeile blau markiert; steht es nur in IServ,
 rot („nur in IServ“, ohne Menü). Führt nur IServ es in einem Fach, ist es aber
 anderswo geplant, sind nur die Jahrgänge rot markiert. Den Zusatz „nicht in
-IServ“ trägt der Titel nur, wenn das Buch dieses Schuljahr eingeführt wird und
-in IServ in keiner Liste steht. Ist es geplant, aber noch nicht in IServ, und
-wird es nicht dieses Jahr eingeführt, kommt es wohl noch: kein Zusatz. Als
-„nur in IServ“ ausgewiesen wird ein Buch nur, wenn die Planung es gar nicht
-kennt.
+IServ“ trägt der Titel nicht mehr: ein Buch, das nur die Planung kennt, ist
+blau markiert, ohne Hinweis. Als „nur in IServ“ ausgewiesen wird ein Buch nur,
+wenn die Planung es gar nicht kennt.
+
+**Sortierung der Fach-Ansicht** (`static/sortieren.js`, Tabellen mit
+`data-ebenen`): eine Liste von Sortierebenen, zu Beginn Jahrgang aufsteigend,
+dann ISBN aufsteigend. Ein Klick auf eine Überschrift setzt ihre Spalte an die
+erste Stelle, die übrigen rücken um eine nach hinten und behalten ihre Richtung;
+die vorderste kehrt beim Klick ihre Richtung um. Titel und Verlag sortieren
+alphabetisch, ISBN, Neupreis und Leihgebühr nach Zahl, „Leihbar“ aufsteigend
+als nur leihbar, beides, nur Kaufbuch. „Jahrgang“ vergleicht erst die Liste der
+leihbaren Jahrgänge, bei Gleichstand die der übrigen - beide nie gemischt,
+jede Zahl für Zahl; eine fehlende zweite, dritte … Klasse steht vor einer
+vorhandenen. Die übrigen Ansichten behalten ihre Klick-Sortierung.
+
+**Zusatz hinter dem Jahrgang** (`zusatz.py`, Entscheidung 2026-10-31): je
+Planungszeile des Eintrags (Fach, Jahrgang, „leihbar“) ein Ergebnis in
+Klammern, mehrere mit „; “ getrennt. Mit dem ausgewählten Schuljahr SJ, dem
+Einführungsjahr ESJ und dem Ausmusterungsjahr ASJ der Zeile:
+
+| Bedingung | Zusatz |
+|-----------|--------|
+| ESJ ≤ SJ ≤ ASJ (ohne ESJ: längst eingeführt) | `bis ASJ` |
+| SJ < ESJ = ASJ | `ESJ` - aber `von ESJ bis ASJ`, bis **beide** Anträge genehmigt sind |
+| SJ < ESJ < ASJ | `von ESJ bis ASJ` |
+| SJ < ESJ, ohne ASJ | `ab ESJ` |
+| sonst (auch ASJ = SJ-1) | nichts |
+
+An jeder Jahreszahl, deren Antrag noch offen oder abgelehnt ist, hängt ein
+Kasten (`zusatzantrag` in `app.css`): ein Rahmen in der Farbe des Status (grau
+offen, rot abgelehnt), unten „offen“/„abgelehnt“, oben die Art
+(„Einführung“/„Ausmusterung“). Ein genehmigter Antrag hat keinen Kasten; ein
+Antrag, über den nicht zu entscheiden ist (`zu_entscheidende_antraege`), auch
+nicht. Eine Einführung zum laufenden Schuljahr steht nicht im Zusatz („bis
+ASJ“ nennt nur die Ausmusterung) und hat deshalb keinen Kasten.
+
+**Abgelehnte Anträge** gelten in der Fach-Ansicht nicht
+(`ohne_abgelehnte_ausmusterungen`, `Vergleich.original`): eine abgelehnte
+**Ausmusterung** lässt das Buch bleiben (der Vergleich mit IServ und die Liste
+rechnen ohne sie), eine abgelehnte **Einführung** zählt für Farbe,
+Durchstreichen und Vergleich nicht. Ihre Jahreszahl bleibt im Zusatz stehen,
+grau, mit rotem Kasten. Gibt es das Buch in der Zeile (bzw. Teilzeile) nur
+wegen abgelehnter Einführungen, also gar nicht, ist sie grau hinterlegt
+(`ganz-grau`); bei einer abgelehnten Ausmusterung nie.
+
+**Nach dem Vorjahr ausgemustert und später wieder eingeführt:** rot und
+durchgestrichen, solange IServ den Jahrgang noch führt; führt er ihn nicht mehr,
+ist die Wiedereinführung das Nächste und der Jahrgang blau. Ohne
+Wiedereinführung bleibt er rot und durchgestrichen.
 
 **Einführung und Ausmusterung zugleich** (etwa eingeführt zu diesem Schuljahr,
 ausgemustert nach einem späteren, oder einjährig): Der Jahrgang ist blau,

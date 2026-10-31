@@ -178,21 +178,3 @@ def test_die_bestaetigung_wird_genauso_verglichen():
     assert [_js("beschreibe(k)", k=k) for k in ergebnis["konflikte"]] == [
         {"feld": "Kürzel", "neu": "ABC", "deins": "XY"},
         {"feld": "Datum", "neu": "01.10.2026", "deins": "30.10.2026"}]
-
-
-# ── teilungInProzent(): die Grenze im Strich vorn ────────────────────────────
-
-
-def _teilung(oben, gesamt) -> object:
-    programm = (f"const {{ teilungInProzent }} = require({json.dumps(str(SKRIPT))});"
-                f"console.log(JSON.stringify(teilungInProzent({json.dumps(oben)}, {json.dumps(gesamt)})));")
-    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, encoding="utf-8",
-                             check=True, timeout=20)
-    return json.loads(ausgabe.stdout)
-
-
-def test_die_strichgrenze_liegt_an_der_unterkante_der_oberen_teilzeile():
-    assert _teilung(30, 90) == 33.333
-    assert _teilung(120, 90) == 100
-    # Nichts zu messen (etwa versteckt): die Mitte.
-    assert _teilung(0, 0) == 50 and _teilung(None, 90) == 50
