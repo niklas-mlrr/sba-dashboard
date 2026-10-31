@@ -29,7 +29,7 @@ def _verteile(werte: list[dict]) -> dict:
         "console.log(JSON.stringify({ y: r.y, fehlt: r.fehlt,"
         " engster: r.engster ? r.engster.i : null, abstand: ABSTAND }));"
     )
-    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, text=True,
+    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, encoding="utf-8",
                              check=True, timeout=20)
     return json.loads(ausgabe.stdout)
 

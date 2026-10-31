@@ -28,7 +28,7 @@ def _schritt(zeilen: list[dict], nummer: int) -> dict:
         f"console.log(JSON.stringify(leihbarSchritt({json.dumps(zeilen)}, {nummer},"
         f" {json.dumps(SCHULJAHR)})));"
     )
-    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, text=True,
+    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, encoding="utf-8",
                              check=True, timeout=20)
     return json.loads(ausgabe.stdout)
 
@@ -85,7 +85,7 @@ def _js(ausdruck: str, **werte) -> object:
         f"const {{ dreiwege, mitWahl, beschreibe }} = require({json.dumps(str(SKRIPT))});"
         f"{belegung} console.log(JSON.stringify({ausdruck}));"
     )
-    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, text=True,
+    ausgabe = subprocess.run([NODE, "-e", programm], capture_output=True, encoding="utf-8",
                              check=True, timeout=20)
     return json.loads(ausgabe.stdout)
 
