@@ -44,35 +44,38 @@ def _ebene(index: int, art: str, absteigend: bool = False) -> dict:
 
 
 def test_jahrgangslisten_werden_zahl_fuer_zahl_verglichen_die_kuerzere_zuerst():
+    """Der kleinste gegen den kleinsten, bei Gleichstand der zweitkleinste; wer
+    keinen zweiten hat, steht vor einem mit zweitem."""
     zeilen = [
-        {"name": "5,6,7", "werte": ["5,6,7|"]},
-        {"name": "5", "werte": ["5|"]},
-        {"name": "5,6", "werte": ["5,6|"]},
-        {"name": "11", "werte": ["11|"]},
-        {"name": "7,8", "werte": ["7,8|"]},
+        {"name": "5,6,7", "werte": ["5,6,7"]},
+        {"name": "5", "werte": ["5"]},
+        {"name": "5,6", "werte": ["5,6"]},
+        {"name": "11", "werte": ["11"]},
+        {"name": "7,8", "werte": ["7,8"]},
+        {"name": "5,8", "werte": ["5,8"]},
     ]
-    assert _sortiere(zeilen, [_ebene(0, "liste")]) == ["5", "5,6", "5,6,7", "7,8", "11"]
-    assert _sortiere(zeilen, [_ebene(0, "liste", True)]) == ["11", "7,8", "5,6,7", "5,6", "5"]
+    erwartet = ["5", "5,6", "5,6,7", "5,8", "7,8", "11"]
+    assert _sortiere(zeilen, [_ebene(0, "liste")]) == erwartet
+    assert _sortiere(zeilen, [_ebene(0, "liste", True)]) == erwartet[::-1]
 
 
-def test_leihbare_und_nicht_leihbare_jahrgaenge_bleiben_getrennt():
-    """Erst zählt die Liste der leihbaren Jahrgänge, bei Gleichstand die der anderen."""
+def test_ein_buch_mit_kaufbuch_jahrgang_steht_nach_seinem_kleinsten_jahrgang():
+    """Alle Jahrgänge der Zeile zählen, leihbar oder nicht - ein Kaufbuch-Jahrgang
+    (hier 5) stellt das Buch nicht ans Ende oder an den Anfang."""
     zeilen = [
-        {"name": "a", "werte": ["6|5"]},
-        {"name": "b", "werte": ["5|8"]},
-        {"name": "c", "werte": ["5,8|"]},
-        {"name": "d", "werte": ["5|7"]},
-        {"name": "e", "werte": ["|5"]},
+        {"name": "nur Kaufbuch 8", "werte": ["8"]},
+        {"name": "leihbar 7 + Kaufbuch 5", "werte": ["5,7"]},
+        {"name": "leihbar 6", "werte": ["6"]},
     ]
-    # „|5“ hat keine leihbaren Jahrgänge: die leere Liste kommt zuerst.
-    assert _sortiere(zeilen, [_ebene(0, "liste")]) == ["e", "d", "b", "c", "a"]
+    assert _sortiere(zeilen, [_ebene(0, "liste")]) == [
+        "leihbar 7 + Kaufbuch 5", "leihbar 6", "nur Kaufbuch 8"]
 
 
 def test_die_naechste_ebene_entscheidet_bei_gleichstand():
     zeilen = [
-        {"name": "x", "werte": ["5|", "9783060000099"]},
-        {"name": "y", "werte": ["5|", "9783060000005"]},
-        {"name": "z", "werte": ["6|", "9783060000001"]},
+        {"name": "x", "werte": ["5", "9783060000099"]},
+        {"name": "y", "werte": ["5", "9783060000005"]},
+        {"name": "z", "werte": ["6", "9783060000001"]},
     ]
     ebenen = [_ebene(0, "liste"), _ebene(1, "text")]
     assert _sortiere(zeilen, ebenen) == ["y", "x", "z"]
@@ -106,3 +109,39 @@ def test_ein_klick_setzt_die_spalte_nach_vorn_und_die_anderen_behalten_ihre_rich
     assert _js(f"(m) => m.sortierNeueEbenen({json.dumps(start)}, 2, 'liste')") == [
         _ebene(2, "liste", True), _ebene(4, "text", True)]
     assert _js(zweimal) == [_ebene(2, "liste"), _ebene(4, "text", True)]
+
+
+def _folge(teile: list[dict], art: str, absteigend: bool = False) -> list[int]:
+    kriterium = {"art": art, "absteigend": absteigend}
+    return _js(f"(m) => m.sortierTeilzeilenFolge({json.dumps(teile)}, {json.dumps(kriterium)})")  # type: ignore[return-value]
+
+
+def test_die_teilzeilen_eines_buches_folgen_der_sortierung_nach_jahrgang():
+    # leihbar Jg. 7, Kaufbuch Jg. 5: aufsteigend steht das Kaufbuch oben.
+    teile = [{"leihbar": 0, "jahrgaenge": [7, 8]}, {"leihbar": 1, "jahrgaenge": [5]}]
+    assert _folge(teile, "jahrgang") == [1, 0]
+    assert _folge(teile, "jahrgang", True) == [0, 1]
+    # Gleicher kleinster Jahrgang: der ohne zweiten zuerst, absteigend umgekehrt.
+    teile = [{"leihbar": 0, "jahrgaenge": [5, 6]}, {"leihbar": 1, "jahrgaenge": [5]}]
+    assert _folge(teile, "jahrgang") == [1, 0]
+    assert _folge(teile, "jahrgang", True) == [0, 1]
+    # Ganz gleich: leihbar zuerst, auch absteigend.
+    teile = [{"leihbar": 1, "jahrgaenge": [5]}, {"leihbar": 0, "jahrgaenge": [5]}]
+    assert _folge(teile, "jahrgang") == [1, 0]
+    assert _folge(teile, "jahrgang", True) == [1, 0]
+
+
+def test_die_teilzeilen_eines_buches_folgen_der_sortierung_nach_leihbar():
+    teile = [{"leihbar": 1, "jahrgaenge": [5]}, {"leihbar": 0, "jahrgaenge": [7]}]
+    assert _folge(teile, "leihbar") == [1, 0]
+    assert _folge(teile, "leihbar", True) == [0, 1]
+
+
+def test_der_strich_folgt_den_farben_in_der_reihenfolge_der_teilzeilen():
+    assert _js("(m) => m.sortierStrichStil([['blau', 'rot'], ['rot']])") == (
+        "linear-gradient(var(--blau-strich) 0% 50%, var(--rot-strich) 50% 100%)")
+    assert _js("(m) => m.sortierStrichStil([['rot'], ['grau', 'rot'], ['blau']])") == (
+        "linear-gradient(var(--rot-strich) 0% 33.333%, var(--grau-strich) 33.333% 66.667%, "
+        "var(--blau-strich) 66.667% 100%)")
+    assert _js("(m) => m.sortierStrichStil([['blau'], ['blau']])") == "var(--blau-strich)"
+    assert _js("(m) => m.sortierStrichStil([[], []])") == ""

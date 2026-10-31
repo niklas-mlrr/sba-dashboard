@@ -155,6 +155,21 @@ class Teilzeile:
     werte: tuple[Wert, ...]
     ganz: str = ""
 
+    @property
+    def jahrgaenge(self) -> tuple[int, ...]:
+        """Die Jahrgänge dieser Teilzeile, aufsteigend, wie sie dastehen."""
+        return tuple(wert.jahrgang for wert in self.werte)
+
+    @property
+    def farben(self) -> tuple[str, ...]:
+        """Ihre Schriftfarben in Lesefolge, jede einmal (für den Strich vorn)."""
+        farben: list[str] = []
+        for wert in self.werte:
+            for farbe in wert.lesefarben:
+                if farbe not in farben:
+                    farben.append(farbe)
+        return tuple(farben)
+
 
 def _prozent(zahl: float) -> str:
     return f"{round(zahl, 3):g}%"
@@ -208,10 +223,9 @@ class Markierung:
         Antrag."""
         farben: list[str] = []
         for teil in self.teilzeilen:
-            for wert in teil.werte:
-                for farbe in wert.lesefarben:
-                    if farbe not in farben:
-                        farben.append(farbe)
+            for farbe in teil.farben:
+                if farbe not in farben:
+                    farben.append(farbe)
         return tuple(farben)
 
     def strich(self, schwerpunkt: str = PLANUNG) -> tuple[str, ...]:
@@ -480,6 +494,12 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
             teil_ganz = _ganz(p for e, p in planung.items() if e[2] == leihbar)
         teilzeilen.append(Teilzeile(leihbar=leihbar, werte=werte, ganz=teil_ganz))
 
+    if nach == JAHRGANG:
+        # Wie die Fach-Ansicht beim Laden sortiert ist (Jahrgang aufsteigend,
+        # static/sortieren.js): die Teilzeile mit den kleineren Jahrgängen
+        # zuerst - Jahrgang für Jahrgang, die kürzere Liste vor der längeren,
+        # bei Gleichstand leihbar vor Kaufbuch.
+        teilzeilen.sort(key=lambda teil: (teil.jahrgaenge, not teil.leihbar))
     art = abweichung.art if abweichung else ""
     return Markierung(
         teilzeilen=tuple(teilzeilen), ganz=ganz,

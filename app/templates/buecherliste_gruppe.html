@@ -120,10 +120,10 @@
       <th data-sort="text">Titel</th>
       {#- In der Fach-Ansicht steht „Leihbar“ vor dem Jahrgang (2026-10-31):
           die beiden Spalten teilen sich die Teilzeilen (``fachzeile``). -#}
-      {% if planbar %}<th data-sort="zahl">Leihbar</th>{% endif %}
+      {% if planbar %}<th data-sort="zahl" data-teilspalte="leihbar">Leihbar</th>{% endif %}
       {#- In der Fach-Ansicht mit Datei sortiert static/sortieren.js nach Ebenen:
           zu Beginn Jahrgang (``liste``), dann ISBN (``data-ebene``). -#}
-      {% if mit_jahrgang %}<th data-sort="{{ 'liste' if planbar else 'text' }}"{% if planbar %} data-ebene="1"{% endif %}>Jahrgang</th>{% endif %}
+      {% if mit_jahrgang %}<th data-sort="{{ 'liste' if planbar else 'text' }}"{% if planbar %} data-ebene="1" data-teilspalte="jahrgang"{% endif %}>Jahrgang</th>{% endif %}
       {% if ohne != "fach" %}<th data-sort="text">Fach</th>{% endif %}
       {% if ohne != "verlag" %}<th data-sort="text">Verlag</th>{% endif %}
       <th data-sort="text"{% if planbar %} data-ebene="2"{% endif %}>ISBN</th>
@@ -262,12 +262,16 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {#
   Eine Spalte, die sich in Teilzeilen teilt: ``leihbar`` (das Häkchen),
   ``jahrgang`` oder ``fach`` (die Werte). Ist ein Buch in einigen Jahrgängen
-  leihbar und in anderen Kaufbuch, stehen zwei Teilzeilen da - oben leihbar,
-  unten Kaufbuch -, gleich hoch gemacht von static/buchplanung.js
-  (``gleicheTeilzeilenAn``). Das Häkchen wird nie gefärbt: ein Wechsel ist
+  leihbar und in anderen Kaufbuch, stehen zwei Teilzeilen da, gleich hoch
+  gemacht von static/buchplanung.js (``gleicheTeilzeilenAn``). Welche oben steht,
+  entscheidet die Sortierung: nach Jahrgang die mit den kleineren Jahrgängen
+  (zu Beginn), nach Leihbar die leihbare; static/sortieren.js ordnet die
+  Teilzeilen nach ``data-leihbar`` und ``data-jahrgaenge`` und setzt den Strich
+  vorn nach ``data-farben`` neu. Das Häkchen wird nie gefärbt: ein Wechsel ist
   eine Ausmusterung in der einen und eine Einführung in der anderen Teilzeile.
-  Sortiert wird nach ``data-wert``: nur leihbar 0, beides 0.5, nur Kaufbuch 1; die Jahrgänge als
-  „5,6|7“ (leihbar | nicht leihbar), siehe static/sortieren.js.
+  Sortiert wird die Zeile nach ``data-wert``: nur leihbar 0, beides 0.5, nur
+  Kaufbuch 1; die Jahrgänge als „5,6,7“ - alle, die dastehen, egal was mit
+  ihnen geplant ist.
 #}
 {% macro teilspalte(f, art) -%}
 {%- set teile = f.teilzeilen -%}
@@ -275,10 +279,8 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   {#- Aufsteigend: erst nur leihbar (0), dann beides (0,5), dann nur Kaufbuch (1). -#}
   {%- set sortwert = 0.5 if teile | length > 1 else (0 if teile and teile[0].leihbar else 1) -%}
 {%- elif art == "jahrgang" -%}
-  {#- „5,6|7“: die leihbaren Jahrgänge vor dem Strich, die nicht leihbaren dahinter. -#}
-  {%- set ja = [] -%}{%- set nein = [] -%}
-  {%- for t in teile %}{% for w in t.werte %}{% set _ = (ja if t.leihbar else nein).append(w.jahrgang) %}{% endfor %}{% endfor -%}
-  {%- set sortwert = (ja | unique | sort | join(',')) ~ '|' ~ (nein | unique | sort | join(',')) -%}
+  {#- „5,6,7“: alle Jahrgänge der Zeile, leihbar oder nicht. -#}
+  {%- set sortwert = f.jahrgaenge | join(',') -%}
 {%- else -%}
   {%- set sortwert = f.werte | map(attribute='text') | unique | join(', ') -%}
 {%- endif -%}
@@ -293,7 +295,8 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- if teile | length > 1 -%}
 <td data-wert="{{ sortwert }}" class="teilzeilen">
   {%- for t in teile %}
-  <div class="teilzeile{{ ' ganz-' ~ t.ganz if t.ganz }}">{{ inhalt(t) }}</div>
+  <div class="teilzeile{{ ' ganz-' ~ t.ganz if t.ganz }}" data-leihbar="{{ 0 if t.leihbar else 1 }}"
+    data-jahrgaenge="{{ t.jahrgaenge | join(',') }}" data-farben="{{ t.farben | join(' ') }}">{{ inhalt(t) }}</div>
   {%- endfor %}</td>
 {%- else -%}
 <td data-wert="{{ sortwert }}"{% if teile and teile[0].ganz %} class="ganz-{{ teile[0].ganz }}"{% endif %}>
@@ -415,8 +418,8 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   <thead>
     <tr>
       <th data-sort="text">Titel</th>
-      <th data-sort="zahl">Leihbar</th>
-      <th data-sort="liste" data-ebene="1">Jahrgang</th>
+      <th data-sort="zahl" data-teilspalte="leihbar">Leihbar</th>
+      <th data-sort="liste" data-ebene="1" data-teilspalte="jahrgang">Jahrgang</th>
       <th data-sort="text">Verlag</th>
       <th data-sort="text" data-ebene="2">ISBN</th>
       <th data-sort="zahl">Neupreis</th>

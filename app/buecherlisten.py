@@ -656,15 +656,13 @@ def _sortiert(zeilen: list[Buch]) -> tuple[Buch, ...]:
 def _fach_reihenfolge(buch: Buch) -> tuple[Any, ...]:
     """Die Anfangsreihenfolge der Fach-Ansicht: Jahrgang, dann ISBN, beide aufsteigend.
 
-    Wie static/sortieren.js sie beim Laden herstellt: erst die Liste der
-    leihbaren Jahrgänge, bei Gleichstand die der übrigen (jede Zahl für Zahl,
-    die kürzere zuerst), dann die ISBN nach Zahl - ein Platzhalter hinter allen.
+    Wie static/sortieren.js sie beim Laden herstellt: nach den Jahrgängen, die
+    in der Zeile stehen (alle, egal was mit ihnen geplant ist), der kleinste
+    zuerst, bei Gleichstand der zweitkleinste - wer keinen zweiten hat, steht
+    vor einem mit zweitem -, dann die ISBN nach Zahl, ein Platzhalter dahinter.
     """
-    teilzeilen = buch.farben.teilzeilen if buch.farben else ()
-    leihbar = tuple(w.jahrgang for t in teilzeilen if t.leihbar for w in t.werte)
-    sonst = tuple(w.jahrgang for t in teilzeilen if not t.leihbar for w in t.werte)
     zahl = buch.isbn.isdigit()
-    return (leihbar, sonst, not zahl, int(buch.isbn) if zahl else 0, buch.isbn)
+    return (buch.jahrgaenge, not zahl, int(buch.isbn) if zahl else 0, buch.isbn)
 
 
 def _im_fach(fach: str) -> Callable[[Paar], bool]:

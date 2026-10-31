@@ -513,8 +513,8 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     # (Offene Anträge hängen als Kasten an der Jahreszahl: Art, Jahr, Status.)
     assert ("5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2029/2030offen), "
             "7 (ab Einführung2028/2029offen)") in _ohne_tags(text)
-    # Sortiert wird nach den nackten Jahrgängen: leihbare vor dem Strich, die übrigen dahinter.
-    assert 'data-wert="5,6,7|"' in text
+    # Sortiert wird nach den nackten Jahrgängen: alle, die dastehen.
+    assert 'data-wert="5,6,7"' in text
     # Die Schrift zeigt die Planung je Jahrgang: nach dem Vorjahr ausgemustert
     # rot und durchgestrichen, auslaufend rot, die Einführung ab
     # 2028/2029 blau; der Strich vorn hat je Farbe einen Abschnitt, in der
@@ -1189,7 +1189,7 @@ def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dic
     # Kaufbuch, je in ihrer Teilzeile; beide sind ganz weg bzw. ganz neu.
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = text.split(f'<tr data-isbn="{DEUTSCH}"')[1].split("</tr>")[0]
-    teile = re.findall(r'<div class="teilzeile([^"]*)">(.*?)</div>', zeile)
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
     assert [klasse for klasse, _ in teile] == [" ganz-ausmusterung", " ganz-einfuehrung"] * 2
     assert '<span class="schrift-ausmusterung durch">5</span></span>' in teile[2][1]
     assert '<span class="schrift-einfuehrung">5</span>' in teile[3][1]
@@ -1461,7 +1461,7 @@ def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
     # markiert, nicht durchgestrichen.
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
     assert "strich" not in zeile.split(">")[0]
-    assert ('<td data-wert="5,6|"><span>5, <span title="IServ-Bücherliste: als Leihbuch noch '
+    assert ('<td data-wert="5,6"><span>5, <span title="IServ-Bücherliste: als Leihbuch noch '
             'eingetragen"><span class="markierung markierung-ausmusterung">6</span>') in zeile
     # Die Jahrgangsseite vergleicht mit IServ; dort steht es beim Fach.
     zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH)
@@ -1809,10 +1809,13 @@ def test_ausmusterungen_zeigen_kein_reines_kaufbuch(
     zeile = _zeile_von(text, TERRA)
     assert '<span class="klein grau">nur in IServ</span>' in zeile
     assert "aufklappbar" not in zeile
-    teile = re.findall(r'<div class="teilzeile([^"]*)">(.*?)</div>', zeile)
-    assert [klasse for klasse, _ in teile] == ["", " ganz-ausmusterung"] * 2
-    assert '<span class="markierung markierung-ausmusterung">6</span>' in teile[2][1]
-    assert _ohne_tags(teile[3][1]) == "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)"
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
+    # Oben die Teilzeile mit den kleineren Jahrgängen (Kaufbuch 5, 6), darunter das,
+    # was nur IServ als Leihbuch führt (6).
+    assert [klasse for klasse, _ in teile] == [" ganz-ausmusterung", ""] * 2
+    assert '<span class="markierung markierung-ausmusterung">6</span>' in teile[3][1]
+    assert _ohne_tags(teile[2][1]) == (
+        "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)")
 
 
 def test_ausgemustert_ist_im_menue_rot(seiten: TestClient, abgeglichen: dict) -> None:
@@ -2084,7 +2087,7 @@ def test_teils_leihbar_steht_in_zwei_teilzeilen_je_fuer_sich_gefaerbt(
     assert re.findall(r"<th [^>]*>([^<]*)</th>", kopf)[:3] == ["Titel", "Leihbar", "Jahrgang"]
     zeile = " ".join(_zeile_von(text, TERRA).split())
     assert '<td data-wert="0.5" class="teilzeilen">' in zeile
-    teile = re.findall(r'<div class="teilzeile([^"]*)">(.*?)</div>', zeile)
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
     assert len(teile) == 4
     (haken_ja, _), (haken_nein, _), (jg_ja, text_ja), (jg_nein, text_nein) = teile
     # Kaufbuch ist Terra zum ersten Mal: die Teilzeile ist ganz neu hinterlegt.

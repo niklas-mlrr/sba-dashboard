@@ -303,7 +303,7 @@ später in den Einstellungen wählbar.
 
 **Strich vorn:** ein gleich hoher Abschnitt je **vorkommender Farbe** (blau,
 grau, rot), in der Reihenfolge, in der die Farben beim Lesen auftauchen:
-Teilzeile für Teilzeile (leihbar zuerst), Jahrgang für Jahrgang aufsteigend,
+Teilzeile für Teilzeile in der angezeigten Reihenfolge, Jahrgang für Jahrgang aufsteigend,
 je Jahrgang erst die Jahrgangszahl, dann die Jahreszahlen des Zusatzes
 (`Markierung.strich_planung`, `strich_stil()`). Grau hat nur eine abgelehnte
 Jahreszahl; ein offener Antrag färbt den Strich nicht. Die IServ-Markierungen
@@ -339,10 +339,20 @@ dann ISBN aufsteigend. Ein Klick auf eine Überschrift setzt ihre Spalte an die
 erste Stelle, die übrigen rücken um eine nach hinten und behalten ihre Richtung;
 die vorderste kehrt beim Klick ihre Richtung um. Titel und Verlag sortieren
 alphabetisch, ISBN, Neupreis und Leihgebühr nach Zahl, „Leihbar“ aufsteigend
-als nur leihbar, beides, nur Kaufbuch. „Jahrgang“ vergleicht erst die Liste der
-leihbaren Jahrgänge, bei Gleichstand die der übrigen - beide nie gemischt,
-jede Zahl für Zahl; eine fehlende zweite, dritte … Klasse steht vor einer
-vorhandenen. Die übrigen Ansichten behalten ihre Klick-Sortierung.
+als nur leihbar, beides, nur Kaufbuch. „Jahrgang“ nimmt von jedem Buch **alle
+Jahrgänge, die in der Zeile stehen** - leihbar oder nicht, egal was mit ihnen
+geplant ist - und vergleicht Zahl für Zahl: der kleinste gegen den kleinsten,
+bei Gleichstand der zweitkleinste; wer keinen zweiten hat, steht vor einem mit
+zweitem.
+
+**Zwei Teilzeilen im Buch** (leihbar und Kaufbuch) ordnet dieselbe Sortierung
+auch innerhalb des Buches, nach der Spalte, die von Leihbar und Jahrgang vorn
+steht: nach Jahrgang die Teilzeile mit den kleineren Jahrgängen zuerst (nach
+derselben Regel, absteigend umgekehrt), nach Leihbar die leihbare (absteigend
+das Kaufbuch); bei Gleichstand leihbar zuerst. Der Server liefert sie schon so
+(`Markierung.teilzeilen`, Jahrgang aufsteigend), das Skript ordnet sie bei jedem
+Klick neu - Leihbar- und Jahrgang-Zelle gleich - und setzt den Strich vorn nach
+`data-farben` der Teilzeilen in der neuen Reihenfolge.
 
 **Zusatz hinter dem Jahrgang** (`zusatz.py`, Entscheidung 2026-10-31): je
 Planungszeile des Eintrags (Fach, Jahrgang, „leihbar“) ein Ergebnis in

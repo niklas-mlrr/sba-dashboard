@@ -33,12 +33,19 @@
 // Anzeige nicht selbst der Schlüssel ist (Preise, Daten, Häkchen). Leerer Wert
 // sortiert in beiden Richtungen ans Ende.
 //
-// "liste" ist die Spalte Jahrgang der Fach-Ansicht: `data-wert="5,6|7"` nennt
-// die leihbaren Jahrgänge vor dem Strich und die nicht leihbaren dahinter. Die
-// beiden Listen bleiben getrennt; verglichen wird erst die der leihbaren
-// Jahrgänge, bei Gleichstand die der anderen, jede Zahl für Zahl (zweiter bei
-// gleichem ersten, dann dritter …). Wo eine Liste früher endet, kommt sie
-// zuerst: kein zweiter Jahrgang steht vor einem zweiten.
+// "liste" ist die Spalte Jahrgang der Fach-Ansicht: `data-wert="5,6,7"` nennt
+// alle Jahrgänge, die in der Zeile stehen - egal, was mit ihnen geplant ist,
+// leihbar oder nicht. Verglichen wird Zahl für Zahl: der kleinste gegen den
+// kleinsten, bei Gleichstand der zweitkleinste gegen den zweitkleinsten. Wer
+// keinen zweiten hat, steht vor einem, der einen hat.
+//
+// Hat ein Buch zwei Teilzeilen (leihbar und Kaufbuch), ordnet dieselbe
+// Sortierung sie auch innerhalb des Buches - nach der Spalte, die von Leihbar
+// und Jahrgang vorn steht: nach Jahrgang die mit den kleineren Jahrgängen
+// zuerst (absteigend umgekehrt), nach Leihbar die leihbare zuerst. Die
+// Teilzeilen tragen dafür `data-leihbar` (0 leihbar, 1 Kaufbuch),
+// `data-jahrgaenge` und `data-farben` (für den Strich vorn, der den Farben
+// in der Reihenfolge folgt, in der man sie liest).
 
 // numeric: "Jahrgang 5" vor "Jahrgang 10", und "5, 6" vor "7, 8" vor "11".
 const sortierTextVergleich = new Intl.Collator("de", { numeric: true }).compare;
@@ -57,15 +64,9 @@ function sortierListenVergleich(links, rechts) {
   return links.length === rechts.length ? 0 : links.length < rechts.length ? -1 : 1;
 }
 
-// Der Wert einer "liste"-Zelle: erst die leihbaren, dann die anderen Jahrgänge.
-function sortierDoppelliste(roh) {
-  const [leihbar, sonst = ""] = roh.split("|");
-  return [sortierZahlen(leihbar), sortierZahlen(sonst)];
-}
-
 function sortierSchluessel(roh, art) {
   const text = roh.trim();
-  if (art === "liste") return sortierDoppelliste(text);
+  if (art === "liste") return sortierZahlen(text);
   if (text === "") return null;
   if (art === "zahl") {
     const zahl = Number(text);
@@ -80,7 +81,7 @@ function sortierVergleich(art, absteigend, links, rechts) {
   if (links === null) return 0;
   let folge;
   if (art === "liste") {
-    folge = sortierListenVergleich(links[0], rechts[0]) || sortierListenVergleich(links[1], rechts[1]);
+    folge = sortierListenVergleich(links, rechts);
   } else if (art === "zahl") {
     folge = links < rechts ? -1 : links > rechts ? 1 : 0;
   } else {
@@ -115,9 +116,41 @@ function sortierNachEbenen(zeilen, ebenen, schluessel) {
   return mitSchluessel.map((eintrag) => eintrag.zeile);
 }
 
+// Die Reihenfolge der Teilzeilen eines Buches: ihre Indizes, wie sie stehen sollen.
+// `teile` sind { leihbar: 0|1, jahrgaenge: [..] }, `kriterium` ist
+// { art: "jahrgang" | "leihbar", absteigend }. Bei Gleichstand steht die
+// leihbare Teilzeile zuerst, in beiden Richtungen.
+function sortierTeilzeilenFolge(teile, kriterium) {
+  const vorzeichen = kriterium.absteigend ? -1 : 1;
+  const reihenfolge = teile.map((_, i) => i);
+  reihenfolge.sort((a, b) => {
+    const jahrgang = sortierListenVergleich(teile[a].jahrgaenge, teile[b].jahrgaenge);
+    const leihbar = teile[a].leihbar - teile[b].leihbar;
+    const erst = kriterium.art === "leihbar" ? leihbar : jahrgang;
+    return vorzeichen * erst || leihbar || jahrgang || a - b;
+  });
+  return reihenfolge;
+}
+
+// Der Strich vorn als CSS-Wert aus den Farben der Teilzeilen in Lesefolge: ein
+// gleich hoher Abschnitt je vorkommender Farbe (wie Markierung.strich_stil).
+function sortierStrichStil(farbenFolge) {
+  const farben = [];
+  for (const teil of farbenFolge) {
+    for (const farbe of teil) if (!farben.includes(farbe)) farben.push(farbe);
+  }
+  if (farben.length === 0) return "";
+  if (farben.length === 1) return `var(--${farben[0]}-strich)`;
+  const prozent = (zahl) => `${Math.round(zahl * 1000) / 1000}%`;
+  return "linear-gradient(" + farben.map((farbe, i) => (
+    `var(--${farbe}-strich) ${prozent((100 * i) / farben.length)} ${prozent((100 * (i + 1)) / farben.length)}`
+  )).join(", ") + ")";
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { sortierListenVergleich, sortierNeueEbenen, sortierNachEbenen,
-                     sortierSchluessel, sortierVergleich };
+                     sortierSchluessel, sortierVergleich, sortierTeilzeilenFolge,
+                     sortierStrichStil };
 }
 
 if (typeof document !== "undefined") {
@@ -151,6 +184,34 @@ if (typeof document !== "undefined") {
       }
     }
 
+    // Hat ein Buch zwei Teilzeilen, ordnet die vorderste der Spalten Leihbar
+    // und Jahrgang sie auch innerhalb des Buches (und setzt den Strich vorn neu).
+    function ordneTeilzeilen(tabelle, folge) {
+      const koepfe = Array.from(tabelle.tHead.rows[0].cells);
+      const vorn = folge.find((ebene) => koepfe[ebene.index].dataset.teilspalte);
+      const jahrgangIndex = koepfe.findIndex((kopf) => kopf.dataset.teilspalte === "jahrgang");
+      if (!vorn || jahrgangIndex < 0) return;
+      const kriterium = { art: koepfe[vorn.index].dataset.teilspalte, absteigend: vorn.absteigend };
+      for (const zeile of tabelle.tBodies[0].rows) {
+        const zellen = Array.from(zeile.querySelectorAll(":scope > td.teilzeilen"));
+        const teile = Array.from(zeile.cells[jahrgangIndex].querySelectorAll(":scope > .teilzeile"));
+        if (zellen.length === 0 || teile.length < 2) continue;
+        const reihenfolge = sortierTeilzeilenFolge(teile.map((teil) => ({
+          leihbar: Number(teil.dataset.leihbar),
+          jahrgaenge: sortierZahlen(teil.dataset.jahrgaenge ?? ""),
+        })), kriterium);
+        for (const zelle of zellen) {
+          const jede = Array.from(zelle.querySelectorAll(":scope > .teilzeile"));
+          for (const i of reihenfolge) zelle.appendChild(jede[i]);
+        }
+        const stil = sortierStrichStil(reihenfolge.map(
+          (i) => (teile[i].dataset.farben ?? "").split(" ").filter(Boolean)));
+        if (stil) zeile.style.setProperty("--strich", stil);
+      }
+      // Die Teilzeilen sind neu gestapelt: ihre Höhen neu angleichen (buchplanung.js).
+      if (typeof gleicheTeilzeilenAn === "function") gleicheTeilzeilenAn();
+    }
+
     function ordne(tabelle) {
       const koerper = tabelle.tBodies[0];
       if (ebenen.has(tabelle)) {
@@ -158,6 +219,7 @@ if (typeof document !== "undefined") {
         const zeilen = sortierNachEbenen(ausgang.get(tabelle), folge,
                                          (zeile, ebene) => schluessel(zeile.cells[ebene.index], ebene.art));
         for (const zeile of zeilen) koerper.appendChild(zeile);
+        ordneTeilzeilen(tabelle, folge);
         zeigeRichtung(tabelle, folge[0]);
         return;
       }

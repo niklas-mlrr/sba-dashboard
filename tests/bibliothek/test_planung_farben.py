@@ -138,7 +138,9 @@ def test_iserv_fehlt_und_steht_noch_je_eintrag():
     m = _markierung(_zeile(7, nach="2025/2026", leihbar=True),
                     _zeile(7, ab="2026/2027", leihbar=False),
                     _zeile(8, ab="2026/2027"), abweichung=abweichung)
-    leihbar, kauf = m.teilzeilen
+    # Die Teilzeile mit den kleineren Jahrgängen steht oben: das Kaufbuch (Jg. 7)
+    # vor dem Leihbuch (Jg. 7, 8, 10).
+    kauf, leihbar = m.teilzeilen
     # Jg. 10 kennt die Datei nicht: er steht nur da, weil IServ ihn führt -
     # rot markiert, ohne Planfarbe, nicht durchgestrichen. Latein gehört
     # nicht in diese Zeile.
@@ -152,11 +154,12 @@ def test_iserv_fehlt_und_steht_noch_je_eintrag():
         "Planung: als Kaufbuch eingeführt zu 2026/2027"
         " · IServ-Bücherliste: als Kaufbuch noch nicht eingetragen")
     # Der Strich der Fach-Ansicht zeigt nur die Planung (je vorkommender Farbe
-    # ein Abschnitt, in Lesefolge), der einer IServ-Ansicht nur IServ.
-    assert m.strich() == (AUSMUSTERUNG, EINFUEHRUNG)
+    # ein Abschnitt, in Lesefolge: erst das Kaufbuch, blau), der einer
+    # IServ-Ansicht nur IServ.
+    assert m.strich() == (EINFUEHRUNG, AUSMUSTERUNG)
     assert m.strich_stil() == (
-        "linear-gradient(var(--ausmusterung-strich) 0% 50%, "
-        "var(--einfuehrung-strich) 50% 100%)")
+        "linear-gradient(var(--einfuehrung-strich) 0% 50%, "
+        "var(--ausmusterung-strich) 50% 100%)")
     assert m.strich(ISERV) == (AUSMUSTERUNG, EINFUEHRUNG)
     gelb = _markierung(_zeile(5), abweichung=Abweichung(ISBN, BEIDE, felder=(("neupreis", 20.0),)))
     assert gelb.strich() == () and gelb.strich_klassen == ("strich-gelb",)
@@ -378,3 +381,21 @@ def test_eine_abgelehnte_ausmusterung_laesst_das_buch_bleiben_ohne_grauen_hinter
     assert m.ganz == "" and not in_ausmusterungen(wirksam, wirksam.buecher[0], "Deutsch")
     # Ohne Ablehnung bleibt der Stand derselbe Objekt.
     assert ohne_abgelehnte_ausmusterungen(_stand(_zeile(5))) is not None
+
+
+def test_die_teilzeilen_stehen_geordnet_nach_ihren_jahrgaengen():
+    """Wie die Fach-Ansicht beim Laden sortiert ist: der kleinste Jahrgang zuerst,
+    bei Gleichstand der zweitkleinste, ohne zweiten vor einem zweiten; bei völliger
+    Gleichheit leihbar vor Kaufbuch."""
+    # Das Kaufbuch hat den kleineren Jahrgang: es steht oben.
+    m = _markierung(_zeile(7), _zeile(8), _zeile(5, leihbar=False))
+    assert [(t.leihbar, t.jahrgaenge) for t in m.teilzeilen] == [(False, (5,)), (True, (7, 8))]
+    # Gleicher kleinster Jahrgang: wer keinen zweiten hat, steht davor.
+    m = _markierung(_zeile(5), _zeile(6), _zeile(5, leihbar=False))
+    assert [(t.leihbar, t.jahrgaenge) for t in m.teilzeilen] == [(False, (5,)), (True, (5, 6))]
+    # Gleich: leihbar zuerst.
+    m = _markierung(_zeile(5), _zeile(5, leihbar=False))
+    assert [t.leihbar for t in m.teilzeilen] == [True, False]
+    # Der Strich folgt der Reihenfolge, in der gelesen wird.
+    m = _markierung(_zeile(7, nach="2026/2027"), _zeile(5, ab="2027/2028", leihbar=False))
+    assert m.strich() == (EINFUEHRUNG, AUSMUSTERUNG)
