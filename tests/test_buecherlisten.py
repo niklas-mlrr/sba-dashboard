@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from app.buecherlisten import (
     OHNE_FACH,
+    buchreihe_jahrgaenge,
     finde_gruppe,
     gruppen_nach_fach,
     gruppen_nach_verlag,
@@ -548,3 +549,14 @@ def test_unbekannte_ansicht_druckt_nicht(seiten: TestClient, erzeuger: _Erzeuger
     _anmelden(seiten)
     assert _drucken(seiten, [], "/buecherliste/schrank/pdf").status_code == 404
     assert erzeuger.aufrufe == []
+
+
+@pytest.mark.parametrize("roh, erwartet", [
+    ([6, 5, "7"], (5, 6, 7)),                  # gradesFlat
+    ([{"grade": 8}, {"grade": 5}], (5, 8)),    # grades aus dem Inventar
+    ([], ()),                                  # keinem Jahrgang zugewiesen
+    (None, None),                              # nicht mitgeschickt
+    (["?", {"x": 1}], None),                   # nichts Lesbares
+])
+def test_buchreihe_jahrgaenge(roh, erwartet):
+    assert buchreihe_jahrgaenge(roh) == erwartet

@@ -248,7 +248,7 @@ const beschreibe = (function () {
 })();
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { leihbarSchritt, dreiwege, mitWahl, beschreibe };
+  module.exports = { leihbarSchritt, dreiwege, mitWahl, beschreibe, teilungInProzent };
 }
 
 // In der Bücherliste steht „Leihbar“ halb, wenn das Buch in den Jahrgängen
@@ -286,6 +286,26 @@ function gleicheTeilzeilenAn() {
         teile[anzahl - 1].style.minHeight = parseFloat(teile[anzahl - 1].style.minHeight) + rest + "px";
       }
     }
+  }
+  teileStricheAn();
+}
+
+// Haben die beiden Teilzeilen einer Zeile je genau eine, verschiedene Farbe,
+// teilt sich der Strich vorn an ihrer Grenze (``data-strich-teile``, gesetzt
+// von der Vorlage nach ``Markierung.strich_teile``): ``--teilung`` ist die
+// Höhe der oberen Teilzeile in Prozent der Zeile. Ohne dieses Skript 50 %.
+function teilungInProzent(oben, gesamt) {
+  if (typeof oben !== "number" || !(gesamt > 0) || !(oben >= 0)) return 50;
+  return Math.round(Math.min(100, (oben / gesamt) * 100) * 1000) / 1000;
+}
+
+function teileStricheAn() {
+  for (const zeile of document.querySelectorAll("tr[data-strich-teile]")) {
+    const oben = zeile.querySelector(":scope > td.teilzeilen > .teilzeile");
+    if (!oben) continue;
+    const prozent = teilungInProzent(oben.getBoundingClientRect().height,
+                                     zeile.getBoundingClientRect().height);
+    zeile.style.setProperty("--teilung", prozent + "%");
   }
 }
 

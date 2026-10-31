@@ -16,7 +16,12 @@ Die Regel: ein Buch ist gleich, wenn
   :func:`~buecherlisten.planung.modelle.wirkt_im_schuljahr` - eingeführt in
   diesem Schuljahr oder vorher, ausgemustert nach diesem Schuljahr oder später.
 * in jedem dieser Paare „leihbar“ übereinstimmt - in IServ je Jahrgangsliste,
-  in der Datei je Zeile.
+  in der Datei je Zeile, und
+* die Buchreihe in IServ jedem Jahrgang zugewiesen ist, in dem die Datei das
+  Buch in diesem Schuljahr führt (``buchreihe_fehlt``). Erst dann lässt es
+  sich in IServ in die Bücherliste des Jahrgangs aufnehmen. Weitere Jahrgänge
+  an der Buchreihe schaden nicht und werden nicht gemeldet (Entscheidung
+  2026-10-31).
 
 Ein Buch in zwei Fächern ist damit nur gleich, wenn es in beiden gleich ist,
 ein Mehrjahresband nur, wenn jeder seiner Jahrgänge stimmt.
@@ -64,6 +69,9 @@ class IservBuch:
     # Die Paare, in denen der Eintrag leihbar ist - ``borrowable`` steht in
     # IServ je Jahrgangsliste. ``None``: in allen Paaren wie ``leihbar``.
     leihbar_paare: frozenset[Paar] | None = None
+    # Die Jahrgänge, denen die Buchreihe in IServ zugewiesen ist
+    # (``gradesFlat``). ``None``: unbekannt - dann wird nicht verglichen.
+    buchreihe_jahrgaenge: frozenset[int] | None = None
 
     def leihbar_in(self, paar: Paar) -> bool:
         return self.leihbar if self.leihbar_paare is None else paar in self.leihbar_paare
@@ -89,6 +97,9 @@ class Abweichung:
     ``eintraege_fehlen`` und ``eintraege_nur_iserv`` sind dasselbe je Eintrag
     (Fach, Jahrgang, leihbar): ein anderes „leihbar“ ist dort ein fehlender und
     ein überzähliger Eintrag. Danach färben die Bücherlisten.
+
+    ``buchreihe_fehlt`` sind die Jahrgänge, in denen die Datei das Buch dieses
+    Schuljahr führt, denen die Buchreihe in IServ aber nicht zugewiesen ist.
     """
 
     isbn: str
@@ -99,11 +110,13 @@ class Abweichung:
     leihbar_anders: tuple[tuple[Paar, bool], ...] = ()
     eintraege_fehlen: tuple[Eintrag, ...] = ()
     eintraege_nur_iserv: tuple[Eintrag, ...] = ()
+    buchreihe_fehlt: tuple[int, ...] = ()
 
     @property
     def gleich(self) -> bool:
         return (self.art == BEIDE and not self.felder and not self.leihbar_anders
-                and not self.fehlt_in_iserv and not self.nur_in_iserv)
+                and not self.fehlt_in_iserv and not self.nur_in_iserv
+                and not self.buchreihe_fehlt)
 
     @property
     def iserv(self) -> dict[str, object]:
@@ -157,23 +170,41 @@ def _verlag(name: str) -> str:
     return "" if name == OHNE_VERLAG else name
 
 
-def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch]) -> dict[str, Abweichung]:
+def _buchreihe_fehlt(soll: frozenset[Eintrag], zugewiesen: frozenset[int] | None) -> tuple[int, ...]:
+    """Die Jahrgänge aus ``soll``, denen die Buchreihe nicht zugewiesen ist -
+    leer, wenn die Zuweisung unbekannt ist."""
+    if zugewiesen is None:
+        return ()
+    return tuple(sorted({jahrgang for _, jahrgang, _ in soll} - zugewiesen))
+
+
+def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch],
+               buchreihen: Mapping[str, frozenset[int]] | None = None) -> dict[str, Abweichung]:
     """Je ISBN, die in diesem Schuljahr auf einer der beiden Seiten vorkommt, ihr Vergleich.
 
     Ein Buch, das in der Datei steht, dieses Schuljahr aber nirgends geführt
     wird (geplant, ausgemustert) und auch in IServ fehlt, kommt nicht vor: an
     ihm ist nichts zu vergleichen.
+
+    ``buchreihen`` sind die Jahrgänge der Buchreihen aus dem IServ-Inventar -
+    für Bücher, deren Zuweisung die Bücherlisten nicht verraten (etwa, weil
+    das Buch in keiner Liste steht).
     """
+    buchreihen = buchreihen or {}
     ergebnis: dict[str, Abweichung] = {}
     for buch in planung.buecher:
         soll = aktive_paare(planung, buch)
         soll_eintraege = aktive_eintraege(planung, buch)
         ist = iserv.get(buch.isbn)
+        zugewiesen = ist.buchreihe_jahrgaenge if ist is not None else None
+        if zugewiesen is None:
+            zugewiesen = buchreihen.get(buch.isbn)
         if ist is None:
             if soll:
                 ergebnis[buch.isbn] = Abweichung(
                     buch.isbn, NUR_EXCEL, fehlt_in_iserv=_sortiert(soll),
-                    eintraege_fehlen=_eintraege_sortiert(soll_eintraege))
+                    eintraege_fehlen=_eintraege_sortiert(soll_eintraege),
+                    buchreihe_fehlt=_buchreihe_fehlt(soll_eintraege, zugewiesen))
             continue
         if not soll:
             ergebnis[buch.isbn] = _nur_iserv(ist)
@@ -198,6 +229,7 @@ def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch]) -> dict[str
             leihbar_anders=leihbar_anders,
             eintraege_fehlen=_eintraege_sortiert(soll_eintraege - ist.eintraege),
             eintraege_nur_iserv=_eintraege_sortiert(ist.eintraege - soll_eintraege),
+            buchreihe_fehlt=_buchreihe_fehlt(soll_eintraege, zugewiesen),
         )
     for isbn, ist in iserv.items():
         if isbn not in ergebnis:

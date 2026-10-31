@@ -50,6 +50,7 @@ from buecherlisten.planung import (
     Abweichung,
     Buchplanung,
     IservBuch,
+    aktive_eintraege,
     aktive_paare,
     leihbar_im_schuljahr,
     planungs_status,
@@ -134,6 +135,9 @@ class Buch:
     # (``buecherlisten/planung/farben.py``). Steht sie da, färbt die Vorlage
     # danach statt nach ``neu``/``weg``.
     farben: Markierung | None = None
+    # Aus IServ: die Jahrgänge, denen die Buchreihe zugewiesen ist
+    # (``series_data.gradesFlat``); ``None``, wenn IServ sie nicht mitschickt.
+    buchreihe_jahrgaenge: tuple[int, ...] | None = None
 
     @property
     def abweichend(self) -> bool:
@@ -378,7 +382,25 @@ def _buch(item: dict, jahrgang: int | None, korrekturen: Korrekturen | None = No
         leihgebuehr=daten.get("fee"),
         leihbar=bool(korrigiert.get("borrowable")),
         jahrgaenge=(jahrgang,) if jahrgang is not None else (),
+        buchreihe_jahrgaenge=buchreihe_jahrgaenge(daten.get("gradesFlat")),
     )
+
+
+def buchreihe_jahrgaenge(roh: Any) -> tuple[int, ...] | None:
+    """Die Jahrgänge einer Buchreihe aus IServ (``gradesFlat``: ``[5, 6]``,
+    ``grades``: ``[{"grade": 5}]``) - ``None``, wenn nichts Lesbares da ist."""
+    if not isinstance(roh, list):
+        return None
+    jahrgaenge = set()
+    for eintrag in roh:
+        wert: Any = eintrag.get("grade") if isinstance(eintrag, dict) else eintrag
+        try:
+            jahrgaenge.add(int(wert))
+        except (TypeError, ValueError):
+            continue
+    if roh and not jahrgaenge:
+        return None
+    return tuple(sorted(jahrgaenge))
 
 
 # ── Umordnen ─────────────────────────────────────────────────────────────────
@@ -468,7 +490,9 @@ def iserv_je_isbn(daten: Buecherlisten) -> dict[str, IservBuch]:
         isbn: IservBuch(isbn=isbn, titel=buch.titel, verlag=buch.verlag,
                         neupreis=buch.neupreis, leihgebuehr=buch.leihgebuehr,
                         leihbar=leihbar[isbn], paare=frozenset(paare.get(isbn, ())),
-                        leihbar_paare=frozenset(leihbar_paare.get(isbn, ())))
+                        leihbar_paare=frozenset(leihbar_paare.get(isbn, ())),
+                        buchreihe_jahrgaenge=None if buch.buchreihe_jahrgaenge is None
+                        else frozenset(buch.buchreihe_jahrgaenge))
         for isbn, buch in werte.items()
     }
 
@@ -498,9 +522,23 @@ class Vergleich:
         return sum(1 for abweichung in self.ergebnis.values() if not abweichung.gleich)
 
 
-def vergleiche_mit_iserv(daten: Buecherlisten, planung: Buchplanung) -> Vergleich:
+def vergleiche_mit_iserv(daten: Buecherlisten, planung: Buchplanung,
+                         buchreihen: Callable[[set[str]], dict[str, frozenset[int]]] | None = None,
+                         ) -> Vergleich:
+    """Die Datei mit IServ vergleichen.
+
+    ``buchreihen`` holt die Jahrgänge der Buchreihen aus dem IServ-Inventar,
+    wenn die Bücherlisten sie für einige ISBNs nicht verraten (das Buch steht
+    in keiner Liste, oder ``gradesFlat`` fehlt) - gerufen nur dann, mit
+    diesen ISBNs.
+    """
     iserv = iserv_je_isbn(daten)
-    return Vergleich(planung=planung, iserv=iserv, ergebnis=vergleiche(planung, iserv))
+    offen = {buch.isbn for buch in planung.buecher
+             if aktive_eintraege(planung, buch)
+             and (buch.isbn not in iserv or iserv[buch.isbn].buchreihe_jahrgaenge is None)}
+    zusatz = buchreihen(offen) if buchreihen is not None and offen else {}
+    return Vergleich(planung=planung, iserv=iserv,
+                     ergebnis=vergleiche(planung, iserv, zusatz))
 
 
 def _paare_text(paare: tuple[Paar, ...] | list[Paar]) -> str:
@@ -614,7 +652,8 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
     IServ (Markierung) zugleich (``farben``, Regeln in
     buecherlisten/planung/farben.py). Bücher, die nur IServ im Fach führt,
     stehen wieder darin (die Entscheidung vom 2026-10-30 ist damit
-    aufgehoben): ihr Titel ist rot markiert, ein Planungsmenü haben sie nicht.
+    aufgehoben): rot markiert sind ihre Jahrgänge, und steht die ISBN dieses
+    Schuljahr nur in IServ, jedes Feld. Ein Planungsmenü haben sie nicht.
     """
     zeilen: dict[str, dict[str, Buch]] = {}
     gezeigt: set[tuple[str, str]] = set()

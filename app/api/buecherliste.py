@@ -55,6 +55,7 @@ from ..buecherlisten import (
     Buch,
     Buecherlisten,
     Vergleich,
+    buchreihe_jahrgaenge,
     finde_gruppe,
     gruppen_nach_fach,
     gruppen_nach_fach_aus_datei,
@@ -144,6 +145,29 @@ def _abweichungen_zur_buchreihe(buch: Buch, serie: Any) -> tuple[tuple[str, Any]
               ("neupreis", buch.neupreis, serie.price),
               ("leihgebuehr", buch.leihgebuehr, serie.fee))
     return tuple((feld, fremd) for feld, eigen, fremd in felder if not gleich(eigen, fremd))
+
+
+def _buchreihen(request: Request) -> Callable[[set[str]], dict[str, frozenset[int]]]:
+    """Holt für die Fach-Ansicht die Jahrgänge der Buchreihen aus dem Inventar -
+    ein Abruf, nur wenn :func:`vergleiche_mit_iserv` ISBNs ohne bekannte
+    Zuweisung hat. Ist das Inventar nicht zu bekommen, wird die Buchreihe
+    dieser Bücher nicht verglichen."""
+    def holen(isbns: set[str]) -> dict[str, frozenset[int]]:
+        try:
+            client = request.app.state.anmeldung.client()
+            serien = list(client.series.get_all())
+        except Exception:  # noqa: BLE001 - ohne Inventar kein Buchreihen-Vergleich
+            return {}
+        ergebnis: dict[str, frozenset[int]] = {}
+        for serie in serien:
+            if serie.isbn not in isbns:
+                continue
+            jahrgaenge = buchreihe_jahrgaenge(getattr(serie, "grades_flat", None) or None) \
+                or buchreihe_jahrgaenge(getattr(serie, "grades", None))
+            if jahrgaenge is not None:
+                ergebnis[serie.isbn] = frozenset(jahrgaenge)
+        return ergebnis
+    return holen
 
 
 def _mit_inventar(request: Request, buecher: tuple[Buch, ...]) -> tuple[Buch, ...]:
@@ -435,7 +459,8 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         if ansicht == "jahrgang" else [g.name for g in iserv_gruppen]
     )
     kontext, stand = _planungskontext(request, daten.kennung)
-    vergleich = vergleiche_mit_iserv(daten, stand) if stand else None
+    vergleich = vergleiche_mit_iserv(
+        daten, stand, _buchreihen(request) if ansicht == "fach" else None) if stand else None
     gruppen = aus_datei(vergleich) if vergleich and aus_datei else iserv_gruppen
     return _seite(request, "buecherliste_uebersicht.html", {
         "planung": kontext,
@@ -466,7 +491,8 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         return daten
     ansicht_name, gruppierung, aus_datei = _ANSICHTEN[ansicht]
     planung, stand = _planungskontext(request, daten.kennung)
-    vergleich = vergleiche_mit_iserv(daten, stand) if stand else None
+    vergleich = vergleiche_mit_iserv(
+        daten, stand, _buchreihen(request) if ansicht == "fach" else None) if stand else None
     if ansicht == "fach" and vergleich is not None:
         # Die Ausmusterungen zeigen auch, was IServ noch führt - das kennt der
         # Planungskontext nicht.

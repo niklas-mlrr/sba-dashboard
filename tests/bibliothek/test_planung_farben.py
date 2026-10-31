@@ -21,7 +21,7 @@ from buecherlisten.planung.farben import (
     in_ausmusterungen,
     markierung,
 )
-from buecherlisten.planung.vergleich import BEIDE, NUR_EXCEL
+from buecherlisten.planung.vergleich import BEIDE, NUR_EXCEL, NUR_ISERV
 
 ISBN = "9783060000005"
 
@@ -54,7 +54,8 @@ def _werte(m) -> list[tuple[str, str, str, bool, str]]:
 def test_ohne_planung_ist_nichts_farbig():
     m = _markierung(_zeile(5), _zeile(6))
     assert _werte(m) == [("5", "", "", False, ""), ("6", "", "", False, "")]
-    assert m.ganz == "" and m.strich() == () and m.strich_klasse() == ""
+    assert m.ganz == "" and m.strich() == () and m.strich_klassen == ()
+    assert m.strich_stil() == "" and m.strich_teile is None and m.zeile == ""
     assert m.jahrgaenge == (5, 6) and m.leihbar and not m.leihbar_teilweise
 
 
@@ -64,7 +65,9 @@ def test_eine_einfuehrung_ist_blau_geschrieben_auch_eine_kuenftige():
     assert _werte(m) == [("5", "", "", False, ""),
                          ("6", "", EINFUEHRUNG, False, ""),
                          ("7", "ab 2027/2028", EINFUEHRUNG, False, "")]
-    assert m.strich() == (EINFUEHRUNG,)
+    # Ein Abschnitt je farbigem Wert; ist er überall blau, ist der Strich blau.
+    assert m.strich() == (EINFUEHRUNG, EINFUEHRUNG)
+    assert m.strich_klassen == ("strich",) and m.strich_stil() == "var(--einfuehrung-strich)"
     assert m.werte[1].hinweis == "Planung: als Leihbuch eingeführt zu 2026/2027"
     assert m.werte[2].hinweis == "Planung: als Leihbuch eingeführt ab 2027/2028"
 
@@ -111,6 +114,11 @@ def test_ein_wechsel_von_leihbar_ist_ausmusterung_und_einfuehrung_in_zwei_teilze
     # Das Buch ist zum ersten Mal Kaufbuch: die Teilzeile ist ganz neu.
     assert (leihbar.ganz, kauf.ganz) == ("", EINFUEHRUNG)
     assert m.strich() == (AUSMUSTERUNG, EINFUEHRUNG)
+    # Je Teilzeile genau eine Farbe: der Strich teilt sich an ihrer Grenze.
+    assert m.strich_teile == (AUSMUSTERUNG, EINFUEHRUNG)
+    assert m.strich_stil() == (
+        "linear-gradient(var(--ausmusterung-strich) 0 var(--teilung, 50%), "
+        "var(--einfuehrung-strich) var(--teilung, 50%) 100%)")
 
 
 def test_wird_das_ganze_buch_kaufbuch_ist_die_eine_teilzeile_weg_die_andere_neu():
@@ -132,20 +140,27 @@ def test_iserv_fehlt_und_steht_noch_je_eintrag():
                     _zeile(8, ab="2026/2027"), abweichung=abweichung)
     leihbar, kauf = m.teilzeilen
     # Jg. 10 kennt die Datei nicht: er steht nur da, weil IServ ihn führt -
-    # durchgestrichen, ohne Planfarbe. Latein gehört nicht in diese Zeile.
+    # rot markiert, ohne Planfarbe, nicht durchgestrichen. Latein gehört
+    # nicht in diese Zeile.
     assert [(w.text, w.plan, w.durch, w.iserv) for w in leihbar.werte] == [
         ("7", AUSMUSTERUNG, True, STEHT_NOCH),
         ("8", EINFUEHRUNG, False, FEHLT),
-        ("10", "", True, STEHT_NOCH)]
+        ("10", "", False, STEHT_NOCH)]
     assert [(w.text, w.iserv, w.markierung) for w in kauf.werte] == [("7", FEHLT, EINFUEHRUNG)]
-    assert leihbar.werte[2].hinweis == "IServ: als Leihbuch noch eingetragen"
+    assert leihbar.werte[2].hinweis == "IServ-Bücherliste: als Leihbuch noch eingetragen"
     assert kauf.werte[0].hinweis == (
-        "Planung: als Kaufbuch eingeführt zu 2026/2027 · IServ: als Kaufbuch noch nicht eingetragen")
-    # Der Strich der Fach-Ansicht zeigt nur die Planung, der einer IServ-Ansicht nur IServ.
-    assert m.strich() == (AUSMUSTERUNG, EINFUEHRUNG)
+        "Planung: als Kaufbuch eingeführt zu 2026/2027"
+        " · IServ-Bücherliste: als Kaufbuch noch nicht eingetragen")
+    # Der Strich der Fach-Ansicht zeigt nur die Planung (je farbigem Wert, nach
+    # Jahrgang, Jahr, rot vor blau), der einer IServ-Ansicht nur IServ.
+    assert m.strich() == (AUSMUSTERUNG, EINFUEHRUNG, EINFUEHRUNG)
+    assert m.strich_teile is None  # die Leihbuch-Teilzeile hat zwei Farben
+    assert m.strich_stil() == (
+        "linear-gradient(var(--ausmusterung-strich) 0% 33.333%, "
+        "var(--einfuehrung-strich) 33.333% 66.667%, var(--einfuehrung-strich) 66.667% 100%)")
     assert m.strich(ISERV) == (AUSMUSTERUNG, EINFUEHRUNG)
-    assert _markierung(_zeile(5), abweichung=Abweichung(
-        ISBN, BEIDE, felder=(("neupreis", 20.0),))).strich() == ()
+    gelb = _markierung(_zeile(5), abweichung=Abweichung(ISBN, BEIDE, felder=(("neupreis", 20.0),)))
+    assert gelb.strich() == () and gelb.strich_klassen == ("strich-gelb",)
 
 
 def test_ein_buch_das_in_iserv_fehlt_und_andere_felder():
@@ -166,10 +181,10 @@ def test_nach_fach_fuer_eine_jahrgangsansicht():
     assert [(w.text, w.plan) for w in m.werte] == [("7", EINFUEHRUNG), ("8", "")]
 
 
-def test_ein_wert_ist_durchgestrichen_wenn_er_weg_ist_oder_nur_in_iserv_steht():
+def test_durchgestrichen_ist_nur_was_nach_dem_vorjahr_ausgemustert_ist():
     assert Wert("5", weg=True).durch
-    assert Wert("5", iserv=STEHT_NOCH).durch
-    assert not Wert("5", plan=EINFUEHRUNG, iserv=STEHT_NOCH).durch
+    assert not Wert("5", iserv=STEHT_NOCH).durch
+    assert not Wert("5", plan=AUSMUSTERUNG).durch
 
 
 def test_ausmusterungen_zeigen_was_aus_den_regalen_geht():
@@ -198,3 +213,46 @@ def test_keine_ausmusterung_ohne_leihbares_vor_zwei_jahren_oder_mit_neuer_einfue
 
 def test_ein_buch_das_ueberall_gleich_leihbar_ist_hat_eine_teilzeile():
     assert len(_markierung(_zeile(5), _zeile(6)).teilzeilen) == 1
+
+
+def test_der_strich_folgt_jahrgang_jahr_und_rot_vor_blau():
+    m = _markierung(_zeile(5, nach="2026/2027"), _zeile(6, ab="2026/2027"),
+                    _zeile(7, nach="2027/2028"), _zeile(7, ab="2026/2027", leihbar=False),
+                    _zeile(8, nach="2026/2027"), _zeile(8, ab="2026/2027", leihbar=False))
+    # Jg. 7: die Einführung als Kaufbuch (2026) vor der Ausmusterung als Leihbuch
+    # (2027); Jg. 8: beides 2026, rot vor blau.
+    assert m.strich() == (AUSMUSTERUNG, EINFUEHRUNG, EINFUEHRUNG, AUSMUSTERUNG,
+                          AUSMUSTERUNG, EINFUEHRUNG)
+    assert m.strich_teile is None
+
+
+def test_hat_nur_eine_teilzeile_eine_farbe_ist_der_strich_ganz_in_ihr():
+    m = _markierung(_zeile(5), _zeile(6, ab="2026/2027", leihbar=False))
+    assert m.strich_teile is None and m.strich_stil() == "var(--einfuehrung-strich)"
+
+
+def test_der_hintergrund_zaehlt_nur_was_die_liste_zeigt():
+    # Jg. 5 ist seit Jahren weg und steht nicht mehr da: alles Gezeigte ist neu.
+    assert _markierung(_zeile(5, nach="2022/2023"), _zeile(6, ab="2026/2027")).ganz == EINFUEHRUNG
+    # Gemischt: kein Hintergrund.
+    assert _markierung(_zeile(5, nach="2026/2027"), _zeile(6, ab="2026/2027")).ganz == ""
+
+
+def test_fehlt_der_jahrgang_an_der_buchreihe_ist_er_blau_markiert():
+    abweichung = Abweichung(ISBN, BEIDE, buchreihe_fehlt=(6, 7, 8))
+    m = _markierung(_zeile(5), _zeile(6), _zeile(7, ab="2027/2028"), _zeile(8, nach="2025/2026"),
+                    abweichung=abweichung)
+    # Nur was dieses Schuljahr gilt: Jg. 7 kommt erst, Jg. 8 ist weg.
+    assert [(w.text, w.iserv) for w in m.werte] == [("5", ""), ("6", FEHLT), ("7", ""), ("8", "")]
+    assert m.werte[1].hinweis == "IServ-Buchreihe: Jahrgang 6 noch nicht zugewiesen"
+    # Fehlt er auch in der Bücherliste, nennt der Tooltip beides.
+    m = _markierung(_zeile(6), abweichung=Abweichung(
+        ISBN, BEIDE, buchreihe_fehlt=(6,), eintraege_fehlen=(("Deutsch", 6, True),)))
+    assert m.werte[0].hinweis == ("IServ-Bücherliste: als Leihbuch noch nicht eingetragen"
+                                  " · IServ-Buchreihe: Jahrgang 6 noch nicht zugewiesen")
+
+
+def test_steht_die_isbn_nur_auf_einer_seite_ist_die_ganze_zeile_markiert():
+    assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, NUR_EXCEL)).zeile == EINFUEHRUNG
+    assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, NUR_ISERV)).zeile == AUSMUSTERUNG
+    assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, BEIDE)).zeile == ""

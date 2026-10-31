@@ -1,27 +1,39 @@
 """Die Farben der Bücherlisten: die Planung in der Schrift, IServ als Markierung.
 
-Entscheidung 2026-10-31 (ersetzt die vom 2026-10-30): Jede Liste zeigt beides,
-die Planung und den Vergleich mit IServ, und jedes Mittel hat eine Bedeutung.
+Entscheidung 2026-10-31 (ersetzt die vom 2026-10-30, am selben Tag
+nachgeschärft): Jede Liste zeigt beides, die Planung und den Vergleich mit
+IServ, und jedes Mittel hat eine Bedeutung. „Dieses Schuljahr“ ist das
+ausgewählte, vorerst immer das laufende (``stand.schuljahr``).
 
 * **Schrift = Planung**, je Wert (Jahrgang, in Verlag/Jahrgang später auch
   Fach): blau eine Einführung zu diesem Schuljahr oder später, rot eine
-  Ausmusterung nach dem Vorjahr oder später. Durchgestrichen ist ein Wert, der
-  nach dem Vorjahr ausgemustert wurde - er gilt nicht mehr.
-* **Markierung = IServ**, je Wert: blau, was in IServ noch fehlt, rot, was dort
-  noch steht (der Wert ist dann durchgestrichen). Gelb (Titel, Verlag, Preise)
-  setzt die Vorlage aus ``Buch.iserv``. IServ wird nur für das laufende
-  Schuljahr verglichen: eine Einführung „ab 2027/2028“ hat keine Markierung.
-* **Hintergrund** nur für Ganzes: die Zeile, wenn das Buch ganz neu ist (keine
-  Zeile in irgendeinem Fach lief schon) oder es danach in keinem Fach und
-  Jahrgang mehr gibt; eine Teilzeile, wenn das Buch als Leih- bzw. Kaufbuch
-  ganz neu oder ganz weg ist.
+  Ausmusterung nach dem Vorjahr oder später. Durchgestrichen ist nur ein
+  Wert, der nach dem Vorjahr ausgemustert wurde - er gilt nicht mehr.
+* **Markierung = IServ**, je Wert (helle Hinterlegung, farbiger Strich
+  darunter): blau, was in IServ noch fehlt, rot, was dort noch steht. Ein
+  Jahrgang fehlt, wenn er in der Bücherliste fehlt (je Eintrag, mit
+  „leihbar“) oder die Buchreihe ihm nicht zugewiesen ist; zu viele Jahrgänge
+  an der Buchreihe schaden nicht. Verglichen wird nur, was in diesem
+  Schuljahr gilt: eine Einführung „ab 2027/2028“ und eine Ausmusterung nach
+  diesem Schuljahr oder später sind kein Grund für eine Markierung. Steht die
+  ISBN nur auf einer Seite, ist die ganze Zeile markiert
+  (:attr:`Markierung.zeile`). Gelb (Titel, Verlag, Preise) setzt die Vorlage
+  aus ``Buch.iserv``.
+* **Hintergrund** nur für Ganzes, über alle Fächer und nur über die gezeigten
+  Einträge: die Zeile, wenn jeder Jahrgang des Buchs blau bzw. rot ist; eine
+  Teilzeile, wenn jeder Jahrgang mit diesem „leihbar“ es ist.
 * **„Leihbar“ hängt am Jahrgang.** Verglichen und gefärbt wird je Eintrag
   (Fach, Jahrgang, leihbar): ein Buch steht in einem Jahrgang als Leih- oder
   als Kaufbuch in der Liste, in zwei Teilzeilen. Ein Wechsel ist eine
   Ausmusterung in der einen und eine Einführung in der anderen Teilzeile; das
   Häkchen selbst wird nie gefärbt.
-* **Der Strich vorn** zeigt den Schwerpunkt der Ansicht: in „Fach“ die Planung
-  (:meth:`Markierung.strich`), in Verlag und Jahrgang später IServ.
+* **Der Strich vorn** zeigt den Schwerpunkt der Ansicht. In „Fach“ die
+  Planung: ein gleich hoher Abschnitt je farbigem Wert, sortiert nach
+  Jahrgang, Einführungs- bzw. Ausmusterungsjahr, rot vor blau
+  (:attr:`Markierung.strich_planung`). Haben zwei Teilzeilen je genau eine,
+  verschiedene Farbe, teilt er sich an ihrer Grenze. Weicht ein Feld ab
+  (gelb), steht ein zweiter, gelber Strich daneben. In Verlag und Jahrgang
+  später IServ (``strich("iserv")``).
 
 Vorerst nutzt nur die Fach-Ansicht dieses Modell. ``im`` und ``nach`` von
 :func:`markierung` sind für Verlag und Jahrgang vorbereitet: dort wird nach
@@ -43,6 +55,7 @@ from .modelle import (
     planungs_status,
     planungs_zusatz,
     schuljahr_zahl,
+    wirkt_im_schuljahr,
 )
 from .vergleich import NUR_EXCEL, NUR_ISERV, Abweichung, Eintrag
 
@@ -76,7 +89,9 @@ class Wert:
     """Ein Wert in einer Spalte (Jahrgang oder Fach) einer Teilzeile.
 
     ``plan`` ist die Farbe der Schrift, ``iserv`` was IServ dazu sagt (die
-    Markierung). ``hinweis`` steht als Tooltip daran.
+    Markierung). ``hinweis`` steht als Tooltip daran. ``jahrgang`` und
+    ``jahr`` (Einführungs- bzw. Ausmusterungsjahr der Schriftfarbe) ordnen
+    den Strich vorn.
     """
 
     text: str
@@ -85,11 +100,13 @@ class Wert:
     weg: bool = False
     iserv: str = ""
     hinweis: str = ""
+    jahrgang: int = 0
+    jahr: int = 0
 
     @property
     def durch(self) -> bool:
-        """Durchgestrichen: nach dem Vorjahr ausgemustert oder nur noch in IServ."""
-        return self.weg or (self.iserv == STEHT_NOCH and not self.plan)
+        """Durchgestrichen: nach dem Vorjahr ausgemustert - sonst nichts."""
+        return self.weg
 
     @property
     def markierung(self) -> str:
@@ -100,8 +117,8 @@ class Wert:
 class Teilzeile:
     """Das Buch als Leih- oder als Kaufbuch: das Häkchen und seine Werte.
 
-    ``ganz`` hinterlegt die Teilzeile: das Buch ist so ganz neu
-    (``einfuehrung``) oder ganz weg (``ausmusterung``).
+    ``ganz`` hinterlegt die Teilzeile: jeder Jahrgang des Buchs mit diesem
+    „leihbar“ ist neu (``einfuehrung``) bzw. geht (``ausmusterung``).
     """
 
     leihbar: bool
@@ -109,14 +126,23 @@ class Teilzeile:
     ganz: str = ""
 
 
+def _strichfolge(wert: Wert) -> tuple[int, int, int]:
+    return (wert.jahrgang, wert.jahr, 0 if wert.plan == AUSMUSTERUNG else 1)
+
+
+def _prozent(zahl: float) -> str:
+    return f"{round(zahl, 3):g}%"
+
+
 @dataclass(frozen=True)
 class Markierung:
     """Wie ein Buch in einer Zeile einer Bücherliste aussieht.
 
     ``ganz`` hinterlegt die Zeile (Planung). ``iserv`` sagt, ob das Buch als
-    Ganzes in IServ fehlt oder nur dort steht; ``felder_anders``, ob IServ
-    Titel, Verlag oder Preise anders nennt - beides nur für den Strich einer
-    Ansicht mit Schwerpunkt IServ. ``eintraege`` sind alle gezeigten Einträge.
+    Ganzes in IServ fehlt oder nur dort steht - dann ist jedes Feld der Zeile
+    markiert (:attr:`zeile`). ``felder_anders`` sagt, ob IServ Titel, Verlag
+    oder Preise anders nennt (der gelbe Strich). ``eintraege`` sind alle
+    gezeigten Einträge.
     """
 
     teilzeilen: tuple[Teilzeile, ...] = ()
@@ -141,19 +167,67 @@ class Markierung:
     def leihbar_teilweise(self) -> bool:
         return len({teil.leihbar for teil in self.teilzeilen}) > 1
 
+    @property
+    def zeile(self) -> str:
+        """Die Markierung jedes Felds der Zeile: blau, wenn die ISBN in IServ
+        fehlt, rot, wenn es sie nur dort gibt - sonst leer."""
+        return MARKIERUNG.get(self.iserv, "")
+
+    @property
+    def strich_planung(self) -> tuple[str, ...]:
+        """Die Abschnitte des Strichs vorn, von oben: je farbigem Wert seine
+        Schriftfarbe, nach Jahrgang, Jahr der Einführung bzw. Ausmusterung und
+        rot vor blau."""
+        return tuple(wert.plan for wert in sorted(
+            (wert for wert in self.werte if wert.plan), key=_strichfolge))
+
+    @property
+    def strich_teile(self) -> tuple[str, str] | None:
+        """Die Farben oben und unten, wenn zwei Teilzeilen je genau eine,
+        verschiedene Farbe haben: dann teilt sich der Strich an ihrer Grenze."""
+        if len(self.teilzeilen) != 2:
+            return None
+        oben, unten = ({wert.plan for wert in teil.werte if wert.plan}
+                       for teil in self.teilzeilen)
+        if len(oben) == 1 and len(unten) == 1 and oben != unten:
+            return next(iter(oben)), next(iter(unten))
+        return None
+
     def strich(self, schwerpunkt: str = PLANUNG) -> tuple[str, ...]:
         """Die Farben des Strichs vorn - die des Schwerpunkts der Ansicht."""
         if schwerpunkt == ISERV:
             return geordnet([MARKIERUNG.get(self.iserv, "")],
                             [wert.markierung for wert in self.werte],
                             [AENDERUNG] if self.felder_anders else [])
-        return geordnet([self.ganz], [teil.ganz for teil in self.teilzeilen],
-                        [wert.plan for wert in self.werte])
+        return self.strich_planung
 
-    def strich_klasse(self, schwerpunkt: str = PLANUNG, *zusaetzlich: str) -> str:
-        """Die CSS-Klasse des Strichs vorn: ``strich-…`` - leer ohne Farbe."""
-        farben = geordnet(self.strich(schwerpunkt), [f for f in zusaetzlich if f])
-        return "strich-" + "-".join(farben) if farben else ""
+    @property
+    def strich_klassen(self) -> tuple[str, ...]:
+        """Die CSS-Klassen der Striche vorn: ``strich`` (Planung, Farben in
+        :meth:`strich_stil`) und ``strich-gelb`` (ein Feld weicht ab)."""
+        return (("strich",) if self.strich_planung else ()) \
+            + (("strich-gelb",) if self.felder_anders else ())
+
+    def strich_stil(self) -> str:
+        """Der Hintergrund des Strichs vorn (Planung) als CSS-Wert - leer ohne Farbe.
+
+        Die Grenze zweier Teilzeilen steht in ``--teilung``; static/buchplanung.js
+        setzt sie auf die wirkliche Höhe der oberen Teilzeile.
+        """
+        teile = self.strich_teile
+        if teile is not None:
+            oben, unten = teile
+            return (f"linear-gradient(var(--{oben}-strich) 0 var(--teilung, 50%), "
+                    f"var(--{unten}-strich) var(--teilung, 50%) 100%)")
+        farben = self.strich_planung
+        if not farben:
+            return ""
+        if len(set(farben)) == 1:
+            return f"var(--{farben[0]}-strich)"
+        anzahl = len(farben)
+        return "linear-gradient(" + ", ".join(
+            f"var(--{farbe}-strich) {_prozent(100 * i / anzahl)} {_prozent(100 * (i + 1) / anzahl)}"
+            for i, farbe in enumerate(farben)) + ")"
 
 
 def _jahr(angabe: str) -> int | None:
@@ -165,11 +239,14 @@ def _jahr(angabe: str) -> int | None:
 
 @dataclass(frozen=True)
 class _Plan:
-    """Die Planung eines Eintrags: Farbe, ob er nach dem Vorjahr endete, Zusatz."""
+    """Die Planung eines Eintrags: Farbe, ob er nach dem Vorjahr endete, Zusatz,
+    das Jahr der Einführung bzw. Ausmusterung und ob er dieses Schuljahr gilt."""
 
     farbe: str
     weg: bool
     zusatz: str
+    jahr: int = 0
+    wirkt: bool = False
 
 
 def _planung_je_eintrag(stand: Buchplanung, buch: Buch, jetzt: int) -> dict[Eintrag, _Plan]:
@@ -186,20 +263,24 @@ def _planung_je_eintrag(stand: Buchplanung, buch: Buch, jetzt: int) -> dict[Eint
         eben_weg = any(z.ende == jetzt - 1 for z in zeilen)
         if not (laufend or eben_weg):
             continue
-        neu = any(z.beginn is not None and z.beginn >= jetzt for z in zeilen)
-        geht = any(z.ende is not None and z.ende >= jetzt - 1 for z in zeilen)
+        beginne = [z.beginn for z in zeilen if z.beginn is not None and z.beginn >= jetzt]
+        enden = [z.ende for z in zeilen if z.ende is not None and z.ende >= jetzt - 1]
         fach, jahrgang, leihbar = eintrag
         massgeblich = stand.massgebliche_zeile(buch.isbn, fach, jahrgang, leihbar=leihbar)
+        # Wird eine Zeile im selben Jahr eingeführt und ausgemustert, gilt Rot.
+        farbe = AUSMUSTERUNG if enden else EINFUEHRUNG if beginne else ""
         ergebnis[eintrag] = _Plan(
-            # Wird eine Zeile im selben Jahr eingeführt und ausgemustert, gilt Rot.
-            farbe=AUSMUSTERUNG if geht else EINFUEHRUNG if neu else "",
+            farbe=farbe,
             weg=not laufend,
             zusatz=planungs_zusatz(massgeblich, stand.schuljahr),
+            jahr=min(enden) if enden else min(beginne) if beginne else 0,
+            wirkt=any(wirkt_im_schuljahr(z, stand.schuljahr) for z in zeilen),
         )
     return ergebnis
 
 
-def _hinweis(plan: _Plan | None, iserv: str, leihbar: bool, stand: Buchplanung) -> str:
+def _hinweis(plan: _Plan | None, liste: str, reihe: bool, jahrgang: int, leihbar: bool,
+             stand: Buchplanung) -> str:
     als = "als Leihbuch" if leihbar else "als Kaufbuch"
     teile = []
     if plan is not None and plan.farbe == EINFUEHRUNG:
@@ -209,10 +290,12 @@ def _hinweis(plan: _Plan | None, iserv: str, leihbar: bool, stand: Buchplanung) 
         teile.append(f"Planung: {als} ausgemustert nach {stand.vorjahr}" if plan.weg
                      else f"Planung: {als} läuft aus ({plan.zusatz})" if plan.zusatz
                      else f"Planung: {als} läuft aus")
-    if iserv == FEHLT:
-        teile.append(f"IServ: {als} noch nicht eingetragen")
-    elif iserv == STEHT_NOCH:
-        teile.append(f"IServ: {als} noch eingetragen")
+    if liste == FEHLT:
+        teile.append(f"IServ-Bücherliste: {als} noch nicht eingetragen")
+    elif liste == STEHT_NOCH:
+        teile.append(f"IServ-Bücherliste: {als} noch eingetragen")
+    if reihe:
+        teile.append(f"IServ-Buchreihe: Jahrgang {jahrgang} noch nicht zugewiesen")
     return " · ".join(teile)
 
 
@@ -223,6 +306,7 @@ def _zusammen(werte: list[Wert]) -> Wert:
     plan = geordnet([w.plan for w in werte])
     iserv = [w.iserv for w in werte if w.iserv]
     zusaetze = {w.zusatz for w in werte}
+    jahre = [w.jahr for w in werte if plan and w.plan == plan[0]]
     return Wert(
         text=werte[0].text,
         zusatz=zusaetze.pop() if len(zusaetze) == 1 else "",
@@ -230,20 +314,16 @@ def _zusammen(werte: list[Wert]) -> Wert:
         weg=all(w.weg for w in werte),
         iserv=STEHT_NOCH if STEHT_NOCH in iserv else iserv[0] if iserv else "",
         hinweis=" · ".join(dict.fromkeys(w.hinweis for w in werte if w.hinweis)),
+        jahrgang=werte[0].jahrgang,
+        jahr=min(jahre) if jahre else 0,
     )
 
 
-def _ganz(zeilen: list[Planungszeile], jetzt: int) -> str:
-    """``einfuehrung``, wenn keine der Zeilen schon lief, ``ausmusterung``,
-    wenn alle enden und eine davon nach dem Vorjahr oder später."""
-    if not zeilen:
-        return ""
-    if all(z.beginn is not None and z.beginn >= jetzt for z in zeilen):
-        return EINFUEHRUNG
-    if all(z.ende is not None for z in zeilen) \
-            and any(z.ende is not None and z.ende >= jetzt - 1 for z in zeilen):
-        return AUSMUSTERUNG
-    return ""
+def _ganz(plaene: Iterable[_Plan]) -> str:
+    """Die Farbe, die jeder der ``plaene`` hat - leer, wenn sie sich
+    unterscheiden, einer keine hat oder es keine gibt."""
+    farben = {plan.farbe for plan in plaene}
+    return farben.pop() if len(farben) == 1 else ""
 
 
 def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = None, *,
@@ -258,12 +338,13 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     planung = _planung_je_eintrag(stand, buch, jetzt) if jetzt is not None else {}
     fehlt = set(abweichung.eintraege_fehlen) if abweichung else set()
     nur_iserv = set(abweichung.eintraege_nur_iserv) if abweichung else set()
+    buchreihe = set(abweichung.buchreihe_fehlt) if abweichung else set()
     eintraege = sorted((e for e in set(planung) | nur_iserv if im(e)),
                        key=lambda e: (e[0].casefold(), e[1], not e[2]))
 
-    alle = [z for z in stand.planung if z.isbn == buch.isbn]
-    ganz = _ganz(alle, jetzt) if jetzt is not None else ""
-    beide = len({z.leihbar for z in alle}) > 1
+    # Der Hintergrund schaut auf alle Fächer, aber nur auf die gezeigten Einträge.
+    ganz = _ganz(planung.values())
+    beide = len({leihbar for _, _, leihbar in planung}) > 1
 
     teilzeilen = []
     for leihbar in (True, False):
@@ -274,20 +355,23 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
         for eintrag in eigene:
             fach, jahrgang, _ = eintrag
             plan = planung.get(eintrag)
-            iserv = FEHLT if eintrag in fehlt else STEHT_NOCH if eintrag in nur_iserv else ""
+            liste = FEHLT if eintrag in fehlt else STEHT_NOCH if eintrag in nur_iserv else ""
+            reihe = plan is not None and plan.wirkt and jahrgang in buchreihe
             schluessel = (fach.casefold(), 0) if nach == FACH else ("", jahrgang)
             je_schluessel.setdefault(schluessel, []).append(Wert(
                 text=fach if nach == FACH else str(jahrgang),
                 zusatz=plan.zusatz if plan else "",
                 plan=plan.farbe if plan else "",
                 weg=plan.weg if plan else False,
-                iserv=iserv,
-                hinweis=_hinweis(plan, iserv, leihbar, stand),
+                iserv=liste or (FEHLT if reihe else ""),
+                hinweis=_hinweis(plan, liste, reihe, jahrgang, leihbar, stand),
+                jahrgang=jahrgang,
+                jahr=plan.jahr if plan else 0,
             ))
         werte = tuple(_zusammen(je_schluessel[k]) for k in sorted(je_schluessel))
         teil_ganz = ""
-        if beide and not ganz and jetzt is not None:
-            teil_ganz = _ganz([z for z in alle if z.leihbar == leihbar], jetzt)
+        if beide and not ganz:
+            teil_ganz = _ganz(p for e, p in planung.items() if e[2] == leihbar)
         teilzeilen.append(Teilzeile(leihbar=leihbar, werte=werte, ganz=teil_ganz))
 
     art = abweichung.art if abweichung else ""

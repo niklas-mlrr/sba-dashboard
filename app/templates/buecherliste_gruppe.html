@@ -138,13 +138,14 @@
     {% set iserv = dict(buch.iserv or ()) %}
     {% set klassen = ["aufklappbar"] if menue else [] %}
     {% if buch.farben %}
-    {% set klassen = klassen + ([buch.farben.strich_klasse("planung"),
+    {% set klassen = klassen + (buch.farben.strich_klassen | list + [
          "ganz-" ~ buch.farben.ganz if buch.farben.ganz else ""] | select | list) %}
     {% else %}
     {% if buch.art %}{% set klassen = klassen + ["zeile-" ~ buch.art] %}{% endif %}
     {% if buch.reihe %}{% set klassen = klassen + ["reihe-" ~ buch.reihe] %}{% endif %}
     {% endif %}
-    <tr data-isbn="{{ buch.isbn }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}{% if menue %}
+    <tr data-isbn="{{ buch.isbn }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}
+      {%- if buch.farben %}{{ strich_attribute(buch.farben) }}{% endif %}{% if menue %}
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage"{% endif %}>
     {% if buch.farben %}{{ fachzeile(buch, iserv, mit_jahrgang, mit_ruecklagen, fach) }}{% else %}
@@ -204,18 +205,27 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   buecherlisten/planung/farben.py), seit 2026-10-31:
 
   * Schrift = Planung je Wert: ``schrift-einfuehrung`` (blau),
-    ``schrift-ausmusterung`` (rot), ``durch`` (nach dem Vorjahr ausgemustert
-    oder nur noch in IServ).
-  * Markierung = IServ je Wert: ``markierung-einfuehrung`` (fehlt in IServ
-    noch), ``markierung-ausmusterung`` (steht dort noch),
+    ``schrift-ausmusterung`` (rot), ``durch`` (nach dem Vorjahr ausgemustert).
+  * Markierung = IServ je Wert: ``markierung-einfuehrung`` (fehlt in der
+    Bücherliste oder an der Buchreihe), ``markierung-ausmusterung`` (steht
+    in der Bücherliste noch),
     ``markierung-aenderung`` (Titel, Verlag, Preise lauten dort anders; der
     IServ-Wert steht im Tooltip).
   * Hintergrund nur für Ganzes: ``ganz-…`` an der Zeile oder einer Teilzeile.
+  * Strich vorn: ``strich`` mit ``--strich`` (die Planung, Abschnitte aus
+    ``strich_stil()``), ``strich-gelb`` als zweiter Strich, wenn ein Feld
+    abweicht. ``data-strich-teile``: der Strich teilt sich an der Grenze der
+    Teilzeilen; static/buchplanung.js setzt ``--teilung``.
+  * Steht die ISBN nur auf einer Seite (``f.zeile``), ist jedes Feld markiert.
 
   ``wert``, ``teilspalte`` und ``iserv_feld`` hängen an keiner Spalte der
   Fach-Ansicht; Verlag und Jahrgang sollen sie übernehmen, wenn ihre Spalten
   feststehen.
 #}
+{% macro strich_attribute(f) -%}
+{%- if f.strich_stil() %} style="--strich: {{ f.strich_stil() }}"{% endif -%}
+{%- if f.strich_teile %} data-strich-teile="{{ f.strich_teile | join(' ') }}"{% endif -%}
+{%- endmacro %}
 {% macro wert(w) -%}
 {%- set schrift = (["schrift-" ~ w.plan] if w.plan else []) + (["durch"] if w.durch else []) -%}
 {%- set kern -%}
@@ -269,14 +279,27 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- else %}{{ inhalt }}{% endif -%}
 {%- endmacro %}
 {#
+  Ein Feld einer Zeile, deren ISBN nur auf einer Seite steht (``f.zeile``):
+  blau markiert, wenn IServ das Buch nicht führt, rot, wenn nur IServ es führt.
+  Sonst ``sonst`` - das Feld, wie es ohne diese Markierung aussähe.
+#}
+{% macro zeilenfeld(f, inhalt, sonst) -%}
+{%- if f.zeile %}<span class="markierung markierung-{{ f.zeile }}">{{ inhalt }}</span>
+{%- else %}{{ sonst }}{% endif -%}
+{%- endmacro %}
+{#
   Der Titel: blau markiert, wenn das Buch in IServ in keiner Liste steht, rot,
-  wenn es nur dort steht (in diesem Fach); sonst gelb, wenn IServ ihn anders
-  nennt. Nennt die Buchreihe im Inventar einen anderen Titel, steht er bei
-  Blau im Tooltip - eine Markierung hat nur eine Farbe.
+  wenn es dieses Schuljahr nur dort steht; sonst gelb, wenn IServ ihn anders
+  nennt. Führt nur IServ es in diesem Fach, das Buch ist aber anderswo geplant,
+  bleibt der Titel ungefärbt (rot sind dann die Jahrgänge). Nennt die
+  Buchreihe im Inventar einen anderen Titel, steht er bei Blau im Tooltip -
+  eine Markierung hat nur eine Farbe.
 #}
 {% macro titelfeld(buch, iserv, f) -%}
-{%- if buch.herkunft == "nur_iserv" -%}
-<span class="markierung markierung-ausmusterung" title="Steht hier nur noch in IServ, laut Datei nicht">{{ buch.titel }}</span> <span class="klein grau">nur in IServ</span>
+{%- if f.iserv == "steht_noch" -%}
+<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, laut Datei dieses Schuljahr nirgends">{{ buch.titel }}</span> <span class="klein grau">nur in IServ</span>
+{%- elif buch.herkunft == "nur_iserv" -%}
+{{ buch.titel }} <span class="klein grau">nur in IServ</span>
 {%- elif f.iserv == "fehlt" -%}
 <span class="markierung markierung-einfuehrung" title="Steht in IServ in keiner Liste
   {%- if "titel" in iserv %} · {{ iserv_wert(iserv, "titel") }}{% endif %}">{{ buch.titel }}</span>
@@ -291,10 +314,11 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
       <td>{{ titelfeld(buch, iserv, f) }}</td>
       {{ teilspalte(f, "leihbar") }}
       {% if mit_jahrgang %}{{ teilspalte(f, "jahrgang") }}{% endif %}
-      <td>{{ iserv_feld(iserv, "verlag", buch.verlag) }}</td>
-      <td data-wert="{{ buch.isbn }}"><samp>{{ buch.isbn_anzeige }}</samp></td>
-      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ iserv_feld(iserv, "neupreis", euro(buch.neupreis)) }}</td>
-      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ iserv_feld(iserv, "leihgebuehr", euro(buch.leihgebuehr)) }}</td>
+      <td>{{ zeilenfeld(f, buch.verlag, iserv_feld(iserv, "verlag", buch.verlag)) }}</td>
+      {% set isbn %}<samp>{{ buch.isbn_anzeige }}</samp>{% endset %}
+      <td data-wert="{{ buch.isbn }}">{{ zeilenfeld(f, isbn, isbn) }}</td>
+      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ zeilenfeld(f, euro(buch.neupreis), iserv_feld(iserv, "neupreis", euro(buch.neupreis))) }}</td>
+      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ zeilenfeld(f, euro(buch.leihgebuehr), iserv_feld(iserv, "leihgebuehr", euro(buch.leihgebuehr))) }}</td>
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
       <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
 {% endmacro %}
@@ -377,8 +401,8 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   <tbody>
     {% for e in ausgemustert %}
     {% set f = e.farben %}
-    <tr data-isbn="{{ e.isbn }}" class="aufklappbar {{ f.strich_klasse('planung', 'ausmusterung') }}
-      {{- ' ganz-' ~ f.ganz if f.ganz }}"
+    <tr data-isbn="{{ e.isbn }}" class="{{ (['aufklappbar'] + f.strich_klassen | list) | join(' ') }}
+      {{- ' ganz-' ~ f.ganz if f.ganz }}"{{ strich_attribute(f) }}
       data-planung="aufklappen" data-fach="{{ gruppe.name }}" role="button" tabindex="0"
       title="Einführung, Ausmusterung und Rücklage">
       <td>{{ e.titel }}</td>

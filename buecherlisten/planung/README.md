@@ -288,21 +288,48 @@ ihres Status, offen weiß, abgelehnt grau überdeckt.
 ## Farben der Fach-Ansicht
 
 Seit 2026-10-31 zeigt die Bücherliste eines Fachs Planung und IServ-Abgleich
-zugleich (`farben.py`, ersetzt die Regeln vom 2026-10-30). Jedes Mittel hat
-eine Bedeutung; Verlag und Jahrgang sollen folgen und vergleichen bis dahin
-weiter wie oben beschrieben:
+zugleich (`farben.py`, ersetzt die Regeln vom 2026-10-30; am selben Tag
+nachgeschärft). Jedes Mittel hat eine Bedeutung; Verlag und Jahrgang sollen
+folgen und vergleichen bis dahin weiter wie oben beschrieben. „Dieses
+Schuljahr“ ist das ausgewählte - vorerst das laufende (`stand.schuljahr`),
+später in den Einstellungen wählbar.
 
 | Mittel | zeigt | blau | rot | gelb |
 |--------|-------|------|-----|------|
-| Schrift (je Wert) | Planung | Einführung zu diesem Schuljahr oder später | Ausmusterung nach dem Vorjahr oder später; durchgestrichen, wenn nach dem Vorjahr | — |
-| Markierung (Textmarker je Wert) | IServ, nur laufendes Schuljahr | fehlt in IServ noch | steht dort noch (Wert durchgestrichen) | Titel, Verlag, Preise lauten dort anders (IServ-Wert im Tooltip) |
-| Hintergrund | Ganzes, laut Planung | Zeile: Buch ganz neu; Teilzeile: als Leih- bzw. Kaufbuch ganz neu | Zeile: Buch danach in keinem Fach und Jahrgang mehr; Teilzeile: so ganz weg | — |
-| Strich vorn | Schwerpunkt der Ansicht (Fach: Planung) | eine Einführung in der Zeile | eine Ausmusterung in der Zeile | — |
+| Schrift (je Wert) | Planung | Einführung zu diesem Schuljahr oder später | Ausmusterung nach dem Vorjahr oder später; durchgestrichen nur, wenn nach dem Vorjahr | — |
+| Markierung (helle Hinterlegung, Strich darunter) | IServ, nur was dieses Schuljahr gilt | fehlt in der Bücherliste (je Eintrag) oder an der Buchreihe | steht in der Bücherliste noch (nicht durchgestrichen) | Titel, Verlag, Preise lauten dort anders (IServ-Wert im Tooltip) |
+| Hintergrund | Ganzes, über alle Fächer, nur gezeigte Einträge | Zeile: jeder Jahrgang neu; Teilzeile: jeder Jahrgang mit diesem „leihbar“ neu | dasselbe für „geht“ | — |
+| Strich vorn | Fach: die Schriftfarben der Zeile | je blauem Wert ein Abschnitt | je rotem Wert ein Abschnitt | zweiter Strich rechts daneben, wenn ein Feld abweicht |
 
-Der Titel ist blau markiert, wenn das Buch in IServ in keiner Liste steht, rot,
-wenn es im Fach nur noch in IServ steht. Solche Bücher stehen wieder in der
-Liste („nur in IServ“, ohne Menü). Trifft auf einer einjährigen Zeile
-Einführung und Ausmusterung zusammen, gilt Rot.
+**Strich vorn:** gleich hohe Abschnitte je farbigem Wert, von oben nach
+Jahrgang, dann Einführungs- bzw. Ausmusterungsjahr, dann rot vor blau
+(`Markierung.strich_planung`, `strich_stil()`). Haben zwei Teilzeilen je genau
+eine, verschiedene Farbe, teilt er sich an ihrer Grenze (`strich_teile`;
+`static/buchplanung.js` misst sie und setzt `--teilung`). Hat nur eine
+Teilzeile Farbe, ist der ganze Strich in ihr. Die IServ-Markierungen gehen
+nicht in den Strich ein.
+
+**Mit IServ verglichen** wird nur, was in diesem Schuljahr gilt (eingeführt zu
+diesem Schuljahr oder vorher, ausgemustert nach diesem oder später): eine
+Einführung „ab 2027/2028“ ist blau geschrieben, aber nicht markiert; eine
+Ausmusterung nach diesem Schuljahr oder später ist rot geschrieben, IServ muss
+den Jahrgang aber noch führen.
+
+**Buchreihe:** In IServ muss die Buchreihe einem Jahrgang zugewiesen sein,
+bevor das Buch in dessen Bücherliste kommt. Fehlt an ihr ein Jahrgang, den ein
+Fach dieses Schuljahr führt, ist der Wert blau markiert
+(`Abweichung.buchreihe_fehlt`; Tooltip „IServ-Buchreihe: Jahrgang N noch nicht
+zugewiesen“). Zu viele Jahrgänge an der Buchreihe schaden nicht und werden nie
+angezeigt. Die Zuweisung kommt aus `series_data.gradesFlat` der Bücherlisten;
+für Bücher ohne sie (etwa in keiner Liste) holt die Fach-Ansicht einmal das
+Inventar (`client.series.get_all()`); ist es nicht zu bekommen, wird die
+Buchreihe nicht verglichen.
+
+**ISBN nur auf einer Seite:** Steht das Buch dieses Schuljahr in keiner
+IServ-Liste, ist jedes Feld der Zeile blau markiert; steht es nur in IServ,
+rot („nur in IServ“, ohne Menü). Führt nur IServ es in einem Fach, ist es aber
+anderswo geplant, sind nur die Jahrgänge rot markiert. Trifft auf einer
+einjährigen Zeile Einführung und Ausmusterung zusammen, gilt Rot.
 
 „Leihbar“ hängt am Jahrgang: gefärbt und verglichen wird je **Eintrag**
 (Fach, Jahrgang, leihbar; `aktive_eintraege`, `Abweichung.eintraege_fehlen` /

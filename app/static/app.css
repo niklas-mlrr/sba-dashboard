@@ -593,32 +593,26 @@ td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: hel
 .iserv-tabelle > tbody > tr.ganz-ausmusterung > td,
 .iserv-tabelle > tbody > tr > td.ganz-ausmusterung,
 .iserv-tabelle .teilzeile.ganz-ausmusterung { background: var(--ausmusterung-reihe); }
-tr[class*="strich-"] > td:first-child { position: relative; }
-tr[class*="strich-"] > td:first-child::before {
+/* Der Strich vorn (buecherlisten/planung/farben.py): ``strich`` trägt die
+   Planung - ``--strich`` setzt die Vorlage je Zeile (Abschnitte je farbigem
+   Jahrgang, ``--teilung`` aus static/buchplanung.js an der Teilzeilengrenze).
+   ``strich-gelb`` ist ein zweiter Strich rechts daneben, wenn ein Feld in
+   IServ anders lautet; ohne Planungsfarbe steht er allein vorn. */
+tr.strich > td:first-child,
+tr.strich-gelb > td:first-child { position: relative; }
+tr.strich > td:first-child::before,
+tr.strich-gelb > td:first-child::after {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   width: 4px;
-  background: var(--strich);
 }
-tr.strich-ausmusterung { --strich: var(--ausmusterung-strich); }
-tr.strich-aenderung { --strich: var(--aenderung-strich); }
-tr.strich-einfuehrung { --strich: var(--einfuehrung-strich); }
-tr.strich-ausmusterung-aenderung {
-  --strich: linear-gradient(var(--ausmusterung-strich) 0 50%, var(--aenderung-strich) 50% 100%);
-}
-tr.strich-ausmusterung-einfuehrung {
-  --strich: linear-gradient(var(--ausmusterung-strich) 0 50%, var(--einfuehrung-strich) 50% 100%);
-}
-tr.strich-aenderung-einfuehrung {
-  --strich: linear-gradient(var(--aenderung-strich) 0 50%, var(--einfuehrung-strich) 50% 100%);
-}
-tr.strich-ausmusterung-aenderung-einfuehrung {
-  --strich: linear-gradient(var(--ausmusterung-strich) 0 33.333%, var(--aenderung-strich) 33.333% 66.667%,
-                            var(--einfuehrung-strich) 66.667% 100%);
-}
+tr.strich > td:first-child::before { background: var(--strich); }
+tr.strich-gelb > td:first-child::after { background: var(--aenderung-strich); }
+tr.strich.strich-gelb > td:first-child::after { left: 6px; }
+.iserv-tabelle > tbody > tr.strich.strich-gelb > td:first-child { padding-left: 16px; }
 tr.zeile-aenderung > td:first-child { box-shadow: inset 4px 0 0 var(--aenderung-strich); }
 tr.zeile-einfuehrung > td:first-child { box-shadow: inset 4px 0 0 var(--einfuehrung-strich); }
 tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmusterung-strich); }

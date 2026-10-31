@@ -187,3 +187,25 @@ def test_je_eintrag_nur_in_der_datei_und_nur_in_iserv():
     assert nur_iserv.art == NUR_ISERV
     assert nur_iserv.eintraege_nur_iserv == (
         ("Erdkunde", 5, True), ("Erdkunde", 6, True), ("Politik", 5, True))
+
+
+def test_die_buchreihe_braucht_jeden_jahrgang_der_dieses_jahr_gilt():
+    """Erst muss die Buchreihe dem Jahrgang zugewiesen sein, dann kommt das Buch
+    in die Bücherliste. Zu viele Jahrgänge an der Buchreihe schaden nicht."""
+    stand = _stand(Planungszeile(TERRA, "Erdkunde", 7, eingefuehrt_ab="2027/2028"),
+                   Planungszeile(TERRA, "Politik", 8, ausgemustert_nach="2025/2026"))
+    # Jg. 7 kommt erst, Jg. 8 ist weg: gebraucht werden nur 5 und 6.
+    assert vergleiche(stand, _iserv(buchreihe_jahrgaenge=frozenset({5, 6, 9})))[TERRA].gleich
+    ergebnis = vergleiche(stand, _iserv(buchreihe_jahrgaenge=frozenset({5})))[TERRA]
+    assert ergebnis.buchreihe_fehlt == (6,) and not ergebnis.gleich
+    # Unbekannt (None) wird nicht verglichen.
+    assert vergleiche(stand, _iserv())[TERRA].buchreihe_fehlt == ()
+
+
+def test_die_buchreihe_eines_buchs_in_keiner_liste_kommt_aus_dem_inventar():
+    ergebnis = vergleiche(_stand(), {}, {TERRA: frozenset({6})})[TERRA]
+    assert ergebnis.art == NUR_EXCEL and ergebnis.buchreihe_fehlt == (5,)
+    # Kennen die Listen die Zuweisung, gilt die aus den Listen.
+    ergebnis = vergleiche(_stand(), _iserv(buchreihe_jahrgaenge=frozenset({5, 6})),
+                          {TERRA: frozenset()})[TERRA]
+    assert ergebnis.buchreihe_fehlt == ()
