@@ -20,6 +20,12 @@ Die Regel: ein Buch ist gleich, wenn
 
 Ein Buch in zwei Fächern ist damit nur gleich, wenn es in beiden gleich ist,
 ein Mehrjahresband nur, wenn jeder seiner Jahrgänge stimmt.
+
+Für die Farben der Bücherlisten (:mod:`~buecherlisten.planung.farben`) wird
+zusätzlich je **Eintrag** verglichen: (Fach, Jahrgang, leihbar). Ein Buch steht
+in einem Jahrgang entweder als Leih- oder als Kaufbuch in der Liste; führt
+IServ es dort anders, fehlt der eine Eintrag in IServ und der andere steht nur
+noch dort (Entscheidung 2026-10-31).
 """
 from __future__ import annotations
 
@@ -39,6 +45,8 @@ NUR_EXCEL = "nur_excel"
 NUR_ISERV = "nur_iserv"
 
 Paar = tuple[str, int]
+# (Fach, Jahrgang, leihbar): ein Buch als Leih- oder als Kaufbuch in einem Paar.
+Eintrag = tuple[str, int, bool]
 
 
 @dataclass(frozen=True)
@@ -60,6 +68,12 @@ class IservBuch:
     def leihbar_in(self, paar: Paar) -> bool:
         return self.leihbar if self.leihbar_paare is None else paar in self.leihbar_paare
 
+    @property
+    def eintraege(self) -> frozenset[Eintrag]:
+        """Die Einträge, die IServ führt: jedes Paar mit seinem „leihbar“."""
+        return frozenset((fach, jahrgang, self.leihbar_in((fach, jahrgang)))
+                         for fach, jahrgang in self.paare)
+
 
 @dataclass(frozen=True)
 class Abweichung:
@@ -71,6 +85,10 @@ class Abweichung:
     listet, ``nur_in_iserv`` das Umgekehrte. ``leihbar_anders`` sind die Paare
     beider Seiten, in denen „leihbar“ abweicht, mit dem Wert aus IServ; ist es
     eines, steht auch ``leihbar`` in ``felder``.
+
+    ``eintraege_fehlen`` und ``eintraege_nur_iserv`` sind dasselbe je Eintrag
+    (Fach, Jahrgang, leihbar): ein anderes „leihbar“ ist dort ein fehlender und
+    ein überzähliger Eintrag. Danach färben die Bücherlisten.
     """
 
     isbn: str
@@ -79,6 +97,8 @@ class Abweichung:
     fehlt_in_iserv: tuple[Paar, ...] = ()
     nur_in_iserv: tuple[Paar, ...] = ()
     leihbar_anders: tuple[tuple[Paar, bool], ...] = ()
+    eintraege_fehlen: tuple[Eintrag, ...] = ()
+    eintraege_nur_iserv: tuple[Eintrag, ...] = ()
 
     @property
     def gleich(self) -> bool:
@@ -92,6 +112,20 @@ class Abweichung:
 
 def _sortiert(paare: set[Paar] | frozenset[Paar]) -> tuple[Paar, ...]:
     return tuple(sorted(paare, key=lambda paar: (paar[0].casefold(), paar[1])))
+
+
+def _eintraege_sortiert(eintraege: set[Eintrag] | frozenset[Eintrag]) -> tuple[Eintrag, ...]:
+    return tuple(sorted(eintraege, key=lambda e: (e[0].casefold(), e[1], not e[2])))
+
+
+def aktive_eintraege(planung: Buchplanung, buch: Buch) -> frozenset[Eintrag]:
+    """Die Einträge (Fach, Jahrgang, leihbar), in denen die Datei das Buch
+    dieses Schuljahr führt - je Planungszeile, die dieses Schuljahr wirkt."""
+    return frozenset(
+        (zeile.fach, zeile.jahrgang, zeile.leihbar)
+        for zeile in planung.planung
+        if zeile.isbn == buch.isbn and wirkt_im_schuljahr(zeile, planung.schuljahr)
+    )
 
 
 def aktive_paare(planung: Buchplanung, buch: Buch) -> frozenset[Paar]:
@@ -133,15 +167,16 @@ def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch]) -> dict[str
     ergebnis: dict[str, Abweichung] = {}
     for buch in planung.buecher:
         soll = aktive_paare(planung, buch)
+        soll_eintraege = aktive_eintraege(planung, buch)
         ist = iserv.get(buch.isbn)
         if ist is None:
             if soll:
-                ergebnis[buch.isbn] = Abweichung(buch.isbn, NUR_EXCEL,
-                                                 fehlt_in_iserv=_sortiert(soll))
+                ergebnis[buch.isbn] = Abweichung(
+                    buch.isbn, NUR_EXCEL, fehlt_in_iserv=_sortiert(soll),
+                    eintraege_fehlen=_eintraege_sortiert(soll_eintraege))
             continue
         if not soll:
-            ergebnis[buch.isbn] = Abweichung(buch.isbn, NUR_ISERV,
-                                             nur_in_iserv=_sortiert(ist.paare))
+            ergebnis[buch.isbn] = _nur_iserv(ist)
             continue
         felder = []
         for feld in ISERV_FELD:
@@ -161,8 +196,15 @@ def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch]) -> dict[str
             fehlt_in_iserv=_sortiert(soll - ist.paare),
             nur_in_iserv=_sortiert(ist.paare - soll),
             leihbar_anders=leihbar_anders,
+            eintraege_fehlen=_eintraege_sortiert(soll_eintraege - ist.eintraege),
+            eintraege_nur_iserv=_eintraege_sortiert(ist.eintraege - soll_eintraege),
         )
     for isbn, ist in iserv.items():
         if isbn not in ergebnis:
-            ergebnis[isbn] = Abweichung(isbn, NUR_ISERV, nur_in_iserv=_sortiert(ist.paare))
+            ergebnis[isbn] = _nur_iserv(ist)
     return ergebnis
+
+
+def _nur_iserv(ist: IservBuch) -> Abweichung:
+    return Abweichung(ist.isbn, NUR_ISERV, nur_in_iserv=_sortiert(ist.paare),
+                      eintraege_nur_iserv=_eintraege_sortiert(ist.eintraege))

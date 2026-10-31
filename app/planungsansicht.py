@@ -15,6 +15,7 @@ Der Kontext ist ein ``dict``, weil die Vorlagen ihn so lesen und
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from buecherlisten.core.daten import format_isbn, ist_platzhalter_isbn
@@ -25,6 +26,7 @@ from buecherlisten.planung import (
     FACH_BESTAETIGT,
     OHNE_VERLAG,
     PLANUNG_AUSGEMUSTERT,
+    Abweichung,
     Buchplanung,
     Planungszeile,
     UngueltigesSchuljahr,
@@ -35,7 +37,7 @@ from buecherlisten.planung import (
     schuljahr_zahl,
     zu_entscheidende_antraege,
 )
-from buecherlisten.planung.farben import in_ausmusterungen, markierung
+from buecherlisten.planung.farben import im_fach, in_ausmusterungen, markierung
 
 
 def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, Any]:
@@ -122,7 +124,7 @@ def planungskontext(planung: Buchplanung, *, schuljahr: str, mtime: float) -> di
         "ruecklage_je_isbn": _ruecklagen(planung),
         # Die Spalte „Bemerkung“ auf „Buchreihen“ - eine je Buch.
         "bemerkung_je_isbn": bemerkungen,
-        "ausmusterungen_je_fach": _ausmusterungen_je_fach(planung),
+        "ausmusterungen_je_fach": ausmusterungen_je_fach(planung),
         "vorjahr": planung.vorjahr,
         # Das Schuljahr der Datei: das Menü führt damit eine neue Zeile ein,
         # wenn „leihbar“ an einer alten umgeschaltet wird.
@@ -227,7 +229,9 @@ def _ruecklagen(planung: Buchplanung) -> dict[str, dict[str, Any]]:
     return ruecklagen
 
 
-def _ausmusterungen_je_fach(planung: Buchplanung) -> dict[str, list[dict[str, Any]]]:
+def ausmusterungen_je_fach(
+    planung: Buchplanung, abweichungen: Mapping[str, Abweichung] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     """„Ausmusterungen zu diesem Schuljahr“ je Fach: was aus den Regalen geht.
 
     Welche Bücher, entscheidet ``in_ausmusterungen`` (buecherlisten/planung/
@@ -238,6 +242,10 @@ def _ausmusterungen_je_fach(planung: Buchplanung) -> dict[str, list[dict[str, An
 
     „Leihbar“ gilt für die Jahrgänge, die mit dem Vorjahr endeten - um die
     geht es hier.
+
+    ``abweichungen`` ist der Vergleich mit IServ (``vergleiche``); mit ihm
+    zeigen die Jahrgänge auch, was IServ noch führt. Der Planungskontext
+    kennt IServ nicht, die Fach-Seite rechnet die Liste deshalb damit neu.
     """
     try:
         vorjahr = schuljahr_zahl(planung.schuljahr) - 1
@@ -256,7 +264,8 @@ def _ausmusterungen_je_fach(planung: Buchplanung) -> dict[str, list[dict[str, An
                 "titel": buch.titel, "verlag": buch.verlag, "isbn": buch.isbn,
                 "isbn_anzeige": format_isbn(buch.isbn), "isbn_fehlt": ist_platzhalter_isbn(buch.isbn),
                 "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
-                "farben": markierung(planung, buch, fach),
+                "farben": markierung(planung, buch, (abweichungen or {}).get(buch.isbn),
+                                     im=im_fach(fach)),
                 "leihbar": bool(ja), "leihbar_teilweise": bool(ja and nein),
                 "leihbar_titel": (
                     f"leihbar: Jg. {', '.join(map(str, ja))} · "

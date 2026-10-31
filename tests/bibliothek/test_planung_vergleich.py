@@ -160,3 +160,30 @@ def test_ohne_vorkommen_auf_beiden_seiten_kein_vergleich():
     alle_aus = tuple(Planungszeile(TERRA, f, j, ausgemustert_nach="2025/2026")
                      for f, j in (("Erdkunde", 5), ("Erdkunde", 6), ("Politik", 5)))
     assert vergleiche(_stand(*alle_aus), {}) == {}
+
+
+def test_je_eintrag_ist_ein_anderes_leihbar_ein_fehlender_und_ein_ueberzaehliger_eintrag():
+    """Die Farben vergleichen je (Fach, Jahrgang, leihbar) - Entscheidung 2026-10-31."""
+    abweichung = vergleiche(_stand(leihbar=False), _iserv(
+        leihbar_paare=frozenset({("Erdkunde", 5)})))[TERRA]
+    assert abweichung.eintraege_fehlen == (("Erdkunde", 5, False),)
+    assert abweichung.eintraege_nur_iserv == (("Erdkunde", 5, True),)
+    assert vergleiche(_stand(), _iserv())[TERRA].eintraege_fehlen == ()
+
+
+def test_je_eintrag_beim_wechsel_von_leihbar_zaehlt_die_zeile_die_dieses_jahr_wirkt():
+    stand = _stand(Planungszeile(TERRA, "Erdkunde", 6, ausgemustert_nach="2025/2026"))
+    stand = replace(stand, planung=stand.planung + (
+        Planungszeile(TERRA, "Erdkunde", 6, eingefuehrt_ab="2026/2027", leihbar=False),))
+    abweichung = vergleiche(stand, _iserv())[TERRA]
+    assert abweichung.eintraege_fehlen == (("Erdkunde", 6, False),)
+    assert abweichung.eintraege_nur_iserv == (("Erdkunde", 6, True),)
+
+
+def test_je_eintrag_nur_in_der_datei_und_nur_in_iserv():
+    nur_datei = vergleiche(_stand(), {})[TERRA]
+    assert nur_datei.art == NUR_EXCEL and len(nur_datei.eintraege_fehlen) == 3
+    nur_iserv = vergleiche(replace(_stand(), buecher=(), planung=()), _iserv())[TERRA]
+    assert nur_iserv.art == NUR_ISERV
+    assert nur_iserv.eintraege_nur_iserv == (
+        ("Erdkunde", 5, True), ("Erdkunde", 6, True), ("Politik", 5, True))

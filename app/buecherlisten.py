@@ -57,7 +57,7 @@ from buecherlisten.planung import (
     wirkt_im_schuljahr,
 )
 from buecherlisten.planung import Buch as PlanBuch
-from buecherlisten.planung.farben import Markierung, in_ausmusterungen, markierung
+from buecherlisten.planung.farben import Markierung, im_fach, in_ausmusterungen, markierung
 
 OHNE_FACH = "(ohne Fach)"
 OHNE_VERLAG = "(ohne Verlag)"
@@ -130,9 +130,9 @@ class Buch:
     leihbar_teilweise: bool = False
     leihbar_titel: str = ""
     leihbar_iserv: tuple[tuple[Paar, bool], ...] = ()
-    # Nur in der Fach-Ansicht: die Farben aus der Planung
+    # Nur in der Fach-Ansicht (vorerst): die Farben aus Planung und IServ-Abgleich
     # (``buecherlisten/planung/farben.py``). Steht sie da, färbt die Vorlage
-    # Einführung, Ausmusterung und „leihbar“ danach statt nach ``neu``/``weg``.
+    # danach statt nach ``neu``/``weg``.
     farben: Markierung | None = None
 
     @property
@@ -602,7 +602,7 @@ def _im_fach(fach: str) -> Callable[[Paar], bool]:
 
 
 def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
-    """Eine Gruppe je Fach, aus der Datei - gefärbt nach der Planung.
+    """Eine Gruppe je Fach, aus der Datei - gefärbt nach Planung und IServ.
 
     In einem Fach steht jedes Buch, das dort dieses Schuljahr geführt wird
     **oder** erst noch eingeführt wird: die geplante Einführung soll man in der
@@ -610,25 +610,41 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
     Schuljahr aus den Regalen geht, steht zusätzlich unter „Ausmusterungen“
     (``in_ausmusterungen``) - läuft es als Kaufbuch weiter, in beiden Listen.
 
-    Seit 2026-10-30 färbt die Fach-Ansicht nach der Planung (``farben``), und
-    Bücher, die nur IServ in einem Fach führt, stehen nicht mehr darin: die
-    Datei ist der Stand, den die Fachkonferenz bestätigt. Titel, Verlag und
-    Preise vergleicht die Vorlage weiter mit IServ (``iserv``).
+    Seit 2026-10-31 färbt die Fach-Ansicht nach der Planung (Schrift) und nach
+    IServ (Markierung) zugleich (``farben``, Regeln in
+    buecherlisten/planung/farben.py). Bücher, die nur IServ im Fach führt,
+    stehen wieder darin (die Entscheidung vom 2026-10-30 ist damit
+    aufgehoben): ihr Titel ist rot markiert, ein Planungsmenü haben sie nicht.
     """
     zeilen: dict[str, dict[str, Buch]] = {}
+    gezeigt: set[tuple[str, str]] = set()
     for buch in v.planung.buecher:
+        abweichung = v.ergebnis.get(buch.isbn)
         # Ein Fach, in dem nur noch Ausgemustertes steht, behält seine Seite:
         # dort stehen die Ausmusterungen und ihre Rücklagen.
         for fach in {fach for fach, _ in v.planung.zeilen_des_buchs(buch)}:
             if in_ausmusterungen(v.planung, buch, fach):
                 zeilen.setdefault(fach, {})
+                gezeigt.add((fach, buch.isbn))
         offen = v.nicht_ausgemustert(buch)
         for fach in {fach for fach, _ in offen}:
-            farben = markierung(v.planung, buch, fach)
+            farben = markierung(v.planung, buch, abweichung, im=im_fach(fach))
             zeilen.setdefault(fach, {})[buch.isbn] = replace(_aus_datei(
                 v, buch, tuple(paar for paar in offen if paar[0] == fach),
-                _im_fach(fach), BEIDE,
-                jahrgaenge=tuple(j.jahrgang for j in farben.jahrgaenge),
+                _im_fach(fach), BEIDE, jahrgaenge=farben.jahrgaenge,
+            ), farben=farben)
+            gezeigt.add((fach, buch.isbn))
+    # Was nur IServ in einem Fach führt und sonst nirgends auf der Seite steht.
+    for isbn, abweichung in v.ergebnis.items():
+        for fach in sorted({fach for fach, _, _ in abweichung.eintraege_nur_iserv}):
+            if (fach, isbn) in gezeigt:
+                continue
+            ist = v.iserv[isbn]
+            eigenes = v.planung.buch(isbn) or PlanBuch(isbn=isbn, titel=ist.titel,
+                                                       verlag=ist.verlag)
+            farben = markierung(v.planung, eigenes, abweichung, im=im_fach(fach))
+            zeilen.setdefault(fach, {})[isbn] = replace(_aus_iserv(
+                v, ist, frozenset(paar for paar in ist.paare if paar[0] == fach),
             ), farben=farben)
     return tuple(Gruppe(name=name, buecher=_sortiert(list(je_isbn.values())))
                  for name, je_isbn in sorted(zeilen.items(), key=lambda e: e[0].casefold()))

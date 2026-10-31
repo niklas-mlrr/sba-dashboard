@@ -432,14 +432,17 @@ class Buchplanung:
         return next((z for z in self.zeilen_des_paars(isbn, fach, jahrgang)
                      if einfuehrung_schluessel(z.eingefuehrt_ab) == gesucht), None)
 
-    def massgebliche_zeile(self, isbn: str, fach: str, jahrgang: int) -> Planungszeile | None:
+    def massgebliche_zeile(self, isbn: str, fach: str, jahrgang: int,
+                           leihbar: bool | None = None) -> Planungszeile | None:
         """Die Zeile, die für dieses Schuljahr spricht.
 
         Die, die in diesem Schuljahr wirkt; sonst die nächste geplante; sonst
         die zuletzt ausgemusterte. Bei einem Paar mit nur einer Zeile ist es
-        diese - also fast immer.
+        diese - also fast immer. Mit ``leihbar`` zählen nur die Zeilen mit
+        diesem Häkchen: das Buch als Leih- bzw. als Kaufbuch.
         """
-        zeilen = self.zeilen_des_paars(isbn, fach, jahrgang)
+        zeilen = tuple(z for z in self.zeilen_des_paars(isbn, fach, jahrgang)
+                       if leihbar is None or z.leihbar == leihbar)
         if len(zeilen) <= 1:
             return zeilen[0] if zeilen else None
         wirkend = [z for z in zeilen if wirkt_im_schuljahr(z, self.schuljahr)]
