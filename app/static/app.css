@@ -1077,6 +1077,9 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
    einem Teil mit Inhalt - eine leere Spalte (etwa ohne Entscheidung nur die
    Begründung) ist so null breit und rückt nichts ein. */
 .planung-entscheidung > td { padding-top: 0; font-size: 12px; white-space: normal; }
+/* Eingaben und ihre Entscheidungen sind eine Einheit (2026-10-31): zwischen
+   ihnen keine Linie, erst unter den Entscheidungen. */
+.planung-tabelle .planung-eingabe:has(+ .planung-entscheidung) > td { border-bottom: 0; }
 .planung-entscheidung .entscheidungen {
   display: grid;
   grid-template-columns: repeat(5, max-content) minmax(0, 1fr);
