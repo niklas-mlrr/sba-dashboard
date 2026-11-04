@@ -209,12 +209,17 @@
   buecherlisten/planung/farben.py), seit 2026-10-31:
 
   * Schrift = Planung je Wert: ``schrift-einfuehrung`` (blau),
-    ``schrift-ausmusterung`` (rot), ``durch`` (nach dem Vorjahr ausgemustert).
+    ``schrift-ausmusterung`` (rot), ``durch`` (nach dem Vorjahr ausgemustert),
+    ``schrift-grau`` (nur wegen abgelehnter Einführungen da).
   * Markierung = IServ je Wert: ``markierung-einfuehrung`` (fehlt in der
-    Bücherliste oder an der Buchreihe), ``markierung-ausmusterung`` (steht
-    in der Bücherliste noch),
-    ``markierung-aenderung`` (Titel, Verlag, Preise lauten dort anders; der
-    IServ-Wert steht im Tooltip).
+    Bücherliste: Strich unten; an der Buchreihe: ``markierung-oben``; beides:
+    ``markierung-oben-unten``), ``markierung-ausmusterung`` (steht in der
+    Bücherliste noch), ``markierung-aenderung`` (Titel, Verlag, Preise lauten
+    dort anders; „Bisher: <IServ-Wert>“ im Tooltip).
+  * Tooltips nach der Entscheidung vom 2026-11-04 (README in
+    buecherlisten/planung/): je Jahrgang ``w.hinweis``, je Feld einer ganz
+    markierten Zeile ``zeilenhinweis``, je entschiedener Jahreszahl
+    ``teil.hinweis``.
   * Hintergrund nur für Ganzes: ``ganz-…`` an der Zeile oder einer Teilzeile
     (blau, rot - grau, wenn es das Buch nur wegen abgelehnter Einführungen gäbe).
   * Zusatz hinter dem Jahrgang: je Planungszeile ein Ergebnis (``zusatz``),

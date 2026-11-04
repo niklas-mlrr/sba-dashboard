@@ -15,13 +15,18 @@ ausgewählte, vorerst immer das laufende (``stand.schuljahr``).
 * **Markierung = IServ**, je Wert (helle Hinterlegung, farbiger Strich
   darunter): blau, was in IServ noch fehlt, rot, was dort noch steht. Ein
   Jahrgang fehlt, wenn er in der Bücherliste fehlt (je Eintrag, mit
-  „leihbar“) oder die Buchreihe ihm nicht zugewiesen ist; zu viele Jahrgänge
-  an der Buchreihe schaden nicht. Verglichen wird nur, was in diesem
-  Schuljahr gilt: eine Einführung „ab 2027/2028“ und eine Ausmusterung nach
-  diesem Schuljahr oder später sind kein Grund für eine Markierung. Steht die
-  ISBN nur auf einer Seite, ist die ganze Zeile markiert
-  (:attr:`Markierung.zeile`). Gelb (Titel, Verlag, Preise) setzt die Vorlage
-  aus ``Buch.iserv``.
+  „leihbar“; Strich unten) oder die Buchreihe ihm nicht zugewiesen ist
+  (Strich oben, Entscheidung 2026-11-04); zu viele Jahrgänge an der Buchreihe
+  schaden nicht. Verglichen wird nur, was in diesem Schuljahr gilt: eine
+  Einführung „ab 2027/2028“ und eine Ausmusterung nach diesem Schuljahr oder
+  später sind kein Grund für eine Markierung. Steht die ISBN nur in IServ, ist
+  die ganze Zeile rot markiert (:attr:`Markierung.zeile`); nur in der Datei
+  blau nur dann, wenn die Buchreihe im Inventar fehlt - sonst zeigen die
+  Jahrgänge, was fehlt. Gelb (Titel, Verlag, Preise) setzt die Vorlage aus
+  ``Buch.iserv``.
+* **Tooltips** je Jahrgang, eine Zeile je Aussage: erst was die Schrift sagt
+  (:func:`_schrift_hinweis`), dann was in IServ zu tun ist
+  (:func:`_iserv_hinweise`). Die Texte stehen im README des Pakets.
 * **Hintergrund** nur für Ganzes, über alle Fächer und nur über die gezeigten
   Einträge: die Zeile, wenn jeder Jahrgang des Buchs blau bzw. rot ist; eine
   Teilzeile, wenn jeder Jahrgang mit diesem „leihbar“ es ist.
