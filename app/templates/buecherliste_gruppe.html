@@ -126,7 +126,8 @@
       {% if mit_jahrgang %}<th data-sort="{{ 'liste' if planbar else 'text' }}"{% if planbar %} data-ebene="1" data-teilspalte="jahrgang"{% endif %}>Jahrgang</th>{% endif %}
       {% if ohne != "fach" %}<th data-sort="text">Fach</th>{% endif %}
       {% if ohne != "verlag" %}<th data-sort="text">Verlag</th>{% endif %}
-      <th data-sort="text"{% if planbar %} data-ebene="2"{% endif %}>ISBN</th>
+      {#- ISBN nach Zahl, ein „X“ am Ende zählt als 10 (``sortierIsbn``). -#}
+      <th data-sort="{{ 'isbn' if planbar else 'text' }}"{% if planbar %} data-ebene="2"{% endif %}>ISBN</th>
       <th data-sort="zahl">Neupreis</th>
       <th data-sort="zahl">Leihgebühr</th>
       {% if not planbar %}<th data-sort="zahl">Leihbar</th>{% endif %}

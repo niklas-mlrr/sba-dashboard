@@ -20,6 +20,7 @@ from app.buecherlisten import (
     finde_gruppe,
     gruppen_nach_fach,
     gruppen_nach_verlag,
+    isbn_zahl,
     lade_buecherlisten,
 )
 from app.main import create_app
@@ -560,3 +561,14 @@ def test_unbekannte_ansicht_druckt_nicht(seiten: TestClient, erzeuger: _Erzeuger
 ])
 def test_buchreihe_jahrgaenge(roh, erwartet):
     assert buchreihe_jahrgaenge(roh) == erwartet
+
+
+@pytest.mark.parametrize(("isbn", "erwartet"), [
+    ("9783060000005", 9783060000005),
+    ("312345678X", 3123456790),               # „X“ am Ende zählt als 10
+    ("3-12-345678-9", 3123456789),
+    ("OHNE-ISBN-1", None),                     # Platzhalter: ans Ende
+])
+def test_isbn_zahl(isbn, erwartet):
+    """Wie ``sortierIsbn`` in static/sortieren.js (Entscheidung 2026-11-04)."""
+    assert isbn_zahl(isbn) == erwartet

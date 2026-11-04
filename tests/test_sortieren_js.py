@@ -95,14 +95,31 @@ def test_zahlen_und_leere_werte():
     assert _sortiere(zeilen, [_ebene(0, "zahl", True)]) == ["10", "9", "ohne", "kaputt"]
 
 
+def test_die_isbn_sortiert_nach_zahl_und_ein_x_zaehlt_als_zehn():
+    """Entscheidung 2026-11-04: ISBN nach Zahl, „X“ am Ende = 10; ein Platzhalter
+    (``OHNE-ISBN-…``) hat keinen Wert und steht am Ende."""
+    zeilen = [
+        {"name": "platzhalter", "werte": ["OHNE-ISBN-1"]},
+        {"name": "13", "werte": ["9783060000005"]},
+        {"name": "10 mit X", "werte": ["312345678X"]},
+        {"name": "10", "werte": ["3123456789"]},
+        {"name": "10 danach", "werte": ["3123456791"]},
+    ]
+    assert _sortiere(zeilen, [_ebene(0, "isbn")]) == [
+        "10", "10 mit X", "10 danach", "13", "platzhalter"]
+    assert _sortiere(zeilen, [_ebene(0, "isbn", True)]) == [
+        "13", "10 danach", "10 mit X", "10", "platzhalter"]
+
+
 def test_ein_klick_setzt_die_spalte_nach_vorn_und_die_anderen_behalten_ihre_richtung():
     start = [_ebene(2, "liste"), _ebene(4, "text", True)]
     # Eine neue Spalte: vorn, aufsteigend; die beiden anderen dahinter, unverändert.
     assert _js(f"(m) => m.sortierNeueEbenen({json.dumps(start)}, 0, 'text')") == [
         _ebene(0, "text"), _ebene(2, "liste"), _ebene(4, "text", True)]
-    # Eine hintere Spalte rückt nach vorn und beginnt aufsteigend, die andere folgt.
+    # Eine hintere Spalte rückt nach vorn und behält ihre letzte Richtung
+    # (Entscheidung 2026-11-04), die andere folgt.
     assert _js(f"(m) => m.sortierNeueEbenen({json.dumps(start)}, 4, 'text')") == [
-        _ebene(4, "text"), _ebene(2, "liste")]
+        _ebene(4, "text", True), _ebene(2, "liste")]
     # Die vorderste kehrt ihre Richtung um - und wieder zurück.
     zweimal = ("(m) => m.sortierNeueEbenen(m.sortierNeueEbenen("
                f"{json.dumps(start)}, 2, 'liste'), 2, 'liste')")

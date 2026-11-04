@@ -9,8 +9,8 @@
 //    (`data-ebene="1"`, `"2"` an den Überschriften). Jeder Klick auf eine
 //    Überschrift setzt ihre Spalte an die erste Stelle und schiebt alle
 //    anderen um eine nach hinten - jede behält ihre Richtung. Die Spalte, die
-//    schon vorn steht, kehrt beim Klick ihre Richtung um; sonst beginnt sie
-//    aufsteigend.
+//    schon vorn steht, kehrt beim Klick ihre Richtung um; eine, die weiter
+//    hinten stand, behält ihre letzte Richtung; eine neue beginnt aufsteigend.
 //
 // 2. KLICKVERLAUF (alle anderen Tabellen). Erster Klick: aufsteigend, jeder
 //    weitere: Richtung umkehren. Bei gleichem Wert (zweimal "Mathematik")
@@ -29,7 +29,7 @@
 //    Gesamttabelle also Grundpaket und danach die Wahlbereiche.
 //
 // Wie in app.js liefert die Vorlage den Schlüssel: `data-sort` an der
-// Überschrift ("text", "zahl" oder "liste"), `data-wert` an der Zelle, wo die
+// Überschrift ("text", "zahl", "isbn" oder "liste"), `data-wert` an der Zelle, wo die
 // Anzeige nicht selbst der Schlüssel ist (Preise, Daten, Häkchen). Leerer Wert
 // sortiert in beiden Richtungen ans Ende.
 //
@@ -64,10 +64,20 @@ function sortierListenVergleich(links, rechts) {
   return links.length === rechts.length ? 0 : links.length < rechts.length ? -1 : 1;
 }
 
+// Eine ISBN als Zahl: die Ziffern, ein „X“ am Ende zählt als 10 (Entscheidung
+// 2026-11-04). Ein Platzhalter ohne ISBN hat keinen Wert und steht am Ende.
+// 13 Ziffern liegen weit unter 2^53, Number rechnet sie also exakt.
+function sortierIsbn(text) {
+  const ziffern = text.replace(/[-\s]/g, "").toUpperCase();
+  if (!/^\d*X?$/.test(ziffern) || ziffern === "" || ziffern === "X") return null;
+  return ziffern.endsWith("X") ? Number(ziffern.slice(0, -1)) * 10 + 10 : Number(ziffern);
+}
+
 function sortierSchluessel(roh, art) {
   const text = roh.trim();
   if (art === "liste") return sortierZahlen(text);
   if (text === "") return null;
+  if (art === "isbn") return sortierIsbn(text);
   if (art === "zahl") {
     const zahl = Number(text);
     return Number.isNaN(zahl) ? null : zahl;
@@ -82,7 +92,7 @@ function sortierVergleich(art, absteigend, links, rechts) {
   let folge;
   if (art === "liste") {
     folge = sortierListenVergleich(links, rechts);
-  } else if (art === "zahl") {
+  } else if (art === "zahl" || art === "isbn") {
     folge = links < rechts ? -1 : links > rechts ? 1 : 0;
   } else {
     folge = sortierTextVergleich(links, rechts);
@@ -92,10 +102,14 @@ function sortierVergleich(art, absteigend, links, rechts) {
 
 // Die Ebenen nach einem Klick auf die Spalte `index`: sie rückt nach vorn,
 // alle anderen um eine nach hinten, jede mit ihrer Richtung. War sie schon
-// vorn, kehrt sich ihre Richtung um; sonst beginnt sie aufsteigend.
+// vorn, kehrt sich ihre Richtung um; stand sie weiter hinten, behält sie ihre
+// letzte Richtung (Entscheidung 2026-11-04); war sie noch keine Ebene, beginnt
+// sie aufsteigend.
 function sortierNeueEbenen(ebenen, index, art) {
   const vorn = ebenen[0];
-  const absteigend = vorn !== undefined && vorn.index === index ? !vorn.absteigend : false;
+  const bisher = ebenen.find((ebene) => ebene.index === index);
+  const absteigend = vorn !== undefined && vorn.index === index
+    ? !vorn.absteigend : bisher !== undefined && bisher.absteigend;
   return [{ index, art, absteigend }, ...ebenen.filter((ebene) => ebene.index !== index)];
 }
 
@@ -148,7 +162,7 @@ function sortierStrichStil(farbenFolge) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { sortierListenVergleich, sortierNeueEbenen, sortierNachEbenen,
+  module.exports = { sortierIsbn, sortierListenVergleich, sortierNeueEbenen, sortierNachEbenen,
                      sortierSchluessel, sortierVergleich, sortierTeilzeilenFolge,
                      sortierStrichStil };
 }

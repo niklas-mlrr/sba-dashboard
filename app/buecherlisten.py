@@ -666,10 +666,19 @@ def _fach_reihenfolge(buch: Buch) -> tuple[Any, ...]:
     Wie static/sortieren.js sie beim Laden herstellt: nach den Jahrgängen, die
     in der Zeile stehen (alle, egal was mit ihnen geplant ist), der kleinste
     zuerst, bei Gleichstand der zweitkleinste - wer keinen zweiten hat, steht
-    vor einem mit zweitem -, dann die ISBN nach Zahl, ein Platzhalter dahinter.
+    vor einem mit zweitem -, dann die ISBN nach Zahl (ein „X“ am Ende zählt als
+    10, wie ``sortierIsbn``), ein Platzhalter dahinter.
     """
-    zahl = buch.isbn.isdigit()
-    return (buch.jahrgaenge, not zahl, int(buch.isbn) if zahl else 0, buch.isbn)
+    zahl = isbn_zahl(buch.isbn)
+    return (buch.jahrgaenge, zahl is None, zahl or 0, buch.isbn)
+
+
+def isbn_zahl(isbn: str) -> int | None:
+    """Die ISBN als Zahl zum Sortieren - ``None`` für einen Platzhalter."""
+    ziffern = isbn.replace("-", "").replace(" ", "").upper()
+    if ziffern.endswith("X") and ziffern[:-1].isdigit():
+        return int(ziffern[:-1]) * 10 + 10
+    return int(ziffern) if ziffern.isdigit() else None
 
 
 def _im_fach(fach: str) -> Callable[[Paar], bool]:
