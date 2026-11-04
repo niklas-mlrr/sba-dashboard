@@ -251,7 +251,7 @@
   <div class="entscheidung entscheidung-{{ antrag.status }}"><span>{{ wort }}</span>
     {#- -#}<span>{{ statuslabel(antrag.status) }}</span>
     {#- -#}<span>{% if antrag.datum %}am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}</span>
-    {#- -#}<span>{% if antrag.kuerzel %}durch {{ antrag.kuerzel }}{% endif %}</span>
+    {#- -#}<span>{% if antrag.signatur %}durch {{ antrag.signatur }}{% endif %}</span>
     {%- if loop.last and zeile.begruendung %}<span>Begründung:</span><span>{{ zeile.begruendung }}</span>{% endif %}</div>
   {%- else %}
   <div class="entscheidung"><span class="entscheidung-begruendung">Begründung:</span><span>{{ zeile.begruendung }}</span></div>

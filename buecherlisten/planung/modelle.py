@@ -242,15 +242,18 @@ class Antragsentscheidung:
     stand: ändert es sich, fällt sie weg (``_setze_zeile`` in ``abgleich.py``).
     ``ergebnis`` wird gespeichert, wie es in der Datei steht; was nicht
     ``genehmigt`` oder ``abgelehnt`` heißt, gilt als offen (:attr:`status`).
+
+    ``signatur`` ist der IServ-Name dessen, der beim Entscheiden angemeldet
+    war (Spalte ``Antrag … Signatur``, bis 2026-11-04 ``Antrag … Kürzel``).
     """
 
     ergebnis: str = ""
-    kuerzel: str = ""
+    signatur: str = ""
     datum: date | None = None
 
     @property
     def leer(self) -> bool:
-        return not self.ergebnis and not self.kuerzel and self.datum is None
+        return not self.ergebnis and not self.signatur and self.datum is None
 
     @property
     def status(self) -> str:
@@ -321,7 +324,12 @@ class Planungszeile:
 
 @dataclass(frozen=True)
 class Ruecklage:
-    """Der Wunsch einer Fachschaft, Exemplare zu behalten."""
+    """Der Wunsch einer Fachschaft, Exemplare zu behalten.
+
+    ``signatur`` ist für den IServ-Namen dessen gedacht, der den Status
+    ändert (etwa „gewünscht“ zu „zugesagt“). Gesetzt wird sie noch von nichts;
+    was in der Datei steht, bleibt beim Schreiben stehen.
+    """
 
     isbn: str
     fach: str
@@ -330,6 +338,7 @@ class Ruecklage:
     kuerzel: str = ""
     datum: date | None = None
     bemerkung: str = ""
+    signatur: str = ""
 
     @property
     def leer(self) -> bool:

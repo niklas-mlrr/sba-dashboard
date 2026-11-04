@@ -85,7 +85,7 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
                     **{
                         f"antrag_{art}": {
                             "ergebnis": antrag.status,
-                            "kuerzel": antrag.kuerzel,
+                            "signatur": antrag.signatur,
                             "datum": antrag.datum.isoformat() if antrag.datum else None,
                         }
                         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
@@ -290,12 +290,12 @@ def api_antrag(request: Request, anfrage: AntragAnfrage) -> JSONResponse:
     Browser. Zurücksetzen und eine Begründung allein brauchen keinen Namen.
     """
     entscheidet = bool(anfrage.ergebnis and anfrage.ergebnis.strip())
-    kuerzel = request.app.state.anmeldung.benutzer() if entscheidet else ""
+    signatur = request.app.state.anmeldung.benutzer() if entscheidet else ""
     stand = domaene.schreibe_antrag(
         aktuelle_einstellungen(request),
         schuljahr=anfrage.schuljahr, isbn=anfrage.isbn, fach=anfrage.fach,
         jahrgang=anfrage.jahrgang, art=anfrage.art, ergebnis=anfrage.ergebnis,
-        kuerzel=kuerzel, begruendung=anfrage.begruendung,
+        signatur=signatur, begruendung=anfrage.begruendung,
         eingefuehrt_ab=anfrage.eingefuehrt_ab, mtime=anfrage.mtime,
     )
     return _antwort(stand)

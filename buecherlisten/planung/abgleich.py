@@ -841,7 +841,7 @@ def halte_bestaetigung(vorher: Buchplanung, nachher: Buchplanung) -> Buchplanung
 
 def entscheide_antrag(
     stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, art: str,
-    ergebnis: str | None, kuerzel: str = "", datum: date | None = None,
+    ergebnis: str | None, signatur: str = "", datum: date | None = None,
     begruendung: str | None = None, heute: date | None = None,
     eingefuehrt_ab: str | None = None,
 ) -> Buchplanung:
@@ -855,7 +855,7 @@ def entscheide_antrag(
     speichert die Änderungsliste auch nur die Begründung. ``begruendung``
     ``None`` lässt sie ebenso stehen.
 
-    Entschieden wird mit Kürzel; ein fehlendes Datum ist heute. Alles andere an
+    Entschieden wird mit Signatur (dem IServ-Namen); ein fehlendes Datum ist heute. Alles andere an
     der Zeile - Schuljahre, Bestätigung der Fachkonferenzleitung, Bemerkung -
     bleibt, wie es ist.
     """
@@ -886,13 +886,13 @@ def entscheide_antrag(
                 f"„{ergebnis}“ ist keine Entscheidung. Möglich sind: "
                 + ", ".join(ANTRAG_ERGEBNISSE) + "."
             )
-        elif not kuerzel.strip():
+        elif not signatur.strip():
             raise UngueltigeEingabe(
-                "Bitte oben das Kürzel eintragen, mit dem entschieden wird."
+                "Ohne Anmeldung lässt sich nicht entscheiden: es fehlt die Signatur."
             )
         else:
             entscheidung = Antragsentscheidung(
-                ergebnis=ergebnis, kuerzel=kuerzel.strip(),
+                ergebnis=ergebnis, signatur=signatur.strip(),
                 datum=datum or heute or date.today(),
             )
 

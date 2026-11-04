@@ -185,7 +185,7 @@ def _zeilen_je_isbn_und_fach(planung: Buchplanung) -> dict[str, dict[str, list[d
                     if zeile is massgeblich else "",
                     # Die Entscheidungen der Änderungsliste - im Menü nur zum Lesen.
                     **{
-                        f"antrag_{art}": {"status": antrag.status, "kuerzel": antrag.kuerzel,
+                        f"antrag_{art}": {"status": antrag.status, "signatur": antrag.signatur,
                                           "datum": antrag.datum}
                         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
                         if zeile.schuljahr_des_antrags(art)

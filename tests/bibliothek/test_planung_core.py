@@ -357,7 +357,7 @@ def test_ein_offener_antrag_zum_schuljahr_haelt_die_bestaetigung_auf(stand):
     # Abgelehnt ist entschieden: es hält nichts mehr auf.
     for jahrgang, ergebnis in ((6, ANTRAG_GENEHMIGT), (7, ANTRAG_ABGELEHNT)):
         stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=jahrgang,
-                                  art=ART_EINFUEHRUNG, ergebnis=ergebnis, kuerzel="SL")
+                                  art=ART_EINFUEHRUNG, ergebnis=ergebnis, signatur="SL")
     assert fach_status(stand, "Deutsch").text == "offen"
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     assert fach_status(stand, "Deutsch").status == FACH_BESTAETIGT
@@ -525,7 +525,7 @@ def test_ein_wechsel_von_leihbar_ist_ein_antrag_mit_partner(stand):
     assert not verbleib[(DEUTSCH, ART_AUSMUSTERUNG)].ganz
     # Entschieden wird je Zeile - über die Einführung gewählt.
     entschieden = entscheide_antrag(neu, isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
-                                    art=ART_AUSMUSTERUNG, ergebnis="genehmigt", kuerzel="SL",
+                                    art=ART_AUSMUSTERUNG, ergebnis="genehmigt", signatur="SL",
                                     eingefuehrt_ab="", heute=date(2026, 10, 1))
     assert entschieden.planungszeile(DEUTSCH, "Deutsch", 5, "").antrag_ausmusterung.status \
         == ANTRAG_GENEHMIGT
@@ -673,7 +673,7 @@ def test_ein_verschobener_eintrag_laesst_die_bestaetigung_verfallen(stand):
         Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2025/2026"),
     ])
     stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=5,
-                              art=ART_AUSMUSTERUNG, ergebnis=ANTRAG_GENEHMIGT, kuerzel="SL")
+                              art=ART_AUSMUSTERUNG, ergebnis=ANTRAG_GENEHMIGT, signatur="SL")
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="ABC", datum=date(2026, 9, 3))
     geaendert = setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
         Jahrgangseingabe(jahrgang=5, ausgemustert_nach="2026/2027"),
@@ -1208,7 +1208,7 @@ def test_ganz_weg_erst_wenn_jede_liste_einen_antrag_hat(stand):
 def test_eine_abgelehnte_ausmusterung_laesst_das_buch_in_der_liste(stand):
     stand = _ausmustern(stand, ALT, ("Chemie", 9))
     stand = entscheide_antrag(stand, isbn=ALT, fach="Chemie", jahrgang=9, art=ART_AUSMUSTERUNG,
-                              ergebnis="abgelehnt", kuerzel="MÜ")
+                              ergebnis="abgelehnt", signatur="MÜ")
     verbleib = _verbleib(stand, ALT, ART_AUSMUSTERUNG)
     assert (verbleib.ganz, verbleib.grund) == (
         False, "bleibt in der Bücherliste Chemie 9 (Ausmusterung abgelehnt)")
@@ -1220,7 +1220,7 @@ def test_eine_einfuehrung_anderswo_haelt_das_buch_ausser_sie_ist_abgelehnt(stand
     verbleib = _verbleib(stand, ALT, ART_AUSMUSTERUNG)
     assert (verbleib.ganz, verbleib.grund) == (False, "hat auch einen Antrag zur Einführung")
     stand = entscheide_antrag(stand, isbn=ALT, fach="Chemie", jahrgang=10, art=ART_EINFUEHRUNG,
-                              ergebnis="abgelehnt", kuerzel="MÜ")
+                              ergebnis="abgelehnt", signatur="MÜ")
     assert _verbleib(stand, ALT, ART_AUSMUSTERUNG).ganz
 
 
@@ -1317,11 +1317,11 @@ def test_die_aenderungsliste_eines_stands_rechnet_mit_den_angaben_der_buchreihe(
 
 def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(tmp_path, stand):
     stand = entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", jahrgang=9,
-                              art=ART_AUSMUSTERUNG, ergebnis="Genehmigt", kuerzel=" MÜ ",
+                              art=ART_AUSMUSTERUNG, ergebnis="Genehmigt", signatur=" MÜ ",
                               begruendung="Nur ein Jahr gebraucht", heute=date(2026, 9, 30))
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
     assert zeile.antrag_ausmusterung.status == ANTRAG_GENEHMIGT
-    assert (zeile.antrag_ausmusterung.kuerzel, zeile.antrag_ausmusterung.datum) \
+    assert (zeile.antrag_ausmusterung.signatur, zeile.antrag_ausmusterung.datum) \
         == ("MÜ", date(2026, 9, 30))
     # Die Einführung derselben Zeile ist ein eigener Antrag.
     assert zeile.antrag_einfuehrung.status == ANTRAG_OFFEN
@@ -1333,18 +1333,73 @@ def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(
     kopf = [z.value for z in ws[1]]
     assert kopf[3:13] == [
         "leihbar",
-        "Einführung", "Antrag Einführung", "Antrag Einführung Kürzel",
+        "Einführung", "Antrag Einführung", "Antrag Einführung Signatur",
         "Antrag Einführung Datum", "Ausmusterung nach Schuljahr", "Antrag Ausmusterung",
-        "Antrag Ausmusterung Kürzel", "Antrag Ausmusterung Datum", "Begründung",
+        "Antrag Ausmusterung Signatur", "Antrag Ausmusterung Datum", "Begründung",
     ]
     gelesen = lies_datei(pfad).planungszeile(DEUTSCH, "Deutsch", 9)
     assert gelesen == zeile
 
 
+def test_eine_alte_datei_wird_mit_kuerzel_gelesen_und_bekommt_signatur(tmp_path, stand):
+    """Bis 2026-11-04 hießen die Spalten „Antrag … Kürzel“ und „Kürzel“/„Datum“."""
+    from openpyxl import load_workbook
+
+    stand = entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", jahrgang=9,
+                              art=ART_AUSMUSTERUNG, ergebnis="genehmigt", signatur="b.lehrer",
+                              heute=date(2026, 9, 30))
+    stand = replace(stand, planung=tuple(
+        replace(z, kuerzel="FK", datum=date(2026, 10, 1)) if z.fach == "Deutsch" else z
+        for z in stand.planung))
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    wb = load_workbook(pfad)
+    ws = wb["Fächer & Jahrgang"]
+    alt = {"Antrag Ausmusterung Signatur": "Antrag Ausmusterung Kürzel",
+           "Antrag Einführung Signatur": "Antrag Einführung Kürzel",
+           "Fachlistenbestätigung Kürzel": "Kürzel", "Fachlistenbestätigung Datum": "Datum"}
+    for zelle in ws[1]:
+        zelle.value = alt.get(zelle.value, zelle.value)
+    wb.save(pfad)
+
+    gelesen = lies_datei(pfad)
+    zeile = gelesen.planungszeile(DEUTSCH, "Deutsch", 9)
+    assert zeile.antrag_ausmusterung.signatur == "b.lehrer"
+    assert (zeile.kuerzel, zeile.datum) == ("FK", date(2026, 10, 1))
+
+    schreibe_datei(pfad, gelesen)
+    kopf = [z.value for z in load_workbook(pfad)["Fächer & Jahrgang"][1]]
+    assert "Antrag Ausmusterung Kürzel" not in kopf and "Kürzel" not in kopf
+    assert kopf[-3:] == ["Fachlistenbestätigung Kürzel", "Fachlistenbestätigung Datum",
+                         "Bemerkung"]
+    assert lies_datei(pfad).planungszeile(DEUTSCH, "Deutsch", 9) == zeile
+
+
+def test_die_signatur_einer_ruecklage_bleibt_stehen(tmp_path, stand):
+    """Gesetzt wird sie noch von nichts; was in der Datei steht, bleibt."""
+    from openpyxl import load_workbook
+
+    stand = setze_ruecklage(stand, isbn=ALT, fach="Chemie", anzahl=3, status="gewünscht")
+    pfad = tmp_path / "Buchplanung.xlsx"
+    schreibe_datei(pfad, stand)
+    wb = load_workbook(pfad)
+    ws = wb["Rücklage"]
+    kopf = [z.value for z in ws[1]]
+    assert kopf == ["ISBN", "Fach", "Anzahl", "Kürzel", "Datum", "Status", "Signatur",
+                    "Bemerkung"]
+    ws.cell(2, kopf.index("Signatur") + 1, "b.lehrer")
+    wb.save(pfad)
+
+    gelesen = lies_datei(pfad)
+    assert gelesen.ruecklagen[0].signatur == "b.lehrer"
+    schreibe_datei(pfad, gelesen)
+    assert lies_datei(pfad).ruecklagen[0].signatur == "b.lehrer"
+
+
 def test_ablehnen_und_zuruecksetzen(stand):
     stand = _mit_antraegen(stand)
     stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
-                              art=ART_EINFUEHRUNG, ergebnis="abgelehnt", kuerzel="MÜ")
+                              art=ART_EINFUEHRUNG, ergebnis="abgelehnt", signatur="MÜ")
     assert stand.planungszeile(DEUTSCH, "Deutsch", 7).antrag_einfuehrung.status \
         == ANTRAG_ABGELEHNT
     stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
@@ -1354,7 +1409,7 @@ def test_ablehnen_und_zuruecksetzen(stand):
 
 def test_nur_die_begruendung_laesst_die_entscheidung_stehen(stand):
     stand = entscheide_antrag(_mit_antraegen(stand), isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
-                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", kuerzel="MÜ")
+                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", signatur="MÜ")
     stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
                               art=ART_EINFUEHRUNG, ergebnis=None, begruendung="neuer Lehrplan")
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 7)
@@ -1363,14 +1418,14 @@ def test_nur_die_begruendung_laesst_die_entscheidung_stehen(stand):
 
 
 @pytest.mark.parametrize(("felder", "teil"), [
-    ({"jahrgang": 7, "art": ART_EINFUEHRUNG, "ergebnis": "genehmigt"}, "Kürzel"),
-    ({"jahrgang": 7, "art": ART_EINFUEHRUNG, "ergebnis": "vielleicht", "kuerzel": "MÜ"},
+    ({"jahrgang": 7, "art": ART_EINFUEHRUNG, "ergebnis": "genehmigt"}, "Signatur"),
+    ({"jahrgang": 7, "art": ART_EINFUEHRUNG, "ergebnis": "vielleicht", "signatur": "MÜ"},
      "keine Entscheidung"),
-    ({"jahrgang": 7, "art": ART_AUSMUSTERUNG, "ergebnis": "genehmigt", "kuerzel": "MÜ"},
+    ({"jahrgang": 7, "art": ART_AUSMUSTERUNG, "ergebnis": "genehmigt", "signatur": "MÜ"},
      "keine Ausmusterung"),
-    ({"jahrgang": 5, "art": ART_EINFUEHRUNG, "ergebnis": "genehmigt", "kuerzel": "MÜ"},
+    ({"jahrgang": 5, "art": ART_EINFUEHRUNG, "ergebnis": "genehmigt", "signatur": "MÜ"},
      "keine Einführung"),
-    ({"jahrgang": 7, "art": "umbenennung", "ergebnis": "genehmigt", "kuerzel": "MÜ"},
+    ({"jahrgang": 7, "art": "umbenennung", "ergebnis": "genehmigt", "signatur": "MÜ"},
      "keine Art"),
 ])
 def test_ungueltige_entscheidung_wird_abgelehnt(stand, felder, teil):
@@ -1382,7 +1437,7 @@ def _genehmigt(stand: Buchplanung) -> Buchplanung:
     stand = _mit_antraegen(stand)
     for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG):
         stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=9, art=art,
-                                  ergebnis="genehmigt", kuerzel="MÜ", begruendung="Grund")
+                                  ergebnis="genehmigt", signatur="MÜ", begruendung="Grund")
     return stand
 
 
@@ -1410,7 +1465,7 @@ def test_bemerkung_und_listenbestaetigung_lassen_die_entscheidung_stehen(stand):
     ])
     # Bestätigen geht erst, wenn die Einführung zum laufenden Schuljahr entschieden ist.
     stand = entscheide_antrag(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
-                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", kuerzel="MÜ")
+                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", signatur="MÜ")
     stand, _ = bestaetige_fach(stand, fach="Deutsch", kuerzel="FK", datum=date(2026, 10, 1))
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
     assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
@@ -1496,7 +1551,7 @@ def test_mit_einfuehrung_und_ausmusterung_erst_geplant_dann_laeuft_aus():
 
 
 def test_alles_genehmigt_zaehlt_nur_antraege_der_aenderungsliste():
-    genehmigt = Antragsentscheidung(ergebnis=ANTRAG_GENEHMIGT, kuerzel="b.lehrer")
+    genehmigt = Antragsentscheidung(ergebnis=ANTRAG_GENEHMIGT, signatur="b.lehrer")
     # Eine längst vollzogene Einführung ist kein Antrag; ohne Antrag ist nichts offen.
     alt = Planungszeile(isbn=DEUTSCH, fach="Deutsch", jahrgang=7, eingefuehrt_ab="2020/2021")
     assert zu_entscheidende_antraege(alt, "2026/2027") == ()
@@ -1544,7 +1599,7 @@ def test_die_isbn_wird_nachgetragen_und_alles_zieht_mit(stand):
                                                          bemerkung="kommt im Juli"),
                              zeilen=[Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2027/2028")])
     stand = entscheide_antrag(stand, isbn="OHNE-ISBN-1", fach="Deutsch", jahrgang=7,
-                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", kuerzel="SL")
+                              art=ART_EINFUEHRUNG, ergebnis="genehmigt", signatur="SL")
     neu = ersetze_isbn(stand, alt="OHNE-ISBN-1", neu="978-3-16-148410-0")
     assert neu.buch("OHNE-ISBN-1") is None
     zeile = neu.planungszeile("9783161484100", "Deutsch", 7)

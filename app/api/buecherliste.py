@@ -275,7 +275,7 @@ def aenderungen(request: Request, sortierung: str = "") -> Response:
                 "verlag": "" if a.verlag == OHNE_VERLAG else a.verlag,
                 "fach": a.fach, "jahrgang": a.jahrgang, "art": a.art,
                 "einfuehrung": a.einfuehrung, "schuljahr": a.schuljahr, "status": a.status,
-                "kuerzel": a.entscheidung.kuerzel, "datum": a.entscheidung.datum,
+                "signatur": a.entscheidung.signatur, "datum": a.entscheidung.datum,
                 "begruendung": a.begruendung, "leihbar": a.leihbar,
                 "neupreis": fmt_price(a.neupreis) if a.neupreis is not None else "",
                 "leihgebuehr": fmt_price(a.leihgebuehr) if a.leihgebuehr is not None else "",

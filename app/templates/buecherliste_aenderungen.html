@@ -103,7 +103,7 @@
         {%- else %}<span class="grau">{{ "kein Vorgänger" if e.einfuehrung else "kein Nachfolger" }}</span>{% endfor %}</dd>
       <dt>Entscheidung</dt>
       <dd>{{ bp.statuslabel(e.status) }}
-        {%- if e.kuerzel or e.datum %} <span class="grau">{{ e.kuerzel }}{% if e.kuerzel and e.datum %}, {% endif %}{{ e.datum.strftime("%d.%m.%Y") if e.datum else "" }}</span>{% endif %}</dd>
+        {%- if e.signatur or e.datum %} <span class="grau">{{ e.signatur }}{% if e.signatur and e.datum %}, {% endif %}{{ e.datum.strftime("%d.%m.%Y") if e.datum else "" }}</span>{% endif %}</dd>
     </dl>
     <label class="antrag-begruendung">Begründung
       <textarea class="form-control" rows="3" data-antrag-feld="begruendung">{{ e.begruendung }}</textarea>

@@ -12,11 +12,14 @@ Blatt                   Schlüssel                   eintragbar
 ``Fächer & Jahrgang``   (ISBN, Fach, Jahrgang,      leihbar, Einführung,
                         Einführung)                 Ausmusterung,
                                                     je Antrag Entscheidung,
-                                                    Kürzel, Datum;
-                                                    Begründung, Kürzel,
-                                                    Datum, Bemerkung
+                                                    Signatur, Datum;
+                                                    Begründung,
+                                                    Fachlistenbestätigung
+                                                    Kürzel und Datum,
+                                                    Bemerkung
 ``Rücklage``            (ISBN, Fach)                Anzahl, Kürzel, Datum,
-                                                    Status, Bemerkung
+                                                    Status, Signatur,
+                                                    Bemerkung
 ``Info``                -                           nichts
 ======================  ==========================  =========================
 
@@ -25,7 +28,9 @@ Bis 2026-09-20 standen die Bücher dreimal in der Mappe, einmal je Achse
 Titel stehen jetzt **einmal**, auf ``Buchreihen``; die beiden anderen Blätter
 tragen nur noch ihren Schlüssel und das, was dazu eingetragen wird. Die
 Bestätigung der Fachkonferenzleitung steht als Kürzel und Datum in der Zeile,
-die sie bestätigt.
+die sie bestätigt (Spalten ``Fachlistenbestätigung Kürzel``/``… Datum``, bis
+2026-11-04 nur ``Kürzel``/``Datum``; ältere Dateien werden mit den alten
+Überschriften gelesen, ``_ALTE_KOEPFE``).
 
 Unverändert gilt die Regel, die die Mappe widerspruchsfrei hält:
 
@@ -109,6 +114,11 @@ SPALTE_ANTRAG_EINFUEHRUNG = "Antrag Einführung"
 SPALTE_ANTRAG_AUSMUSTERUNG = "Antrag Ausmusterung"
 SPALTE_BEGRUENDUNG = "Begründung"
 SPALTE_LEIHBAR = "leihbar"
+# Der IServ-Name dessen, der entschieden hat - nicht von Hand eingetippt.
+SIGNATUR = "Signatur"
+# Was in „Liste bestätigen“ eingegeben wird (bis 2026-11-04 „Kürzel“/„Datum“).
+SPALTE_BESTAETIGUNG_KUERZEL = "Fachlistenbestätigung Kürzel"
+SPALTE_BESTAETIGUNG_DATUM = "Fachlistenbestätigung Datum"
 
 _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
     BLATT_BUECHER: (
@@ -130,17 +140,17 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         (SPALTE_LEIHBAR, 9, True),
         (SPALTE_EINFUEHRUNG, 13, True),
         # Je Antrag drei Spalten, direkt hinter dem Schuljahr, über das
-        # entschieden wird: Entscheidung, Kürzel, Datum.
+        # entschieden wird: Entscheidung, Signatur (IServ-Name), Datum.
         (SPALTE_ANTRAG_EINFUEHRUNG, 17, True),
-        (f"{SPALTE_ANTRAG_EINFUEHRUNG} Kürzel", 12, True),
+        (f"{SPALTE_ANTRAG_EINFUEHRUNG} {SIGNATUR}", 12, True),
         (f"{SPALTE_ANTRAG_EINFUEHRUNG} Datum", 12, True),
         (SPALTE_AUSMUSTERUNG, 24, True),
         (SPALTE_ANTRAG_AUSMUSTERUNG, 19, True),
-        (f"{SPALTE_ANTRAG_AUSMUSTERUNG} Kürzel", 12, True),
+        (f"{SPALTE_ANTRAG_AUSMUSTERUNG} {SIGNATUR}", 12, True),
         (f"{SPALTE_ANTRAG_AUSMUSTERUNG} Datum", 12, True),
         (SPALTE_BEGRUENDUNG, 30, True),
-        ("Kürzel", 10, True),
-        ("Datum", 12, True),
+        (SPALTE_BESTAETIGUNG_KUERZEL, 10, True),
+        (SPALTE_BESTAETIGUNG_DATUM, 12, True),
         ("Bemerkung", 30, True),
     ),
     BLATT_RUECKLAGE: (
@@ -150,9 +160,26 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         ("Kürzel", 10, True),
         ("Datum", 12, True),
         ("Status", 16, True),
+        (SIGNATUR, 12, True),
         ("Bemerkung", 30, True),
     ),
 }
+
+# Die Überschriften bis 2026-11-04 - eine ältere Datei wird mit ihnen gelesen
+# und bekommt beim nächsten Speichern die neuen.
+_ALTE_KOEPFE: dict[str, str] = {
+    f"{SPALTE_ANTRAG_EINFUEHRUNG} {SIGNATUR}": f"{SPALTE_ANTRAG_EINFUEHRUNG} Kürzel",
+    f"{SPALTE_ANTRAG_AUSMUSTERUNG} {SIGNATUR}": f"{SPALTE_ANTRAG_AUSMUSTERUNG} Kürzel",
+    SPALTE_BESTAETIGUNG_KUERZEL: "Kürzel",
+    SPALTE_BESTAETIGUNG_DATUM: "Datum",
+}
+
+
+def _wert(zeile: dict[str, object], spalte: str) -> object:
+    """Der Wert der Spalte - in einer älteren Datei unter ihrer alten Überschrift."""
+    if spalte in zeile or spalte not in _ALTE_KOEPFE:
+        return zeile.get(spalte)
+    return zeile.get(_ALTE_KOEPFE[spalte])
 
 # Aus der Mehrjahresbände-Mappe übernommen, damit die drei Dateien der
 # Schulbuchausleihe gleich aussehen.
@@ -307,8 +334,8 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             leihbar=_ja(zeile.get(SPALTE_LEIHBAR)) if mit_leihbar else leihbar_alt.get(isbn, False),
             eingefuehrt_ab=_text(zeile.get(SPALTE_EINFUEHRUNG)),
             ausgemustert_nach=_text(zeile.get(SPALTE_AUSMUSTERUNG)),
-            kuerzel=_text(zeile.get("Kürzel")),
-            datum=_datum(zeile.get("Datum")),
+            kuerzel=_text(_wert(zeile, SPALTE_BESTAETIGUNG_KUERZEL)),
+            datum=_datum(_wert(zeile, SPALTE_BESTAETIGUNG_DATUM)),
             bemerkung=_text(zeile.get("Bemerkung")),
             antrag_einfuehrung=_lies_antrag(zeile, SPALTE_ANTRAG_EINFUEHRUNG),
             antrag_ausmusterung=_lies_antrag(zeile, SPALTE_ANTRAG_AUSMUSTERUNG),
@@ -355,6 +382,7 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
                 kuerzel=_text(zeile.get("Kürzel")),
                 datum=_datum(zeile.get("Datum")),
                 bemerkung=_text(zeile.get("Bemerkung")),
+                signatur=_text(zeile.get(SIGNATUR)),
             )
             for zeile in ruecklage_roh if _text(zeile.get("ISBN"))
         ) if not eintrag.leer
@@ -368,18 +396,18 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
 
 
 def _lies_antrag(zeile: dict[str, object], spalte: str) -> Antragsentscheidung:
-    """Entscheidung, Kürzel und Datum eines Antrags - fehlen die Spalten, ist er offen."""
+    """Entscheidung, Signatur und Datum eines Antrags - fehlen die Spalten, ist er offen."""
     return Antragsentscheidung(
         ergebnis=_text(zeile.get(spalte)),
-        kuerzel=_text(zeile.get(f"{spalte} Kürzel")),
+        signatur=_text(_wert(zeile, f"{spalte} {SIGNATUR}")),
         datum=_datum(zeile.get(f"{spalte} Datum")),
     )
 
 
 def _schreibe_antrag(spalte: str, antrag: Antragsentscheidung | None) -> dict[str, object]:
     if antrag is None:
-        return {spalte: "", f"{spalte} Kürzel": "", f"{spalte} Datum": None}
-    return {spalte: antrag.ergebnis, f"{spalte} Kürzel": antrag.kuerzel,
+        return {spalte: "", f"{spalte} {SIGNATUR}": "", f"{spalte} Datum": None}
+    return {spalte: antrag.ergebnis, f"{spalte} {SIGNATUR}": antrag.signatur,
             f"{spalte} Datum": antrag.datum}
 
 
@@ -494,8 +522,8 @@ def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
             SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach,
             **_schreibe_antrag(SPALTE_ANTRAG_AUSMUSTERUNG, zeile.antrag_ausmusterung),
             SPALTE_BEGRUENDUNG: zeile.begruendung,
-            "Kürzel": zeile.kuerzel,
-            "Datum": zeile.datum,
+            SPALTE_BESTAETIGUNG_KUERZEL: zeile.kuerzel,
+            SPALTE_BESTAETIGUNG_DATUM: zeile.datum,
             "Bemerkung": zeile.bemerkung,
         })
     return zeilen
@@ -519,6 +547,7 @@ def _ruecklagenzeilen(stand: Buchplanung) -> list[dict[str, object]]:
             "Kürzel": eintrag.kuerzel,
             "Datum": eintrag.datum,
             "Status": eintrag.status,
+            SIGNATUR: eintrag.signatur,
             "Bemerkung": eintrag.bemerkung,
         })
     return zeilen
@@ -558,7 +587,8 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     zeile(9, "Jahrgänge", "Ohne Einführung ist ein Jahrgang eingeführt, mit Einführung "
                           "geplant. Ein Buch ohne jeden Jahrgang fällt aus der Datei.")
     zeile(10, "Anträge", "Jede Einführung und Ausmusterung ist ein Antrag: „genehmigt“ "
-                         "oder „abgelehnt“ mit Kürzel und Datum, leer heißt offen. Ändert "
+                         "oder „abgelehnt“ mit Signatur (IServ-Name) und Datum, leer "
+                         "heißt offen. Ändert "
                          "sich das Schuljahr, fällt die Entscheidung weg. Die Begründung "
                          "gilt für beide Anträge der Zeile.")
     zeile(11, "Legende", "", fett=True)

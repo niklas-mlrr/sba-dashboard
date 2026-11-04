@@ -340,13 +340,13 @@ def schreibe_neues_buch(
 
 def schreibe_antrag(
     einstellungen: Einstellungen, *, schuljahr: str, isbn: str, fach: str, jahrgang: int,
-    art: str, ergebnis: str | None, kuerzel: str = "", datum: date | None = None,
+    art: str, ergebnis: str | None, signatur: str = "", datum: date | None = None,
     begruendung: str | None = None, eingefuehrt_ab: str | None = None, mtime: float | None,
 ) -> Stand:
     """Genehmigt oder lehnt eine Einführung oder Ausmusterung ab - die Änderungsliste."""
     return _aendere(einstellungen, schuljahr, mtime, lambda stand: entscheide_antrag(
         stand, isbn=isbn, fach=fach, jahrgang=jahrgang, art=art, ergebnis=ergebnis,
-        kuerzel=kuerzel, datum=datum, begruendung=begruendung, eingefuehrt_ab=eingefuehrt_ab,
+        signatur=signatur, datum=datum, begruendung=begruendung, eingefuehrt_ab=eingefuehrt_ab,
     ))
 
 

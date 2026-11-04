@@ -1720,7 +1720,7 @@ def test_ein_antrag_wird_genehmigt_und_zurueckgesetzt(
     buch = next(b for b in antwort.json()["planung"]["buecher"] if b["isbn"] == DEUTSCH)
     zeile = next(z for z in buch["planung"] if z["jahrgang"] == 7)
     assert zeile["antrag_einfuehrung"] == {
-        "ergebnis": "genehmigt", "kuerzel": "b.lehrer", "datum": heute.isoformat()}
+        "ergebnis": "genehmigt", "signatur": "b.lehrer", "datum": heute.isoformat()}
     assert zeile["antrag_ausmusterung"]["ergebnis"] == "offen"
     assert zeile["begruendung"] == "neuer Lehrplan"
 
