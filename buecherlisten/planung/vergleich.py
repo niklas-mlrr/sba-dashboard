@@ -100,6 +100,12 @@ class Abweichung:
 
     ``buchreihe_fehlt`` sind die Jahrgänge, in denen die Datei das Buch dieses
     Schuljahr führt, denen die Buchreihe in IServ aber nicht zugewiesen ist.
+
+    ``buchreihe_angelegt`` sagt bei einem Buch, das nur die Datei führt
+    (``nur_excel``), ob es die Buchreihe im IServ-Inventar schon gibt -
+    ``None``, wenn das Inventar nicht bekannt ist. Fehlt sie, fehlt sie jedem
+    Jahrgang (``buchreihe_fehlt``), und die ganze Zeile ist blau markiert
+    (Entscheidung 2026-11-04); gibt es sie, nur die Jahrgänge.
     """
 
     isbn: str
@@ -111,6 +117,7 @@ class Abweichung:
     eintraege_fehlen: tuple[Eintrag, ...] = ()
     eintraege_nur_iserv: tuple[Eintrag, ...] = ()
     buchreihe_fehlt: tuple[int, ...] = ()
+    buchreihe_angelegt: bool | None = None
 
     @property
     def gleich(self) -> bool:
@@ -179,17 +186,21 @@ def _buchreihe_fehlt(soll: frozenset[Eintrag], zugewiesen: frozenset[int] | None
 
 
 def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch],
-               buchreihen: Mapping[str, frozenset[int]] | None = None) -> dict[str, Abweichung]:
+               buchreihen: Mapping[str, frozenset[int] | None] | None = None,
+               ) -> dict[str, Abweichung]:
     """Je ISBN, die in diesem Schuljahr auf einer der beiden Seiten vorkommt, ihr Vergleich.
 
     Ein Buch, das in der Datei steht, dieses Schuljahr aber nirgends geführt
     wird (geplant, ausgemustert) und auch in IServ fehlt, kommt nicht vor: an
     ihm ist nichts zu vergleichen.
 
-    ``buchreihen`` sind die Jahrgänge der Buchreihen aus dem IServ-Inventar -
-    für Bücher, deren Zuweisung die Bücherlisten nicht verraten (etwa, weil
-    das Buch in keiner Liste steht).
+    ``buchreihen`` sind die Buchreihen aus dem IServ-Inventar mit ihren
+    Jahrgängen (``None``: Zuweisung nicht lesbar) - für Bücher, deren
+    Zuweisung die Bücherlisten nicht verraten (etwa, weil das Buch in keiner
+    Liste steht). Fehlt eine angefragte ISBN darin, gibt es ihre Buchreihe im
+    Inventar nicht. Ohne ``buchreihen`` ist das Inventar unbekannt.
     """
+    inventar = buchreihen
     buchreihen = buchreihen or {}
     ergebnis: dict[str, Abweichung] = {}
     for buch in planung.buecher:
@@ -201,10 +212,14 @@ def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch],
             zugewiesen = buchreihen.get(buch.isbn)
         if ist is None:
             if soll:
+                angelegt = None if inventar is None else buch.isbn in inventar
                 ergebnis[buch.isbn] = Abweichung(
                     buch.isbn, NUR_EXCEL, fehlt_in_iserv=_sortiert(soll),
                     eintraege_fehlen=_eintraege_sortiert(soll_eintraege),
-                    buchreihe_fehlt=_buchreihe_fehlt(soll_eintraege, zugewiesen))
+                    # Ohne Buchreihe ist ihr auch kein Jahrgang zugewiesen.
+                    buchreihe_fehlt=_buchreihe_fehlt(
+                        soll_eintraege, frozenset() if angelegt is False else zugewiesen),
+                    buchreihe_angelegt=angelegt)
             continue
         if not soll:
             ergebnis[buch.isbn] = _nur_iserv(ist)

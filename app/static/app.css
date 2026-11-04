@@ -584,9 +584,17 @@ td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: hel
    die ganze Zeile oder eine Teilzeile (leihbar / Kaufbuch). */
 .schrift-einfuehrung { color: var(--einfuehrung); font-weight: 600; }
 .schrift-ausmusterung { color: var(--ausmusterung); font-weight: 600; }
+/* Gibt es das Buch im Jahrgang nur wegen abgelehnter Einführungen, also gar nicht. */
+.schrift-grau { color: var(--grau-schrift); }
 .durch { text-decoration: line-through; }
 .markierung { display: inline-block; padding: 0 4px; border-radius: 3px; white-space: nowrap; }
 .markierung-einfuehrung { background: var(--einfuehrung-grund); box-shadow: inset 0 -2px 0 var(--einfuehrung-strich); }
+/* Blau am Jahrgang (2026-11-04): der Strich unten heißt „in die Bücherliste
+   des Jahrgangs eintragen“, der oben „der Buchreihe den Jahrgang zuweisen“. */
+.markierung-einfuehrung.markierung-oben { box-shadow: inset 0 2px 0 var(--einfuehrung-strich); }
+.markierung-einfuehrung.markierung-oben-unten {
+  box-shadow: inset 0 2px 0 var(--einfuehrung-strich), inset 0 -2px 0 var(--einfuehrung-strich);
+}
 .markierung-ausmusterung { background: var(--ausmusterung-grund); box-shadow: inset 0 -2px 0 var(--ausmusterung-strich); }
 .markierung-aenderung { background: var(--aenderung-grund); box-shadow: inset 0 -2px 0 var(--aenderung-strich); }
 .markierung[title], span[title] > .markierung { cursor: help; }

@@ -147,25 +147,26 @@ def _abweichungen_zur_buchreihe(buch: Buch, serie: Any) -> tuple[tuple[str, Any]
     return tuple((feld, fremd) for feld, eigen, fremd in felder if not gleich(eigen, fremd))
 
 
-def _buchreihen(request: Request) -> Callable[[set[str]], dict[str, frozenset[int]]]:
-    """Holt für die Fach-Ansicht die Jahrgänge der Buchreihen aus dem Inventar -
-    ein Abruf, nur wenn :func:`vergleiche_mit_iserv` ISBNs ohne bekannte
-    Zuweisung hat. Ist das Inventar nicht zu bekommen, wird die Buchreihe
-    dieser Bücher nicht verglichen."""
-    def holen(isbns: set[str]) -> dict[str, frozenset[int]]:
+def _buchreihen(request: Request) -> Callable[[set[str]], dict[str, frozenset[int] | None] | None]:
+    """Holt für die Fach-Ansicht die Buchreihen aus dem Inventar mit ihren
+    Jahrgängen (``None``, wenn die Zuweisung nicht lesbar ist) - ein Abruf,
+    nur wenn :func:`vergleiche_mit_iserv` ISBNs ohne bekannte Zuweisung hat.
+    Eine angefragte ISBN ohne Eintrag hat im Inventar keine Buchreihe. Ist das
+    Inventar nicht zu bekommen (``None``), wird die Buchreihe dieser Bücher
+    nicht verglichen."""
+    def holen(isbns: set[str]) -> dict[str, frozenset[int] | None] | None:
         try:
             client = request.app.state.anmeldung.client()
             serien = list(client.series.get_all())
         except Exception:  # noqa: BLE001 - ohne Inventar kein Buchreihen-Vergleich
-            return {}
-        ergebnis: dict[str, frozenset[int]] = {}
+            return None
+        ergebnis: dict[str, frozenset[int] | None] = {}
         for serie in serien:
             if serie.isbn not in isbns:
                 continue
             jahrgaenge = buchreihe_jahrgaenge(getattr(serie, "grades_flat", None) or None) \
                 or buchreihe_jahrgaenge(getattr(serie, "grades", None))
-            if jahrgaenge is not None:
-                ergebnis[serie.isbn] = frozenset(jahrgaenge)
+            ergebnis[serie.isbn] = frozenset(jahrgaenge) if jahrgaenge is not None else None
         return ergebnis
     return holen
 

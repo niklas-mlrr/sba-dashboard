@@ -67,8 +67,8 @@ def test_eine_einfuehrung_ist_blau_geschrieben_auch_eine_kuenftige():
     # Ein Abschnitt je vorkommender Farbe; ist sie überall blau, ist der Strich blau.
     assert m.strich() == (EINFUEHRUNG,)
     assert m.strich_klassen == ("strich",) and m.strich_stil() == "var(--einfuehrung-strich)"
-    assert m.werte[1].hinweis == "Planung: als Leihbuch eingeführt zu 2026/2027"
-    assert m.werte[2].hinweis == "Planung: als Leihbuch eingeführt ab 2027/2028"
+    assert m.werte[1].hinweis == "Einführung der Buchreihe in Jahrgang 6 beantragt"
+    assert m.werte[2].hinweis == "Einführung der Buchreihe in Jahrgang 7 für 2027/2028 beantragt"
 
 
 def test_ein_ganz_neues_buch_hinterlegt_die_zeile():
@@ -83,7 +83,7 @@ def test_eine_ausmusterung_nach_dem_vorjahr_ist_rot_und_durchgestrichen():
     # Der Antrag ist noch offen: das Jahr steht da, mit Kasten.
     assert _werte(m) == [("5", "bis 2025/2026", AUSMUSTERUNG, True, ""),
                          ("6", "", "", False, "")]
-    assert m.werte[0].hinweis == "Planung: als Leihbuch ausgemustert nach 2025/2026"
+    assert m.werte[0].hinweis == "Ausmusterung der Buchreihe in Jahrgang 5 beantragt"
     # Was früher endete, steht nicht mehr in der Spalte.
     m = _markierung(_zeile(5, nach="2024/2025"), _zeile(6))
     assert _werte(m) == [("6", "", "", False, "")] and m.strich() == ()
@@ -92,7 +92,7 @@ def test_eine_ausmusterung_nach_dem_vorjahr_ist_rot_und_durchgestrichen():
 def test_ein_auslaufender_jahrgang_ist_rot_aber_nicht_durchgestrichen():
     m = _markierung(_zeile(5), _zeile(6, nach="2026/2027"))
     assert _werte(m)[1] == ("6", "bis 2026/2027", AUSMUSTERUNG, False, "")
-    assert m.werte[1].hinweis == "Planung: als Leihbuch läuft aus (bis 2026/2027)"
+    assert m.werte[1].hinweis == "Ausmusterung der Buchreihe in Jahrgang 6 nach 2026/2027 beantragt"
 
 
 def test_ein_buch_das_danach_nirgends_mehr_steht_hinterlegt_die_zeile_rot():
@@ -148,10 +148,19 @@ def test_iserv_fehlt_und_steht_noch_je_eintrag():
         ("8", EINFUEHRUNG, False, FEHLT),
         ("10", "", False, STEHT_NOCH)]
     assert [(w.text, w.iserv, w.markierung) for w in kauf.werte] == [("7", FEHLT, EINFUEHRUNG)]
-    assert leihbar.werte[2].hinweis == "IServ-Bücherliste: als Leihbuch noch eingetragen"
+    assert leihbar.werte[2].hinweis == \
+        "Buchreihe ist aus Bücherliste für Jahrgang 10 in IServ zu entfernen"
+    # Jg. 7 ist leihbar rot und als Kaufbuch blau markiert: in IServ ist nur
+    # „leihbar“ umzustellen, in beiden Teilzeilen (Entscheidung 2026-11-04).
     assert kauf.werte[0].hinweis == (
-        "Planung: als Kaufbuch eingeführt zu 2026/2027"
-        " · IServ-Bücherliste: als Kaufbuch noch nicht eingetragen")
+        "Einführung der Buchreihe in Jahrgang 7 beantragt\n"
+        "Buchreihe ist in Bücherliste für Jahrgang 7 auf nicht leihbar zu setzen")
+    assert leihbar.werte[0].hinweis == (
+        "Ausmusterung der Buchreihe in Jahrgang 7 beantragt\n"
+        "Buchreihe ist in Bücherliste für Jahrgang 7 auf nicht leihbar zu setzen")
+    assert leihbar.werte[1].hinweis == (
+        "Einführung der Buchreihe in Jahrgang 8 beantragt\n"
+        "Buchreihe ist Bücherliste für Jahrgang 8 hinzuzufügen")
     # Der Strich der Fach-Ansicht zeigt nur die Planung (je vorkommender Farbe
     # ein Abschnitt, in Lesefolge: erst das Kaufbuch, blau), der einer
     # IServ-Ansicht nur IServ.
@@ -230,18 +239,50 @@ def test_fehlt_der_jahrgang_an_der_buchreihe_ist_er_blau_markiert():
                     abweichung=abweichung)
     # Nur was dieses Schuljahr gilt: Jg. 7 kommt erst, Jg. 8 ist weg.
     assert [(w.text, w.iserv) for w in m.werte] == [("5", ""), ("6", FEHLT), ("7", ""), ("8", "")]
-    assert m.werte[1].hinweis == "IServ-Buchreihe: Jahrgang 6 noch nicht zugewiesen"
-    # Fehlt er auch in der Bücherliste, nennt der Tooltip beides.
+    assert m.werte[1].hinweis == "Jahrgang 6 ist der Buchreihe hinzuzufügen"
+    # Nur der Strich oben (Buchreihe), die Bücherliste führt ihn.
+    assert (m.werte[1].reihe_fehlt, m.werte[1].liste_fehlt, m.werte[1].striche) \
+        == (True, False, "oben")
+    # Fehlt er auch in der Bücherliste, nennt der Tooltip beides, und es gibt
+    # beide Striche.
     m = _markierung(_zeile(6), abweichung=Abweichung(
         ISBN, BEIDE, buchreihe_fehlt=(6,), eintraege_fehlen=(("Deutsch", 6, True),)))
-    assert m.werte[0].hinweis == ("IServ-Bücherliste: als Leihbuch noch nicht eingetragen"
-                                  " · IServ-Buchreihe: Jahrgang 6 noch nicht zugewiesen")
+    assert m.werte[0].hinweis == ("Jahrgang 6 ist der Buchreihe hinzuzufügen\n"
+                                  "Buchreihe ist Bücherliste für Jahrgang 6 hinzuzufügen")
+    assert m.werte[0].striche == "oben-unten"
+    # Nur in der Bücherliste: der gewöhnliche Strich unten.
+    m = _markierung(_zeile(6), abweichung=Abweichung(
+        ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 6, True),)))
+    assert (m.werte[0].markierung, m.werte[0].striche) == (EINFUEHRUNG, "")
 
 
 def test_steht_die_isbn_nur_auf_einer_seite_ist_die_ganze_zeile_markiert():
     assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, NUR_EXCEL)).zeile == EINFUEHRUNG
     assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, NUR_ISERV)).zeile == AUSMUSTERUNG
     assert _markierung(_zeile(5), abweichung=Abweichung(ISBN, BEIDE)).zeile == ""
+
+
+def test_ganz_blau_nur_wenn_die_buchreihe_im_inventar_fehlt():
+    """Entscheidung 2026-11-04 (Variante B): fehlt die Buchreihe im Inventar,
+    ist die Zeile ganz blau und jeder Jahrgang hat beide Striche; gibt es sie,
+    markieren nur die Jahrgänge, was in IServ fehlt."""
+    fehlen = (("Deutsch", 5, True), ("Deutsch", 6, True))
+    m = _markierung(_zeile(5), _zeile(6), abweichung=Abweichung(
+        ISBN, NUR_EXCEL, eintraege_fehlen=fehlen, buchreihe_fehlt=(5, 6),
+        buchreihe_angelegt=False))
+    assert m.zeile == EINFUEHRUNG
+    assert [w.striche for w in m.werte] == ["oben-unten", "oben-unten"]
+    assert m.werte[0].hinweis == ("Buchreihe muss in IServ angelegt werden\n"
+                                  "Jahrgang 5 ist der Buchreihe hinzuzufügen\n"
+                                  "Buchreihe ist Bücherliste für Jahrgang 5 hinzuzufügen")
+    # Die Buchreihe gibt es schon, Jg. 6 ist ihr zugewiesen.
+    m = _markierung(_zeile(5), _zeile(6), abweichung=Abweichung(
+        ISBN, NUR_EXCEL, eintraege_fehlen=fehlen, buchreihe_fehlt=(5,),
+        buchreihe_angelegt=True))
+    assert m.zeile == ""
+    assert [(w.markierung, w.striche) for w in m.werte] == [
+        (EINFUEHRUNG, "oben-unten"), (EINFUEHRUNG, "")]
+    assert m.werte[1].hinweis == "Buchreihe ist Bücherliste für Jahrgang 6 hinzuzufügen"
 
 
 def test_einfuehrung_mit_ausmusterung_ist_blau_bis_iserv_den_jahrgang_fuehrt():
@@ -252,8 +293,8 @@ def test_einfuehrung_mit_ausmusterung_ist_blau_bis_iserv_den_jahrgang_fuehrt():
         ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 6, True),)))
     assert (m.werte[0].plan, m.werte[0].jahr) == (EINFUEHRUNG, 2026)
     assert m.werte[0].hinweis == (
-        "Planung: als Leihbuch eingeführt zu 2026/2027 (bis 2029/2030)"
-        " · IServ-Bücherliste: als Leihbuch noch nicht eingetragen")
+        "Einführung der Buchreihe in Jahrgang 6 beantragt\n"
+        "Buchreihe ist Bücherliste für Jahrgang 6 hinzuzufügen")
     # … oder an der Buchreihe: blau.
     m = _markierung(zeile, abweichung=Abweichung(ISBN, BEIDE, buchreihe_fehlt=(6,)))
     assert m.werte[0].plan == EINFUEHRUNG
@@ -271,8 +312,8 @@ def test_eine_spaetere_einfuehrung_mit_ausmusterung_bleibt_blau():
                     _zeile(8, ab="2027/2028", nach="2030/2031"), abweichung=Abweichung(ISBN, BEIDE))
     assert [(w.text, w.plan, w.iserv) for w in m.werte] == [
         ("5", "", ""), ("7", EINFUEHRUNG, ""), ("8", EINFUEHRUNG, "")]
-    assert m.werte[1].hinweis == "Planung: als Leihbuch eingeführt nur für 2027/2028"
-    assert m.werte[2].hinweis == "Planung: als Leihbuch eingeführt ab 2027/2028"
+    assert m.werte[1].hinweis == "Einführung der Buchreihe in Jahrgang 7 für 2027/2028 beantragt"
+    assert m.werte[2].hinweis == "Einführung der Buchreihe in Jahrgang 8 für 2027/2028 beantragt"
 
 
 # ── Wiedereinführung, abgelehnte Anträge, Grau (Entscheidung 2026-10-31) ─────
@@ -337,7 +378,7 @@ def test_hinge_das_buch_nur_an_abgelehnten_einfuehrungen_ist_die_zeile_grau():
     m = _markierung(_abgelehnt(_zeile(7, ab="2027/2028"), einfuehrung=True),
                     _abgelehnt(_zeile(8, ab="2027/2028"), einfuehrung=True))
     assert [w.grau for w in m.werte] == [True, True] and m.ganz == "grau"
-    assert m.werte[0].hinweis.startswith("Planung: Antrag auf Einführung als Leihbuch abgelehnt")
+    assert m.werte[0].hinweis.startswith("Einführung der Buchreihe in Jahrgang 7 für 2027/2028 abgelehnt")
     # Läuft es anderswo oder in einem anderen Jahrgang, gibt es das Buch: nicht grau.
     m = _markierung(_abgelehnt(_zeile(7, ab="2027/2028"), einfuehrung=True), _zeile(5))
     assert m.ganz == ""
@@ -382,3 +423,43 @@ def test_die_teilzeilen_stehen_geordnet_nach_ihren_jahrgaengen():
     # Der Strich folgt der Reihenfolge, in der gelesen wird.
     m = _markierung(_zeile(7, nach="2026/2027"), _zeile(5, ab="2027/2028", leihbar=False))
     assert m.strich() == (EINFUEHRUNG, AUSMUSTERUNG)
+
+
+# ── Tooltips am Jahrgang (Entscheidung 2026-11-04) ───────────────────────────
+
+
+def _entschieden(zeile: Planungszeile, *, einfuehrung: str = "", ausmusterung: str = "",
+                 ) -> Planungszeile:
+    from dataclasses import replace
+    from datetime import date
+
+    from buecherlisten.planung import Antragsentscheidung
+
+    def antrag(ergebnis: str) -> Antragsentscheidung:
+        return Antragsentscheidung(ergebnis, "b.lehrer", date(2026, 10, 12)) if ergebnis \
+            else Antragsentscheidung()
+    return replace(zeile, antrag_einfuehrung=antrag(einfuehrung),
+                   antrag_ausmusterung=antrag(ausmusterung))
+
+
+def test_ein_genehmigter_antrag_steht_ohne_beantragt_im_tooltip():
+    m = _markierung(_entschieden(_zeile(5, nach="2025/2026"), ausmusterung="genehmigt"),
+                    _entschieden(_zeile(6, ab="2026/2027"), einfuehrung="genehmigt"),
+                    _entschieden(_zeile(7, ab="2027/2028"), einfuehrung="genehmigt"),
+                    _entschieden(_zeile(8, nach="2027/2028"), ausmusterung="genehmigt"))
+    assert [w.hinweis for w in m.werte] == [
+        "Ausmusterung der Buchreihe in Jahrgang 5",
+        "Einführung der Buchreihe in Jahrgang 6",
+        "Einführung der Buchreihe in Jahrgang 7 für 2027/2028",
+        "Ausmusterung der Buchreihe in Jahrgang 8 nach 2027/2028"]
+
+
+def test_grau_nennt_die_abgelehnte_einfuehrung_mit_datum_und_signatur():
+    """„für ESJ“ nur, wenn die Einführung nach dem ausgewählten Schuljahr liegt."""
+    m = _markierung(_entschieden(_zeile(7, ab="2027/2028"), einfuehrung="abgelehnt"),
+                    _entschieden(_zeile(8, ab="2026/2027"), einfuehrung="abgelehnt"))
+    assert [w.grau for w in m.werte] == [True, True]
+    assert [w.hinweis for w in m.werte] == [
+        "Einführung der Buchreihe in Jahrgang 7 für 2027/2028 abgelehnt\n"
+        "am 12.10.2026\ndurch b.lehrer",
+        "Einführung der Buchreihe in Jahrgang 8 abgelehnt\nam 12.10.2026\ndurch b.lehrer"]

@@ -150,7 +150,7 @@
     <tr data-isbn="{{ buch.isbn }}"{% if klassen %} class="{{ klassen | join(' ') }}"{% endif %}
       {%- if buch.farben %}{{ strich_attribute(buch.farben) }}{% endif %}{% if menue %}
       data-planung="aufklappen" data-fach="{{ fach }}" role="button" tabindex="0"
-      title="Einführung, Ausmusterung und Rücklage"{% endif %}>
+      title="Buchreihe bearbeiten"{% endif %}>
     {% if buch.farben %}{{ fachzeile(buch, iserv, mit_jahrgang, mit_ruecklagen, fach) }}{% else %}
       <td{{ feldabweichung(iserv, "titel") }}>{{ buch.titel }}
         {%- if buch.von_hand and not buch.art %} <span class="klein grau">nicht in IServ</span>{% endif %}
@@ -198,9 +198,10 @@
 {% macro feldabweichung(iserv, feld) -%}
 {%- if feld in iserv %} class="aenderung" title="{{ iserv_wert(iserv, feld) }}"{% endif -%}
 {%- endmacro %}
-{% macro iserv_wert(iserv, feld) -%}
+{#- ``vor``: in der Fach-Ansicht „Bisher: “ (Entscheidung 2026-11-04), sonst „In IServ: “. -#}
+{% macro iserv_wert(iserv, feld, vor="In IServ: ") -%}
 {%- set wert = iserv[feld] -%}
-In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}
+{{ vor }}{% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% elif wert is none or wert == "" %}–{% elif feld in ("neupreis", "leihgebuehr") %}{{ "%.2f"|format(wert)|replace(".", ",") }} €{% else %}{{ wert }}{% endif %}
 {%- endmacro %}
 
 {#
@@ -252,16 +253,25 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 </span>{{ ", " if not loop.last }}
 {%- endfor %}){% endif -%}
 {%- endmacro %}
+{#
+  Ein Jahrgang: die Zahl in der Schrift der Planung (blau, rot, durchgestrichen,
+  grau - grau, wenn es das Buch hier nur wegen abgelehnter Einführungen gäbe),
+  markiert nach IServ. Eine blaue Markierung hat den Strich unten (Bücherliste),
+  ``markierung-oben`` den oben (Buchreihe), ``markierung-oben-unten`` beide.
+  Der Tooltip (``w.hinweis``, eine Zeile je Aussage) hängt an der Zahl, nicht
+  am Zusatz: dessen Jahreszahlen haben ihren eigenen.
+#}
 {% macro wert(w) -%}
-{%- set schrift = (["schrift-" ~ w.plan] if w.plan else []) + (["durch"] if w.durch else []) -%}
+{%- set schrift = (["schrift-" ~ w.plan] if w.plan else ["schrift-grau"] if w.grau else [])
+     + (["durch"] if w.durch else []) -%}
 {%- set kern -%}
 {%- if schrift %}<span class="{{ schrift | join(' ') }}">{{ w.text }}</span>{% else %}{{ w.text }}{% endif -%}
 {%- endset -%}
-{%- set inhalt -%}
-{%- if w.markierung %}<span class="markierung markierung-{{ w.markierung }}">{{ kern }}</span>{% else %}{{ kern }}{% endif -%}
+{%- set titel %}{% if w.hinweis %} title="{{ w.hinweis }}"{% endif %}{% endset -%}
+{%- if w.markierung -%}
+<span class="markierung markierung-{{ w.markierung }}{{ ' markierung-' ~ w.striche if w.striche }}"{{ titel }}>{{ kern }}</span>
+{%- elif w.hinweis %}<span{{ titel }}>{{ kern }}</span>{% else %}{{ kern }}{% endif -%}
 {{- zusatz(w) -}}
-{%- endset -%}
-{%- if w.hinweis %}<span title="{{ w.hinweis }}">{{ inhalt }}</span>{% else %}{{ inhalt }}{% endif -%}
 {%- endmacro %}
 {#
   Eine Spalte, die sich in Teilzeilen teilt: ``leihbar`` (das Häkchen),
@@ -308,43 +318,51 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   {%- if teile %}{{ inhalt(teile[0]) }}{% endif %}</td>
 {%- endif -%}
 {%- endmacro %}
-{# Ein Feld, das IServ anders nennt: gelb markiert, der IServ-Wert im Tooltip. #}
+{#
+  Ein Feld, das IServ anders nennt: gelb markiert, im Tooltip „Bisher: “ und
+  der Wert aus IServ (Entscheidung 2026-11-04); gezeigt wird der der Datei.
+#}
 {% macro iserv_feld(iserv, feld, inhalt) -%}
-{%- if feld in iserv %}<span class="markierung markierung-aenderung" title="{{ iserv_wert(iserv, feld) }}">{{ inhalt }}</span>
+{%- if feld in iserv %}<span class="markierung markierung-aenderung" title="{{ iserv_wert(iserv, feld, 'Bisher: ') }}">{{ inhalt }}</span>
 {%- else %}{{ inhalt }}{% endif -%}
 {%- endmacro %}
 {#
-  Ein Feld einer Zeile, deren ISBN nur auf einer Seite steht (``f.zeile``):
-  blau markiert, wenn IServ das Buch nicht führt, rot, wenn nur IServ es führt.
-  Sonst ``sonst`` - das Feld, wie es ohne diese Markierung aussähe.
+  Der Tooltip eines Felds einer ganz markierten Zeile (Entscheidung
+  2026-11-04): blau „Buchreihe muss in IServ angelegt werden“, rot mit dem
+  Zusatz „nur in IServ“ „Buchreihe existiert nur in IServ“, rot ohne ihn
+  „Buchreihe wird ausgemustert“ - die Datei kennt das Buch, führt es dieses
+  Schuljahr aber nirgends mehr.
 #}
-{% macro zeilenfeld(f, inhalt, sonst) -%}
-{%- if f.zeile %}<span class="markierung markierung-{{ f.zeile }}">{{ inhalt }}</span>
+{% macro zeilenhinweis(buch, f) -%}
+{%- if f.zeile == "einfuehrung" %}Buchreihe muss in IServ angelegt werden
+{%- elif buch.isbn not in planung.isbns %}Buchreihe existiert nur in IServ
+{%- else %}Buchreihe wird ausgemustert{% endif -%}
+{%- endmacro %}
+{#
+  Ein Feld einer Zeile, deren ISBN nur auf einer Seite steht (``f.zeile``):
+  blau markiert, wenn die Buchreihe in IServ erst angelegt werden muss, rot,
+  wenn nur IServ sie führt - mit dem Tooltip dazu. Sonst ``sonst`` - das Feld,
+  wie es ohne diese Markierung aussähe.
+#}
+{% macro zeilenfeld(buch, f, inhalt, sonst) -%}
+{%- if f.zeile %}<span class="markierung markierung-{{ f.zeile }}" title="{{ zeilenhinweis(buch, f) }}">{{ inhalt }}</span>
 {%- else %}{{ sonst }}{% endif -%}
 {%- endmacro %}
 {#
-  Der Titel (Entscheidung 2026-10-31): blau markiert, wenn das Buch in IServ in keiner Liste steht - ohne Hinweis,
-  die Markierung sagt es -, rot,
-  wenn es dieses Schuljahr nur dort steht; sonst gelb, wenn IServ ihn anders
-  nennt. Führt nur IServ es in diesem Fach, das Buch ist aber anderswo geplant,
-  bleibt der Titel ungefärbt (rot sind dann die Jahrgänge). Nennt die
-  Buchreihe im Inventar einen anderen Titel, steht er bei Blau im Tooltip -
-  eine Markierung hat nur eine Farbe.
-
-  Der Zusatz „nur in IServ“ (Entscheidung 2026-11-04) steht nur, wenn die
-  ISBN in der ganzen Datei fehlt - nicht schon, wenn die Datei das Buch kennt,
-  es dieses Schuljahr aber nirgends führt (etwa nach dem Vorjahr ausgemustert).
+  Der Titel: wie jedes Feld der Zeile (``zeilenfeld``), dazu der Zusatz
+  „nur in IServ“ (Entscheidung 2026-11-04) - nur, wenn die ISBN in der ganzen
+  Datei fehlt, nicht schon, wenn die Datei das Buch kennt, es dieses Schuljahr
+  aber nirgends führt (etwa nach dem Vorjahr ausgemustert). Führt nur IServ es
+  in diesem Fach, das Buch ist aber anderswo geplant, bleibt der Titel
+  ungefärbt (rot sind dann die Jahrgänge).
 #}
 {% macro titelfeld(buch, iserv, f) -%}
 {%- set zusatz = ' <span class="klein grau">nur in IServ</span>' | safe
       if buch.isbn not in planung.isbns else "" -%}
-{%- if f.iserv == "steht_noch" -%}
-<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, laut Datei dieses Schuljahr nirgends">{{ buch.titel }}</span>{{ zusatz }}
+{%- if f.zeile -%}
+{{ zeilenfeld(buch, f, buch.titel, "") }}{{ zusatz }}
 {%- elif buch.herkunft == "nur_iserv" -%}
 {{ buch.titel }}{{ zusatz }}
-{%- elif f.iserv == "fehlt" -%}
-<span class="markierung markierung-einfuehrung" title="Steht in IServ in keiner Liste
-  {%- if "titel" in iserv %} · {{ iserv_wert(iserv, "titel") }}{% endif %}">{{ buch.titel }}</span>
 {%- else -%}
 {{ iserv_feld(iserv, "titel", buch.titel) }}
 {%- endif -%}
@@ -354,13 +372,13 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
       <td>{{ titelfeld(buch, iserv, f) }}</td>
       {{ teilspalte(f, "leihbar") }}
       {% if mit_jahrgang %}{{ teilspalte(f, "jahrgang") }}{% endif %}
-      <td>{{ zeilenfeld(f, buch.verlag, iserv_feld(iserv, "verlag", buch.verlag)) }}</td>
+      <td>{{ zeilenfeld(buch, f, buch.verlag, iserv_feld(iserv, "verlag", buch.verlag)) }}</td>
       {% set isbn %}<samp>{{ buch.isbn_anzeige }}</samp>{% endset %}
-      <td data-wert="{{ buch.isbn }}">{{ zeilenfeld(f, isbn, isbn) }}</td>
-      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ zeilenfeld(f, euro(buch.neupreis), iserv_feld(iserv, "neupreis", euro(buch.neupreis))) }}</td>
-      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ zeilenfeld(f, euro(buch.leihgebuehr), iserv_feld(iserv, "leihgebuehr", euro(buch.leihgebuehr))) }}</td>
+      <td data-wert="{{ buch.isbn }}">{{ zeilenfeld(buch, f, isbn, isbn) }}</td>
+      <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ zeilenfeld(buch, f, euro(buch.neupreis), iserv_feld(iserv, "neupreis", euro(buch.neupreis))) }}</td>
+      <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ zeilenfeld(buch, f, euro(buch.leihgebuehr), iserv_feld(iserv, "leihgebuehr", euro(buch.leihgebuehr))) }}</td>
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
-      <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
+      <td data-wert="{{ zurueck }}">{% if zurueck %}{{ zeilenfeld(buch, f, zurueck, zurueck) }}{% endif %}</td>{% endif %}
 {% endmacro %}
 {% macro euro(wert) -%}
 {%- if wert is not none -%}{{ "%.2f"|format(wert)|replace(".", ",") }}&nbsp;€{%- endif -%}

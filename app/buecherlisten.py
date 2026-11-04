@@ -539,14 +539,16 @@ class Vergleich:
 
 
 def vergleiche_mit_iserv(daten: Buecherlisten, planung: Buchplanung,
-                         buchreihen: Callable[[set[str]], dict[str, frozenset[int]]] | None = None,
+                         buchreihen: Callable[[set[str]], dict[str, frozenset[int] | None] | None]
+                         | None = None,
                          *, abgelehnte_gelten_nicht: bool = False) -> Vergleich:
     """Die Datei mit IServ vergleichen.
 
-    ``buchreihen`` holt die Jahrgänge der Buchreihen aus dem IServ-Inventar,
-    wenn die Bücherlisten sie für einige ISBNs nicht verraten (das Buch steht
-    in keiner Liste, oder ``gradesFlat`` fehlt) - gerufen nur dann, mit
-    diesen ISBNs.
+    ``buchreihen`` holt die Buchreihen aus dem IServ-Inventar mit ihren
+    Jahrgängen, wenn die Bücherlisten sie für einige ISBNs nicht verraten (das
+    Buch steht in keiner Liste, oder ``gradesFlat`` fehlt) - gerufen nur dann,
+    mit diesen ISBNs. Eine angefragte ISBN, die darin fehlt, hat im Inventar
+    keine Buchreihe; ``None`` heißt, das Inventar war nicht zu bekommen.
 
     ``abgelehnte_gelten_nicht``: eine abgelehnte Ausmusterung gilt nicht, das
     Buch bleibt (Fach-Ansicht, ``ohne_abgelehnte_ausmusterungen``). Der
@@ -560,7 +562,7 @@ def vergleiche_mit_iserv(daten: Buecherlisten, planung: Buchplanung,
     offen = {buch.isbn for buch in planung.buecher
              if aktive_eintraege(planung, buch)
              and (buch.isbn not in iserv or iserv[buch.isbn].buchreihe_jahrgaenge is None)}
-    zusatz = buchreihen(offen) if buchreihen is not None and offen else {}
+    zusatz = buchreihen(offen) if buchreihen is not None and offen else None
     return Vergleich(planung=planung, iserv=iserv,
                      ergebnis=vergleiche(planung, iserv, zusatz),
                      original=original if abgelehnte_gelten_nicht else None)

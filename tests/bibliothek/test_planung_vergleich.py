@@ -140,6 +140,19 @@ def test_nur_in_der_datei():
     ergebnis = vergleiche(_stand(), {})[TERRA]
     assert ergebnis.art == NUR_EXCEL
     assert len(ergebnis.fehlt_in_iserv) == 3
+    # Ohne Inventar ist unbekannt, ob es die Buchreihe gibt.
+    assert ergebnis.buchreihe_angelegt is None and ergebnis.buchreihe_fehlt == ()
+
+
+def test_nur_in_der_datei_mit_inventar():
+    """Entscheidung 2026-11-04: fehlt die Buchreihe im Inventar, fehlt sie jedem
+    Jahrgang; gibt es sie, zählt ihre Zuweisung (unlesbar: nicht verglichen)."""
+    ergebnis = vergleiche(_stand(), {}, {})[TERRA]
+    assert ergebnis.buchreihe_angelegt is False and ergebnis.buchreihe_fehlt == (5, 6)
+    ergebnis = vergleiche(_stand(), {}, {TERRA: frozenset({5})})[TERRA]
+    assert ergebnis.buchreihe_angelegt is True and ergebnis.buchreihe_fehlt == (6,)
+    ergebnis = vergleiche(_stand(), {}, {TERRA: None})[TERRA]
+    assert ergebnis.buchreihe_angelegt is True and ergebnis.buchreihe_fehlt == ()
 
 
 def test_nur_in_iserv():

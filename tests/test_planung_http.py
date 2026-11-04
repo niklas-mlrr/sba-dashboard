@@ -520,9 +520,15 @@ def test_die_jahrgang_spalte_zeigt_einfuehrung_und_ausmusterung(
     # 2028/2029 blau; der Strich vorn hat je Farbe einen Abschnitt, in der
     # Reihenfolge des Lesens (Entscheidung 2026-10-31).
     zeile = _zeile_von(text, TERRA)
-    assert '<span class="schrift-ausmusterung durch">5</span> (<span class="zusatzzeile">bis ' in zeile
-    assert '<span class="schrift-ausmusterung">6</span> (<span class="zusatzzeile">bis ' in zeile
-    assert '<span class="schrift-einfuehrung">7</span> (<span class="zusatzzeile">ab ' in zeile
+    # Der Tooltip hängt an der Zahl, nicht am Zusatz (Entscheidung 2026-11-04).
+    assert ('<span class="schrift-ausmusterung durch">5</span></span> '
+            '(<span class="zusatzzeile">bis ') in zeile
+    assert ('<span title="Ausmusterung der Buchreihe in Jahrgang 6 nach 2029/2030 beantragt">'
+            '<span class="schrift-ausmusterung">6</span></span> (<span class="zusatzzeile">bis ') \
+        in zeile
+    assert ('<span title="Einführung der Buchreihe in Jahrgang 7 für 2028/2029 beantragt">'
+            '<span class="schrift-einfuehrung">7</span></span> (<span class="zusatzzeile">ab ') \
+        in zeile
     assert ('class="aufklappbar strich" style="--strich: linear-gradient('
             'var(--ausmusterung-strich) 0% 50%, '
             'var(--einfuehrung-strich) 50% 100%)"') in zeile.split(">")[0]
@@ -845,9 +851,10 @@ def test_ganz_ausgemustertes_buch_steht_in_der_liste_mit_ruecklage(
     assert 'style="--strich: var(--ausmusterung-strich)"' in zeile.split(">")[0]
     assert "ganz-" not in zeile.split(">")[0]
     assert '<span class="schrift-ausmusterung durch">5</span>' in zeile
-    assert ('<span class="markierung markierung-ausmusterung">'
-            '<span class="schrift-ausmusterung durch">6</span></span>') in zeile
-    assert "IServ-Bücherliste: als Leihbuch noch eingetragen" in zeile
+    assert ('<span class="markierung markierung-ausmusterung" title="Ausmusterung der '
+            'Buchreihe in Jahrgang 6 beantragt\nBuchreihe ist aus Bücherliste für Jahrgang 6 '
+            'in IServ zu entfernen"><span class="schrift-ausmusterung durch">6</span></span>') \
+        in zeile
     assert "<td>Terra 5/6</td>" in zeile
     assert "nur in IServ" not in zeile
     assert "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)" in _ohne_tags(zeile)
@@ -867,8 +874,9 @@ def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
         zeile = _zeile_von(_haupttabelle(seiten.get(f"/buecherliste/fach/{fach}").text), TERRA)
         kopf = zeile.split(">")[0]
         assert "ganz-ausmusterung" in kopf and "aufklappbar" in kopf
-        assert ('<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, '
-                'laut Datei dieses Schuljahr nirgends">Terra 5/6</span></td>') in zeile
+        # Die Datei kennt das Buch: es wird ausgemustert (Entscheidung 2026-11-04).
+        assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe wird '
+                'ausgemustert">Terra 5/6</span></td>') in zeile
         assert "nur in IServ</span>" not in zeile
     assert "reihe-weg" in _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, TERRA)
 
@@ -1149,10 +1157,13 @@ def test_korrigiertes_leihbar_steht_in_der_liste(seiten: TestClient, abgeglichen
     # Teilzeilen - als Leihbuch fehlt Jg. 5 in IServ, als Kaufbuch steht er
     # dort noch. Das Häkchen selbst bleibt ungefärbt.
     assert 'data-wert="0.5" class="teilzeilen"' in zeile
-    assert ('<span title="IServ-Bücherliste: als Leihbuch noch nicht eingetragen">'
-            '<span class="markierung markierung-einfuehrung">5</span></span>') in zeile
-    assert ('<span title="IServ-Bücherliste: als Kaufbuch noch eingetragen">'
-            '<span class="markierung markierung-ausmusterung">5</span>') in zeile
+    # Rot in der einen, blau in der anderen Teilzeile: in IServ ist nur
+    # „leihbar“ umzustellen (Entscheidung 2026-11-04).
+    umstellen = "Buchreihe ist in Bücherliste für Jahrgang 5 auf leihbar zu setzen"
+    assert (f'<span class="markierung markierung-einfuehrung" title="{umstellen}">'
+            '5</span>') in zeile
+    assert (f'<span class="markierung markierung-ausmusterung" title="{umstellen}">'
+            '5</span>') in zeile
     assert "in IServ: nein" not in _vorlage(text, KAUF, "Latein")
     # Die Jahrgangsansicht vergleicht weiter mit IServ.
     jahrgang = _zeile_von(seiten.get("/buecherliste/jahrgang/5").text, KAUF)
@@ -1185,7 +1196,8 @@ def test_leihbar_umschalten_teilt_die_zeile(seiten: TestClient, abgeglichen: dic
     # Kaufbuch, je in ihrer Teilzeile; beide sind ganz weg bzw. ganz neu.
     text = seiten.get("/buecherliste/fach/Deutsch").text
     zeile = text.split(f'<tr data-isbn="{DEUTSCH}"')[1].split("</tr>")[0]
-    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
+    # re.S: ein Tooltip kann mehrere Zeilen haben.
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile, re.S)
     # Die Jahrgang-Zelle (hinten) trägt zusätzlich ``mit-antrag``: an beiden Jahren hängt ein Kasten.
     assert [klasse for klasse, _ in teile] == [
         " ganz-ausmusterung", " ganz-einfuehrung",
@@ -1321,7 +1333,8 @@ def test_ein_anderer_preis_in_iserv_wird_markiert_und_die_datei_gezeigt(
     assert "22,50" in zeile
     # Titel, Verlag und Preise vergleicht auch die Fach-Ansicht mit IServ: gelb
     # markiert. Ohne Planungsfarbe steht nur der gelbe Strich vorn (2026-10-31).
-    assert ('<span class="markierung markierung-aenderung" title="In IServ: 24,00 €">'
+    # Der Tooltip nennt den bisherigen Wert (Entscheidung 2026-11-04).
+    assert ('<span class="markierung markierung-aenderung" title="Bisher: 24,00 €">'
             '22,50&nbsp;€</span>') in zeile
     assert 'class="aufklappbar strich-gelb"' in zeile.split(">")[0]
     assert "--strich" not in zeile.split(">")[0]
@@ -1346,13 +1359,14 @@ def test_ein_buch_nur_in_iserv_steht_markiert_und_ohne_menue(
     # Was nur IServ führt, steht wieder in der Fach-Ansicht (2026-10-31): jedes
     # Feld rot markiert, Jg. 5 nicht durchgestrichen, ohne Planungsmenü.
     zeile = _zeile_von(text, neu)
-    assert ('<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, laut '
-            'Datei dieses Schuljahr nirgends">Deutschbuch 6</span> '
-            '<span class="klein grau">nur in IServ</span>') in zeile
-    assert '<span class="markierung markierung-ausmusterung">Cornelsen</span>' in zeile
-    assert '<span class="markierung markierung-ausmusterung"><samp>' in zeile
-    assert '<span class="markierung markierung-ausmusterung">23,00&nbsp;€</span>' in zeile
-    assert '<span class="markierung markierung-ausmusterung">5</span>' in zeile
+    rot = '<span class="markierung markierung-ausmusterung" title="Buchreihe existiert nur in IServ">'
+    assert (f'{rot}Deutschbuch 6</span> <span class="klein grau">nur in IServ</span>') in zeile
+    assert f'{rot}Cornelsen</span>' in zeile
+    assert f'{rot}<samp>' in zeile
+    assert f'{rot}23,00&nbsp;€</span>' in zeile
+    # Der Jahrgang je Jahrgang (Variante 2, Entscheidung 2026-11-04).
+    assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe ist aus '
+            'Bücherliste für Jahrgang 5 in IServ zu entfernen">5</span>') in zeile
     assert "durch" not in zeile
     assert "aufklappbar" not in zeile and "strich" not in zeile.split(">")[0]
     assert f'data-isbn="{neu}" data-fach="Deutsch"' not in text
@@ -1368,10 +1382,14 @@ def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
     _iserv_aendern(monkeypatch, 5, [
         (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    # In keiner IServ-Liste mehr: Titel und Jg. 5 blau markiert (fehlt in
-    # IServ). Geplant ist nichts, also kein Strich.
-    assert '<span class="markierung markierung-einfuehrung" title="Steht in IServ' in zeile
-    assert '<span class="markierung markierung-einfuehrung">5</span>' in zeile
+    # In keiner IServ-Liste mehr, die Buchreihe steht aber im Inventar: nicht
+    # die ganze Zeile, nur Jg. 5 ist blau markiert - in die Bücherliste
+    # einzutragen (Variante B, Entscheidung 2026-11-04). Die Zuweisung der
+    # Buchreihe kennt das Inventar hier nicht: kein Strich oben. Geplant ist
+    # nichts, also kein Strich vorn.
+    assert "<td>Deutschbuch 5</td>" in zeile
+    assert ('<span class="markierung markierung-einfuehrung" title="Buchreihe ist Bücherliste '
+            'für Jahrgang 5 hinzuzufügen">5</span>') in zeile
     assert "strich" not in zeile.split(">")[0]
     # Das Menü bleibt: das Buch steht in der Datei.
     assert "aufklappbar" in zeile
@@ -1381,11 +1399,12 @@ def test_ein_aus_iserv_verschwundenes_buch_fehlt_in_iserv(
     fehlend = _zeile_von(jahrgang.split("Nicht in IServ")[1], DEUTSCH)
     assert "zeile-einfuehrung" in fehlend and "reihe-" not in fehlend
 
-    # Weicht die Datei von der Buchreihe im Inventar ab, steht der IServ-Titel
-    # im Tooltip der blauen Markierung.
+    # Weicht die Datei von der Buchreihe im Inventar ab, ist das Feld gelb, mit
+    # dem Titel der Buchreihe im Tooltip.
     _korrigiere_deutsch(seiten, abgeglichen["mtime"], titel="Deutschbuch 5 NRW")
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert 'title="Steht in IServ in keiner Liste · In IServ: Deutschbuch 5"' in zeile
+    assert ('<span class="markierung markierung-aenderung" title="Bisher: Deutschbuch 5">'
+            'Deutschbuch 5 NRW</span>') in zeile
 
 
 def test_fehlt_der_jahrgang_an_der_buchreihe_ist_er_blau_markiert(
@@ -1398,8 +1417,9 @@ def test_fehlt_der_jahrgang_an_der_buchreihe_ist_er_blau_markiert(
     assert "markierung" not in zeile
     monkeypatch.setitem(_BUCHREIHEN, DEUTSCH, [6])
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert ('<span title="IServ-Buchreihe: Jahrgang 5 noch nicht zugewiesen">'
-            '<span class="markierung markierung-einfuehrung">5</span></span>') in zeile
+    # Nur der Strich oben: die Bücherliste führt Jg. 5 schon.
+    assert ('<span class="markierung markierung-einfuehrung markierung-oben" '
+            'title="Jahrgang 5 ist der Buchreihe hinzuzufügen">5</span>') in zeile
 
 
 def test_die_buchreihe_eines_buchs_in_keiner_liste_kommt_aus_dem_inventar(
@@ -1410,15 +1430,22 @@ def test_die_buchreihe_eines_buchs_in_keiner_liste_kommt_aus_dem_inventar(
         (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
     # Das Inventar kennt Deutschbuch 5 aus dem Vorjahr - zugewiesen nur Jg. 6.
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert ('title="IServ-Bücherliste: als Leihbuch noch nicht eingetragen · '
-            'IServ-Buchreihe: Jahrgang 5 noch nicht zugewiesen"') in zeile
+    assert ('<span class="markierung markierung-einfuehrung markierung-oben-unten" '
+            'title="Jahrgang 5 ist der Buchreihe hinzuzufügen\nBuchreihe ist Bücherliste für '
+            'Jahrgang 5 hinzuzufügen">5</span>') in zeile
+    # Die Buchreihe gibt es: die Zeile ist nicht ganz blau.
+    assert "<td>Deutschbuch 5</td>" in zeile
 
-    # Ist das Inventar nicht zu bekommen, wird die Buchreihe nicht verglichen.
+    # Ist das Inventar nicht zu bekommen, wird die Buchreihe nicht verglichen -
+    # und die Zeile gilt als neu: ganz blau.
     def kaputt(self: object, detailed: bool = False) -> list:
         raise RuntimeError("IServ antwortet nicht")
     monkeypatch.setattr(_Serien, "get_all", kaputt)
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert 'title="IServ-Bücherliste: als Leihbuch noch nicht eingetragen"' in zeile
+    assert ('title="Buchreihe muss in IServ angelegt werden\nBuchreihe ist Bücherliste für '
+            'Jahrgang 5 hinzuzufügen">5</span>') in zeile
+    assert ('<span class="markierung markierung-einfuehrung" title="Buchreihe muss in IServ '
+            'angelegt werden">Deutschbuch 5</span>') in zeile
 
 
 def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
@@ -1442,9 +1469,17 @@ def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
     assert ('class="aufklappbar strich ganz-einfuehrung" style="--strich: '
             'var(--einfuehrung-strich)"') in zeile.split(">")[0]
-    assert '<span class="markierung markierung-einfuehrung" title="Steht in IServ' in zeile
-    assert '<span class="markierung markierung-einfuehrung"><samp>' in zeile
-    assert ('<span class="markierung markierung-einfuehrung">'
+    blau = ('<span class="markierung markierung-einfuehrung" '
+            'title="Buchreihe muss in IServ angelegt werden">')
+    assert f"{blau}Neues Deutschbuch</span>" in zeile
+    assert f"{blau}<samp>" in zeile
+    # Der Jahrgang: beide Striche, erst die Schrift, dann was in IServ zu tun ist
+    # (Variante 2, Entscheidung 2026-11-04).
+    assert ('<span class="markierung markierung-einfuehrung markierung-oben-unten" title="'
+            'Einführung der Buchreihe in Jahrgang 5 beantragt\n'
+            'Buchreihe muss in IServ angelegt werden\n'
+            'Jahrgang 5 ist der Buchreihe hinzuzufügen\n'
+            'Buchreihe ist Bücherliste für Jahrgang 5 hinzuzufügen">'
             '<span class="schrift-einfuehrung">5</span></span>') in zeile
     # Die Jahrgangsansicht vergleicht weiter mit IServ.
     fehlend = seiten.get("/buecherliste/jahrgang/5").text.split("Nicht in IServ")[1]
@@ -1460,8 +1495,9 @@ def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
     # markiert, nicht durchgestrichen.
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
     assert "strich" not in zeile.split(">")[0]
-    assert ('<td data-wert="5,6"><span>5, <span title="IServ-Bücherliste: als Leihbuch noch '
-            'eingetragen"><span class="markierung markierung-ausmusterung">6</span>') in zeile
+    assert ('<td data-wert="5,6"><span>5, <span class="markierung markierung-ausmusterung" '
+            'title="Buchreihe ist aus Bücherliste für Jahrgang 6 in IServ zu entfernen">6</span>') \
+        in zeile
     # Die Jahrgangsseite vergleicht mit IServ; dort steht es beim Fach.
     zeile = _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH)
     assert "Ausmusterung, in IServ noch: Deutsch Jg. 6" in zeile
@@ -1497,7 +1533,7 @@ def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(
         (KAUF, "Wörterbuch Latein", ["Latein"], "Langenscheidt", 19.9, False)])
     assert seiten.post("/api/buchplanung/abgleich", json={}).status_code == 200
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert "22,50" in zeile and "In IServ: 24,00 €" in zeile
+    assert "22,50" in zeile and "Bisher: 24,00 €" in zeile
 
 
 
@@ -1808,12 +1844,13 @@ def test_ein_nach_dem_vorjahr_ausgemustertes_kaufbuch_steht_mit_menue_in_der_lis
     zeile = _zeile_von(text, TERRA)
     assert "nur in IServ</span>" not in zeile
     assert "aufklappbar" in zeile.split(">")[0]
-    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile, re.S)
     # Oben die Teilzeile mit den kleineren Jahrgängen (Kaufbuch 5, 6), darunter das,
     # was nur IServ als Leihbuch führt (6).
     assert [klasse for klasse, _ in teile] == [
         " ganz-ausmusterung", "", " ganz-ausmusterung mit-antrag", ""]
-    assert '<span class="markierung markierung-ausmusterung">6</span>' in teile[3][1]
+    assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe ist aus '
+            'Bücherliste für Jahrgang 6 in IServ zu entfernen">6</span>') in teile[3][1]
     assert _ohne_tags(teile[2][1]) == (
         "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)")
 
