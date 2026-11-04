@@ -321,6 +321,17 @@ Einführung „ab 2027/2028“ ist blau geschrieben, aber nicht markiert; eine
 Ausmusterung nach diesem Schuljahr oder später ist rot geschrieben, IServ muss
 den Jahrgang aber noch führen.
 
+**Markiert wird nur, was entschieden ist** (Entscheidung 2026-11-04): hängt
+ein Jahrgang (je „leihbar“) in diesem Schuljahr an einem **offenen** Antrag -
+einer Einführung zu diesem Schuljahr oder einer Ausmusterung nach dem Vorjahr -,
+ist er weder rot noch blau markiert, und sein Tooltip nennt nichts, was in
+IServ zu tun wäre. Erst genehmigt gilt die Änderung. Abgelehnt gilt sie nicht:
+der Jahrgang ist dann entschieden wie ohne den Antrag und wird gegen IServ
+verglichen. Ein Antrag für später ändert dieses Schuljahr nicht. Hängt eine
+ganz neue bzw. ganz ausgemusterte Buchreihe nur an offenen Anträgen, ist auch
+die Zeile nicht markiert. Die Schrift (Farbe, Durchstreichen) rechnet weiter
+damit, was IServ führt (`_ungeklaert` in `farben.py`).
+
 **Buchreihe:** In IServ muss die Buchreihe einem Jahrgang zugewiesen sein,
 bevor das Buch in dessen Bücherliste kommt. Fehlt an ihr ein Jahrgang, den ein
 Fach dieses Schuljahr führt, ist der Jahrgang blau markiert, mit einem Strich

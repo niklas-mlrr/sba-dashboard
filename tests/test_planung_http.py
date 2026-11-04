@@ -816,6 +816,19 @@ def _mustere_terra_aus(seiten: TestClient, mtime: float, *faecher: str) -> float
     return mtime
 
 
+def _genehmige(seiten: TestClient, mtime: float, isbn: str, art: str,
+               *paare: tuple[str, int]) -> float:
+    """Genehmigt den Antrag dieser Art je (Fach, Jahrgang) - erst dann wird markiert."""
+    for fach, jahrgang in paare:
+        antwort = seiten.post("/api/buchplanung/antrag", json={
+            "schuljahr": "2026/2027", "isbn": isbn, "fach": fach, "jahrgang": jahrgang,
+            "art": art, "ergebnis": "genehmigt", "mtime": mtime,
+        })
+        assert antwort.status_code == 200, antwort.text
+        mtime = antwort.json()["mtime"]
+    return mtime
+
+
 def _haupttabelle(text: str) -> str:
     """Die Bücherliste der Seite - die erste Tabelle."""
     return text.split("</table>")[0]
@@ -837,27 +850,33 @@ def test_ganz_ausgemustertes_buch_steht_in_der_liste_mit_ruecklage(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     mtime = _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
-    seiten.post("/api/buchplanung/ruecklage", json={
+    mtime = seiten.post("/api/buchplanung/ruecklage", json={
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "anzahl": 4,
         "mtime": mtime,
-    })
+    }).json()["mtime"]
     tabelle = _haupttabelle(seiten.get("/buecherliste/fach/Erdkunde").text)
     assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
         "Titel", "Leihbar", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Rücklagen"]
     zeile = _zeile_von(tabelle, TERRA)
     assert '<td data-wert="4">4</td>' in zeile
     # In Politik läuft Terra weiter, es ist also nicht ganz weg: rot sind der
-    # Strich und die Jahrgänge (Schrift); Jg. 6 führt IServ noch - rot markiert.
+    # Strich und die Jahrgänge (Schrift). Jg. 6 führt IServ noch - markiert ist
+    # er erst, wenn die Ausmusterung genehmigt ist (Entscheidung 2026-11-04).
     assert 'style="--strich: var(--ausmusterung-strich)"' in zeile.split(">")[0]
     assert "ganz-" not in zeile.split(">")[0]
     assert '<span class="schrift-ausmusterung durch">5</span>' in zeile
-    assert ('<span class="markierung markierung-ausmusterung" title="Ausmusterung der '
-            'Buchreihe in Jahrgang 6 beantragt\nBuchreihe ist aus Bücherliste für Jahrgang 6 '
-            'in IServ zu entfernen"><span class="schrift-ausmusterung durch">6</span></span>') \
-        in zeile
+    assert ('<span title="Ausmusterung der Buchreihe in Jahrgang 6 beantragt">'
+            '<span class="schrift-ausmusterung durch">6</span></span>') in zeile
+    assert "markierung" not in zeile
     assert "<td>Terra 5/6</td>" in zeile
     assert "nur in IServ" not in zeile
     assert "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)" in _ohne_tags(zeile)
+    _genehmige(seiten, mtime, TERRA, "ausmusterung", ("Erdkunde", 6))
+    zeile = _zeile_von(_haupttabelle(seiten.get("/buecherliste/fach/Erdkunde").text), TERRA)
+    assert ('<span class="markierung markierung-ausmusterung" title="Ausmusterung der '
+            'Buchreihe in Jahrgang 6\nBuchreihe ist aus Bücherliste für Jahrgang 6 '
+            'in IServ zu entfernen"><span class="schrift-ausmusterung durch">6</span></span>') \
+        in zeile
 
 
 def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
@@ -869,7 +888,12 @@ def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
     bleibt (2026-11-04). Die Jahrgangsansicht vergleicht weiter mit IServ -
     dort führt IServ Terra dieses Jahr noch in Jg. 6.
     """
-    _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde", "Politik")
+    mtime = _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde", "Politik")
+    # Solange die Ausmusterungen offen sind, ist nichts markiert (Entscheidung
+    # 2026-11-04) - hinterlegt ist die Zeile trotzdem, das zeigt die Planung.
+    zeile = _zeile_von(_haupttabelle(seiten.get("/buecherliste/fach/Erdkunde").text), TERRA)
+    assert "ganz-ausmusterung" in zeile.split(">")[0] and "markierung" not in zeile
+    _genehmige(seiten, mtime, TERRA, "ausmusterung", ("Erdkunde", 6), ("Politik", 6))
     for fach in ("Erdkunde", "Politik"):
         zeile = _zeile_von(_haupttabelle(seiten.get(f"/buecherliste/fach/{fach}").text), TERRA)
         kopf = zeile.split(">")[0]
@@ -1464,11 +1488,15 @@ def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
     })
     assert antwort.status_code == 200, antwort.text
     # In der Fach-Ansicht: zum ersten Mal überhaupt eingeführt, zum laufenden
-    # Schuljahr - die ganze Zeile hinterlegt, die Jahrgangszahl blau, und weil
-    # IServ es nicht kennt, ist jedes Feld blau markiert.
+    # Schuljahr - die ganze Zeile hinterlegt, die Jahrgangszahl blau. Markiert
+    # ist noch nichts: der Antrag ist offen (Entscheidung 2026-11-04).
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
     assert ('class="aufklappbar strich ganz-einfuehrung" style="--strich: '
             'var(--einfuehrung-strich)"') in zeile.split(">")[0]
+    assert "markierung" not in zeile
+    # Genehmigt: weil IServ es nicht kennt, ist jedes Feld blau markiert.
+    _genehmige(seiten, antwort.json()["mtime"], NEU, "einfuehrung", ("Deutsch", 5))
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
     blau = ('<span class="markierung markierung-einfuehrung" '
             'title="Buchreihe muss in IServ angelegt werden">')
     assert f"{blau}Neues Deutschbuch</span>" in zeile
@@ -1476,7 +1504,7 @@ def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
     # Der Jahrgang: beide Striche, erst die Schrift, dann was in IServ zu tun ist
     # (Variante 2, Entscheidung 2026-11-04).
     assert ('<span class="markierung markierung-einfuehrung markierung-oben-unten" title="'
-            'Einführung der Buchreihe in Jahrgang 5 beantragt\n'
+            'Einführung der Buchreihe in Jahrgang 5\n'
             'Buchreihe muss in IServ angelegt werden\n'
             'Jahrgang 5 ist der Buchreihe hinzuzufügen\n'
             'Buchreihe ist Bücherliste für Jahrgang 5 hinzuzufügen">'

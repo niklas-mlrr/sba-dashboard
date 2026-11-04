@@ -405,6 +405,19 @@ def _plan_des_eintrags(stand: Buchplanung, jetzt: int, zeilen: _Zeilen, *,
     )
 
 
+def _ungeklaert(zeilen: _Zeilen, jetzt: int) -> bool:
+    """Hängt der Eintrag in diesem Schuljahr an einem offenen Antrag - einer
+    Einführung zu diesem Schuljahr oder einer Ausmusterung nach dem Vorjahr?
+
+    Dann ist noch nicht entschieden, ob IServ ihn führen soll: er wird nicht
+    markiert. Ein abgelehnter Antrag gilt nicht, der Eintrag ist dann so
+    entschieden wie ohne ihn; ein späterer Antrag ändert dieses Schuljahr nicht."""
+    return any(
+        (zeile.beginn == jetzt and zeile.antrag_einfuehrung.status == ANTRAG_OFFEN)
+        or (zeile.ende == jetzt - 1 and zeile.antrag_ausmusterung.status == ANTRAG_OFFEN)
+        for zeile in zeilen.urspruenglich)
+
+
 def _naechste_abgelehnte(zeilen: tuple[Planungszeile, ...], jetzt: int) -> Planungszeile | None:
     """Die zeitlich nächste abgelehnte Einführung: die früheste ab diesem
     Schuljahr, sonst die letzte davor."""
@@ -538,6 +551,16 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     eintraege = sorted((e for e in set(planung) | nur_iserv if im(e)),
                        key=lambda e: (e[0].casefold(), e[1], not e[2]))
 
+    # Markiert wird nur, was entschieden ist (Entscheidung 2026-11-04): hängt
+    # der Stand eines Eintrags in diesem Schuljahr an einem offenen Antrag,
+    # bleibt er unmarkiert - in IServ ist dafür noch nichts zu tun. Die Schrift
+    # rechnet weiter mit dem, was IServ führt (``fehlt``, ``ist`` oben).
+    ungeklaert = {e for e, z in zeilen.items() if jetzt is not None and _ungeklaert(z, jetzt)}
+    fehlt, nur_iserv = fehlt - ungeklaert, nur_iserv - ungeklaert
+    buchreihe_markiert = buchreihe if not ungeklaert else {
+        jahrgang for jahrgang in buchreihe
+        if any(e[1] == jahrgang and e not in ungeklaert for e in zeilen)}
+
     # Der Hintergrund schaut auf alle Fächer, aber nur auf die gezeigten Einträge.
     ganz = _ganz(planung.values())
     beide = len({leihbar for _, _, leihbar in planung}) > 1
@@ -545,9 +568,15 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     # Ganz blau markiert ist die Zeile nur, wenn die Buchreihe in IServ erst
     # angelegt werden muss (Entscheidung 2026-11-04); gibt es sie im Inventar
     # schon, zeigen die Jahrgänge, was fehlt. Ist das Inventar unbekannt, gilt
-    # die Zeile als neu.
+    # die Zeile als neu. Hängt alles an offenen Anträgen, ist nichts markiert.
+    def alles_offen(betroffen: tuple[Eintrag, ...]) -> bool:
+        return bool(betroffen) and all(e in ungeklaert for e in betroffen)
+
     anlegen = art == NUR_EXCEL and abweichung is not None \
-        and abweichung.buchreihe_angelegt is not True
+        and abweichung.buchreihe_angelegt is not True \
+        and not alles_offen(abweichung.eintraege_fehlen)
+    nur_dort = art == NUR_ISERV and abweichung is not None \
+        and not alles_offen(abweichung.eintraege_nur_iserv)
 
     teilzeilen = []
     for leihbar in (True, False):
@@ -559,7 +588,8 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
             fach, jahrgang, _ = eintrag
             plan = planung.get(eintrag)
             liste = FEHLT if eintrag in fehlt else STEHT_NOCH if eintrag in nur_iserv else ""
-            reihe = plan is not None and plan.wirkt and jahrgang in buchreihe
+            reihe = plan is not None and plan.wirkt and jahrgang in buchreihe_markiert \
+                and eintrag not in ungeklaert
             # Steht der Jahrgang in der anderen Teilzeile andersherum markiert,
             # ist in IServ nur „leihbar“ umzustellen - auf den Wert der blauen.
             gegenueber = (fach, jahrgang, not leihbar)
@@ -597,7 +627,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
         teilzeilen.sort(key=lambda teil: (teil.jahrgaenge, not teil.leihbar))
     return Markierung(
         teilzeilen=tuple(teilzeilen), ganz=ganz,
-        iserv=FEHLT if anlegen else STEHT_NOCH if art == NUR_ISERV else "",
+        iserv=FEHLT if anlegen else STEHT_NOCH if nur_dort else "",
         felder_anders=bool(abweichung and any(f != "leihbar" for f, _ in abweichung.felder)),
         eintraege=tuple(eintraege),
     )
