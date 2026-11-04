@@ -107,7 +107,6 @@ from .modelle import (
     verfallsgruende,
     wirkt_im_schuljahr,
     zeilen_des_fachs,
-    zum_schuljahr_ausgemustert,
 )
 from .vergleich import (
     BEIDE,
@@ -210,6 +209,5 @@ __all__ = [
     "wirkt_im_schuljahr",
     "zeilen_des_fachs",
     "zu_entscheidende_antraege",
-    "zum_schuljahr_ausgemustert",
     "zusammenfuehren",
 ]

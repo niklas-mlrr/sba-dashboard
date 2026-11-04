@@ -65,7 +65,7 @@ from ..buecherlisten import (
     liste_aus_datei,
     vergleiche_mit_iserv,
 )
-from ..planungsansicht import ausmusterungen_je_fach, leerer_kontext, planungskontext
+from ..planungsansicht import leerer_kontext, planungskontext
 from ..sitzung import Abgelaufen, NichtAngemeldet
 from .gemeinsam import aktuelle_einstellungen, vorlagen
 
@@ -495,12 +495,6 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
     vergleich = vergleiche_mit_iserv(
         daten, stand, _buchreihen(request) if ansicht == "fach" else None,
         abgelehnte_gelten_nicht=ansicht == "fach") if stand else None
-    if ansicht == "fach" and vergleich is not None:
-        # Die Ausmusterungen zeigen auch, was IServ noch führt - das kennt der
-        # Planungskontext nicht.
-        planung = {**planung, "ausmusterungen_je_fach":
-                   ausmusterungen_je_fach(vergleich.planung, vergleich.ergebnis,
-                                          vergleich.original)}
     werte: dict[str, Any] = {
         "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,

@@ -52,8 +52,8 @@ gesehen hatte. Seitdem ist es umgekehrt:
   nur verglichen (`vergleich.py`). Drei Farben: **gelb** ein anderer Wert
   (Titel, Verlag, Preise, leihbar; der IServ-Wert steht beim Überfahren),
   **blau** eine Einführung (laut Datei in Fach und Jahrgang, in IServ noch
-  nicht), **rot** eine Ausmusterung (in IServ noch, laut Datei nicht mehr -
-  auch unter „Ausmusterungen zu diesem Schuljahr“). Die Zeile hat vorn einen
+  nicht), **rot** eine Ausmusterung (in IServ noch, laut Datei nicht mehr).
+  Die Zeile hat vorn einen
   Strich in der Farbe, die Zelle ist hell hinterlegt, der Wert farbig. Ist die
   ganze Buchreihe neu oder ganz ausgemustert, ist die ganze Zeile hinterlegt.
   Bei einer neuen Reihe entscheidet das IServ-Inventar (`GET /series`,
@@ -108,8 +108,9 @@ erlaubt — sonst ließe sich ein Wunsch von vor dieser Regel nie wieder lösche
 Jedes (Fach, Jahrgang)-Paar, in dem ein leihbares Buch im Vorjahr stand und
 heuer nicht mehr, bekommt beim Abgleich auf `Fächer & Jahrgang` die
 `Ausmusterung nach Schuljahr` = Kennung des Vorjahres. Ein von Hand
-eingetragener Wert bleibt. Die Fach-Seite listet diese Zeilen unter der
-Bücherliste in der Tabelle „Ausmusterungen zu diesem Schuljahr“.
+eingetragener Wert bleibt. Die Fach-Seite zeigt diese Jahrgänge in der
+Bücherliste selbst, rot und durchgestrichen (siehe „Nach dem Vorjahr
+ausgemustert“ unter „Farben der Fach-Ansicht“).
 
 **Nicht** daran hängt die Ausmusterung. Bis 2026-09-20 nahm die Spalte
 `Ausmusterung nach Schuljahr` nur bei `leihbar = ja` einen Wert an; das
@@ -327,11 +328,14 @@ Buchreihe nicht verglichen.
 
 **ISBN nur auf einer Seite:** Steht das Buch dieses Schuljahr in keiner
 IServ-Liste, ist jedes Feld der Zeile blau markiert; steht es nur in IServ,
-rot („nur in IServ“, ohne Menü). Führt nur IServ es in einem Fach, ist es aber
+rot. Führt nur IServ es in einem Fach, ist es aber
 anderswo geplant, sind nur die Jahrgänge rot markiert. Den Zusatz „nicht in
 IServ“ trägt der Titel nicht mehr: ein Buch, das nur die Planung kennt, ist
-blau markiert, ohne Hinweis. Als „nur in IServ“ ausgewiesen wird ein Buch nur,
-wenn die Planung es gar nicht kennt.
+blau markiert, ohne Hinweis. Den Zusatz **„nur in IServ“** (ohne Menü) trägt
+der Titel nur, wenn die ISBN in einer IServ-Bücherliste steht und **in der
+ganzen Datei nicht** (Entscheidung 2026-11-04). Ein Buch, das die Datei kennt -
+etwa nach dem Vorjahr ausgemustert, IServ führt es noch -, ist rot markiert,
+hat aber keinen Zusatz und behält sein Menü.
 
 **Sortierung der Fach-Ansicht** (`static/sortieren.js`, Tabellen mit
 `data-ebenen`): eine Liste von Sortierebenen, zu Beginn Jahrgang aufsteigend,
@@ -421,11 +425,15 @@ vorbereitet: `im` wählt die Einträge der Zeile, `nach` die Wertspalte
 (`jahrgang` oder `fach`); `strich("iserv")` gibt den Strich einer Ansicht mit
 Schwerpunkt IServ.
 
-„Ausmusterungen zu diesem Schuljahr“ (`in_ausmusterungen`) führt ein Buch, wenn
-jeder Jahrgang, in dem es im Fach leihbar war, spätestens nach dem Vorjahr
-ausgemustert ist (der letzte genau dann) und es im Fach nicht wieder eingeführt
-wird. Läuft es als Kaufbuch weiter, steht es in beiden Listen, mit derselben
-Jahrgang-Spalte. Gefärbt wird es wie die Liste darüber.
+**Was in der Liste eines Fachs steht** (`Vergleich.gezeigte_paare` in
+`app/buecherlisten.py`, Entscheidung 2026-11-04): jedes (Fach, Jahrgang)-Paar,
+das dieses Schuljahr gilt oder erst noch kommt, und jedes, das **genau nach dem
+Vorjahr** ausgemustert ist - leihbar oder Kaufbuch. Ein ganz ausgemustertes
+Buch steht damit rot und durchgestrichen in der Liste, mit Antragskasten,
+Planungsmenü und Rücklage. Was vor dem Vorjahr endete, steht nicht mehr da;
+eine abgelehnte Ausmusterung gilt nicht. Bis 2026-11-04 standen ganz
+ausgemusterte Leihbücher in einer eigenen Tabelle „Ausmusterungen zu diesem
+Schuljahr“ unter der Liste; die gibt es nicht mehr.
 
 ## Status werden gerechnet, nie eingetragen
 

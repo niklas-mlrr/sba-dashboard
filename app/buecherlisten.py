@@ -52,6 +52,7 @@ from buecherlisten.planung import (
     IservBuch,
     aktive_eintraege,
     aktive_paare,
+    endet_mit_vorjahr,
     leihbar_im_schuljahr,
     planungs_status,
     vergleiche,
@@ -61,7 +62,6 @@ from buecherlisten.planung import Buch as PlanBuch
 from buecherlisten.planung.farben import (
     Markierung,
     im_fach,
-    in_ausmusterungen,
     markierung,
     ohne_abgelehnte_ausmusterungen,
 )
@@ -517,11 +517,18 @@ class Vergleich:
     def aktiv(self, buch: PlanBuch) -> frozenset[Paar]:
         return aktive_paare(self.planung, buch)
 
-    def nicht_ausgemustert(self, buch: PlanBuch) -> tuple[Paar, ...]:
-        """Paare, die dieses Schuljahr gelten oder erst noch kommen."""
+    def gezeigte_paare(self, buch: PlanBuch) -> tuple[Paar, ...]:
+        """Paare der Fach-Ansicht: die dieses Schuljahr gelten oder erst noch
+        kommen, und die genau nach dem Vorjahr ausgemustert sind - rot und
+        durchgestrichen, mit ihrem Antrag (Entscheidung 2026-11-04).
+
+        Gerechnet mit dem wirksamen Stand: eine abgelehnte Ausmusterung ist
+        darin schon weg. Was vor dem Vorjahr endete, steht nicht mehr da."""
+        schuljahr = self.planung.schuljahr
         return tuple(
             (fach, jahrgang) for fach, jahrgang in self.planung.zeilen_des_buchs(buch)
-            if any(planungs_status(zeile, self.planung.schuljahr) != PLANUNG_AUSGEMUSTERT
+            if any(planungs_status(zeile, schuljahr) != PLANUNG_AUSGEMUSTERT
+                   or endet_mit_vorjahr(zeile, schuljahr)
                    for zeile in self.planung.zeilen_des_paars(buch.isbn, fach, jahrgang)
                    or [None])
         )
@@ -672,11 +679,12 @@ def _im_fach(fach: str) -> Callable[[Paar], bool]:
 def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
     """Eine Gruppe je Fach, aus der Datei - gefärbt nach Planung und IServ.
 
-    In einem Fach steht jedes Buch, das dort dieses Schuljahr geführt wird
-    **oder** erst noch eingeführt wird: die geplante Einführung soll man in der
-    Liste sehen und im Planungsmenü ändern können. Was dort zu diesem
-    Schuljahr aus den Regalen geht, steht zusätzlich unter „Ausmusterungen“
-    (``in_ausmusterungen``) - läuft es als Kaufbuch weiter, in beiden Listen.
+    In einem Fach steht jedes Buch, das dort dieses Schuljahr geführt wird,
+    erst noch eingeführt wird **oder** genau nach dem Vorjahr ausgemustert ist
+    (``Vergleich.gezeigte_paare``): die geplante Einführung und die
+    Ausmusterung zu diesem Schuljahr soll man in der Liste sehen und im
+    Planungsmenü ändern können, samt Rücklage. Eine eigene Tabelle
+    „Ausmusterungen zu diesem Schuljahr“ gibt es seit 2026-11-04 nicht mehr.
 
     Seit 2026-10-31 färbt die Fach-Ansicht nach der Planung (Schrift) und nach
     IServ (Markierung) zugleich (``farben``, Regeln in
@@ -689,18 +697,12 @@ def gruppen_nach_fach_aus_datei(v: Vergleich) -> tuple[Gruppe, ...]:
     gezeigt: set[tuple[str, str]] = set()
     for buch in v.planung.buecher:
         abweichung = v.ergebnis.get(buch.isbn)
-        # Ein Fach, in dem nur noch Ausgemustertes steht, behält seine Seite:
-        # dort stehen die Ausmusterungen und ihre Rücklagen.
-        for fach in {fach for fach, _ in v.planung.zeilen_des_buchs(buch)}:
-            if in_ausmusterungen(v.planung, buch, fach):
-                zeilen.setdefault(fach, {})
-                gezeigt.add((fach, buch.isbn))
-        offen = v.nicht_ausgemustert(buch)
-        for fach in {fach for fach, _ in offen}:
+        paare = v.gezeigte_paare(buch)
+        for fach in {fach for fach, _ in paare}:
             farben = markierung(v.planung, buch, abweichung, im=im_fach(fach),
                                 original=v.original)
             zeilen.setdefault(fach, {})[buch.isbn] = replace(_aus_datei(
-                v, buch, tuple(paar for paar in offen if paar[0] == fach),
+                v, buch, tuple(paar for paar in paare if paar[0] == fach),
                 _im_fach(fach), BEIDE, jahrgaenge=farben.jahrgaenge,
             ), farben=farben)
             gezeigt.add((fach, buch.isbn))

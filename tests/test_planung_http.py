@@ -785,15 +785,15 @@ def test_vorjahresbuch_steht_mit_dem_vorjahr_als_ausmusterung_in_der_datei(
     assert zeile["ausgemustert_nach"] == "2025/2026"
 
 
-def test_fach_seite_listet_nur_vollstaendig_ausgemusterte_buecher(
+def test_fach_seite_hat_keine_eigene_tabelle_fuer_ausmusterungen(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Terra ist in Erdkunde nur in Jg. 5 ausgelaufen, Jg. 6 bleibt: nicht aufgeführt."""
-    # Ohne Ausmusterung fehlt der ganze Abschnitt, samt Überschrift.
-    erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert "Ausmusterungen zu diesem Schuljahr" not in erdkunde
-    latein = seiten.get("/buecherliste/fach/Latein").text
-    assert "Ausmusterungen zu diesem Schuljahr" not in latein
+    """Seit 2026-11-04 gibt es „Ausmusterungen zu diesem Schuljahr“ nicht mehr."""
+    _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
+    for fach in ("Erdkunde", "Latein", "Politik"):
+        text = seiten.get(f"/buecherliste/fach/{fach}").text
+        assert "Ausmusterungen zu diesem Schuljahr" not in text
+        assert 'id="ausmusterungen"' not in text
 
 
 def _mustere_terra_aus(seiten: TestClient, mtime: float, *faecher: str) -> float:
@@ -811,23 +811,23 @@ def _mustere_terra_aus(seiten: TestClient, mtime: float, *faecher: str) -> float
 
 
 def _haupttabelle(text: str) -> str:
-    return text.split("Ausmusterungen zu diesem Schuljahr")[0]
+    """Die Bücherliste der Seite - die erste Tabelle."""
+    return text.split("</table>")[0]
 
 
 def test_ausgemustertes_buch_laesst_sich_wie_die_anderen_planen(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Läuft Terra in Erdkunde ganz mit dem Vorjahr aus, steht es klickbar in der Tabelle."""
+    """Läuft Terra in Erdkunde ganz mit dem Vorjahr aus, steht es klickbar in der Liste."""
     _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
     text = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert "Ausmusterungen zu diesem Schuljahr" in text
-    tabelle = text.split('id="ausmusterungen"')[1]
-    assert 'data-planung="aufklappen"' in tabelle
+    zeile = _zeile_von(_haupttabelle(text), TERRA)
+    assert 'data-planung="aufklappen"' in zeile
     assert f'<template class="planung-vorlage" data-isbn="{TERRA}" data-fach="Erdkunde"' in text
-    assert 'data-planung-feld="anzahl"' in text.split("planung-vorlage")[-1]
+    assert 'data-planung-feld="anzahl"' in _vorlage(text, TERRA, "Erdkunde")
 
 
-def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
+def test_ganz_ausgemustertes_buch_steht_in_der_liste_mit_ruecklage(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
     mtime = _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
@@ -835,27 +835,22 @@ def test_ganz_ausgemustertes_buch_steht_nur_unter_ausmusterungen_mit_ruecklage(
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "anzahl": 4,
         "mtime": mtime,
     })
-    text = seiten.get("/buecherliste/fach/Erdkunde").text
-    # IServ führt Terra noch in Jg. 6 - in der normalen Liste steht es trotzdem nicht.
-    assert f'<tr data-isbn="{TERRA}"' not in _haupttabelle(text)
-    tabelle = text.split('id="ausmusterungen"')[1].split("</table>")[0]
-    assert f'data-isbn="{TERRA}"' in tabelle
-    assert "<th data-sort=\"zahl\">Rücklagen</th>" in tabelle
-    assert '<td data-wert="4">4</td>' in tabelle
+    tabelle = _haupttabelle(seiten.get("/buecherliste/fach/Erdkunde").text)
+    assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
+        "Titel", "Leihbar", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Rücklagen"]
+    zeile = _zeile_von(tabelle, TERRA)
+    assert '<td data-wert="4">4</td>' in zeile
     # In Politik läuft Terra weiter, es ist also nicht ganz weg: rot sind der
     # Strich und die Jahrgänge (Schrift); Jg. 6 führt IServ noch - rot markiert.
-    zeile = _zeile_von(tabelle, TERRA)
     assert 'style="--strich: var(--ausmusterung-strich)"' in zeile.split(">")[0]
     assert "ganz-" not in zeile.split(">")[0]
     assert '<span class="schrift-ausmusterung durch">5</span>' in zeile
     assert ('<span class="markierung markierung-ausmusterung">'
             '<span class="schrift-ausmusterung durch">6</span></span>') in zeile
     assert "IServ-Bücherliste: als Leihbuch noch eingetragen" in zeile
-    assert f'<td>{"Terra 5/6"}</td>' in zeile
-    # Dieselben Spalten wie die normale Liste, das Ende steht am Jahrgang.
-    assert re.findall(r"<th [^>]*>([^<]*)</th>", tabelle) == [
-        "Titel", "Leihbar", "Jahrgang", "Verlag", "ISBN", "Neupreis", "Leihgebühr", "Rücklagen"]
-    assert "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)" in _ohne_tags(tabelle)
+    assert "<td>Terra 5/6</td>" in zeile
+    assert "nur in IServ" not in zeile
+    assert "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)" in _ohne_tags(zeile)
 
 
 def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
@@ -863,31 +858,32 @@ def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
 ) -> None:
     """Die Datei führt Terra danach nirgends mehr: in den Fächern die ganze Zeile hinterlegt.
 
-    Die Jahrgangsansicht vergleicht weiter mit IServ - dort führt IServ Terra
-    dieses Jahr noch in Jg. 6.
+    Die Datei kennt die ISBN aber: kein Zusatz „nur in IServ“, und das Menü
+    bleibt (2026-11-04). Die Jahrgangsansicht vergleicht weiter mit IServ -
+    dort führt IServ Terra dieses Jahr noch in Jg. 6.
     """
     _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde", "Politik")
     for fach in ("Erdkunde", "Politik"):
-        tabelle = seiten.get(f"/buecherliste/fach/{fach}").text.split('id="ausmusterungen"')[1]
-        zeile = _zeile_von(tabelle, TERRA)
-        assert "ganz-ausmusterung" in zeile.split(">")[0]
-        assert "<td>Terra 5/6</td>" in zeile
+        zeile = _zeile_von(_haupttabelle(seiten.get(f"/buecherliste/fach/{fach}").text), TERRA)
+        kopf = zeile.split(">")[0]
+        assert "ganz-ausmusterung" in kopf and "aufklappbar" in kopf
+        assert ('<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, '
+                'laut Datei dieses Schuljahr nirgends">Terra 5/6</span></td>') in zeile
+        assert "nur in IServ</span>" not in zeile
     assert "reihe-weg" in _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, TERRA)
 
 
-def test_buch_das_in_einem_anderen_fach_bleibt_kommt_trotzdem_zur_ausmusterung(
+def test_buch_das_in_einem_anderen_fach_bleibt_steht_in_beiden_listen(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """In Erdkunde ausgelaufen, in Politik weiter im Einsatz: in Erdkunde „Ausmusterung“."""
+    """In Erdkunde ausgelaufen, in Politik weiter im Einsatz: in beiden Fach-Listen."""
     _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde")
-    erdkunde = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert f'<tr data-isbn="{TERRA}"' not in _haupttabelle(erdkunde)
-    assert f'data-isbn="{TERRA}"' in erdkunde.split('id="ausmusterungen"')[1]
+    erdkunde = _zeile_von(_haupttabelle(seiten.get("/buecherliste/fach/Erdkunde").text), TERRA)
+    assert '<span class="schrift-ausmusterung durch">5</span>' in erdkunde
     # Nur in Erdkunde ausgemustert, nicht die ganze Reihe: keine hinterlegte Zeile.
-    assert "reihe-weg" not in erdkunde.split('id="ausmusterungen"')[1]
-    politik = seiten.get("/buecherliste/fach/Politik").text
-    assert "Ausmusterungen zu diesem Schuljahr" not in politik
-    assert f'<tr data-isbn="{TERRA}"' in politik
+    assert "ganz-" not in erdkunde.split(">")[0]
+    politik = _zeile_von(seiten.get("/buecherliste/fach/Politik").text, TERRA)
+    assert "ganz-" not in politik.split(">")[0]
 
 
 def test_buch_das_im_selben_fach_weiterlaeuft_steht_in_der_normalen_liste(
@@ -1792,13 +1788,14 @@ def _vorlage(text: str, isbn: str, fach: str) -> str:
     return text.split(kopf)[1].split("</template>")[0]
 
 
-def test_ausmusterungen_zeigen_kein_reines_kaufbuch(
+def test_ein_nach_dem_vorjahr_ausgemustertes_kaufbuch_steht_mit_menue_in_der_liste(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Terra in Erdkunde ausgelaufen, aber dort nie leihbar: steht nicht unter „Ausmusterungen“.
+    """Terra in Erdkunde als Kaufbuch nach dem Vorjahr ausgemustert (2026-11-04).
 
-    IServ führt es dort aber noch (als Leihbuch in Jg. 6): dann steht es in der
-    Liste, als „nur in IServ“ und ohne Menü (Entscheidung 2026-10-31).
+    Es steht in der Liste, rot und durchgestrichen, mit Menü. IServ führt es
+    dort noch als Leihbuch in Jg. 6: das ist rot markiert. „nur in IServ“
+    steht nicht dabei - die Datei kennt die ISBN.
     """
     antwort = seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde",
@@ -1808,10 +1805,9 @@ def test_ausmusterungen_zeigen_kein_reines_kaufbuch(
     })
     assert antwort.status_code == 200, antwort.text
     text = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert "Ausmusterungen zu diesem Schuljahr" not in text
     zeile = _zeile_von(text, TERRA)
-    assert '<span class="klein grau">nur in IServ</span>' in zeile
-    assert "aufklappbar" not in zeile
+    assert "nur in IServ</span>" not in zeile
+    assert "aufklappbar" in zeile.split(">")[0]
     teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile)
     # Oben die Teilzeile mit den kleineren Jahrgängen (Kaufbuch 5, 6), darunter das,
     # was nur IServ als Leihbuch führt (6).
@@ -2138,7 +2134,7 @@ def test_eine_abgelehnte_ausmusterung_laesst_das_buch_in_der_liste(
     """Erdkunde 5 ist nach 2025/2026 ausgemustert (Abgleich): ist die Ausmusterung
     abgelehnt, bleibt das Buch in der Liste, ohne Durchstreichen."""
     erst = seiten.get("/buecherliste/fach/Erdkunde").text
-    assert 'class="schrift-ausmusterung durch">5<' in erst or "Ausmusterungen zu diesem" in erst
+    assert 'class="schrift-ausmusterung durch">5<' in erst
     antwort = seiten.post("/api/buchplanung/antrag", json={
         "schuljahr": "2026/2027", "isbn": TERRA, "fach": "Erdkunde", "jahrgang": 5,
         "art": "ausmusterung", "ergebnis": "abgelehnt", "mtime": abgeglichen["mtime"],

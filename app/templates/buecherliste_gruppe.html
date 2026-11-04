@@ -326,12 +326,18 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   bleibt der Titel ungefärbt (rot sind dann die Jahrgänge). Nennt die
   Buchreihe im Inventar einen anderen Titel, steht er bei Blau im Tooltip -
   eine Markierung hat nur eine Farbe.
+
+  Der Zusatz „nur in IServ“ (Entscheidung 2026-11-04) steht nur, wenn die
+  ISBN in der ganzen Datei fehlt - nicht schon, wenn die Datei das Buch kennt,
+  es dieses Schuljahr aber nirgends führt (etwa nach dem Vorjahr ausgemustert).
 #}
 {% macro titelfeld(buch, iserv, f) -%}
+{%- set zusatz = ' <span class="klein grau">nur in IServ</span>' | safe
+      if buch.isbn not in planung.isbns else "" -%}
 {%- if f.iserv == "steht_noch" -%}
-<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, laut Datei dieses Schuljahr nirgends">{{ buch.titel }}</span> <span class="klein grau">nur in IServ</span>
+<span class="markierung markierung-ausmusterung" title="Steht nur in IServ, laut Datei dieses Schuljahr nirgends">{{ buch.titel }}</span>{{ zusatz }}
 {%- elif buch.herkunft == "nur_iserv" -%}
-{{ buch.titel }} <span class="klein grau">nur in IServ</span>
+{{ buch.titel }}{{ zusatz }}
 {%- elif f.iserv == "fehlt" -%}
 <span class="markierung markierung-einfuehrung" title="Steht in IServ in keiner Liste
   {%- if "titel" in iserv %} · {{ iserv_wert(iserv, "titel") }}{% endif %}">{{ buch.titel }}</span>
@@ -397,62 +403,6 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
   {% endif %}
 {% endif %}
 {% if ansicht == "fach" and planung.mtime is not none %}
-{% set ausgemustert = planung.ausmusterungen_je_fach.get(gruppe.name, []) %}
-{% if ausgemustert %}
-{#
-  Hier steht, was die Schule im Fach verliehen hat und zu diesem Schuljahr aus
-  den Regalen nimmt (``in_ausmusterungen`` in buecherlisten/planung/farben.py).
-  Läuft ein Buch als Kaufbuch in einem anderen Jahrgang weiter, steht es auch
-  oben, mit derselben Jahrgang-Spalte („7 (bis 2025/2026), 8“).
-  Die Rücklagen stehen mit dabei: was aus den Regalen geht, ist genau das,
-  wovon die Fachschaft noch etwas behalten will.
-
-  Gefärbt wie die Liste darüber (``teilspalte``): die ausgemusterten Jahrgänge
-  rot und durchgestrichen, rot markiert, solange IServ sie noch führt; die
-  ganze Zeile hinterlegt, wenn es das Buch danach in keinem Fach und Jahrgang
-  mehr gibt.
-#}
-{% set mit_ruecklagen = bp.ruecklagen_vorhanden(planung, ausgemustert, gruppe.name) | trim %}
-<h2 class="iserv-h2">Ausmusterungen zu diesem Schuljahr</h2>
-<div class="tabellenrahmen">
-<table class="iserv-tabelle sortierbar fach-tabelle" id="ausmusterungen" data-ebenen>
-  <thead>
-    <tr>
-      <th data-sort="text">Titel</th>
-      <th data-sort="zahl" data-teilspalte="leihbar">Leihbar</th>
-      <th data-sort="liste" data-ebene="1" data-teilspalte="jahrgang">Jahrgang</th>
-      <th data-sort="text">Verlag</th>
-      <th data-sort="text" data-ebene="2">ISBN</th>
-      <th data-sort="zahl">Neupreis</th>
-      <th data-sort="zahl">Leihgebühr</th>
-      {% if mit_ruecklagen %}<th data-sort="zahl">Rücklagen</th>{% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for e in ausgemustert %}
-    {% set f = e.farben %}
-    <tr data-isbn="{{ e.isbn }}" class="{{ (['aufklappbar'] + f.strich_klassen | list) | join(' ') }}
-      {{- ' ganz-' ~ f.ganz if f.ganz }}"{{ strich_attribute(f) }}
-      data-planung="aufklappen" data-fach="{{ gruppe.name }}" role="button" tabindex="0"
-      title="Einführung, Ausmusterung und Rücklage">
-      <td>{{ e.titel }}</td>
-      {{ teilspalte(f, "leihbar") }}
-      {{ teilspalte(f, "jahrgang") }}
-      <td>{{ e.verlag }}</td>
-      <td data-wert="{{ e.isbn }}"><samp>{{ e.isbn_anzeige }}</samp></td>
-      <td data-wert="{{ e.neupreis if e.neupreis is not none else '' }}">{{ euro(e.neupreis) }}</td>
-      <td data-wert="{{ e.leihgebuehr if e.leihgebuehr is not none else '' }}">{{ euro(e.leihgebuehr) }}</td>
-      {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, e, gruppe.name) | trim %}
-      <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{# Steht ein Buch auch oben, hat es seine Menü-Vorlage schon von dort. #}
-{% set oben = gruppe.buecher | map(attribute="isbn") | list %}
-{% for e in ausgemustert if e.isbn not in oben %}{{ bp.planungsvorlage(planung, e, gruppe.name) }}{% endfor %}
-</div>
-{% endif %}
 {{ bp.planungsmenue(verlage, vorschlaege | default([])) }}{% endif %}
 {% if druckbar %}
 {% with druck_ansicht = ansicht, druck_gruppen = none,

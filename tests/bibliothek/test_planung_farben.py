@@ -18,7 +18,6 @@ from buecherlisten.planung.farben import (
     STEHT_NOCH,
     Wert,
     im_fach,
-    in_ausmusterungen,
     markierung,
 )
 from buecherlisten.planung.vergleich import BEIDE, NUR_EXCEL, NUR_ISERV
@@ -189,28 +188,12 @@ def test_durchgestrichen_ist_nur_was_nach_dem_vorjahr_ausgemustert_ist():
     assert not Wert("5", plan=AUSMUSTERUNG).durch
 
 
-def test_ausmusterungen_zeigen_was_aus_den_regalen_geht():
-    stand = _stand(_zeile(5, nach="2025/2026"), _zeile(6, nach="2025/2026"))
-    assert in_ausmusterungen(stand, stand.buecher[0], "Deutsch")
-    # Läuft ein leihbarer Jahrgang weiter, ist es keine Ausmusterung …
-    stand = _stand(_zeile(5, nach="2025/2026"), _zeile(6))
-    assert not in_ausmusterungen(stand, stand.buecher[0], "Deutsch")
-    # … ein Kaufbuch-Jahrgang hält es nicht heraus (es steht dann in beiden Listen).
+def test_leihbuch_nach_dem_vorjahr_weg_kaufbuch_laeuft_weiter_zwei_teilzeilen():
+    """Ausgemustert nach dem Vorjahr ist durchgestrichen, das laufende Kaufbuch nicht."""
     stand = _stand(_zeile(7, nach="2025/2026"), _zeile(8, leihbar=False))
-    assert in_ausmusterungen(stand, stand.buecher[0], "Deutsch")
     m = markierung(stand, stand.buecher[0], im=im_fach("Deutsch"))
     assert [[(w.text, w.durch) for w in t.werte] for t in m.teilzeilen] == [
         [("7", True)], [("8", False)]]
-
-
-def test_keine_ausmusterung_ohne_leihbares_vor_zwei_jahren_oder_mit_neuer_einfuehrung():
-    for zeilen in (
-        (_zeile(5, nach="2025/2026", leihbar=False),),          # reines Kaufbuch
-        (_zeile(5, nach="2024/2025"),),                         # schon voriges Jahr weg
-        (_zeile(5, nach="2025/2026"), _zeile(6, ab="2027/2028")),  # kommt wieder
-    ):
-        stand = _stand(*zeilen)
-        assert not in_ausmusterungen(stand, stand.buecher[0], "Deutsch"), zeilen
 
 
 def test_ein_buch_das_ueberall_gleich_leihbar_ist_hat_eine_teilzeile():
@@ -378,7 +361,7 @@ def test_eine_abgelehnte_ausmusterung_laesst_das_buch_bleiben_ohne_grauen_hinter
     # Jahrgang 5 gilt weiter; der Zusatz zeigt die abgelehnte Ausmusterung nicht (keine Regel).
     assert [(w.text, w.plan, w.durch, w.grau) for w in m.werte] == [
         ("5", "", False, False), ("6", "", False, False)]
-    assert m.ganz == "" and not in_ausmusterungen(wirksam, wirksam.buecher[0], "Deutsch")
+    assert m.ganz == ""
     # Ohne Ablehnung bleibt der Stand derselbe Objekt.
     assert ohne_abgelehnte_ausmusterungen(_stand(_zeile(5))) is not None
 

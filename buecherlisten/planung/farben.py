@@ -530,25 +530,3 @@ def ohne_abgelehnte_ausmusterungen(stand: Buchplanung) -> Buchplanung:
 def im_fach(fach: str) -> Callable[[Eintrag], bool]:
     """Die Einträge eines Fachs - der Filter der Fach-Ansicht."""
     return lambda eintrag: eintrag[0] == fach
-
-
-def in_ausmusterungen(stand: Buchplanung, buch: Buch, fach: str) -> bool:
-    """Steht das Buch unter „Ausmusterungen zu diesem Schuljahr“ des Fachs?
-
-    Dort steht, was die Schule im Fach verliehen hat und nun aus den Regalen
-    nimmt: jeder Jahrgang, in dem es leihbar war, ist spätestens nach dem
-    Vorjahr ausgemustert - der letzte genau nach dem Vorjahr -, und im Fach
-    wird es zu diesem oder einem späteren Schuljahr nicht wieder eingeführt.
-    Läuft es als Kaufbuch in einem anderen Jahrgang weiter, steht es zusätzlich
-    in der Liste darüber (Entscheidung 2026-10-30).
-    """
-    jetzt = _jahr(stand.schuljahr)
-    if jetzt is None:
-        return False
-    eigene = [z for z in stand.planung if (z.isbn, z.fach) == (buch.isbn, fach)]
-    leihbar = [z for z in eigene if z.leihbar]
-    if not leihbar or any(z.ende is None or z.ende > jetzt - 1 for z in leihbar):
-        return False
-    if max(z.ende for z in leihbar if z.ende is not None) != jetzt - 1:
-        return False
-    return not any(z.beginn is not None and z.beginn >= jetzt for z in eigene)

@@ -3,8 +3,8 @@
 Die Bücherlisten-Seiten (``app/api/buecherliste.py``) zeigen die
 Buchplanungs-Datei und das Planungsmenü je Buch. Was die Vorlagen dafür
 brauchen, entsteht hier aus einer :class:`Buchplanung`: je Buch und Fach die
-Zeilen des Menüs, die Rücklagen, die Ausmusterungen zu diesem Schuljahr, die
-Vorschläge für „+ Buch hinzufügen“ und der Status je Fach.
+Zeilen des Menüs, die Rücklagen, die Vorschläge für „+ Buch hinzufügen“ und
+der Status je Fach.
 
 Die Status werden nicht aus der Datei gelesen, sondern hier gerechnet - mit
 denselben Funktionen, mit denen auch die API sie rechnet
@@ -15,7 +15,6 @@ Der Kontext ist ein ``dict``, weil die Vorlagen ihn so lesen und
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 from buecherlisten.core.daten import format_isbn, ist_platzhalter_isbn
@@ -26,7 +25,6 @@ from buecherlisten.planung import (
     FACH_BESTAETIGT,
     OHNE_VERLAG,
     PLANUNG_AUSGEMUSTERT,
-    Abweichung,
     Buchplanung,
     Planungszeile,
     UngueltigesSchuljahr,
@@ -37,7 +35,6 @@ from buecherlisten.planung import (
     schuljahr_zahl,
     zu_entscheidende_antraege,
 )
-from buecherlisten.planung.farben import im_fach, in_ausmusterungen, markierung
 
 
 def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, Any]:
@@ -45,7 +42,7 @@ def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, An
     return {
         "schuljahr": schuljahr, "mtime": None, "fehler": fehler, "warnungen": [],
         "fach_je_name": {}, "planung_je_isbn_und_fach": {},
-        "ruecklage_je_isbn": {}, "bemerkung_je_isbn": {}, "ausmusterungen_je_fach": {},
+        "ruecklage_je_isbn": {}, "bemerkung_je_isbn": {},
         "vorjahr": "", "planungsjahr": "", "leihbar_isbns": set(),
         "verlage": [], "buecher": [], "isbns": set(),
         "eintrag": lambda isbn, fach: None, "fachstand": lambda fach: None,
@@ -124,7 +121,6 @@ def planungskontext(planung: Buchplanung, *, schuljahr: str, mtime: float) -> di
         "ruecklage_je_isbn": _ruecklagen(planung),
         # Die Spalte „Bemerkung“ auf „Buchreihen“ - eine je Buch.
         "bemerkung_je_isbn": bemerkungen,
-        "ausmusterungen_je_fach": ausmusterungen_je_fach(planung),
         "vorjahr": planung.vorjahr,
         # Das Schuljahr der Datei: das Menü führt damit eine neue Zeile ein,
         # wenn „leihbar“ an einer alten umgeschaltet wird.
@@ -227,56 +223,6 @@ def _ruecklagen(planung: Buchplanung) -> dict[str, dict[str, Any]]:
             "bemerkung": wunsch.bemerkung,
         }
     return ruecklagen
-
-
-def ausmusterungen_je_fach(
-    planung: Buchplanung, abweichungen: Mapping[str, Abweichung] | None = None,
-    original: Buchplanung | None = None,
-) -> dict[str, list[dict[str, Any]]]:
-    """„Ausmusterungen zu diesem Schuljahr“ je Fach: was aus den Regalen geht.
-
-    Welche Bücher, entscheidet ``in_ausmusterungen`` (buecherlisten/planung/
-    farben.py): jeder Jahrgang, in dem das Buch im Fach leihbar war, endete
-    spätestens mit dem Vorjahr, der letzte genau damit, und im Fach wird es
-    nicht wieder eingeführt. Läuft es als Kaufbuch weiter, steht es auch in
-    der Liste darüber - mit derselben Jahrgang-Spalte (``farben``).
-
-    „Leihbar“ gilt für die Jahrgänge, die mit dem Vorjahr endeten - um die
-    geht es hier.
-
-    ``abweichungen`` ist der Vergleich mit IServ (``vergleiche``); mit ihm
-    zeigen die Jahrgänge auch, was IServ noch führt. Der Planungskontext
-    kennt IServ nicht, die Fach-Seite rechnet die Liste deshalb damit neu.
-    ``original`` ist der Stand der Datei, wenn ``planung`` der wirksame ist
-    (``Vergleich.original``).
-    """
-    try:
-        vorjahr = schuljahr_zahl(planung.schuljahr) - 1
-    except UngueltigesSchuljahr:
-        return {}
-    ausgemustert: dict[str, list[dict[str, Any]]] = {}
-    for buch in planung.buecher:
-        for fach in sorted({fach for fach, _ in planung.zeilen_des_buchs(buch)}):
-            if not in_ausmusterungen(planung, buch, fach):
-                continue
-            weg = [z for z in planung.planung
-                   if (z.isbn, z.fach) == (buch.isbn, fach) and z.ende == vorjahr]
-            ja = sorted({z.jahrgang for z in weg if z.leihbar})
-            nein = sorted({z.jahrgang for z in weg if not z.leihbar})
-            ausgemustert.setdefault(fach, []).append({
-                "titel": buch.titel, "verlag": buch.verlag, "isbn": buch.isbn,
-                "isbn_anzeige": format_isbn(buch.isbn), "isbn_fehlt": ist_platzhalter_isbn(buch.isbn),
-                "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
-                "farben": markierung(planung, buch, (abweichungen or {}).get(buch.isbn),
-                                     im=im_fach(fach), original=original),
-                "leihbar": bool(ja), "leihbar_teilweise": bool(ja and nein),
-                "leihbar_titel": (
-                    f"leihbar: Jg. {', '.join(map(str, ja))} · "
-                    f"Kaufbuch: Jg. {', '.join(map(str, nein))}" if ja and nein else ""),
-            })
-    for eintraege in ausgemustert.values():
-        eintraege.sort(key=lambda e: e["titel"].casefold())
-    return ausgemustert
 
 
 def _vorschlaege(planung: Buchplanung, bemerkungen: dict[str, str]) -> list[dict[str, Any]]:
