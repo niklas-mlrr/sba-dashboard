@@ -285,7 +285,7 @@ def test_nach_dem_vorjahr_ausgemustert_und_spaeter_wieder_eingefuehrt():
     m = _markierung(*zeilen, abweichung=noch)
     assert [(w.text, w.plan, w.durch) for w in m.werte] == [
         ("5", AUSMUSTERUNG, True), ("6", "", False)]
-    assert m.werte[0].zusatz == "bis 2025/2026; ab 2028/2029" and m.werte[0].iserv == STEHT_NOCH
+    assert m.werte[0].zusatz == "bis 2025/2026, ab 2028/2029" and m.werte[0].iserv == STEHT_NOCH
     # In IServ ist er weg: die Wiedereinführung ist das Nächste, blau, nicht durchgestrichen.
     m = _markierung(*zeilen, abweichung=Abweichung(ISBN, BEIDE))
     assert [(w.text, w.plan, w.durch) for w in m.werte] == [
@@ -298,7 +298,7 @@ def test_nach_dem_vorjahr_ausgemustert_und_spaeter_wieder_eingefuehrt():
 
 def test_mehrere_zeilen_im_eintrag_haben_je_ein_ergebnis_im_zusatz():
     m = _markierung(_zeile(5, ab="2020/2021", nach="2026/2027"), _zeile(5, ab="2029/2030"))
-    assert m.werte[0].zusatz == "bis 2026/2027; ab 2029/2030"
+    assert m.werte[0].zusatz == "bis 2026/2027, ab 2029/2030"
     # Das nächste Ereignis ist die Ausmusterung: rot.
     assert m.werte[0].plan == AUSMUSTERUNG
     # Im Folgejahr endete die erste Zeile mit dem Vorjahr; IServ führt den Jahrgang nicht mehr.
@@ -306,7 +306,7 @@ def test_mehrere_zeilen_im_eintrag_haben_je_ein_ergebnis_im_zusatz():
     from dataclasses import replace
     spaeter = replace(stand, schuljahr="2027/2028", vorjahr="2026/2027")
     m = markierung(spaeter, spaeter.buecher[0], Abweichung(ISBN, BEIDE), im=im_fach("Deutsch"))
-    assert m.werte[0].zusatz == "bis 2026/2027; ab 2029/2030" and m.werte[0].plan == EINFUEHRUNG
+    assert m.werte[0].zusatz == "bis 2026/2027, ab 2029/2030" and m.werte[0].plan == EINFUEHRUNG
 
 
 def _abgelehnt(zeile: Planungszeile, *, einfuehrung: bool = False, ausmusterung: bool = False,

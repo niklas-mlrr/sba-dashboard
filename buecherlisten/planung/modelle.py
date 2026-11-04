@@ -311,6 +311,13 @@ class Planungszeile:
         """Jahresanfang der Ausmusterung; ``None`` ohne (oder mit unlesbarer) Ausmusterung."""
         return _jahr_oder_none(self.ausgemustert_nach)
 
+    @property
+    def verkehrt(self) -> bool:
+        """Ausgemustert vor der Einführung (ASJ < ESJ) - ein Zeitraum, den es
+        nicht gibt. Im Menü lässt er sich nicht eintragen; aus Excel gelesen,
+        meldet ihn die Seite (Entscheidung 2026-11-04)."""
+        return self.beginn is not None and self.ende is not None and self.ende < self.beginn
+
     def antrag(self, art: str) -> Antragsentscheidung:
         return self.antrag_einfuehrung if art == ART_EINFUEHRUNG else self.antrag_ausmusterung
 

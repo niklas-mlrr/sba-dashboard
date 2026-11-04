@@ -462,6 +462,21 @@ def test_zwei_zeilen_eines_jahrgangs_duerfen_sich_nicht_ueberschneiden(stand):
         ])
 
 
+def test_die_ausmusterung_darf_nicht_vor_der_einfuehrung_liegen(stand):
+    """ASJ < ESJ ist nicht eintragbar (Entscheidung 2026-11-04); ASJ = ESJ schon."""
+    with pytest.raises(UngueltigeEingabe, match="wenn es erst ab 2028/2029 eingeführt"):
+        setze_buchplanung(stand, isbn=DEUTSCH, fach="Deutsch", zeilen=[
+            Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2028/2029",
+                             ausgemustert_nach="2027/2028"),
+        ])
+    with pytest.raises(UngueltigeEingabe, match="wenn es erst ab 2028/2029 eingeführt"):
+        setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                      eingefuehrt_ab="2028/2029", ausgemustert_nach="2027/28")
+    stand = setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                          eingefuehrt_ab="2028/2029", ausgemustert_nach="2028/2029")
+    assert not stand.planungszeile(DEUTSCH, "Deutsch", 7, "2028/2029").verkehrt
+
+
 # ── „leihbar“ je Zeile ───────────────────────────────────────────────────────
 
 

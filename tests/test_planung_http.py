@@ -2120,7 +2120,10 @@ def test_eine_abgelehnte_einfuehrung_steht_grau_im_kasten_und_zaehlt_nicht(
     assert '<span class="zusatzantrag zusatzantrag-offen">' in zeile
     _entscheide(seiten, stand, "einfuehrung", "abgelehnt")
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
-    assert ('<span class="zusatzantrag zusatzantrag-abgelehnt">'
+    # Der Tooltip der Jahreszahl nennt Entscheidung, Datum und Signatur.
+    heute = date.today().strftime("%d.%m.%Y")
+    assert ('<span class="zusatzantrag zusatzantrag-abgelehnt" title="Einführung der '
+            f'Buchreihe in Jahrgang 7 abgelehnt\nam {heute}\ndurch b.lehrer">'
             '<span class="zusatzantrag-art">Einführung</span>'
             '<span class="zusatzantrag-jahr">2027/2028</span>'
             '<span class="zusatzantrag-status">abgelehnt</span></span>') in zeile
@@ -2160,3 +2163,23 @@ def test_eine_zelle_mit_antragskasten_hat_den_engen_zellrand(
     # Eine Zelle ohne Teilzeilen trägt sie selbst.
     einfach = " ".join(_zeile_von(seiten.get("/buecherliste/fach/Erdkunde").text, TERRA).split())
     assert re.search(r'<td data-wert="[^"]*" class="mit-antrag">', einfach)
+
+
+def test_eine_verkehrte_zeile_aus_excel_wird_beim_laden_gemeldet() -> None:
+    """ASJ < ESJ lässt sich im Menü nicht eintragen; steht es in Excel, nennt die
+    Seite die Stelle im Fehlermenü (Entscheidung 2026-11-04)."""
+    from app.planungsansicht import planungskontext, verkehrte_zeitraeume
+    from buecherlisten.planung import Buch, Buchplanung, Planungszeile
+
+    buch = Buch(isbn="9783060000005", titel="Deutsch 7", verlag="Cornelsen",
+                kombinationen=())
+    gut = Planungszeile(isbn=buch.isbn, fach="Deutsch", jahrgang=7,
+                        eingefuehrt_ab="2027/2028", ausgemustert_nach="2027/2028")
+    stand = Buchplanung(schuljahr="2026/2027", buecher=(buch,), planung=(gut,))
+    assert verkehrte_zeitraeume(stand) is None
+    verkehrt = Planungszeile(isbn=buch.isbn, fach="Deutsch", jahrgang=8,
+                             eingefuehrt_ab="2028/2029", ausgemustert_nach="2027/2028")
+    stand = Buchplanung(schuljahr="2026/2027", buecher=(buch,), planung=(gut, verkehrt))
+    meldung = planungskontext(stand, schuljahr="2026/2027", mtime=1.0)["fehler"]
+    assert meldung is not None
+    assert "„Deutsch 7“ in Deutsch, Jahrgang 8 (ab 2028/2029, nach 2027/2028)" in meldung

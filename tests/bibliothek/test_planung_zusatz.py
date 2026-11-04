@@ -98,7 +98,9 @@ def test_die_kaesten_der_einfuehrung_zum_laufenden_und_der_ausmusterung_nach_dem
     assert einf.teile == (Teil("ab "), Teil("2026/2027", art="einfuehrung", antrag="offen"))
     ausm = zusatz_der_zeile(_zeile("2020/2021", "2025/2026", ausmusterung="abgelehnt"), SJ)
     assert ausm is not None
-    assert ausm.teile == (Teil("bis "), Teil("2025/2026", art="ausmusterung", antrag="abgelehnt"))
+    assert ausm.teile == (Teil("bis "), Teil(
+        "2025/2026", art="ausmusterung", antrag="abgelehnt",
+        hinweis="Ausmusterung der Buchreihe in Jahrgang 7 abgelehnt"))
 
 
 def test_mehrere_zeilen_ergeben_je_eines_in_der_reihenfolge_der_uebergabe():
@@ -109,3 +111,23 @@ def test_mehrere_zeilen_ergeben_je_eines_in_der_reihenfolge_der_uebergabe():
 
 def test_ein_unlesbares_schuljahr_gibt_nichts():
     assert zusatz_der_zeile(_zeile("2027/2028"), "kaputt") is None
+
+
+def test_eine_entschiedene_jahreszahl_nennt_entscheidung_datum_und_signatur():
+    """Tooltip der Jahreszahl (Entscheidung 2026-11-04); ein offener Antrag hat keinen."""
+    from datetime import date
+
+    zeile = Planungszeile(
+        isbn="9783060000005", fach="Deutsch", jahrgang=7, eingefuehrt_ab="2027/2028",
+        ausgemustert_nach="2029/2030", leihbar=True,
+        antrag_einfuehrung=Antragsentscheidung("abgelehnt", "b.lehrer", date(2026, 10, 12)),
+        antrag_ausmusterung=Antragsentscheidung("genehmigt"))
+    zusatz = zusatz_der_zeile(zeile, SJ)
+    assert zusatz is not None
+    einfuehrung, ausmusterung = (teil for teil in zusatz.teile if teil.art)
+    assert einfuehrung.hinweis == (
+        "Einführung der Buchreihe in Jahrgang 7 abgelehnt\nam 12.10.2026\ndurch b.lehrer")
+    # Ohne Datum und Signatur (etwa in Excel eingetragen) fallen die Zeilen weg.
+    assert ausmusterung.hinweis == "Ausmusterung der Buchreihe in Jahrgang 7 genehmigt"
+    offen = zusatz_der_zeile(_zeile("2027/2028"), SJ)
+    assert offen is not None and all(not teil.hinweis for teil in offen.teile)

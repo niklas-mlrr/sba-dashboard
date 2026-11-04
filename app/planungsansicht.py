@@ -102,6 +102,21 @@ def fach_stand(planung: Buchplanung, fach: str) -> dict[str, Any]:
     return {"fach": {"kuerzel": kuerzel, "datum": datum.isoformat() if datum else None}}
 
 
+def verkehrte_zeitraeume(planung: Buchplanung) -> str | None:
+    """Die Meldung für Zeilen, die vor ihrer Einführung ausgemustert sind - aus
+    Excel; im Menü lässt sich das nicht eintragen. Die Seite zeigt sie beim
+    Laden im Fehlermenü, die Liste bleibt trotzdem nutzbar."""
+    titel = {buch.isbn: buch.titel for buch in planung.buecher}
+    stellen = [
+        f"„{titel.get(z.isbn, z.isbn)}“ in {z.fach}, Jahrgang {z.jahrgang} "
+        f"(ab {z.eingefuehrt_ab}, nach {z.ausgemustert_nach})"
+        for z in planung.planung if z.verkehrt]
+    if not stellen:
+        return None
+    return ("In der Datei ist die Ausmusterung vor der Einführung eingetragen: "
+            + "; ".join(stellen) + ". Bitte im Buchmenü oder in Excel korrigieren.")
+
+
 def planungskontext(planung: Buchplanung, *, schuljahr: str, mtime: float) -> dict[str, Any]:
     """Alles, was die Bücherlisten-Vorlagen über den gespeicherten Stand wissen.
 
@@ -114,7 +129,7 @@ def planungskontext(planung: Buchplanung, *, schuljahr: str, mtime: float) -> di
     return {
         "schuljahr": schuljahr,
         "mtime": mtime,
-        "fehler": None,
+        "fehler": verkehrte_zeitraeume(planung),
         "warnungen": list(planung.warnungen),
         "fach_je_name": _faecher(planung),
         "planung_je_isbn_und_fach": _zeilen_je_isbn_und_fach(planung),

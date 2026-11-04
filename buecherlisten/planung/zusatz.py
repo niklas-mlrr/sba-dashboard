@@ -15,7 +15,8 @@ sonst                     nichts
 ========================  ==================
 
 Eine Zeile ohne Einführung gilt als längst eingeführt (ESJ ≤ SJ). Die
-Ergebnisse mehrerer Zeilen stehen mit „; “ getrennt in einer Klammer.
+Ergebnisse mehrerer Zeilen stehen mit „, “ getrennt in einer Klammer (bis
+2026-11-04 mit „; “).
 
 Drei Sonderfälle, damit jeder Antrag, über den noch zu entscheiden ist oder der
 abgelehnt wurde, ein Jahr mit Kasten hat:
@@ -38,6 +39,7 @@ from dataclasses import dataclass
 
 from .aenderungen import zu_entscheidende_antraege
 from .modelle import (
+    ANTRAG_ABGELEHNT,
     ANTRAG_GENEHMIGT,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
@@ -55,11 +57,17 @@ class Teil:
     (``einfuehrung`` oder ``ausmusterung``), sonst leer. ``antrag`` ist
     ``offen`` oder ``abgelehnt``, wenn an dem Jahr ein Kasten hängt - leer,
     wenn der Antrag genehmigt ist oder über ihn nicht entschieden wird.
+
+    ``hinweis`` ist der Tooltip eines entschiedenen Antrags (Entscheidung
+    2026-11-04): „Einführung der Buchreihe in Jahrgang 7 genehmigt“, darunter
+    „am …“ und „durch …“, soweit bekannt. Ein offener Antrag hat keinen - sein
+    Kasten sagt schon alles, Datum und Signatur gibt es nicht.
     """
 
     text: str
     art: str = ""
     antrag: str = ""
+    hinweis: str = ""
 
 
 @dataclass(frozen=True)
@@ -80,11 +88,27 @@ def _jahr(angabe: str) -> int | None:
         return None
 
 
+def entscheidungs_hinweis(zeile: Planungszeile, art: str) -> str:
+    """„<Einführung/Ausmusterung> der Buchreihe in Jahrgang N <genehmigt/abgelehnt>“,
+    darunter Datum und Signatur - leer, solange der Antrag offen ist."""
+    antrag = zeile.antrag(art)
+    if antrag.status not in (ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT):
+        return ""
+    wort = "Einführung" if art == ART_EINFUEHRUNG else "Ausmusterung"
+    zeilen = [f"{wort} der Buchreihe in Jahrgang {zeile.jahrgang} {antrag.status}"]
+    if antrag.datum is not None:
+        zeilen.append(f"am {antrag.datum.strftime('%d.%m.%Y')}")
+    if antrag.signatur:
+        zeilen.append(f"durch {antrag.signatur}")
+    return "\n".join(zeilen)
+
+
 def _jahr_teil(zeile: Planungszeile, art: str, entscheidbar: tuple[str, ...]) -> Teil:
     """Das Jahr der Einführung bzw. Ausmusterung der Zeile, mit Kasten, wenn nötig."""
     status = zeile.antrag(art).status
     kasten = status if art in entscheidbar and status != ANTRAG_GENEHMIGT else ""
-    return Teil(zeile.schuljahr_des_antrags(art), art=art, antrag=kasten)
+    return Teil(zeile.schuljahr_des_antrags(art), art=art, antrag=kasten,
+                hinweis=entscheidungs_hinweis(zeile, art))
 
 
 def zusatz_der_zeile(zeile: Planungszeile, schuljahr: str) -> Zusatzzeile | None:

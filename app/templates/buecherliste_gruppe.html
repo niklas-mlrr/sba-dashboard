@@ -233,20 +233,23 @@ In IServ: {% if wert is sameas true %}ja{% elif wert is sameas false %}nein{% el
 {%- if f.strich_stil() %} style="--strich: {{ f.strich_stil() }}"{% endif -%}
 {%- endmacro %}
 {#
-  Der Zusatz in Klammern: je Planungszeile ein Ergebnis, mit „; “ getrennt.
+  Der Zusatz in Klammern: je Planungszeile ein Ergebnis, mit „, “ getrennt.
   Hängt an einer Jahreszahl ein Antrag, der offen oder abgelehnt ist, steht sie
   in einem Rahmen in der Farbe des Status, mit einem Kasten für die Art
-  (Einführung/Ausmusterung) darüber und einem für den Status darunter.
+  (Einführung/Ausmusterung) darüber und einem für den Status darunter. Ist der
+  Antrag entschieden, nennt der Tooltip der Jahreszahl Entscheidung, Datum und
+  Signatur (``teil.hinweis``).
 #}
 {% macro zusatz(w) -%}
 {%- if w.zusaetze %} ({% for zeile in w.zusaetze -%}
 <span class="zusatzzeile">
 {%- for teil in zeile.teile -%}
 {%- if teil.antrag -%}
-<span class="zusatzantrag zusatzantrag-{{ teil.antrag }}"><span class="zusatzantrag-art">{{ "Einführung" if teil.art == "einfuehrung" else "Ausmusterung" }}</span><span class="zusatzantrag-jahr">{{ teil.text }}</span><span class="zusatzantrag-status">{{ teil.antrag }}</span></span>
+<span class="zusatzantrag zusatzantrag-{{ teil.antrag }}"{% if teil.hinweis %} title="{{ teil.hinweis }}"{% endif %}><span class="zusatzantrag-art">{{ "Einführung" if teil.art == "einfuehrung" else "Ausmusterung" }}</span><span class="zusatzantrag-jahr">{{ teil.text }}</span><span class="zusatzantrag-status">{{ teil.antrag }}</span></span>
+{%- elif teil.hinweis -%}<span title="{{ teil.hinweis }}">{{ teil.text }}</span>
 {%- else -%}{{ teil.text }}{%- endif -%}
 {%- endfor -%}
-</span>{{ "; " if not loop.last }}
+</span>{{ ", " if not loop.last }}
 {%- endfor %}){% endif -%}
 {%- endmacro %}
 {% macro wert(w) -%}

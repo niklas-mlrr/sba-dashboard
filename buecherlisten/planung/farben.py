@@ -122,8 +122,8 @@ class Wert:
 
     @property
     def zusatz(self) -> str:
-        """Die Ergebnisse der Planungszeilen als Text, mit „; “ getrennt."""
-        return "; ".join(zeile.text for zeile in self.zusaetze)
+        """Die Ergebnisse der Planungszeilen als Text, mit „, “ getrennt."""
+        return ", ".join(zeile.text for zeile in self.zusaetze)
 
     @property
     def durch(self) -> bool:
