@@ -176,26 +176,60 @@ def test_iserv_fehlt_und_steht_noch_je_eintrag():
     assert gelb.strich() == () and gelb.strich_klassen == ("strich-gelb",)
 
 
-def test_ein_offener_antrag_zu_diesem_schuljahr_wird_nicht_markiert():
-    """Entscheidung 2026-11-04: rot und blau nur, wenn der Antrag genehmigt ist
-    und gilt. Offen ist noch nicht entschieden, ob IServ den Jahrgang führen
-    soll - Schrift und Zusatz bleiben, Markierung und IServ-Tooltip nicht."""
-    abweichung = Abweichung(
-        ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 7, False), ("Deutsch", 5, True)),
-        eintraege_nur_iserv=(("Deutsch", 7, True),), buchreihe_fehlt=(5, 7))
-    m = _markierung(_zeile(5),
-                    _zeile(7, nach="2025/2026", leihbar=True),
-                    _zeile(7, ab="2026/2027", leihbar=False), abweichung=abweichung)
-    # Oben die Teilzeile mit den kleineren Jahrgängen: leihbar (5, 7) vor Kaufbuch (7).
+def test_der_entschiedene_stand():
+    """Entscheidung 2026-11-05: eine nicht genehmigte Ausmusterung nach dem
+    Vorjahr läuft noch, eine nicht genehmigte Einführung zu diesem Schuljahr
+    ist noch nicht eingeführt, eine abgelehnte Einführung gilt nie. Anträge zu
+    anderen Schuljahren ändern nichts."""
+    from buecherlisten.planung.farben import entschiedener_stand
+
+    stand = _stand(_zeile(5), _zeile(6, nach="2025/2026"), _zeile(7, ab="2026/2027"),
+                   _zeile(8, ab="2027/2028"), _zeile(9, nach="2024/2025"),
+                   _zeile(10, nach="2026/2027"),
+                   _abgelehnt(_zeile(11, ab="2027/2028"), einfuehrung=True))
+    assert [(z.jahrgang, z.eingefuehrt_ab, z.ausgemustert_nach)
+            for z in entschiedener_stand(stand).planung] == [
+        (5, "", ""), (6, "", ""), (8, "2027/2028", ""), (9, "", "2024/2025"),
+        (10, "", "2026/2027")]
+    # Genehmigt bleibt alles, wie es ist.
+    genehmigt = _stand(_entschieden(_zeile(6, nach="2025/2026"), ausmusterung="genehmigt"),
+                       _entschieden(_zeile(7, ab="2026/2027"), einfuehrung="genehmigt"))
+    assert entschiedener_stand(genehmigt) is genehmigt
+
+
+def test_markiert_wird_gegen_den_entschiedenen_stand():
+    """Entscheidung 2026-11-05 (ersetzt die vom 2026-11-04, nach der ein
+    offener Antrag gar nicht markiert wurde): solange die Ausmusterung nicht
+    genehmigt ist, läuft das Buch noch; solange die Einführung nicht genehmigt
+    ist, ist es noch nicht eingeführt. Die Abweichung ist gegen diesen Stand
+    gerechnet. Schrift und Zusatz zeigen weiter die Planung."""
+    zeilen = (_zeile(5), _zeile(7, nach="2025/2026", leihbar=True),
+              _zeile(7, ab="2026/2027", leihbar=False))
+    # IServ ist schon vorgeprescht: Jg. 7 steht dort als Kaufbuch, Jg. 5 fehlt
+    # in Bücherliste und Buchreihe.
+    m = _markierung(*zeilen, abweichung=Abweichung(
+        ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 5, True), ("Deutsch", 7, True)),
+        eintraege_nur_iserv=(("Deutsch", 7, False),), buchreihe_fehlt=(5,)))
     leihbar, kauf = m.teilzeilen
+    # Jg. 7 als Leihbuch läuft noch (blau markiert), als Kaufbuch ist er noch
+    # nicht eingeführt (rot markiert): IServ muss „leihbar“ zurückstellen.
     assert [(w.text, w.plan, w.durch, w.markierung, w.striche) for w in leihbar.werte] == [
-        ("5", "", False, EINFUEHRUNG, "oben-unten"), ("7", AUSMUSTERUNG, True, "", "")]
-    assert [(w.text, w.plan, w.markierung) for w in kauf.werte] == [("7", EINFUEHRUNG, "")]
-    assert kauf.werte[0].hinweis == "Einführung der Buchreihe in Jahrgang 7 beantragt"
-    assert leihbar.werte[1].hinweis == "Ausmusterung der Buchreihe in Jahrgang 7 beantragt"
-    # Abgelehnt gilt der Antrag nicht, der Jahrgang ist entschieden wie ohne ihn:
-    # die Ausmusterung von Jg. 7 ist abgelehnt, er bleibt - fehlt er in IServ,
-    # ist er blau markiert.
+        ("5", "", False, EINFUEHRUNG, "oben-unten"), ("7", AUSMUSTERUNG, True, EINFUEHRUNG, "")]
+    assert [(w.text, w.plan, w.markierung) for w in kauf.werte] == [
+        ("7", EINFUEHRUNG, AUSMUSTERUNG)]
+    assert leihbar.werte[1].hinweis == (
+        "Ausmusterung der Buchreihe in Jahrgang 7 beantragt\n"
+        "Buchreihe ist in Bücherliste für Jahrgang 7 auf leihbar zu setzen")
+    assert kauf.werte[0].hinweis == (
+        "Einführung der Buchreihe in Jahrgang 7 beantragt\n"
+        "Buchreihe ist in Bücherliste für Jahrgang 7 auf leihbar zu setzen")
+    # Führt IServ, was entschieden ist (Jg. 7 noch als Leihbuch), ist nichts markiert.
+    m = _markierung(*zeilen, abweichung=Abweichung(ISBN, BEIDE))
+    assert [(w.text, w.plan, w.markierung) for w in m.werte] == [
+        ("5", "", ""), ("7", AUSMUSTERUNG, ""), ("7", EINFUEHRUNG, "")]
+    assert m.werte[1].hinweis == "Ausmusterung der Buchreihe in Jahrgang 7 beantragt"
+    # Abgelehnt gilt der Antrag nicht: die Ausmusterung von Jg. 7 ist
+    # abgelehnt, er bleibt - fehlt er in IServ, ist er blau markiert.
     from buecherlisten.planung.farben import ohne_abgelehnte_ausmusterungen
 
     original = _stand(_zeile(5), _entschieden(_zeile(7, nach="2025/2026"),
@@ -209,14 +243,31 @@ def test_ein_offener_antrag_zu_diesem_schuljahr_wird_nicht_markiert():
     m = _markierung(_zeile(5, nach="2028/2029"), abweichung=Abweichung(
         ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 5, True),)))
     assert m.werte[0].markierung == EINFUEHRUNG
-    # Hängt ein ganz neues Buch nur an offenen Einführungen, ist die Zeile nicht markiert.
-    neu = Abweichung(ISBN, NUR_EXCEL, eintraege_fehlen=(("Deutsch", 5, True),),
-                     buchreihe_angelegt=False, buchreihe_fehlt=(5,))
-    m = _markierung(_zeile(5, ab="2026/2027"), abweichung=neu)
-    assert m.zeile == "" and m.werte[0].markierung == ""
-    m = _markierung(_entschieden(_zeile(5, ab="2026/2027"), einfuehrung="genehmigt"),
-                    abweichung=neu)
-    assert m.zeile == EINFUEHRUNG and m.werte[0].striche == "oben-unten"
+
+
+def test_fuehrt_iserv_eine_buchreihe_vor_genehmigter_einfuehrung_ist_die_zeile_rot():
+    """Plant die Datei das Buch nur mit einer offenen Einführung zu diesem
+    Schuljahr und IServ führt es schon, ist die ganze Zeile rot - mit eigenem
+    Tooltip (``einfuehrung_offen``, Entscheidung 2026-11-05)."""
+    zeile = _zeile(5, ab="2026/2027")
+    m = _markierung(zeile, abweichung=Abweichung(
+        ISBN, NUR_ISERV, eintraege_nur_iserv=(("Deutsch", 5, True),)))
+    assert m.zeile == AUSMUSTERUNG and m.einfuehrung_offen
+    assert [(w.text, w.plan, w.markierung) for w in m.werte] == [("5", EINFUEHRUNG, AUSMUSTERUNG)]
+    assert m.werte[0].hinweis == (
+        "Einführung der Buchreihe in Jahrgang 5 beantragt\n"
+        "Buchreihe ist aus Bücherliste für Jahrgang 5 in IServ zu entfernen")
+    # Genehmigt und in IServ noch nicht angelegt: ganz blau.
+    m = _markierung(_entschieden(zeile, einfuehrung="genehmigt"), abweichung=Abweichung(
+        ISBN, NUR_EXCEL, eintraege_fehlen=(("Deutsch", 5, True),),
+        buchreihe_angelegt=False, buchreihe_fehlt=(5,)))
+    assert m.zeile == EINFUEHRUNG and not m.einfuehrung_offen
+    assert m.werte[0].striche == "oben-unten"
+    # Nur in IServ, weil das Buch nach dem Vorjahr ausgemustert ist: kein eigener Tooltip.
+    m = _markierung(_entschieden(_zeile(5, nach="2025/2026"), ausmusterung="genehmigt"),
+                    abweichung=Abweichung(ISBN, NUR_ISERV,
+                                          eintraege_nur_iserv=(("Deutsch", 5, True),)))
+    assert m.zeile == AUSMUSTERUNG and not m.einfuehrung_offen
 
 
 def test_ein_buch_das_in_iserv_fehlt_und_andere_felder():
@@ -282,7 +333,8 @@ def test_der_hintergrund_zaehlt_nur_was_die_liste_zeigt():
 
 def test_fehlt_der_jahrgang_an_der_buchreihe_ist_er_blau_markiert():
     abweichung = Abweichung(ISBN, BEIDE, buchreihe_fehlt=(6, 7, 8))
-    m = _markierung(_zeile(5), _zeile(6), _zeile(7, ab="2027/2028"), _zeile(8, nach="2025/2026"),
+    m = _markierung(_zeile(5), _zeile(6), _zeile(7, ab="2027/2028"),
+                    _entschieden(_zeile(8, nach="2025/2026"), ausmusterung="genehmigt"),
                     abweichung=abweichung)
     # Nur was dieses Schuljahr gilt: Jg. 7 kommt erst, Jg. 8 ist weg.
     assert [(w.text, w.iserv) for w in m.werte] == [("5", ""), ("6", FEHLT), ("7", ""), ("8", "")]
@@ -349,7 +401,8 @@ def test_einfuehrung_mit_ausmusterung_ist_blau_bis_iserv_den_jahrgang_fuehrt():
     m = _markierung(zeile, abweichung=Abweichung(ISBN, BEIDE))
     assert (m.werte[0].plan, m.werte[0].jahr, m.ganz) == (AUSMUSTERUNG, 2029, AUSMUSTERUNG)
     # Einjährig im laufenden Schuljahr: genauso.
-    m = _markierung(_zeile(6, ab="2026/2027", nach="2026/2027"), abweichung=Abweichung(ISBN, BEIDE))
+    m = _markierung(_entschieden(_zeile(6, ab="2026/2027", nach="2026/2027"),
+                                 einfuehrung="genehmigt"), abweichung=Abweichung(ISBN, BEIDE))
     assert m.werte[0].plan == AUSMUSTERUNG
 
 
@@ -368,19 +421,28 @@ def test_eine_spaetere_einfuehrung_mit_ausmusterung_bleibt_blau():
 
 def test_nach_dem_vorjahr_ausgemustert_und_spaeter_wieder_eingefuehrt():
     """Rot und durchgestrichen, solange IServ den Jahrgang noch führt; danach blau."""
-    zeilen = (_zeile(5, nach="2025/2026"), _zeile(5, ab="2028/2029"), _zeile(6))
+    genehmigt = (_entschieden(_zeile(5, nach="2025/2026"), ausmusterung="genehmigt"),
+                 _zeile(5, ab="2028/2029"), _zeile(6))
     noch = Abweichung(ISBN, BEIDE, eintraege_nur_iserv=(("Deutsch", 5, True),))
-    m = _markierung(*zeilen, abweichung=noch)
+    m = _markierung(*genehmigt, abweichung=noch)
     assert [(w.text, w.plan, w.durch) for w in m.werte] == [
         ("5", AUSMUSTERUNG, True), ("6", "", False)]
-    # Die Ausmusterung ist noch offen: IServ führt ihn, markiert ist er nicht.
-    assert m.werte[0].zusatz == "bis 2025/2026, ab 2028/2029" and m.werte[0].iserv == ""
-    genehmigt = (_entschieden(zeilen[0], ausmusterung="genehmigt"), *zeilen[1:])
-    assert _markierung(*genehmigt, abweichung=noch).werte[0].iserv == STEHT_NOCH
+    assert m.werte[0].iserv == STEHT_NOCH
     # In IServ ist er weg: die Wiedereinführung ist das Nächste, blau, nicht durchgestrichen.
-    m = _markierung(*zeilen, abweichung=Abweichung(ISBN, BEIDE))
-    assert [(w.text, w.plan, w.durch) for w in m.werte] == [
-        ("5", EINFUEHRUNG, False), ("6", "", False)]
+    m = _markierung(*genehmigt, abweichung=Abweichung(ISBN, BEIDE))
+    assert [(w.text, w.plan, w.durch, w.iserv) for w in m.werte] == [
+        ("5", EINFUEHRUNG, False, ""), ("6", "", False, "")]
+    # Ist die Ausmusterung noch offen, läuft Jg. 5 noch (Entscheidung 2026-11-05):
+    # führt IServ ihn, ist er nicht markiert, hat IServ ihn schon entfernt, blau.
+    offen = (_zeile(5, nach="2025/2026"), *genehmigt[1:])
+    m = _markierung(*offen, abweichung=Abweichung(ISBN, BEIDE))
+    assert [(w.text, w.plan, w.durch, w.iserv) for w in m.werte] == [
+        ("5", AUSMUSTERUNG, True, ""), ("6", "", False, "")]
+    assert m.werte[0].zusatz == "bis 2025/2026, ab 2028/2029"
+    m = _markierung(*offen, abweichung=Abweichung(
+        ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 5, True),)))
+    assert [(w.text, w.plan, w.durch, w.iserv) for w in m.werte] == [
+        ("5", EINFUEHRUNG, False, FEHLT), ("6", "", False, "")]
     # Ohne Wiedereinführung bleibt er rot und durchgestrichen, auch ohne IServ.
     m = _markierung(_zeile(5, nach="2025/2026"), _zeile(6), abweichung=Abweichung(ISBN, BEIDE))
     assert [(w.text, w.plan, w.durch) for w in m.werte] == [
@@ -396,7 +458,9 @@ def test_mehrere_zeilen_im_eintrag_haben_je_ein_ergebnis_im_zusatz():
     stand = _stand(_zeile(5, ab="2020/2021", nach="2026/2027"), _zeile(5, ab="2029/2030"))
     from dataclasses import replace
     spaeter = replace(stand, schuljahr="2027/2028", vorjahr="2026/2027")
-    m = markierung(spaeter, spaeter.buecher[0], Abweichung(ISBN, BEIDE), im=im_fach("Deutsch"))
+    # (Die Ausmusterung ist noch offen, Jg. 5 läuft also noch: IServ fehlt er.)
+    m = markierung(spaeter, spaeter.buecher[0], Abweichung(
+        ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 5, True),)), im=im_fach("Deutsch"))
     assert m.werte[0].zusatz == "bis 2026/2027, ab 2029/2030" and m.werte[0].plan == EINFUEHRUNG
 
 
@@ -435,9 +499,8 @@ def test_hinge_das_buch_nur_an_abgelehnten_einfuehrungen_ist_die_zeile_grau():
     # Eine abgelehnte Einführung zum laufenden Schuljahr: nicht in IServ erwartet (keine
     # blaue Markierung), und steht der Jahrgang dort schon, ist er rot markiert.
     alt = _abgelehnt(_zeile(7, ab="2026/2027"), einfuehrung=True)
-    fehlt = Abweichung(ISBN, BEIDE, eintraege_fehlen=(("Deutsch", 7, True),))
-    assert _markierung(alt, abweichung=fehlt).werte[0].iserv == ""
-    steht = Abweichung(ISBN, BEIDE)
+    assert _markierung(alt, abweichung=Abweichung(ISBN, BEIDE)).werte[0].iserv == ""
+    steht = Abweichung(ISBN, BEIDE, eintraege_nur_iserv=(("Deutsch", 7, True),))
     assert _markierung(alt, abweichung=steht).werte[0].iserv == STEHT_NOCH
 
 

@@ -321,16 +321,20 @@ Einführung „ab 2027/2028“ ist blau geschrieben, aber nicht markiert; eine
 Ausmusterung nach diesem Schuljahr oder später ist rot geschrieben, IServ muss
 den Jahrgang aber noch führen.
 
-**Markiert wird nur, was entschieden ist** (Entscheidung 2026-11-04): hängt
-ein Jahrgang (je „leihbar“) in diesem Schuljahr an einem **offenen** Antrag -
-einer Einführung zu diesem Schuljahr oder einer Ausmusterung nach dem Vorjahr -,
-ist er weder rot noch blau markiert, und sein Tooltip nennt nichts, was in
-IServ zu tun wäre. Erst genehmigt gilt die Änderung. Abgelehnt gilt sie nicht:
-der Jahrgang ist dann entschieden wie ohne den Antrag und wird gegen IServ
-verglichen. Ein Antrag für später ändert dieses Schuljahr nicht. Hängt eine
-ganz neue bzw. ganz ausgemusterte Buchreihe nur an offenen Anträgen, ist auch
-die Zeile nicht markiert. Die Schrift (Farbe, Durchstreichen) rechnet weiter
-damit, was IServ führt (`_ungeklaert` in `farben.py`).
+**Markiert wird gegen den entschiedenen Stand** (Entscheidung 2026-11-05,
+ersetzt die vom 2026-11-04, nach der ein Jahrgang mit offenem Antrag gar nicht
+markiert wurde): solange die **Ausmusterung** nach dem Vorjahr nicht genehmigt
+ist, **läuft das Buch noch** - führt IServ den Jahrgang, ist nichts markiert,
+hat IServ ihn schon entfernt, ist er blau. Solange die **Einführung** zu diesem
+Schuljahr nicht genehmigt ist, ist das Buch **noch nicht eingeführt** - fehlt
+es in IServ, ist nichts markiert, führt IServ es schon, ist es rot; plant die
+Datei die Buchreihe nur so, ist die ganze Zeile rot. Abgelehnt gilt ein Antrag
+nie: eine abgelehnte Ausmusterung lässt das Buch bleiben, eine abgelehnte
+Einführung zählt nicht. Anträge zu anderen Schuljahren ändern nichts (frühere
+Zeilen gelten als entschieden, spätere werden noch nicht verglichen). Die
+Fach-Ansicht vergleicht dafür mit `entschiedener_stand` (`farben.py`); die
+Schrift (Farbe, Durchstreichen) und der Zusatz zeigen weiter die Planung mit
+ihren Anträgen.
 
 **Buchreihe:** In IServ muss die Buchreihe einem Jahrgang zugewiesen sein,
 bevor das Buch in dessen Bücherliste kommt. Fehlt an ihr ein Jahrgang, den ein
@@ -362,7 +366,10 @@ das die Datei kennt - etwa nach dem Vorjahr ausgemustert, IServ führt es noch
 der Titel): die Zeile „Buchreihe bearbeiten“. Titel, Verlag, ISBN, Preise und
 Rücklagen: gelb „Bisher: <IServ-Wert>“, blau „Buchreihe muss in IServ angelegt
 werden“, rot mit „nur in IServ“ „Buchreihe existiert nur in IServ“, rot ohne
-„Buchreihe wird ausgemustert“. Eine entschiedene Jahreszahl im Zusatz:
+„Buchreihe wird ausgemustert“ - oder, wenn die Datei sie nur mit einer noch
+nicht genehmigten Einführung plant, „IServ führt Buchreihe bereits, obwohl die
+Einführung noch nicht genehmigt ist.“ (Entscheidung 2026-11-05,
+`Markierung.einfuehrung_offen`). Eine entschiedene Jahreszahl im Zusatz:
 „<Einführung/Ausmusterung> der Buchreihe in Jahrgang N <genehmigt/abgelehnt>“,
 darunter „am …“ und „durch <Signatur>“; eine offene hat keinen. Der Jahrgang
 (`farben.py`: `_schrift_hinweis`, `_iserv_hinweise`), je Aussage eine Zeile,

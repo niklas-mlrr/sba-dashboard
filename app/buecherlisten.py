@@ -61,6 +61,7 @@ from buecherlisten.planung import (
 from buecherlisten.planung import Buch as PlanBuch
 from buecherlisten.planung.farben import (
     Markierung,
+    entschiedener_stand,
     im_fach,
     markierung,
     ohne_abgelehnte_ausmusterungen,
@@ -551,20 +552,25 @@ def vergleiche_mit_iserv(daten: Buecherlisten, planung: Buchplanung,
     keine Buchreihe; ``None`` heißt, das Inventar war nicht zu bekommen.
 
     ``abgelehnte_gelten_nicht``: eine abgelehnte Ausmusterung gilt nicht, das
-    Buch bleibt (Fach-Ansicht, ``ohne_abgelehnte_ausmusterungen``). Der
-    Vergleich rechnet dann mit diesem Stand; ``Vergleich.original`` hält den
-    der Datei.
+    Buch bleibt (Fach-Ansicht, ``ohne_abgelehnte_ausmusterungen``) - das ist
+    ``Vergleich.planung``, ``Vergleich.original`` hält den Stand der Datei.
+    Mit IServ verglichen wird dann nur, was entschieden ist
+    (``entschiedener_stand``, Entscheidung 2026-11-05): eine nicht genehmigte
+    Ausmusterung läuft noch, eine nicht genehmigte Einführung ist noch nicht
+    eingeführt.
     """
     original = planung
+    verglichen = planung
     if abgelehnte_gelten_nicht:
         planung = ohne_abgelehnte_ausmusterungen(planung)
+        verglichen = entschiedener_stand(planung)
     iserv = iserv_je_isbn(daten)
-    offen = {buch.isbn for buch in planung.buecher
-             if aktive_eintraege(planung, buch)
+    offen = {buch.isbn for buch in verglichen.buecher
+             if aktive_eintraege(verglichen, buch)
              and (buch.isbn not in iserv or iserv[buch.isbn].buchreihe_jahrgaenge is None)}
     zusatz = buchreihen(offen) if buchreihen is not None and offen else None
     return Vergleich(planung=planung, iserv=iserv,
-                     ergebnis=vergleiche(planung, iserv, zusatz),
+                     ergebnis=vergleiche(verglichen, iserv, zusatz),
                      original=original if abgelehnte_gelten_nicht else None)
 
 

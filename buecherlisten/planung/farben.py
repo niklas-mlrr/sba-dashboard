@@ -19,7 +19,11 @@ ausgewählte, vorerst immer das laufende (``stand.schuljahr``).
   (Strich oben, Entscheidung 2026-11-04); zu viele Jahrgänge an der Buchreihe
   schaden nicht. Verglichen wird nur, was in diesem Schuljahr gilt: eine
   Einführung „ab 2027/2028“ und eine Ausmusterung nach diesem Schuljahr oder
-  später sind kein Grund für eine Markierung. Steht die ISBN nur in IServ, ist
+  später sind kein Grund für eine Markierung. Markiert wird gegen den
+  entschiedenen Stand (:func:`entschiedener_stand`, Entscheidung 2026-11-05):
+  solange die Ausmusterung nach dem Vorjahr nicht genehmigt ist, läuft das
+  Buch noch; solange die Einführung zu diesem Schuljahr nicht genehmigt ist,
+  ist es noch nicht eingeführt. Steht die ISBN nur in IServ, ist
   die ganze Zeile rot markiert (:attr:`Markierung.zeile`); nur in der Datei
   blau nur dann, wenn die Buchreihe im Inventar fehlt - sonst zeigen die
   Jahrgänge, was fehlt. Gelb (Titel, Verlag, Preise) setzt die Vorlage aus
@@ -212,7 +216,9 @@ class Markierung:
     Ganzes in IServ fehlt oder nur dort steht - dann ist jedes Feld der Zeile
     markiert (:attr:`zeile`). ``felder_anders`` sagt, ob IServ Titel, Verlag
     oder Preise anders nennt (der gelbe Strich). ``eintraege`` sind alle
-    gezeigten Einträge.
+    gezeigten Einträge. ``einfuehrung_offen``: die Zeile ist rot, weil IServ
+    die Buchreihe schon führt, die Datei sie aber nur mit offener Einführung
+    zu diesem Schuljahr plant (der Tooltip sagt das).
     """
 
     teilzeilen: tuple[Teilzeile, ...] = ()
@@ -220,6 +226,7 @@ class Markierung:
     iserv: str = ""
     felder_anders: bool = False
     eintraege: tuple[Eintrag, ...] = ()
+    einfuehrung_offen: bool = False
 
     @property
     def werte(self) -> tuple[Wert, ...]:
@@ -405,17 +412,36 @@ def _plan_des_eintrags(stand: Buchplanung, jetzt: int, zeilen: _Zeilen, *,
     )
 
 
-def _ungeklaert(zeilen: _Zeilen, jetzt: int) -> bool:
-    """Hängt der Eintrag in diesem Schuljahr an einem offenen Antrag - einer
-    Einführung zu diesem Schuljahr oder einer Ausmusterung nach dem Vorjahr?
+def _einfuehrung_offen(zeile: Planungszeile, jetzt: int) -> bool:
+    """Ist die Einführung dieser Zeile zu diesem Schuljahr noch nicht entschieden?"""
+    return zeile.beginn == jetzt and zeile.antrag_einfuehrung.status == ANTRAG_OFFEN
 
-    Dann ist noch nicht entschieden, ob IServ ihn führen soll: er wird nicht
-    markiert. Ein abgelehnter Antrag gilt nicht, der Eintrag ist dann so
-    entschieden wie ohne ihn; ein späterer Antrag ändert dieses Schuljahr nicht."""
-    return any(
-        (zeile.beginn == jetzt and zeile.antrag_einfuehrung.status == ANTRAG_OFFEN)
-        or (zeile.ende == jetzt - 1 and zeile.antrag_ausmusterung.status == ANTRAG_OFFEN)
-        for zeile in zeilen.urspruenglich)
+
+def _ausmusterung_offen(zeile: Planungszeile, jetzt: int) -> bool:
+    """Ist die Ausmusterung dieser Zeile nach dem Vorjahr noch nicht entschieden?"""
+    return zeile.ende == jetzt - 1 and zeile.antrag_ausmusterung.status == ANTRAG_OFFEN
+
+
+def entschiedener_stand(stand: Buchplanung) -> Buchplanung:
+    """Der Stand, gegen den die Fach-Ansicht mit IServ vergleicht: nur was
+    entschieden ist (Entscheidung 2026-11-05, ersetzt die vom 2026-11-04).
+
+    Solange die Ausmusterung nach dem Vorjahr nicht genehmigt ist, läuft das
+    Buch noch - die Zeile verliert ihre Ausmusterung. Solange die Einführung
+    zu diesem Schuljahr nicht genehmigt ist, ist es noch nicht eingeführt; eine
+    abgelehnte Einführung gilt nie - beide Zeilen fallen weg. Anträge zu
+    anderen Schuljahren ändern nichts: frühere Zeilen gelten als entschieden,
+    spätere werden noch nicht verglichen. ``stand`` ist der wirksame
+    (:func:`ohne_abgelehnte_ausmusterungen`); die Schrift rechnet weiter mit ihm.
+    """
+    jetzt = _jahr(stand.schuljahr)
+    if jetzt is None:
+        return stand
+    zeilen = tuple(
+        replace(zeile, ausgemustert_nach="") if _ausmusterung_offen(zeile, jetzt) else zeile
+        for zeile in stand.planung
+        if not _einfuehrung_abgelehnt(zeile) and not _einfuehrung_offen(zeile, jetzt))
+    return stand if zeilen == stand.planung else replace(stand, planung=zeilen)
 
 
 def _naechste_abgelehnte(zeilen: tuple[Planungszeile, ...], jetzt: int) -> Planungszeile | None:
@@ -521,45 +547,43 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     die Wertspalte: ``jahrgang`` oder ``fach``. ``abweichung`` ist der
     Vergleich mit IServ; ohne ihn bleibt jede Markierung weg.
 
-    ``stand`` ist der wirksame Stand, mit dem verglichen wurde (eine abgelehnte
-    Ausmusterung ist darin weg, ``ohne_abgelehnte_ausmusterungen``); ``original``
-    der Stand der Datei, aus dem Zusatz, Anträge und abgelehnte Einführungen
-    kommen. Ohne ihn ist es derselbe.
+    ``stand`` ist der wirksame Stand (eine abgelehnte Ausmusterung ist darin
+    weg, ``ohne_abgelehnte_ausmusterungen``) - aus ihm kommt die Schrift.
+    ``abweichung`` ist gegen den entschiedenen Stand gerechnet
+    (:func:`entschiedener_stand`), und so wird markiert: eine nicht genehmigte
+    Ausmusterung läuft noch, eine nicht genehmigte Einführung ist noch nicht
+    eingeführt. ``original`` ist der Stand der Datei, aus dem Zusatz, Anträge
+    und abgelehnte Einführungen kommen. Ohne ihn ist es derselbe.
     """
     jetzt = _jahr(stand.schuljahr)
     original = original or stand
     zeilen = _zeilen_je_eintrag(stand, original, buch) if jetzt is not None else {}
+    soll: set[Eintrag] = set()
     fehlt: set[Eintrag] = set()
     nur_iserv: set[Eintrag] = set()
     ist: set[Eintrag] = set()
+    fehlt_schrift: set[Eintrag] = set()
     if abweichung is not None:
-        # Was IServ führt, folgt aus dem Vergleich mit dem wirksamen Stand; wo
-        # eine abgelehnte Einführung ihn ändert, wird neu gegen IServ gerechnet.
+        # Markiert wird, was der entschiedene Stand anders sagt als IServ
+        # (Entscheidung 2026-11-05). Die Schrift rechnet mit dem wirksamen
+        # Stand gegen das, was IServ führt (``ist``).
+        soll = set(aktive_eintraege(entschiedener_stand(stand), buch))
+        ist = (soll - set(abweichung.eintraege_fehlen)) | set(abweichung.eintraege_nur_iserv)
+        fehlt, nur_iserv = soll - ist, ist - soll
         gilt = {e for e, z in zeilen.items() if z.wirkt(stand.schuljahr)}
-        ist = (set(aktive_eintraege(stand, buch)) - set(abweichung.eintraege_fehlen)) \
-            | set(abweichung.eintraege_nur_iserv)
-        fehlt, nur_iserv = gilt - ist, ist - gilt
+        fehlt_schrift = gilt - ist
     buchreihe = set(abweichung.buchreihe_fehlt) if abweichung else set()
     planung: dict[Eintrag, _Plan] = {}
     if jetzt is not None:
         for eintrag, z in zeilen.items():
             plan = _plan_des_eintrags(
                 stand, jetzt, z,
-                offen=eintrag in fehlt or eintrag[1] in buchreihe, in_iserv=eintrag in ist)
+                offen=eintrag in fehlt_schrift or eintrag[1] in buchreihe,
+                in_iserv=eintrag in ist)
             if plan is not None:
                 planung[eintrag] = plan
     eintraege = sorted((e for e in set(planung) | nur_iserv if im(e)),
                        key=lambda e: (e[0].casefold(), e[1], not e[2]))
-
-    # Markiert wird nur, was entschieden ist (Entscheidung 2026-11-04): hängt
-    # der Stand eines Eintrags in diesem Schuljahr an einem offenen Antrag,
-    # bleibt er unmarkiert - in IServ ist dafür noch nichts zu tun. Die Schrift
-    # rechnet weiter mit dem, was IServ führt (``fehlt``, ``ist`` oben).
-    ungeklaert = {e for e, z in zeilen.items() if jetzt is not None and _ungeklaert(z, jetzt)}
-    fehlt, nur_iserv = fehlt - ungeklaert, nur_iserv - ungeklaert
-    buchreihe_markiert = buchreihe if not ungeklaert else {
-        jahrgang for jahrgang in buchreihe
-        if any(e[1] == jahrgang and e not in ungeklaert for e in zeilen)}
 
     # Der Hintergrund schaut auf alle Fächer, aber nur auf die gezeigten Einträge.
     ganz = _ganz(planung.values())
@@ -568,15 +592,14 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     # Ganz blau markiert ist die Zeile nur, wenn die Buchreihe in IServ erst
     # angelegt werden muss (Entscheidung 2026-11-04); gibt es sie im Inventar
     # schon, zeigen die Jahrgänge, was fehlt. Ist das Inventar unbekannt, gilt
-    # die Zeile als neu. Hängt alles an offenen Anträgen, ist nichts markiert.
-    def alles_offen(betroffen: tuple[Eintrag, ...]) -> bool:
-        return bool(betroffen) and all(e in ungeklaert for e in betroffen)
-
+    # die Zeile als neu.
     anlegen = art == NUR_EXCEL and abweichung is not None \
-        and abweichung.buchreihe_angelegt is not True \
-        and not alles_offen(abweichung.eintraege_fehlen)
-    nur_dort = art == NUR_ISERV and abweichung is not None \
-        and not alles_offen(abweichung.eintraege_nur_iserv)
+        and abweichung.buchreihe_angelegt is not True
+    nur_dort = art == NUR_ISERV
+    # Ganz rot, weil die Einführung noch nicht genehmigt ist, IServ die
+    # Buchreihe aber schon führt - das sagt dann der Tooltip.
+    einfuehrung_offen = nur_dort and jetzt is not None and any(
+        _einfuehrung_offen(zeile, jetzt) for z in zeilen.values() for zeile in z.urspruenglich)
 
     teilzeilen = []
     for leihbar in (True, False):
@@ -588,8 +611,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
             fach, jahrgang, _ = eintrag
             plan = planung.get(eintrag)
             liste = FEHLT if eintrag in fehlt else STEHT_NOCH if eintrag in nur_iserv else ""
-            reihe = plan is not None and plan.wirkt and jahrgang in buchreihe_markiert \
-                and eintrag not in ungeklaert
+            reihe = eintrag in soll and jahrgang in buchreihe
             # Steht der Jahrgang in der anderen Teilzeile andersherum markiert,
             # ist in IServ nur „leihbar“ umzustellen - auf den Wert der blauen.
             gegenueber = (fach, jahrgang, not leihbar)
@@ -630,6 +652,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
         iserv=FEHLT if anlegen else STEHT_NOCH if nur_dort else "",
         felder_anders=bool(abweichung and any(f != "leihbar" for f, _ in abweichung.felder)),
         eintraege=tuple(eintraege),
+        einfuehrung_offen=einfuehrung_offen,
     )
 
 

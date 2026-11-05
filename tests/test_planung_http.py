@@ -860,14 +860,17 @@ def test_ganz_ausgemustertes_buch_steht_in_der_liste_mit_ruecklage(
     zeile = _zeile_von(tabelle, TERRA)
     assert '<td data-wert="4">4</td>' in zeile
     # In Politik läuft Terra weiter, es ist also nicht ganz weg: rot sind der
-    # Strich und die Jahrgänge (Schrift). Jg. 6 führt IServ noch - markiert ist
-    # er erst, wenn die Ausmusterung genehmigt ist (Entscheidung 2026-11-04).
+    # Strich und die Jahrgänge (Schrift). Solange die Ausmusterung nicht
+    # genehmigt ist, läuft das Buch noch (Entscheidung 2026-11-05): Jg. 6 führt
+    # IServ, nicht markiert; Jg. 5 hat IServ schon entfernt - blau.
     assert 'style="--strich: var(--ausmusterung-strich)"' in zeile.split(">")[0]
     assert "ganz-" not in zeile.split(">")[0]
-    assert '<span class="schrift-ausmusterung durch">5</span>' in zeile
+    assert ('<span class="markierung markierung-einfuehrung" title="Ausmusterung der '
+            'Buchreihe in Jahrgang 5 beantragt\nBuchreihe ist Bücherliste für Jahrgang 5 '
+            'hinzuzufügen"><span class="schrift-ausmusterung durch">5</span></span>') in zeile
     assert ('<span title="Ausmusterung der Buchreihe in Jahrgang 6 beantragt">'
             '<span class="schrift-ausmusterung durch">6</span></span>') in zeile
-    assert "markierung" not in zeile
+    assert "markierung-ausmusterung" not in zeile
     assert "<td>Terra 5/6</td>" in zeile
     assert "nur in IServ" not in zeile
     assert "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)" in _ohne_tags(zeile)
@@ -889,11 +892,15 @@ def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
     dort führt IServ Terra dieses Jahr noch in Jg. 6.
     """
     mtime = _mustere_terra_aus(seiten, abgeglichen["mtime"], "Erdkunde", "Politik")
-    # Solange die Ausmusterungen offen sind, ist nichts markiert (Entscheidung
-    # 2026-11-04) - hinterlegt ist die Zeile trotzdem, das zeigt die Planung.
+    # Solange die Ausmusterungen offen sind, läuft Terra noch (Entscheidung
+    # 2026-11-05): die Zeile ist nicht rot markiert, nur Jg. 5, den IServ schon
+    # entfernt hat, blau - hinterlegt ist sie trotzdem, das zeigt die Planung.
     zeile = _zeile_von(_haupttabelle(seiten.get("/buecherliste/fach/Erdkunde").text), TERRA)
-    assert "ganz-ausmusterung" in zeile.split(">")[0] and "markierung" not in zeile
-    _genehmige(seiten, mtime, TERRA, "ausmusterung", ("Erdkunde", 6), ("Politik", 6))
+    assert "ganz-ausmusterung" in zeile.split(">")[0]
+    assert "markierung-ausmusterung" not in zeile and "<td>Terra 5/6</td>" in zeile
+    assert zeile.count("markierung-einfuehrung") == 1
+    _genehmige(seiten, mtime, TERRA, "ausmusterung", ("Erdkunde", 5), ("Erdkunde", 6),
+               ("Politik", 5), ("Politik", 6))
     for fach in ("Erdkunde", "Politik"):
         zeile = _zeile_von(_haupttabelle(seiten.get(f"/buecherliste/fach/{fach}").text), TERRA)
         kopf = zeile.split(">")[0]
@@ -1514,6 +1521,34 @@ def test_eine_neue_reihe_ohne_buchreihe_im_inventar_ist_ganz_blau(
     assert "reihe-unbekannt" in _zeile_von(fehlend, NEU)
 
 
+def test_fuehrt_iserv_eine_reihe_vor_genehmigter_einfuehrung_ist_sie_ganz_rot(
+    seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Datei plant das Buch nur mit einer offenen Einführung zu diesem
+    Schuljahr, IServ führt es schon: noch nicht eingeführt, also ganz rot, mit
+    eigenem Tooltip (Entscheidung 2026-11-05). Genehmigt ist nichts markiert."""
+    antwort = seiten.post("/api/buchplanung/buch/neu", json={
+        "schuljahr": "2026/2027", "isbn": NEU, "fach": "Deutsch",
+        "zeilen": [{"jahrgang": 5, "eingefuehrt_ab": "2026/2027", "leihbar": True}],
+        "buchreihe": _buchreihe("Neues Deutschbuch", "Cornelsen"),
+        "mtime": abgeglichen["mtime"],
+    })
+    assert antwort.status_code == 200, antwort.text
+    _iserv_aendern(monkeypatch, 5, [*_BUECHER["2026/2027"][5],
+                                    (NEU, "Neues Deutschbuch", ["Deutsch"], "Cornelsen", 22.5, True)])
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
+    rot = ('<span class="markierung markierung-ausmusterung" title="IServ führt Buchreihe '
+           'bereits, obwohl die Einführung noch nicht genehmigt ist.">')
+    assert f"{rot}Neues Deutschbuch</span>" in zeile
+    assert "nur in IServ" not in zeile
+    assert ('<span class="markierung markierung-ausmusterung" title="Einführung der Buchreihe '
+            'in Jahrgang 5 beantragt\nBuchreihe ist aus Bücherliste für Jahrgang 5 in IServ '
+            'zu entfernen"><span class="schrift-einfuehrung">5</span></span>') in zeile
+    _genehmige(seiten, antwort.json()["mtime"], NEU, "einfuehrung", ("Deutsch", 5))
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, NEU)
+    assert "markierung-ausmusterung" not in zeile and "noch nicht genehmigt" not in zeile
+
+
 def test_ein_zusaetzlicher_jahrgang_in_iserv_markiert_die_jahrgangsspalte(
     seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1536,21 +1571,29 @@ def test_eine_eingefuehrte_planung_gleicht_iserv(
     seiten: TestClient, abgeglichen: dict, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Eingeführt ab diesem Schuljahr heißt: laut Datei dieses Jahr da."""
-    seiten.post("/api/buchplanung/buch", json={
+    mtime = seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
         "zeilen": [{"jahrgang": 5}, {"jahrgang": 6, "eingefuehrt_ab": "2026/2027", "leihbar": True}],
         "mtime": abgeglichen["mtime"],
-    })
+    }).json()["mtime"]
     _iserv_aendern(monkeypatch, 6, [*_BUECHER["2026/2027"][6],
                                     (DEUTSCH, "Deutschbuch 5", ["Deutsch"], "Cornelsen", 22.5, True)])
     # Gegen IServ (Jahrgangsansicht) ist nichts abweichend …
     assert not _markiert(_zeile_von(seiten.get("/buecherliste/jahrgang/6").text, DEUTSCH))
-    # … in der Fach-Ansicht ist es eine Einführung zum laufenden Schuljahr:
-    # blau geschrieben, aber ohne Markierung - IServ ist schon nachgezogen.
+    # … in der Fach-Ansicht ist es eine Einführung zum laufenden Schuljahr,
+    # blau geschrieben. Solange sie nicht genehmigt ist, ist Jg. 6 noch nicht
+    # eingeführt: IServ ist vorgeprescht - rot markiert (Entscheidung 2026-11-05).
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
+    assert ('<span class="markierung markierung-ausmusterung" title="Einführung der '
+            'Buchreihe in Jahrgang 6 beantragt\nBuchreihe ist aus Bücherliste für '
+            'Jahrgang 6 in IServ zu entfernen"><span class="schrift-einfuehrung">6</span>') \
+        in zeile
+    assert 'style="--strich: var(--einfuehrung-strich)"' in zeile.split(">")[0]
+    # Genehmigt: IServ ist schon nachgezogen, ohne Markierung.
+    _genehmige(seiten, mtime, DEUTSCH, "einfuehrung", ("Deutsch", 6))
     zeile = _zeile_von(seiten.get("/buecherliste/fach/Deutsch").text, DEUTSCH)
     assert '<span class="schrift-einfuehrung">6</span>' in zeile
     assert "markierung" not in zeile
-    assert 'style="--strich: var(--einfuehrung-strich)"' in zeile.split(">")[0]
 
 
 def test_der_abgleich_zieht_die_datei_nicht_auf_iserv_nach(
@@ -1877,10 +1920,20 @@ def test_ein_nach_dem_vorjahr_ausgemustertes_kaufbuch_steht_mit_menue_in_der_lis
     # was nur IServ als Leihbuch führt (6).
     assert [klasse for klasse, _ in teile] == [
         " ganz-ausmusterung", "", " ganz-ausmusterung mit-antrag", ""]
-    assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe ist aus '
-            'Bücherliste für Jahrgang 6 in IServ zu entfernen">6</span>') in teile[3][1]
+    # Solange die Ausmusterung nicht genehmigt ist, läuft Terra als Kaufbuch
+    # noch (Entscheidung 2026-11-05): in IServ ist Jg. 6 nur auf „nicht
+    # leihbar“ zu stellen.
+    assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe ist in '
+            'Bücherliste für Jahrgang 6 auf nicht leihbar zu setzen">6</span>') in teile[3][1]
     assert _ohne_tags(teile[2][1]) == (
         "5 (bis Ausmusterung2025/2026offen), 6 (bis Ausmusterung2025/2026offen)")
+    # Genehmigt: IServ hat den Leihbuch-Jahrgang zu entfernen.
+    _genehmige(seiten, antwort.json()["mtime"], TERRA, "ausmusterung",
+               ("Erdkunde", 5), ("Erdkunde", 6))
+    zeile = _zeile_von(seiten.get("/buecherliste/fach/Erdkunde").text, TERRA)
+    teile = re.findall(r'<div class="teilzeile([^"]*)"[^>]*>(.*?)</div>', zeile, re.S)
+    assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe ist aus '
+            'Bücherliste für Jahrgang 6 in IServ zu entfernen">6</span>') in teile[3][1]
 
 
 def test_ausgemustert_ist_im_menue_rot(seiten: TestClient, abgeglichen: dict) -> None:
