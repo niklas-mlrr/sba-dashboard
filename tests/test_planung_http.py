@@ -1395,9 +1395,12 @@ def test_ein_buch_nur_in_iserv_steht_markiert_und_ohne_menue(
     assert f'{rot}Cornelsen</span>' in zeile
     assert f'{rot}<samp>' in zeile
     assert f'{rot}23,00&nbsp;€</span>' in zeile
-    # Der Jahrgang je Jahrgang (Variante 2, Entscheidung 2026-11-04).
-    assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe ist aus '
-            'Bücherliste für Jahrgang 5 in IServ zu entfernen">5</span>') in zeile
+    # Der Jahrgang je Jahrgang (Variante 2, Entscheidung 2026-11-04). Die
+    # Buchreihe geht ganz: auch an ihr ist er zu entfernen, Strich oben und
+    # unten (Entscheidung 2026-11-05).
+    assert ('<span class="markierung markierung-ausmusterung markierung-oben-unten" '
+            'title="Buchreihe ist aus Bücherliste für Jahrgang 5 in IServ zu entfernen\n'
+            'Jahrgang 5 ist aus der Buchreihe zu entfernen">5</span>') in zeile
     assert "durch" not in zeile
     assert "aufklappbar" not in zeile and "strich" not in zeile.split(">")[0]
     assert f'data-isbn="{neu}" data-fach="Deutsch"' not in text

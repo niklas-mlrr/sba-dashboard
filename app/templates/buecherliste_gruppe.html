@@ -386,7 +386,8 @@
       <td data-wert="{{ buch.neupreis if buch.neupreis is not none else '' }}">{{ zeilenfeld(buch, f, euro(buch.neupreis), iserv_feld(iserv, "neupreis", euro(buch.neupreis))) }}</td>
       <td data-wert="{{ buch.leihgebuehr if buch.leihgebuehr is not none else '' }}">{{ zeilenfeld(buch, f, euro(buch.leihgebuehr), iserv_feld(iserv, "leihgebuehr", euro(buch.leihgebuehr))) }}</td>
       {% if mit_ruecklagen %}{% set zurueck = bp.ruecklage_anzahl(planung, buch, fach) | trim %}
-      <td data-wert="{{ zurueck }}">{% if zurueck %}{{ zeilenfeld(buch, f, zurueck, zurueck) }}{% endif %}</td>{% endif %}
+      {#- Rücklagen werden nie markiert (Entscheidung 2026-11-05): sie stehen nicht in IServ. #}
+      <td data-wert="{{ zurueck }}">{{ zurueck }}</td>{% endif %}
 {% endmacro %}
 {% macro euro(wert) -%}
 {%- if wert is not none -%}{{ "%.2f"|format(wert)|replace(".", ",") }}&nbsp;€{%- endif -%}

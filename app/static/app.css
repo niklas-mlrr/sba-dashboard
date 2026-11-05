@@ -596,6 +596,12 @@ td.aenderung[title], td.einfuehrung[title], td.ausmusterung[title] { cursor: hel
   box-shadow: inset 0 2px 0 var(--einfuehrung-strich), inset 0 -2px 0 var(--einfuehrung-strich);
 }
 .markierung-ausmusterung { background: var(--ausmusterung-grund); box-shadow: inset 0 -2px 0 var(--ausmusterung-strich); }
+/* Rot am Jahrgang (2026-11-05): unten „aus der Bücherliste des Jahrgangs
+   entfernen“ (immer), oben „an der Buchreihe entfernen“ - nur, wenn die
+   Buchreihe ganz geht. */
+.markierung-ausmusterung.markierung-oben-unten {
+  box-shadow: inset 0 2px 0 var(--ausmusterung-strich), inset 0 -2px 0 var(--ausmusterung-strich);
+}
 .markierung-aenderung { background: var(--aenderung-grund); box-shadow: inset 0 -2px 0 var(--aenderung-strich); }
 .markierung[title], span[title] > .markierung { cursor: help; }
 /* So spezifisch wie ".iserv-tabelle > tbody > tr > td" oben, das den Grund

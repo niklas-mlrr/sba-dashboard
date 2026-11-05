@@ -48,6 +48,26 @@ davon geändert waren, weiß die Datei ohne Kommentar nicht mehr. Ebenfalls offe
 Kommandozeilen-Skript `buecherlisten/generate_booklists.py` kennt die
 Korrekturen nicht.
 
+**Offen: eine Datei je Schuljahr, ausgewähltes Schuljahr** (Entscheidung
+2026-11-05). Die Fach-Ansicht rechnet gegen „das ausgewählte Schuljahr“, das
+vorerst immer das laufende ist. Wählbar wird es, wenn es je Schuljahr genau
+eine Datei gibt. Beim Anlegen der nächsten werden **abgelehnte Anträge nicht
+mitgenommen** - außer ein Buch wird in einem Fach in einem Jahrgang
+ausgemustert (etwa Mathe 9) und läuft anderswo weiter (Mathe 10, Physik 9 und
+10): dann muss die neue Datei wissen, dass es in Mathe 9 ausgemustert ist.
+IServ ordnet Fächern nur Buchreihen zu, nicht Jahrgängen; ohne diese
+Erinnerung stünde es wieder auf der Mathe-Liste, und die Fachschaft wunderte
+sich. Damit erledigt sich auch, dass eine längst vergangene abgelehnte
+Einführung in jedem späteren Schuljahr grau dasteht.
+
+**Offen: zusammengehörige Anträge mit ablehnen** (Entscheidung 2026-11-05).
+Wird eine Einführung abgelehnt, ist ihre Ausmusterung gegenstandslos; wird
+eine Ausmusterung abgelehnt, die Wiedereinführung danach (bzw. beim Wechsel
+alles an der anderen Teilzeile). Die Änderungsliste soll diese Anträge dann
+mit ablehnen. Bis dahin färbt die Fach-Ansicht auch Unlogisches: es fällt
+nur der abgelehnte Antrag selbst weg (Planungs-README, „Unlogisches darf
+gefärbt werden“).
+
 **Festgelegt am 2026-10-30: Grundlage der Farben je Ansicht.** In der
 Fach-Ansicht färben Einführung und Ausmusterung nach der Planung (Einführungs-
 und Ausmusterungsjahr), nicht nach dem Vergleich mit IServ. In der **Verlags-
