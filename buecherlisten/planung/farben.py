@@ -234,7 +234,9 @@ class Markierung:
     oder Preise anders nennt (der gelbe Strich). ``eintraege`` sind alle
     gezeigten Einträge. ``einfuehrung_offen``: die Zeile ist rot, weil IServ
     die Buchreihe schon führt, die Datei sie aber nur mit offener Einführung
-    zu diesem Schuljahr plant (der Tooltip sagt das).
+    zu diesem Schuljahr plant (der Tooltip sagt das). ``reihe_weg``: die
+    Buchreihe geht ganz (wie :attr:`Wert.reihe_weg`) - eine rot markierte
+    Zeile hat dann auch an jedem Feld den Strich oben (:attr:`zeile_striche`).
     """
 
     teilzeilen: tuple[Teilzeile, ...] = ()
@@ -243,6 +245,7 @@ class Markierung:
     felder_anders: bool = False
     eintraege: tuple[Eintrag, ...] = ()
     einfuehrung_offen: bool = False
+    reihe_weg: bool = False
 
     @property
     def werte(self) -> tuple[Wert, ...]:
@@ -265,6 +268,13 @@ class Markierung:
         """Die Markierung jedes Felds der Zeile: blau, wenn die ISBN in IServ
         fehlt, rot, wenn es sie nur dort gibt - sonst leer."""
         return MARKIERUNG.get(self.iserv, "")
+
+    @property
+    def zeile_striche(self) -> str:
+        """Die Striche an jedem Feld einer ganz markierten Zeile, wie
+        :attr:`Wert.striche`: rot ``oben-unten``, wenn die Buchreihe ganz geht
+        (Entscheidung 2026-11-05) - sonst leer (nur unten)."""
+        return "oben-unten" if self.zeile == AUSMUSTERUNG and self.reihe_weg else ""
 
     @property
     def strich_planung(self) -> tuple[str, ...]:
@@ -729,6 +739,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
         felder_anders=bool(abweichung and any(f != "leihbar" for f, _ in abweichung.felder)),
         eintraege=tuple(eintraege),
         einfuehrung_offen=einfuehrung_offen,
+        reihe_weg=reihe_weg,
     )
 
 

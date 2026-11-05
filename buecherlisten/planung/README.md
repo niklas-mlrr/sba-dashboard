@@ -360,7 +360,10 @@ nicht ganz markiert: die Jahrgänge zeigen, was fehlt, und was die Datei bei
 Titel, Verlag und Preisen anders führt als die Buchreihe, ist gelb
 (Variante B, Entscheidung 2026-11-04). Ist das Inventar nicht zu bekommen,
 gilt die Zeile als neu. Steht die ISBN nur in IServ, ist jedes Feld rot, die
-Jahrgänge je Jahrgang. Führt nur IServ es in einem Fach, ist es aber anderswo
+Jahrgänge je Jahrgang. Geht die Buchreihe ganz, hat wie bei den Jahrgängen
+jedes rot markierte Feld auch den Strich oben (`Markierung.zeile_striche`);
+mit „nur in IServ“ haben die Felder nur den Strich oben (Entscheidung
+2026-11-05), die Jahrgänge beide. Führt nur IServ es in einem Fach, ist es aber anderswo
 geplant, sind nur die Jahrgänge rot markiert. Den Zusatz **„nur in IServ“**
 (ohne Menü) trägt der Titel nur, wenn die ISBN in einer IServ-Bücherliste
 steht und **in der ganzen Datei nicht** (Entscheidung 2026-11-04). Ein Buch,
@@ -371,7 +374,9 @@ das die Datei kennt - etwa nach dem Vorjahr ausgemustert, IServ führt es noch
 der Titel): die Zeile „Buchreihe bearbeiten“. Titel, Verlag, ISBN und Preise
 (Rücklagen werden nie markiert, Entscheidung 2026-11-05): gelb „Bisher: <IServ-Wert>“, blau „Buchreihe muss in IServ angelegt
 werden“, rot mit „nur in IServ“ „Buchreihe existiert nur in IServ“, rot ohne
-„Buchreihe wird ausgemustert“ - oder, wenn die Datei sie nur mit einer noch
+„Buchreihe wird ausgemustert“, wenn die Buchreihe ganz geht (Strich oben und
+unten), sonst „Buchreihe wird vorübergehend ausgemustert“ (nur unten: eine
+Einführung kommt noch; `Markierung.reihe_weg`) - oder, wenn die Datei sie nur mit einer noch
 nicht genehmigten Einführung plant, „IServ führt Buchreihe bereits, obwohl die
 Einführung noch nicht genehmigt ist.“ (Entscheidung 2026-11-05,
 `Markierung.einfuehrung_offen`). Eine entschiedene Jahreszahl im Zusatz:

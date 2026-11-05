@@ -634,6 +634,21 @@ def test_geht_die_buchreihe_ganz_hat_rot_auch_den_strich_oben():
     assert [w.striche for w in m.werte if w.markierung] == ["oben-unten", "oben-unten"]
 
 
+def test_eine_ganz_rote_zeile_hat_den_strich_oben_nur_wenn_die_buchreihe_ganz_geht():
+    """Wie die Jahrgänge: jedes Feld der rot markierten Zeile hat oben einen
+    Strich, wenn die Buchreihe ganz geht - sonst nur unten (vorübergehend)."""
+    weg = (_entschieden(_zeile(5, nach="2025/2026"), ausmusterung="genehmigt"),)
+    steht = Abweichung(ISBN, NUR_ISERV, eintraege_nur_iserv=(("Deutsch", 5, True),))
+    m = _markierung(*weg, abweichung=steht)
+    assert (m.zeile, m.reihe_weg, m.zeile_striche) == (AUSMUSTERUNG, True, "oben-unten")
+    m = _markierung(*weg, _zeile(5, ab="2028/2029"), abweichung=steht)
+    assert (m.zeile, m.reihe_weg, m.zeile_striche) == (AUSMUSTERUNG, False, "")
+    # Ohne rote Zeile keine Striche, auch wenn die Buchreihe geht.
+    m = _markierung(*weg, abweichung=Abweichung(
+        ISBN, BEIDE, eintraege_nur_iserv=(("Deutsch", 5, True),)))
+    assert (m.zeile, m.zeile_striche) == ("", "")
+
+
 def test_beim_wechsel_in_iserv_nur_leihbar_umstellen():
     """Rot in der einen, blau in der anderen Teilzeile: nur „auf … zu setzen“,
     auch wenn der Buchreihe der Jahrgang fehlt."""

@@ -906,8 +906,9 @@ def test_ein_ueberall_ausgemustertes_buch_das_iserv_noch_fuehrt_ist_ganz_rot(
         kopf = zeile.split(">")[0]
         assert "ganz-ausmusterung" in kopf and "aufklappbar" in kopf
         # Die Datei kennt das Buch: es wird ausgemustert (Entscheidung 2026-11-04).
-        assert ('<span class="markierung markierung-ausmusterung" title="Buchreihe wird '
-                'ausgemustert">Terra 5/6</span></td>') in zeile
+        # Die Buchreihe geht ganz: jedes Feld auch mit Strich oben.
+        assert ('<span class="markierung markierung-ausmusterung markierung-oben-unten" '
+                'title="Buchreihe wird ausgemustert">Terra 5/6</span></td>') in zeile
         assert "nur in IServ</span>" not in zeile
     assert "reihe-weg" in _zeile_von(seiten.get("/buecherliste/jahrgang/6").text, TERRA)
 
@@ -1390,7 +1391,9 @@ def test_ein_buch_nur_in_iserv_steht_markiert_und_ohne_menue(
     # Was nur IServ führt, steht wieder in der Fach-Ansicht (2026-10-31): jedes
     # Feld rot markiert, Jg. 5 nicht durchgestrichen, ohne Planungsmenü.
     zeile = _zeile_von(text, neu)
-    rot = '<span class="markierung markierung-ausmusterung" title="Buchreihe existiert nur in IServ">'
+    # Die Felder nur mit Strich oben (Entscheidung 2026-11-05).
+    rot = ('<span class="markierung markierung-ausmusterung markierung-oben" '
+           'title="Buchreihe existiert nur in IServ">')
     assert (f'{rot}Deutschbuch 6</span> <span class="klein grau">nur in IServ</span>') in zeile
     assert f'{rot}Cornelsen</span>' in zeile
     assert f'{rot}<samp>' in zeile

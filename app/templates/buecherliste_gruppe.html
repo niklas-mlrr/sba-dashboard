@@ -335,25 +335,32 @@
   Der Tooltip eines Felds einer ganz markierten Zeile (Entscheidung
   2026-11-04): blau „Buchreihe muss in IServ angelegt werden“, rot mit dem
   Zusatz „nur in IServ“ „Buchreihe existiert nur in IServ“, rot ohne ihn
-  „Buchreihe wird ausgemustert“ - die Datei kennt das Buch, führt es dieses
-  Schuljahr aber nirgends mehr. Plant die Datei es nur mit einer Einführung
-  zu diesem Schuljahr, die noch nicht genehmigt ist, sagt der Tooltip das
+  - die Datei kennt das Buch, führt es dieses Schuljahr aber nirgends mehr -
+  „Buchreihe wird ausgemustert“, wenn die Buchreihe ganz geht (Strich oben und
+  unten), sonst „Buchreihe wird vorübergehend ausgemustert“ (nur unten: eine
+  Einführung kommt noch). Plant die Datei es nur mit einer Einführung zu
+  diesem Schuljahr, die noch nicht genehmigt ist, sagt der Tooltip das
   (Entscheidung 2026-11-05).
 #}
 {% macro zeilenhinweis(buch, f) -%}
 {%- if f.zeile == "einfuehrung" %}Buchreihe muss in IServ angelegt werden
 {%- elif buch.isbn not in planung.isbns %}Buchreihe existiert nur in IServ
 {%- elif f.einfuehrung_offen %}IServ führt Buchreihe bereits, obwohl die Einführung noch nicht genehmigt ist.
-{%- else %}Buchreihe wird ausgemustert{% endif -%}
+{%- elif f.reihe_weg %}Buchreihe wird ausgemustert
+{%- else %}Buchreihe wird vorübergehend ausgemustert{% endif -%}
 {%- endmacro %}
 {#
   Ein Feld einer Zeile, deren ISBN nur auf einer Seite steht (``f.zeile``):
   blau markiert, wenn die Buchreihe in IServ erst angelegt werden muss, rot,
-  wenn nur IServ sie führt - mit dem Tooltip dazu. Sonst ``sonst`` - das Feld,
+  wenn nur IServ sie führt - mit dem Tooltip dazu; rot oben und unten, wenn
+  die Buchreihe ganz geht (``f.zeile_striche``), mit „nur in IServ“ nur oben
+  (Entscheidung 2026-11-05). Sonst ``sonst`` - das Feld,
   wie es ohne diese Markierung aussähe.
 #}
 {% macro zeilenfeld(buch, f, inhalt, sonst) -%}
-{%- if f.zeile %}<span class="markierung markierung-{{ f.zeile }}" title="{{ zeilenhinweis(buch, f) }}">{{ inhalt }}</span>
+{%- set striche = "oben" if f.zeile == "ausmusterung" and buch.isbn not in planung.isbns
+      else f.zeile_striche -%}
+{%- if f.zeile %}<span class="markierung markierung-{{ f.zeile }}{{ ' markierung-' ~ striche if striche }}" title="{{ zeilenhinweis(buch, f) }}">{{ inhalt }}</span>
 {%- else %}{{ sonst }}{% endif -%}
 {%- endmacro %}
 {#
