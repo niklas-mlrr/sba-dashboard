@@ -35,7 +35,6 @@ from buecherlisten.planung import (
     ANTRAG_OFFEN,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
-    FACH_BESTAETIGT,
     NUR_ISERV,
     OHNE_VERLAG,
     RANG_JAHRGANG,
@@ -338,9 +337,9 @@ async def pdf_gruppen(request: Request, ansicht: str) -> Response:
     einer abgelaufenen Anmeldung genügt Neuladen.
 
     Die Gruppen kommen bei "Individuell" als fertige Liste. Das soll so
-    bleiben: "veränderte" wird später im Menü geprüft und hakt die Fächer
-    dort an, damit F5 dieselben Fächer zeigt, auch wenn sich danach etwas
-    geändert hat (docs/roadmap.md).
+    bleiben: "nicht versendete" hakt die Fächer später im Menü an, damit F5
+    dieselben Fächer zeigt, auch wenn sich danach etwas geändert hat
+    (docs/roadmap.md).
     """
     if ansicht not in _ANSICHTEN:
         return _unbekannte_ansicht(request, ansicht)
@@ -351,7 +350,7 @@ async def pdf_gruppen(request: Request, ansicht: str) -> Response:
         modus = abfrage.get("reihenfolge", "")
         if abfrage.get(f"{feld}_auswahl") == "individuell":
             return abfrage.getlist(feld), modus
-        # "Alle" sowie die Platzhalter "veränderte" und "nicht bestätigte".
+        # "Alle" sowie der Platzhalter "nicht versendete".
         return alle, modus
 
     return await _pdf(request, cast(Ansicht, ansicht), auswahl)
@@ -466,13 +465,6 @@ def uebersicht(request: Request, ansicht: str) -> Response:
     gruppen = aus_datei(vergleich) if vergleich and aus_datei else iserv_gruppen
     return _seite(request, "buecherliste_uebersicht.html", {
         "planung": kontext,
-        # Was hinter "nicht bestätigte" im Druckmenü steckt: die Fächer ohne
-        # gültige Freigabe. Der Server rechnet sie aus, nicht das Skript - so
-        # steht im HTML dieselbe Liste, die auch die Seite anzeigt.
-        "druck_nicht_bestaetigt": [
-            name for name in druck_gruppen
-            if (kontext["fach_je_name"].get(name) or {}).get("status") != FACH_BESTAETIGT
-        ] if ansicht == "fach" and kontext["mtime"] is not None else None,
         "ansicht": ansicht,
         # Jede Ansicht hat ein Druckmenü; nur sein Inhalt unterscheidet sich.
         "druckbar": True,

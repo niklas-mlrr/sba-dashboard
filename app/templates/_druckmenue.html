@@ -9,9 +9,13 @@
   Name, für die URL) auf der Seite einer Gruppe. Verhalten in
   static/druckmenue.js; das Formular öffnet das PDF in einem neuen Tab.
 
-  Nur Fächer lassen sich bestätigen (die Bestätigung ist an die
-  Fachkonferenzleitung adressiert) und nach Aufgabenfeld sortieren; nur
-  Jahrgänge haben die Schülerliste, also die Druckversion aus IServ.
+  Nur Fächer haben Stand, Bestätigung, Rückgabe, Gesendet und Anträge, und
+  nur sie lassen sich nach Aufgabenfeld sortieren (Vorgabe vom 2026-11-06);
+  nur Jahrgänge haben die Schülerliste, also die Druckversion aus IServ.
+  Reihenfolge der Fach-Felder: Stand, Fächer, Reihenfolge, Bestätigung,
+  Rückgabe, Gesendet, Anträge, Doppelseitig.
+  Bestätigung und Anträge gibt es nur ohne "IServ-Stand benutzen"; ihre
+  Felder sind sonst gesperrt (druckmenue.js).
 
   GET, damit alle Angaben in der URL stehen und F5 im PDF-Tab ohne Rückfrage
   dasselbe PDF neu lädt (app/api/buecherliste.py).
@@ -27,6 +31,86 @@
     <div class="modal-body">
       {% if druck_ansicht == "fach" %}
       <div class="form-group">
+        <label class="control-label spalte-beschriftung" for="druck-iserv-stand">Stand:</label>
+        <div class="spalte-inhalt">
+          <div class="checkbox">
+            <label><input type="checkbox" name="iserv_stand" value="1" id="druck-iserv-stand" checked>&nbsp;IServ-Stand benutzen</label>
+          </div>
+          <p class="small help-block">Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet,
+            werden bei Buchreihen mit mehreren Fächern alle Jahrgänge allen Fächern zugeschrieben,
+            auch wenn nicht alle Jahrgänge für alle Fächer gelten.</p>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if druck_ansicht == "jahrgang" %}
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung" for="druck-schuelerliste">Schülerliste:</label>
+        <div class="spalte-inhalt">
+          <div class="checkbox">
+            <label><input type="checkbox" name="schuelerliste" value="1" id="druck-schuelerliste">&nbsp;Druckversion aus IServ</label>
+          </div>
+          <p class="small help-block">Nimmt die Bücherliste, die IServ selbst druckt: mit Grundpaket
+            und Wahlbereichen einzeln. Ohne Häkchen stehen alle Bücher des Jahrgangs in einer
+            Tabelle, im Aussehen der Listen nach Fach.</p>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if druck_gruppen %}
+      {# Fächer alphabetisch (Vorgabe vom 2026-11-06); Jahrgänge in ihrer Reihenfolge. #}
+      {% set gruppenliste = (druck_gruppen | sort(case_sensitive=false)) if druck_ansicht == "fach" else druck_gruppen %}
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung">{{ wort }}:</label>
+        <div class="spalte-inhalt">
+          {#
+            "nicht versendete": Fächer, deren aktuelle Bücherliste noch nicht
+            gedruckt ist. Gesperrt, bis "Gesendet" einen Stand je Fach
+            speichert (Vorgabe vom 2026-11-06). Dann bekommt die Option ihre
+            Namen in data-gruppen, wie früher "nicht bestätigte": "Individuell"
+            übernimmt sie als Vorauswahl der Häkchen.
+          #}
+          <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="alle"
+            data-gruppen="alle" checked>Alle</label></div>
+          {% if druck_ansicht == "fach" %}
+          <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="nicht_versendete"
+            data-gruppen="alle" disabled
+            title="Folgt mit dem Stand „Gesendet“">nicht versendete</label></div>
+          {% endif %}
+          <div class="radio radio-mit-auswahl">
+            <label><input type="radio" name="{{ feld }}_auswahl" value="individuell"
+              id="druck-individuell">Individuell</label>
+            <div class="dropdown" id="druck-gruppenliste">
+              <button type="button" class="btn btn-default dropdown-toggle" id="druck-gruppenliste-knopf"
+                aria-haspopup="true" aria-expanded="false" disabled><span
+                id="druck-gruppenliste-text">{{ druck_gruppen|length }} von {{ druck_gruppen|length }}</span>&nbsp;<span
+                class="caret"></span></button>
+              <ul class="dropdown-menu faecherauswahl" role="menu">
+                {% for gruppe in gruppenliste %}
+                <li><label><input type="checkbox" name="{{ feld }}" value="{{ gruppe }}" checked
+                  disabled>&nbsp;{{ gruppe }}</label></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if druck_ansicht == "fach" %}
+      <div class="form-group">
+        <label class="control-label spalte-beschriftung">Reihenfolge:</label>
+        <div class="spalte-inhalt">
+          <div class="radio"><label><input type="radio" name="reihenfolge" value="alphabet"
+            checked>Alphabetisch</label></div>
+          <div class="radio"><label><input type="radio" name="reihenfolge"
+            value="aufgabenfeld">Nach Aufgabenfeld</label></div>
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      {% if druck_ansicht == "fach" %}
+      <div class="form-group" id="druck-bestaetigung-zeile">
         <label class="control-label spalte-beschriftung" for="druck-bestaetigung">Bestätigung:</label>
         <div class="spalte-inhalt">
           <div class="checkbox">
@@ -55,80 +139,44 @@
           </div>
         </div>
       </div>
-      {% endif %}
 
-      {% if druck_ansicht == "jahrgang" %}
-      <div class="form-group">
-        <label class="control-label spalte-beschriftung" for="druck-schuelerliste">Schülerliste:</label>
+      {#
+        "Gesendet" setzt den Status der gedruckten Fächer auf "Warten auf
+        Rückmeldung". Was der Status ist, steht noch aus (Vorgabe vom
+        2026-11-06); bis dahin ist das Häkchen gesperrt und wird nicht gesendet.
+      #}
+      <div class="form-group gesperrt">
+        <label class="control-label spalte-beschriftung" for="druck-gesendet">Gesendet:</label>
         <div class="spalte-inhalt">
           <div class="checkbox">
-            <label><input type="checkbox" name="schuelerliste" value="1" id="druck-schuelerliste">&nbsp;Druckversion aus IServ</label>
+            <label><input type="checkbox" name="gesendet" value="1" id="druck-gesendet" disabled
+              title="Folgt, sobald der Status „Warten auf Rückmeldung“ beschrieben ist">&nbsp;Fach auf „Warten auf Rückmeldung“ setzen</label>
           </div>
-          <p class="small help-block">Nimmt die Bücherliste, die IServ selbst druckt: mit Grundpaket
-            und Wahlbereichen einzeln. Ohne Häkchen stehen alle Bücher des Jahrgangs in einer
-            Tabelle, im Aussehen der Listen nach Fach.</p>
+          <p class="small help-block">Setzt den Status für gedruckte Fächer auf „Warten auf
+            Rückmeldung“.</p>
         </div>
       </div>
-      {% endif %}
 
-      {% if druck_gruppen %}
-      <div class="form-group">
-        <label class="control-label spalte-beschriftung">{{ wort }}:</label>
+      <div class="form-group" id="druck-antraege">
+        <label class="control-label spalte-beschriftung" for="druck-antragsinfo">Anträge:</label>
         <div class="spalte-inhalt">
-          {#
-            "nicht bestätigte" ist seit 2026-09-19 echt: der Server legt in
-            data-gruppen die Fächer ohne Freigabe der Fachkonferenzleitung ab,
-            das Skript hakt sie an und schaltet auf "Individuell" - so enthält
-            die PDF-URL feste Fächer, und F5 im PDF-Tab zeigt dieselben, auch
-            wenn inzwischen eines bestätigt wurde.
-
-            "veränderte" bleibt ein Platzhalter (data-gruppen="alle"), bis
-            feststeht, was als Änderung zählt; "Prüfen" daneben ebenso.
-          #}
-          <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="alle"
-            data-gruppen="alle" checked>Alle</label></div>
-          {% if druck_ansicht == "fach" %}
-          <div class="radio radio-mit-auswahl">
-            <label><input type="radio" name="{{ feld }}_auswahl" value="veraenderte"
-              data-gruppen="alle">veränderte</label>
-            <button type="button" class="btn btn-default" id="druck-veraenderte-pruefen" disabled
-              title="Folgt, sobald sich ein Stand der Bücherlisten speichern lässt">Prüfen</button>
+          <div class="checkbox">
+            <label><input type="checkbox" name="antragsinfo" value="1" id="druck-antragsinfo" checked>&nbsp;Antragsinformationen</label>
           </div>
-          <div class="radio"><label><input type="radio" name="{{ feld }}_auswahl" value="nicht_bestaetigte"
-            data-gruppen="{{ (druck_nicht_bestaetigt | tojson) if druck_nicht_bestaetigt is not none else 'alle' }}"
-            {% if druck_nicht_bestaetigt is not none and not druck_nicht_bestaetigt %}disabled
-            title="Alle Fächer sind bestätigt."{% endif %}>nicht bestätigte</label></div>
-          {% endif %}
-          <div class="radio radio-mit-auswahl">
-            <label><input type="radio" name="{{ feld }}_auswahl" value="individuell"
-              id="druck-individuell">Individuell</label>
-            <div class="dropdown" id="druck-gruppenliste">
-              <button type="button" class="btn btn-default dropdown-toggle" id="druck-gruppenliste-knopf"
-                aria-haspopup="true" aria-expanded="false" disabled><span
-                id="druck-gruppenliste-text">{{ druck_gruppen|length }} von {{ druck_gruppen|length }}</span>&nbsp;<span
-                class="caret"></span></button>
-              <ul class="dropdown-menu faecherauswahl" role="menu">
-                {% for gruppe in druck_gruppen %}
-                <li><label><input type="checkbox" name="{{ feld }}" value="{{ gruppe }}" checked
-                  disabled>&nbsp;{{ gruppe }}</label></li>
-                {% endfor %}
-              </ul>
-            </div>
+          <p class="small help-block">Nennt je Antrag, ob er genehmigt, offen oder abgelehnt ist.</p>
+          <div class="checkbox eingerueckt" id="druck-antrag-datum-zeile">
+            <label><input type="checkbox" name="antrag_datum" value="1" id="druck-antrag-datum" checked>&nbsp;Bearbeitungsdatum</label>
+            <span class="small help-inline">Datum, an dem der Antrag entschieden wurde</span>
+          </div>
+          <div class="checkbox eingerueckt" id="druck-antrag-bearbeiter-zeile">
+            <label><input type="checkbox" name="antrag_bearbeiter" value="1" id="druck-antrag-bearbeiter" checked>&nbsp;Bearbeitender</label>
+            <span class="small help-inline">Benutzername dessen, der den Antrag entschieden hat</span>
+          </div>
+          <div class="checkbox eingerueckt" id="druck-antrag-begruendung-zeile">
+            <label><input type="checkbox" name="antrag_begruendung" value="1" id="druck-antrag-begruendung" checked>&nbsp;Begründung</label>
           </div>
         </div>
       </div>
-
-      {% if druck_ansicht == "fach" %}
-      <div class="form-group">
-        <label class="control-label spalte-beschriftung">Reihenfolge:</label>
-        <div class="spalte-inhalt">
-          <div class="radio"><label><input type="radio" name="reihenfolge" value="alphabet"
-            checked>Alphabetisch</label></div>
-          <div class="radio"><label><input type="radio" name="reihenfolge"
-            value="aufgabenfeld">Nach Aufgabenfeld</label></div>
-        </div>
-      </div>
-      {% endif %}
       {% endif %}
 
       <div class="form-group">

@@ -857,7 +857,9 @@ tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmust
 .iserv-modal .eingabezeile .form-control { flex: 0 1 190px; min-width: 0; }
 .iserv-modal .eingabe-vor { flex: 0 0 22px; }
 .iserv-modal .eingabe-nach { color: #737373; font-size: 85%; }
-.iserv-modal .gesperrt .eingabe-vor, .iserv-modal .gesperrt .eingabe-nach, .iserv-modal .gesperrt .control-label { color: #aaa; }
+.iserv-modal .gesperrt .eingabe-vor, .iserv-modal .gesperrt .eingabe-nach, .iserv-modal .gesperrt .control-label,
+.iserv-modal .gesperrt .checkbox label, .iserv-modal .gesperrt .help-block, .iserv-modal .gesperrt .help-inline { color: #aaa; }
+.iserv-modal .gesperrt input[type="checkbox"] { cursor: not-allowed; }
 
 .iserv-modal .radio-mit-auswahl { display: flex; align-items: center; gap: 12px; }
 .iserv-modal .radio-mit-auswahl .dropdown { display: inline-block; }

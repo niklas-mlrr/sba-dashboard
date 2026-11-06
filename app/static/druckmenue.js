@@ -1,44 +1,68 @@
 // Druckmenü der Bücherlisten (Vorlage: templates/_druckmenue.html).
 //
-// Dieselbe Datei für Fach, Verlag und Jahrgang: Bestätigung, Rückgabe und
-// Reihenfolge gibt es nur bei Fach, die Schülerliste nur bei Jahrgang, die
-// Auswahl nur auf der Übersicht. Was fehlt, wird hier übersprungen.
+// Dieselbe Datei für Fach, Verlag und Jahrgang: Stand, Bestätigung, Rückgabe,
+// Anträge und Reihenfolge gibt es nur bei Fach, die Schülerliste nur bei
+// Jahrgang, die Auswahl nur auf der Übersicht. Was fehlt, wird hier
+// übersprungen.
 //
 // Regeln, die hier und nirgends sonst stehen:
-//   * Ohne "Bestätigungsaufforderung" sind die Rückgabe-Felder gesperrt, und
-//     ohne "Für doppelseitigen Druck optimieren" das Häkchen "falls nötig".
-//     Gesperrte Felder schickt der Browser nicht mit.
+//   * Mit "IServ-Stand benutzen" sind Bestätigung, Rückgabe und Anträge
+//     gesperrt: sie gibt es nur ohne. Ohne "Bestätigungsaufforderung" sind
+//     die Rückgabe-Felder gesperrt, ohne "Antragsinformationen" die
+//     Häkchen darunter und ohne "Für doppelseitigen Druck optimieren" das
+//     Häkchen "falls nötig". Gesperrte Felder schickt der Browser nicht mit.
 //   * Die Auswahl steht bei jedem Öffnen auf "Alle".
 //   * Wechsel auf "Individuell": die Häkchen zeigen die Gruppen der zuletzt
 //     gewählten Option. "alle" heißt alle; sonst steht in data-gruppen die
-//     Liste der Namen (JSON), die der Server ausgerechnet hat - heute für
-//     "nicht bestätigte". Eine solche Option schaltet selbst auf
-//     "Individuell": nur so steht die fertige Auswahl in der PDF-URL, und F5
-//     im PDF-Tab zeigt dieselben Fächer. "veränderte" ist noch "alle".
+//     Liste der Namen (JSON), die der Server ausgerechnet hat. Eine solche
+//     Option schaltet selbst auf "Individuell": nur so steht die fertige
+//     Auswahl in der PDF-URL, und F5 im PDF-Tab zeigt dieselben Fächer.
+//     "nicht versendete" ist noch gesperrt (Stand "Gesendet" fehlt).
 //   * Ohne einen einzigen angehakten Eintrag lässt sich kein PDF öffnen.
 // Alle anderen Felder behalten ihren Wert, bis die Seite neu geladen wird.
 (function () {
   const dialog = document.getElementById("druckmenue");
   const oeffnen = document.getElementById("druck-oeffnen");
   const formular = document.getElementById("druckformular");
+  const iservStand = document.getElementById("druck-iserv-stand");
   const bestaetigung = document.getElementById("druck-bestaetigung");
+  const bestaetigungZeile = document.getElementById("druck-bestaetigung-zeile");
   const rueckgabeBis = document.getElementById("druck-rueckgabe-bis");
   const rueckgabeAn = document.getElementById("druck-rueckgabe-an");
   const rueckgabe = document.getElementById("druck-rueckgabe");
+  const antraege = document.getElementById("druck-antraege");
+  const antragsinfo = document.getElementById("druck-antragsinfo");
+  const antragDetails = ["datum", "bearbeiter", "begruendung"].map((name) => ({
+    haekchen: document.getElementById(`druck-antrag-${name}`),
+    zeile: document.getElementById(`druck-antrag-${name}-zeile`),
+  }));
   const doppelseitig = document.getElementById("druck-doppelseitig");
   const fallsNoetig = document.getElementById("druck-falls-noetig");
   const fallsNoetigZeile = document.getElementById("druck-falls-noetig-zeile");
   const starten = document.getElementById("druck-starten");
 
   function sperren() {
-    if (bestaetigung) {
-      for (const feld of [rueckgabeBis, rueckgabeAn]) feld.disabled = !bestaetigung.checked;
-      rueckgabe.classList.toggle("gesperrt", !bestaetigung.checked);
+    if (iservStand) {
+      const ohneIserv = !iservStand.checked;
+      bestaetigung.disabled = !ohneIserv;
+      bestaetigungZeile.classList.toggle("gesperrt", !ohneIserv);
+      const mitBestaetigung = ohneIserv && bestaetigung.checked;
+      for (const feld of [rueckgabeBis, rueckgabeAn]) feld.disabled = !mitBestaetigung;
+      rueckgabe.classList.toggle("gesperrt", !mitBestaetigung);
+      antragsinfo.disabled = !ohneIserv;
+      antraege.classList.toggle("gesperrt", !ohneIserv);
+      const mitAntraegen = ohneIserv && antragsinfo.checked;
+      for (const { haekchen, zeile } of antragDetails) {
+        haekchen.disabled = !mitAntraegen;
+        zeile.classList.toggle("disabled", !mitAntraegen);
+      }
     }
     fallsNoetig.disabled = !doppelseitig.checked;
     fallsNoetigZeile.classList.toggle("disabled", !doppelseitig.checked);
   }
-  if (bestaetigung) bestaetigung.addEventListener("change", sperren);
+  if (iservStand) {
+    for (const feld of [iservStand, bestaetigung, antragsinfo]) feld.addEventListener("change", sperren);
+  }
   doppelseitig.addEventListener("change", sperren);
 
   // ── Auswahl (nur auf der Übersicht) ───────────────────────────────────────

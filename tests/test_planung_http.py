@@ -753,19 +753,47 @@ def test_fachseite_zeigt_die_freigabe_und_ihren_verfall(
     assert 'class="hinweis warnung"' not in text
 
 
-def test_druckmenue_kennt_die_nicht_bestaetigten_faecher(
+def test_druckmenue_der_faecher_folgt_der_vorgabe_vom_2026_11_06(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    seiten.post("/api/buchplanung/fach", json={
-        "schuljahr": "2026/2027", "fach": "Deutsch", "kuerzel": "ABC", "datum": "2026-09-03",
-        "mtime": abgeglichen["mtime"],
-    })
+    """Felder und Reihenfolge: Stand, Fächer, Reihenfolge, Bestätigung, Rückgabe,
+    Gesendet, Anträge, Doppelseitig; "nicht versendete" ersetzt die alten
+    Optionen und ist gesperrt, bis es den Stand "Gesendet" gibt."""
     text = seiten.get("/buecherliste/fach").text
-    # "nicht bestätigte" trägt jetzt eine echte Liste - ohne das bestätigte Fach.
-    assert 'value="nicht_bestaetigte"' in text
-    liste = text.split('value="nicht_bestaetigte"')[1].split("</label>")[0]
-    assert "Erdkunde" in liste and "Politik" in liste
-    assert "Deutsch" not in liste
+    menue = text.split('<dialog id="druckmenue"')[1].split("</dialog>")[0]
+    folge = ["Stand:", "Fächer:", "Reihenfolge:", "Bestätigung:", "Rückgabe:", "Gesendet:",
+             "Anträge:", "Doppelseitig:"]
+    stellen = [menue.index(f">{name}<") for name in folge]
+    assert stellen == sorted(stellen)
+    assert 'name="iserv_stand" value="1" id="druck-iserv-stand" checked' in menue
+    assert 'value="nicht_versendete"' in menue
+    assert "nicht_bestaetigte" not in menue and "veraenderte" not in menue
+    nicht_versendete = menue.split('value="nicht_versendete"')[1].split("</label>")[0]
+    assert "disabled" in nicht_versendete
+    assert 'name="gesendet"' in menue and "disabled" in menue.split('name="gesendet"')[1].split(">")[0]
+    # Die Fächer im Dropdown stehen alphabetisch.
+    liste = menue.split('class="dropdown-menu faecherauswahl"')[1].split("</ul>")[0]
+    namen = [teil.split("&nbsp;")[1].split("<")[0] for teil in liste.split('value="')[1:]]
+    assert namen == sorted(namen, key=str.casefold)
+
+
+def test_druckmenue_im_fach_hat_keine_auswahl_und_keine_reihenfolge(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    menue = seiten.get("/buecherliste/fach/Deutsch").text.split('<dialog id="druckmenue"')[1] \
+        .split("</dialog>")[0]
+    assert ">Stand:<" in menue and ">Anträge:<" in menue
+    assert "Fächer:" not in menue and "Reihenfolge:" not in menue
+
+
+def test_druckmenue_von_verlag_und_jahrgang_hat_nur_ihre_felder(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    for ansicht in ("verlag", "jahrgang"):
+        menue = seiten.get(f"/buecherliste/{ansicht}").text.split('<dialog id="druckmenue"')[1] \
+            .split("</dialog>")[0]
+        for name in ("Stand:", "Bestätigung:", "Rückgabe:", "Gesendet:", "Anträge:"):
+            assert f">{name}<" not in menue
 
 
 def test_kaputte_datei_macht_die_buecherliste_nicht_unbrauchbar(

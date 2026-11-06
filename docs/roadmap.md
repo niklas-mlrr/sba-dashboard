@@ -23,6 +23,15 @@ zeigt jetzt die Freigabe (nur beim Fach), und **„nicht bestätigte"** im
 Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
 **„veränderte"** — dafür fehlt weiterhin die Festlegung, was als Änderung zählt.
 
+**Geändert am 2026-11-06:** Das Druckmenü der Fächer folgt einer neuen Vorgabe
+(Stand, Fächer, Reihenfolge, Bestätigung, Rückgabe, Gesendet, Anträge,
+Doppelseitig). „nicht bestätigte" und „veränderte" sind darin durch **„nicht
+versendete"** ersetzt, das wie „Gesendet" („Fach auf Warten auf Rückmeldung
+setzen") noch gesperrt ist, bis der Status beschrieben und gespeichert wird.
+„IServ-Stand benutzen" sowie die Antrags-Häkchen werden schon mitgeschickt,
+das PDF reagiert erst mit den folgenden Schritten (Kopf und Fuß, Planungsstand,
+Anträge) darauf.
+
 **Offen: die Fach-Aliase.** Dasselbe Thema wie bei den Mehrjahresbänden, aber
 unkritischer: die Buchplanung übernimmt die IServ-Fachnamen unverändert, ein
 Abgleich mit anderen Schreibweisen findet nicht statt.
