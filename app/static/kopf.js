@@ -1,6 +1,13 @@
 // Der Kopf aus base.html - steht auf jeder Seite, auch auf Einrichtung und
 // Fehlerseite, und deshalb nicht in app.js, das ohne Tabelle sofort aufhört.
 (function () {
+  // Kommt die Seite über Vor/Zurück aus dem Back-Forward-Cache, ist sie ein
+  // eingefrorener Stand von damals - inzwischen kann ein Abruf gelaufen oder
+  // eine Planung geändert worden sein. Dann neu laden. Den HTTP-Zwischenspeicher
+  // schließt der Server mit "Cache-Control: no-store" aus (app/frische.py).
+  window.addEventListener("pageshow", (ereignis) => {
+    if (ereignis.persisted) window.location.reload();
+  });
   const dialog = document.getElementById("einstellungen");
   document.getElementById("einstellungen-oeffnen").addEventListener("click", (ereignis) => {
     ereignis.preventDefault();

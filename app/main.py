@@ -28,6 +28,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import fehler
 from .api import ROUTER
+from .frische import KeinZwischenspeicherMiddleware
 from .refresh import ClientFabrik, RefreshManager
 from .settings import Einstellungen
 from .sicherheit import HerkunftMiddleware, erlaubte_hosts
@@ -68,6 +69,8 @@ def create_app(
     # Die Namen werden je Anwendung gelesen, nicht beim Import: so sieht ein
     # Test, der SBA_ZUSATZ_HOSTS setzt, sie in der App, die er danach baut.
     hosts = erlaubte_hosts()
+    # Ganz innen: setzt nur einen Kopf auf HTML-Antworten (app/frische.py).
+    application.add_middleware(KeinZwischenspeicherMiddleware)
     application.add_middleware(HerkunftMiddleware, hosts=hosts)
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=list(hosts))
 
