@@ -15,13 +15,16 @@ ausgewählte, vorerst immer das laufende (``stand.schuljahr``).
   IServ durch ist. Durchgestrichen ist nur ein Wert, der nach dem Vorjahr
   ausgemustert wurde - er gilt nicht mehr.
 * **Markierung = IServ**, je Wert (helle Hinterlegung, farbiger Strich
-  darunter): blau, was in IServ noch fehlt, rot, was dort noch steht. Ein
-  Jahrgang fehlt, wenn er in der Bücherliste fehlt (je Eintrag, mit
-  „leihbar“; Strich unten) oder die Buchreihe ihm nicht zugewiesen ist
-  (Strich oben, Entscheidung 2026-11-04); zu viele Jahrgänge an der Buchreihe
-  schaden nicht. Rot hat den Strich unten immer und oben dazu, wenn die
+  darunter): blau, was in IServ noch fehlt, rot, was dort noch steht -
+  je Jahrgang, nicht je Fach: IServ kennt kein Fach je Jahrgang (Entscheidung
+  2026-11-06, Modulkopf von :mod:`~buecherlisten.planung.vergleich`). Ein
+  Jahrgang fehlt, wenn er in der Bücherliste fehlt (mit „leihbar“; Strich
+  unten); fehlt er auch an der Buchreihe, kommt der Strich oben dazu - oben
+  nur zusammen mit unten (Entscheidung 2026-11-06); zu viele Jahrgänge an der
+  Buchreihe schaden nicht. Rot hat den Strich unten und oben dazu, wenn die
   Buchreihe ganz geht: kein Fach führt sie dieses Schuljahr, und keine
-  Einführung ist offen oder genehmigt (Entscheidung 2026-11-05). Verglichen
+  genehmigte Einführung kommt (Entscheidung 2026-11-06; bis dahin hielt auch
+  eine offene sie); kennt die Datei die ISBN nicht, nur oben. Verglichen
   wird nur, was in diesem Schuljahr gilt: eine
   Einführung „ab 2027/2028“ und eine Ausmusterung nach diesem Schuljahr oder
   später sind kein Grund für eine Markierung. Markiert wird gegen den
@@ -37,11 +40,12 @@ ausgewählte, vorerst immer das laufende (``stand.schuljahr``).
   (:func:`_schrift_hinweis`), dann was in IServ zu tun ist
   (:func:`_iserv_hinweise`). Die Texte stehen im README des Pakets.
 * **Hintergrund** nur für Ganzes, über alle Fächer und nur über die gezeigten
-  Einträge: die Zeile, wenn jeder Jahrgang des Buchs blau bzw. rot ist; eine
-  Teilzeile, wenn jeder Jahrgang mit diesem „leihbar“ es ist. Rot nur, wenn
-  zu keiner Zahl danach im selben Fach und Jahrgang eine Einführung geplant ist
-  (offen oder genehmigt) - für die Zeile jede, für die Teilzeile nur eine mit
-  ihrem „leihbar“.
+  Einträge: die Zeile, wenn das nächste Ereignis jedes Jahrgangs des Buchs
+  eine Einführung bzw. Ausmusterung ist; eine Teilzeile, wenn es jeder
+  Jahrgang mit diesem „leihbar“ ist. Wie weit IServ ist, zählt nicht
+  (Entscheidung 2026-11-06). Rot nur, wenn zu keiner Zahl danach im selben
+  Fach und Jahrgang eine Einführung geplant ist (offen oder genehmigt) - für
+  die Zeile jede, für die Teilzeile nur eine mit ihrem „leihbar“.
 * **„Leihbar“ hängt am Jahrgang.** Verglichen und gefärbt wird je Eintrag
   (Fach, Jahrgang, leihbar): ein Buch steht in einem Jahrgang als Leih- oder
   als Kaufbuch in der Liste, in zwei Teilzeilen. Ein Wechsel ist eine
@@ -71,6 +75,7 @@ from dataclasses import dataclass, replace
 
 from .modelle import (
     ANTRAG_ABGELEHNT,
+    ANTRAG_GENEHMIGT,
     ANTRAG_OFFEN,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
@@ -128,13 +133,15 @@ class Wert:
     (:mod:`~buecherlisten.planung.zusatz`); ``grau``: das Buch gibt es hier
     nur wegen abgelehnter Einführungen, also gar nicht - die Zahl ist grau.
 
-    Fehlt der Wert in IServ (``iserv`` = ``fehlt``), sagen ``reihe_fehlt``
-    und ``liste_fehlt``, wo (Entscheidung 2026-11-04): der Buchreihe ist der
-    Jahrgang nicht zugewiesen (Strich oben) bzw. die Buchreihe steht nicht in
-    der Bücherliste des Jahrgangs (Strich unten). Steht er dort noch (rot),
-    ist der Strich unten immer da, ``reihe_weg`` setzt den oben dazu: die
-    Buchreihe geht ganz, der Jahrgang ist auch an ihr zu entfernen
-    (Entscheidung 2026-11-05). ``hinweis`` hat je Aussage eine Zeile.
+    Fehlt der Wert in IServ (``iserv`` = ``fehlt``), steht die Buchreihe
+    nicht in der Bücherliste des Jahrgangs (``liste_fehlt``, Strich unten);
+    ``reihe_fehlt`` setzt den Strich oben dazu: der Buchreihe ist der Jahrgang
+    auch nicht zugewiesen (Entscheidung 2026-11-06 - oben nur zusammen mit
+    unten). Steht er dort noch (rot), ist der Strich unten da, ``reihe_weg``
+    setzt den oben dazu: die Buchreihe geht ganz (Entscheidung 2026-11-05).
+    ``unbekannt``: die Datei kennt die ISBN nicht („nur in IServ“) - dann
+    hat ein roter Wert nur den Strich oben, wie jedes Feld der Zeile
+    (Entscheidung 2026-11-06). ``hinweis`` hat je Aussage eine Zeile.
     """
 
     text: str
@@ -149,17 +156,20 @@ class Wert:
     reihe_fehlt: bool = False
     liste_fehlt: bool = False
     reihe_weg: bool = False
+    unbekannt: bool = False
 
     @property
     def striche(self) -> str:
         """Die Striche der Markierung für die Vorlage: ``oben-unten``, ``oben``
         oder leer (nur unten, wie jede andere Markierung). Blau nach
-        ``reihe_fehlt``/``liste_fehlt``, rot nach ``reihe_weg``."""
+        ``reihe_fehlt``, rot nach ``reihe_weg``; rot und ``unbekannt`` nur oben."""
         if self.markierung == AUSMUSTERUNG:
+            if self.unbekannt:
+                return "oben"
             return "oben-unten" if self.reihe_weg else ""
-        if self.markierung != EINFUEHRUNG or not self.reihe_fehlt:
-            return ""
-        return "oben-unten" if self.liste_fehlt else "oben"
+        if self.markierung == EINFUEHRUNG and self.reihe_fehlt and self.liste_fehlt:
+            return "oben-unten"
+        return ""
 
     @property
     def zusatz(self) -> str:
@@ -237,6 +247,7 @@ class Markierung:
     zu diesem Schuljahr plant (der Tooltip sagt das). ``reihe_weg``: die
     Buchreihe geht ganz (wie :attr:`Wert.reihe_weg`) - eine rot markierte
     Zeile hat dann auch an jedem Feld den Strich oben (:attr:`zeile_striche`).
+    ``unbekannt``: die Datei kennt die ISBN nicht („nur in IServ“).
     """
 
     teilzeilen: tuple[Teilzeile, ...] = ()
@@ -246,6 +257,7 @@ class Markierung:
     eintraege: tuple[Eintrag, ...] = ()
     einfuehrung_offen: bool = False
     reihe_weg: bool = False
+    unbekannt: bool = False
 
     @property
     def werte(self) -> tuple[Wert, ...]:
@@ -273,8 +285,21 @@ class Markierung:
     def zeile_striche(self) -> str:
         """Die Striche an jedem Feld einer ganz markierten Zeile, wie
         :attr:`Wert.striche`: rot ``oben-unten``, wenn die Buchreihe ganz geht
-        (Entscheidung 2026-11-05) - sonst leer (nur unten)."""
-        return "oben-unten" if self.zeile == AUSMUSTERUNG and self.reihe_weg else ""
+        (Entscheidung 2026-11-05), ``oben`` bei „nur in IServ“ - sonst leer
+        (nur unten)."""
+        if self.zeile != AUSMUSTERUNG:
+            return ""
+        if self.unbekannt:
+            return "oben"
+        return "oben-unten" if self.reihe_weg else ""
+
+    @property
+    def entfernen(self) -> str:
+        """Die zweite Zeile im Tooltip eines rot markierten Felds: „Buchreihe ist
+        aus Bücherliste(n) für <JG> zu entfernen“, mit jedem rot markierten
+        Jahrgang der Zeile (Entscheidung 2026-11-06)."""
+        return entfernen_hinweis(wert.jahrgang for wert in self.werte
+                                 if wert.markierung == AUSMUSTERUNG)
 
     @property
     def strich_planung(self) -> tuple[str, ...]:
@@ -335,7 +360,13 @@ class _Plan:
     Farbe gibt, ``abgelehnt`` bei Grau die zeitlich nächste abgelehnte
     Einführung - beide nennt der Tooltip. ``kommt``: eine Einführung, die
     zählt, liegt in diesem Schuljahr oder später (offen oder genehmigt);
-    ``beginne`` sind deren Jahre."""
+    ``beginne`` sind deren Jahre, ``kommt_genehmigt``: eine davon ist
+    genehmigt.
+
+    ``naechste`` und ``naechstes_jahr`` sind das zeitlich nächste offene oder
+    genehmigte Ereignis, gleich was IServ schon umgesetzt hat - danach geht
+    der Hintergrund (Entscheidung 2026-11-06); die Schrift (``farbe``) geht
+    weiter, sobald IServ es umgesetzt hat."""
 
     farbe: str
     weg: bool
@@ -347,11 +378,15 @@ class _Plan:
     abgelehnt: Planungszeile | None = None
     kommt: bool = False
     beginne: tuple[int, ...] = ()
+    kommt_genehmigt: bool = False
+    naechste: str = ""
+    naechstes_jahr: int = 0
 
     @property
     def hintergrund(self) -> str:
-        """Die Farbe, in der der Eintrag zur Zeile beiträgt (Schrift oder Grau)."""
-        return self.farbe or (GRAU if self.grau else "")
+        """Die Farbe, in der der Eintrag zur Zeile beiträgt: die des nächsten
+        Ereignisses, oder Grau."""
+        return self.naechste or (GRAU if self.grau else "")
 
 
 def _einfuehrung_abgelehnt(zeile: Planungszeile) -> bool:
@@ -450,6 +485,12 @@ def _plan_des_eintrags(stand: Buchplanung, jetzt: int, zeilen: _Zeilen, *,
         faerbend = None
     # Grau nur, wenn auch keine Ausmusterung färbt („läuft oder wird ausgemustert“).
     grau = zeilen.einfuehrung_abgelehnt and not (laufend or eben_weg) and not farbe
+    # Das nächste Ereignis, gleich was IServ schon umgesetzt hat (für den
+    # Hintergrund): eine Einführung zu einem Schuljahr kommt vor der
+    # Ausmusterung nach demselben.
+    ereignisse = sorted([(2 * b, EINFUEHRUNG, b) for b in beginne]
+                        + [(2 * e + 1, AUSMUSTERUNG, e) for e in enden])
+    naechste, naechstes_jahr = ereignisse[0][1:] if ereignisse else ("", 0)
     return _Plan(
         farbe=farbe,
         weg=weg,
@@ -461,6 +502,11 @@ def _plan_des_eintrags(stand: Buchplanung, jetzt: int, zeilen: _Zeilen, *,
         abgelehnt=_naechste_abgelehnte(zeilen.urspruenglich, jetzt) if grau else None,
         kommt=bool(beginne),
         beginne=tuple(beginne),
+        kommt_genehmigt=any(z.beginn is not None and z.beginn >= jetzt
+                            and z.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
+                            for z in zaehlend),
+        naechste=naechste,
+        naechstes_jahr=naechstes_jahr,
     )
 
 
@@ -514,16 +560,31 @@ def _beantragt(zeile: Planungszeile, art: str) -> str:
     return " beantragt" if zeile.antrag(art).status == ANTRAG_OFFEN else ""
 
 
+def jahrgaenge_text(jahrgaenge: Iterable[int]) -> str:
+    """„Jahrgang 5“ oder „Jahrgänge 5, 7-9“ - aufeinanderfolgende als Bereich
+    (Entscheidung 2026-11-06)."""
+    zahlen = sorted(set(jahrgaenge))
+    bereiche: list[list[int]] = []
+    for zahl in zahlen:
+        if bereiche and zahl == bereiche[-1][-1] + 1:
+            bereiche[-1].append(zahl)
+        else:
+            bereiche.append([zahl])
+    text = ", ".join(str(b[0]) if len(b) == 1 else f"{b[0]}-{b[-1]}" for b in bereiche)
+    return f"Jahrgang {text}" if len(zahlen) == 1 else f"Jahrgänge {text}"
+
+
 def _schrift_hinweis(plan: _Plan | None, jahrgang: int, jetzt: int) -> str:
     """Was die Schrift (Farbe, Durchstreichen) des Jahrgangs sagt - Entscheidung
-    2026-11-04. Ein offener Antrag hängt „beantragt“ an; „für ESJ“ steht nur,
-    wenn die Einführung nach dem ausgewählten Schuljahr liegt."""
+    2026-11-04. Ein offener Antrag hängt „beantragt“ an; „für ESJ“ steht bei
+    Blau nur, wenn die Einführung nach dem ausgewählten Schuljahr liegt, bei
+    Grau immer, wenn sie nicht zum ausgewählten war (Entscheidung 2026-11-06)."""
     if plan is None:
         return ""
-    jg = f"Jahrgang {jahrgang}"
+    jg = jahrgaenge_text([jahrgang])
     if plan.grau and plan.abgelehnt is not None:
         abgelehnt = plan.abgelehnt
-        fuer = f" für {abgelehnt.eingefuehrt_ab}" if (abgelehnt.beginn or 0) > jetzt else ""
+        fuer = f" für {abgelehnt.eingefuehrt_ab}" if abgelehnt.beginn != jetzt else ""
         antrag = abgelehnt.antrag_einfuehrung
         return "\n".join([f"Einführung der Buchreihe in {jg}{fuer} abgelehnt"]
                          + ([f"am {antrag.datum.strftime('%d.%m.%Y')}"] if antrag.datum else [])
@@ -540,14 +601,24 @@ def _schrift_hinweis(plan: _Plan | None, jahrgang: int, jetzt: int) -> str:
             f"{_beantragt(zeile, ART_AUSMUSTERUNG)}")
 
 
+def entfernen_hinweis(jahrgaenge: Iterable[int]) -> str:
+    """„Buchreihe ist aus Bücherliste(n) für <JG> zu entfernen“ - leer ohne Jahrgang."""
+    zahlen = sorted(set(jahrgaenge))
+    if not zahlen:
+        return ""
+    liste = "Bücherliste" if len(zahlen) == 1 else "Bücherlisten"
+    return f"Buchreihe ist aus {liste} für {jahrgaenge_text(zahlen)} zu entfernen"
+
+
 def _iserv_hinweise(jahrgang: int, *, anlegen: bool, steht_noch: bool, reihe: bool,
-                    liste: bool, wechsel_auf: bool | None, reihe_weg: bool = False) -> list[str]:
+                    liste: bool, wechsel_auf: bool | None) -> list[str]:
     """Was die Markierung des Jahrgangs in IServ zu tun sagt - Entscheidung
-    2026-11-04. ``wechsel_auf``: der Jahrgang steht in der anderen Teilzeile
+    2026-11-04, seit 2026-11-06 ohne „in IServ“ und ohne eigene Zeile für den
+    Strich oben, wenn die Buchreihe ganz geht (das sagt der Tooltip der
+    Felder). ``wechsel_auf``: der Jahrgang steht in der anderen Teilzeile
     mit der anderen Markierung, IServ muss nur „leihbar“ umstellen - dann
-    gilt nur das. ``reihe_weg``: die Buchreihe geht ganz, der Jahrgang ist
-    auch an ihr zu entfernen (Strich oben, Entscheidung 2026-11-05)."""
-    jg = f"Jahrgang {jahrgang}"
+    gilt nur das."""
+    jg = jahrgaenge_text([jahrgang])
     zeilen = [BUCHREIHE_ANLEGEN] if anlegen else []
     if wechsel_auf is not None:
         auf = "leihbar" if wechsel_auf else "nicht leihbar"
@@ -556,9 +627,7 @@ def _iserv_hinweise(jahrgang: int, *, anlegen: bool, steht_noch: bool, reihe: bo
     if reihe:
         zeilen.append(f"{jg} ist der Buchreihe hinzuzufügen")
     if steht_noch:
-        zeilen.append(f"Buchreihe ist aus Bücherliste für {jg} in IServ zu entfernen")
-        if reihe_weg:
-            zeilen.append(f"{jg} ist aus der Buchreihe zu entfernen")
+        zeilen.append(entfernen_hinweis([jahrgang]))
     elif liste:
         zeilen.append(f"Buchreihe ist Bücherliste für {jg} hinzuzufügen")
     return zeilen
@@ -585,15 +654,18 @@ def _zusammen(werte: list[Wert]) -> Wert:
         reihe_fehlt=any(w.reihe_fehlt for w in werte),
         liste_fehlt=any(w.liste_fehlt for w in werte),
         reihe_weg=all(w.reihe_weg for w in werte),
+        unbekannt=all(w.unbekannt for w in werte),
     )
 
 
 def _ganz(plaene: Iterable[tuple[Eintrag, _Plan]]) -> str:
-    """Die Farbe, die jeder der ``plaene`` hat (Schrift, oder Grau, wo es das
-    Buch nur wegen abgelehnter Einführungen gäbe) - leer, wenn sie sich
-    unterscheiden, einer keine hat oder es keine gibt. ``plaene`` sind die der
-    ganzen Buchreihe oder die einer Teilzeile (ein „leihbar“), je über alle
-    Fächer.
+    """Die Farbe, die jeder der ``plaene`` hat (die seines nächsten Ereignisses,
+    oder Grau, wo es das Buch nur wegen abgelehnter Einführungen gäbe) - leer,
+    wenn sie sich unterscheiden, einer keine hat oder es keine gibt. ``plaene``
+    sind die der ganzen Buchreihe oder die einer Teilzeile (ein „leihbar“), je
+    über alle Fächer. Wie weit IServ ist, zählt nicht (Entscheidung
+    2026-11-06): der Hintergrund ist die Schriftfarbe, wenn sie nur nach dem
+    einen nächsten Ereignis ginge.
 
     Rot nur, wenn zu keiner Zahl nach ihrer Ausmusterung im selben Fach und
     Jahrgang eine Einführung unter den ``plaene`` geplant ist (offen oder
@@ -611,7 +683,7 @@ def _ganz(plaene: Iterable[tuple[Eintrag, _Plan]]) -> str:
     beginne: dict[tuple[str, int], list[int]] = {}
     for (fach, jahrgang, _), plan in alle:
         beginne.setdefault((fach, jahrgang), []).extend(plan.beginne)
-    if any(beginn > plan.jahr for (fach, jahrgang, _), plan in alle
+    if any(beginn > plan.naechstes_jahr for (fach, jahrgang, _), plan in alle
            for beginn in beginne[(fach, jahrgang)]):
         return ""
     return farbe
@@ -640,17 +712,19 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     soll: set[Eintrag] = set()
     fehlt: set[Eintrag] = set()
     nur_iserv: set[Eintrag] = set()
-    ist: set[Eintrag] = set()
+    ist: frozenset[tuple[int, bool]] = frozenset()
     fehlt_schrift: set[Eintrag] = set()
     if abweichung is not None:
         # Markiert wird, was der entschiedene Stand anders sagt als IServ
-        # (Entscheidung 2026-11-05). Die Schrift rechnet mit dem wirksamen
-        # Stand gegen das, was IServ führt (``ist``).
+        # (Entscheidung 2026-11-05), je Jahrgang - IServ kennt kein Fach je
+        # Jahrgang (Entscheidung 2026-11-06, ``vergleich``). Die Schrift
+        # rechnet mit dem wirksamen Stand gegen das, was IServ führt (``ist``).
         soll = set(aktive_eintraege(entschiedener_stand(stand), buch))
-        ist = (soll - set(abweichung.eintraege_fehlen)) | set(abweichung.eintraege_nur_iserv)
-        fehlt, nur_iserv = soll - ist, ist - soll
+        fehlt = soll & set(abweichung.eintraege_fehlen)
+        nur_iserv = set(abweichung.eintraege_nur_iserv) - soll
+        ist = abweichung.iserv_jahrgaenge
         gilt = {e for e, z in zeilen.items() if z.wirkt(stand.schuljahr)}
-        fehlt_schrift = gilt - ist
+        fehlt_schrift = {e for e in gilt if (e[1], e[2]) not in ist}
     buchreihe = set(abweichung.buchreihe_fehlt) if abweichung else set()
     planung: dict[Eintrag, _Plan] = {}
     if jetzt is not None:
@@ -658,7 +732,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
             plan = _plan_des_eintrags(
                 stand, jetzt, z,
                 offen=eintrag in fehlt_schrift or eintrag[1] in buchreihe,
-                in_iserv=eintrag in ist)
+                in_iserv=(eintrag[1], eintrag[2]) in ist)
             if plan is not None:
                 planung[eintrag] = plan
     eintraege = sorted((e for e in set(planung) | nur_iserv if im(e)),
@@ -667,10 +741,13 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
     # Der Hintergrund schaut auf alle Fächer, aber nur auf die gezeigten Einträge.
     ganz = _ganz(planung.items())
     # Die Buchreihe geht ganz (Entscheidung 2026-11-05): dieses Schuljahr führt
-    # sie kein Fach, und keine Einführung kommt (offen oder genehmigt). Dann ist
-    # jeder rot markierte Jahrgang auch an der Buchreihe zu entfernen (Strich oben).
+    # sie kein Fach, und keine genehmigte Einführung kommt (Entscheidung
+    # 2026-11-06; bis dahin hielt auch eine offene sie). Dann hat jedes rot
+    # markierte Feld auch den Strich oben.
     reihe_weg = abweichung is not None and not soll \
-        and not any(plan.kommt for plan in planung.values())
+        and not any(plan.kommt_genehmigt for plan in planung.values())
+    # Die Datei kennt die ISBN nicht („nur in IServ“): rot nur mit Strich oben.
+    unbekannt = stand.buch(buch.isbn) is None
     beide = len({leihbar for _, _, leihbar in planung}) > 1
     art = abweichung.art if abweichung else ""
     # Ganz blau markiert ist die Zeile nur, wenn die Buchreihe in IServ erst
@@ -695,7 +772,9 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
             fach, jahrgang, _ = eintrag
             plan = planung.get(eintrag)
             liste = FEHLT if eintrag in fehlt else STEHT_NOCH if eintrag in nur_iserv else ""
-            reihe = eintrag in soll and jahrgang in buchreihe
+            # Fehlt der Jahrgang auch an der Buchreihe: Strich oben - nur
+            # zusammen mit dem unten (Entscheidung 2026-11-06).
+            reihe = liste == FEHLT and jahrgang in buchreihe
             # Steht der Jahrgang in der anderen Teilzeile andersherum markiert,
             # ist in IServ nur „leihbar“ umzustellen - auf den Wert der blauen.
             gegenueber = (fach, jahrgang, not leihbar)
@@ -705,14 +784,13 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
             schluessel = (fach.casefold(), 0) if nach == FACH else ("", jahrgang)
             hinweise = [_schrift_hinweis(plan, jahrgang, jetzt or 0)] + _iserv_hinweise(
                 jahrgang, anlegen=anlegen and eintrag in fehlt, steht_noch=liste == STEHT_NOCH,
-                reihe=reihe, liste=liste == FEHLT, wechsel_auf=wechsel_auf,
-                reihe_weg=reihe_weg and liste == STEHT_NOCH)
+                reihe=reihe, liste=liste == FEHLT, wechsel_auf=wechsel_auf)
             je_schluessel.setdefault(schluessel, []).append(Wert(
                 text=fach if nach == FACH else str(jahrgang),
                 zusaetze=plan.zusaetze if plan else (),
                 plan=plan.farbe if plan else "",
                 weg=plan.weg if plan else False,
-                iserv=liste or (FEHLT if reihe else ""),
+                iserv=liste,
                 hinweis="\n".join(hinweis for hinweis in hinweise if hinweis),
                 jahrgang=jahrgang,
                 jahr=plan.jahr if plan else 0,
@@ -720,6 +798,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
                 reihe_fehlt=reihe,
                 liste_fehlt=liste == FEHLT,
                 reihe_weg=reihe_weg and liste == STEHT_NOCH,
+                unbekannt=unbekannt,
             ))
         werte = tuple(_zusammen(je_schluessel[k]) for k in sorted(je_schluessel))
         teil_ganz = ""
@@ -740,6 +819,7 @@ def markierung(stand: Buchplanung, buch: Buch, abweichung: Abweichung | None = N
         eintraege=tuple(eintraege),
         einfuehrung_offen=einfuehrung_offen,
         reihe_weg=reihe_weg,
+        unbekannt=unbekannt,
     )
 
 

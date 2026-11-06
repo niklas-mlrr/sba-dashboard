@@ -12,8 +12,8 @@ Blatt                   Schlüssel                   eintragbar
 ``Fächer & Jahrgang``   (ISBN, Fach, Jahrgang,      leihbar, Einführung,
                         Einführung)                 Ausmusterung,
                                                     je Antrag Entscheidung,
-                                                    Signatur, Datum;
-                                                    Begründung,
+                                                    Signatur, Datum,
+                                                    Begründung;
                                                     Fachlistenbestätigung
                                                     Kürzel und Datum,
                                                     Bemerkung
@@ -112,7 +112,11 @@ SPALTE_EINFUEHRUNG = "Einführung"
 SPALTE_AUSMUSTERUNG = "Ausmusterung nach Schuljahr"
 SPALTE_ANTRAG_EINFUEHRUNG = "Antrag Einführung"
 SPALTE_ANTRAG_AUSMUSTERUNG = "Antrag Ausmusterung"
-SPALTE_BEGRUENDUNG = "Begründung"
+# Je Antrag eine Begründung (seit 2026-11-06). Bis dahin gab es eine
+# gemeinsame Spalte „Begründung“; sie wird nicht mehr gelesen und fällt beim
+# nächsten Schreiben weg (sie war zu dem Zeitpunkt überall leer).
+SPALTE_BEGRUENDUNG_EINFUEHRUNG = "Begründung Einführung"
+SPALTE_BEGRUENDUNG_AUSMUSTERUNG = "Begründung Ausmusterung"
 SPALTE_LEIHBAR = "leihbar"
 # Der IServ-Name dessen, der entschieden hat - nicht von Hand eingetippt.
 SIGNATUR = "Signatur"
@@ -139,16 +143,18 @@ _SPALTEN: dict[str, tuple[tuple[str, float, bool], ...]] = {
         # „leihbar“ am Eintrag der Jahrgangsliste.
         (SPALTE_LEIHBAR, 9, True),
         (SPALTE_EINFUEHRUNG, 13, True),
-        # Je Antrag drei Spalten, direkt hinter dem Schuljahr, über das
-        # entschieden wird: Entscheidung, Signatur (IServ-Name), Datum.
+        # Je Antrag vier Spalten, direkt hinter dem Schuljahr, über das
+        # entschieden wird: Entscheidung, Signatur (IServ-Name), Datum,
+        # Begründung.
         (SPALTE_ANTRAG_EINFUEHRUNG, 17, True),
         (f"{SPALTE_ANTRAG_EINFUEHRUNG} {SIGNATUR}", 12, True),
         (f"{SPALTE_ANTRAG_EINFUEHRUNG} Datum", 12, True),
+        (SPALTE_BEGRUENDUNG_EINFUEHRUNG, 30, True),
         (SPALTE_AUSMUSTERUNG, 24, True),
         (SPALTE_ANTRAG_AUSMUSTERUNG, 19, True),
         (f"{SPALTE_ANTRAG_AUSMUSTERUNG} {SIGNATUR}", 12, True),
         (f"{SPALTE_ANTRAG_AUSMUSTERUNG} Datum", 12, True),
-        (SPALTE_BEGRUENDUNG, 30, True),
+        (SPALTE_BEGRUENDUNG_AUSMUSTERUNG, 30, True),
         (SPALTE_BESTAETIGUNG_KUERZEL, 10, True),
         (SPALTE_BESTAETIGUNG_DATUM, 12, True),
         ("Bemerkung", 30, True),
@@ -339,7 +345,8 @@ def lies_mappe(wb: Workbook) -> Buchplanung:
             bemerkung=_text(zeile.get("Bemerkung")),
             antrag_einfuehrung=_lies_antrag(zeile, SPALTE_ANTRAG_EINFUEHRUNG),
             antrag_ausmusterung=_lies_antrag(zeile, SPALTE_ANTRAG_AUSMUSTERUNG),
-            begruendung=_text(zeile.get(SPALTE_BEGRUENDUNG)),
+            begruendung_einfuehrung=_text(zeile.get(SPALTE_BEGRUENDUNG_EINFUEHRUNG)),
+            begruendung_ausmusterung=_text(zeile.get(SPALTE_BEGRUENDUNG_AUSMUSTERUNG)),
         )
         if eintrag.schluessel in gesehen:
             continue
@@ -519,9 +526,10 @@ def _planungszeilen(stand: Buchplanung) -> list[dict[str, object]]:
             SPALTE_LEIHBAR: _JA if zeile.leihbar else _NEIN,
             SPALTE_EINFUEHRUNG: zeile.eingefuehrt_ab,
             **_schreibe_antrag(SPALTE_ANTRAG_EINFUEHRUNG, zeile.antrag_einfuehrung),
+            SPALTE_BEGRUENDUNG_EINFUEHRUNG: zeile.begruendung_einfuehrung,
             SPALTE_AUSMUSTERUNG: zeile.ausgemustert_nach,
             **_schreibe_antrag(SPALTE_ANTRAG_AUSMUSTERUNG, zeile.antrag_ausmusterung),
-            SPALTE_BEGRUENDUNG: zeile.begruendung,
+            SPALTE_BEGRUENDUNG_AUSMUSTERUNG: zeile.begruendung_ausmusterung,
             SPALTE_BESTAETIGUNG_KUERZEL: zeile.kuerzel,
             SPALTE_BESTAETIGUNG_DATUM: zeile.datum,
             "Bemerkung": zeile.bemerkung,
@@ -589,8 +597,8 @@ def _schreibe_info(ws: Worksheet, stand: Buchplanung) -> None:
     zeile(10, "Anträge", "Jede Einführung und Ausmusterung ist ein Antrag: „genehmigt“ "
                          "oder „abgelehnt“ mit Signatur (IServ-Name) und Datum, leer "
                          "heißt offen. Ändert "
-                         "sich das Schuljahr, fällt die Entscheidung weg. Die Begründung "
-                         "gilt für beide Anträge der Zeile.")
+                         "sich das Schuljahr, fällt die Entscheidung weg. Jeder "
+                         "Antrag hat seine eigene Begründung.")
     zeile(11, "Legende", "", fett=True)
     for versatz, (marke, text) in enumerate(LEGENDE):
         zeile(12 + versatz, marke, text)

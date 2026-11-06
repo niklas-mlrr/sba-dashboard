@@ -277,7 +277,8 @@ class AntragAnfrage(_BuchplanungAnfrage):
 
     ``art`` ist ``einfuehrung`` oder ``ausmusterung``. ``ergebnis`` ist
     ``genehmigt``, ``abgelehnt`` oder leer (zurück auf offen); ``None`` lässt
-    die Entscheidung stehen und speichert nur die ``begruendung``. Die Werte
+    die Entscheidung stehen und speichert nur die ``begruendung`` - die des
+    Antrags ``art``, jeder hat seine eigene (seit 2026-11-06). Die Werte
     prüft der Kern (``entscheide_antrag``), nicht dieses Modell.
 
     Kürzel und Datum fehlen mit Absicht: entschieden wird mit dem Namen der

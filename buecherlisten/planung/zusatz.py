@@ -1,33 +1,31 @@
 """Der Zusatz hinter dem Jahrgang der Fach-Ansicht: je Planungszeile ein Ergebnis.
 
-Entscheidung 2026-10-31: Jede Planungszeile eines Eintrags (Fach, Jahrgang,
-„leihbar“) prüft ihre Jahre gegen das ausgewählte Schuljahr (SJ; ESJ ist das
-Einführungsjahr der Zeile, ASJ das Ausmusterungsjahr) und liefert genau eines:
+Entscheidung 2026-11-06 (ersetzt die Tabelle vom 2026-10-31, im Ergebnis
+gleich bis auf eine Ausmusterung vor der Einführung): Jede Planungszeile eines
+Eintrags (Fach, Jahrgang, „leihbar“) legt ihre Ereignisse auf eine Zeitachse,
+gemessen am ausgewählten Schuljahr SJ (ESJ: Einführung zum Schuljahr, ASJ:
+Ausmusterung nach dem Schuljahr):
 
-========================  ==================
-Bedingung                 Zusatz
-========================  ==================
-ESJ ≤ SJ ≤ ASJ            ``bis ASJ``
-SJ < ESJ = ASJ            ``ESJ``
-SJ < ESJ < ASJ            ``von ESJ bis ASJ``
-SJ < ESJ, ohne ASJ        ``ab ESJ``
-sonst                     nichts
-========================  ==================
+    Ausmusterung nach SJ-1 (nur offen oder abgelehnt), Einführung zu SJ (nur
+    offen oder abgelehnt), Ausmusterung nach SJ, Einführung zu SJ+1,
+    Ausmusterung nach SJ+1, …
 
-Eine Zeile ohne Einführung gilt als längst eingeführt (ESJ ≤ SJ). Die
-Ergebnisse mehrerer Zeilen stehen mit „, “ getrennt in einer Klammer (bis
-2026-11-04 mit „; “).
+Früheres zählt nie. Aus den Ereignissen, die bleiben, der Reihe nach:
 
-Drei Sonderfälle, damit jeder Antrag, über den noch zu entscheiden ist oder der
-abgelehnt wurde, ein Jahr mit Kasten hat:
+==========================================================  ======================
+Ereignisse                                                  Zusatz
+==========================================================  ======================
+ESJ, dann ASJ, ESJ = ASJ, beide genehmigt                   ``ESJ``
+ESJ, dann ASJ, sonst                                        ``von ESJ bis ASJ``
+ein ESJ                                                     ``ab ESJ``
+ein ASJ                                                     ``bis ASJ``
+==========================================================  ======================
 
-* Einführung und Ausmusterung im selben künftigen Jahr stehen als
-  ``von ESJ bis ASJ``, bis **beide** Anträge genehmigt sind; erst danach gilt
-  die Tabelle.
-* ESJ = SJ (zum laufenden Schuljahr eingeführt), Einführung nicht genehmigt:
-  ``von ESJ bis ASJ`` bzw. ``ab ESJ`` statt ``bis ASJ``.
-* ASJ = SJ-1 (nach dem Vorjahr ausgemustert), Ausmusterung nicht genehmigt:
-  ``bis ASJ`` statt nichts.
+Eine Zeile ohne Einführung gilt als längst eingeführt. Steht die Ausmusterung
+vor der Einführung (nur aus Excel möglich), ergibt das ``bis ASJ, ab ESJ``.
+Die Ergebnisse mehrerer Zeilen stehen mit „, “ getrennt in einer Klammer (bis
+2026-11-04 mit „; “). So hat jeder Antrag, über den noch zu entscheiden ist
+oder der abgelehnt wurde, ein Jahr mit Kasten.
 
 An jedem Jahr hängt, wenn über seinen Antrag noch nicht oder abschlägig
 entschieden ist, ein Kasten „offen“ bzw. „abgelehnt“ (:attr:`Teil.antrag`).
@@ -90,7 +88,8 @@ def _jahr(angabe: str) -> int | None:
 
 def entscheidungs_hinweis(zeile: Planungszeile, art: str) -> str:
     """„<Einführung/Ausmusterung> der Buchreihe in Jahrgang N <genehmigt/abgelehnt>“,
-    darunter Datum und Signatur - leer, solange der Antrag offen ist."""
+    darunter Datum, Signatur und Begründung des Antrags (seit 2026-11-06),
+    soweit bekannt - leer, solange der Antrag offen ist."""
     antrag = zeile.antrag(art)
     if antrag.status not in (ANTRAG_GENEHMIGT, ANTRAG_ABGELEHNT):
         return ""
@@ -100,6 +99,8 @@ def entscheidungs_hinweis(zeile: Planungszeile, art: str) -> str:
         zeilen.append(f"am {antrag.datum.strftime('%d.%m.%Y')}")
     if antrag.signatur:
         zeilen.append(f"durch {antrag.signatur}")
+    if zeile.begruendung(art):
+        zeilen.append(f"Begründung: {zeile.begruendung(art)}")
     return "\n".join(zeilen)
 
 
@@ -112,49 +113,43 @@ def _jahr_teil(zeile: Planungszeile, art: str, entscheidbar: tuple[str, ...]) ->
 
 
 def zusatz_der_zeile(zeile: Planungszeile, schuljahr: str) -> Zusatzzeile | None:
-    """Das Ergebnis dieser Zeile - ``None``, wenn keine Regel zutrifft."""
+    """Das Ergebnis dieser Zeile - ``None``, wenn kein Ereignis bleibt (Modulkopf)."""
     jetzt = _jahr(schuljahr)
     if jetzt is None:
         return None
     esj, asj = zeile.beginn, zeile.ende
     entscheidbar = zu_entscheidende_antraege(zeile, schuljahr)
 
-    def einfuehrung() -> Teil:
-        return _jahr_teil(zeile, ART_EINFUEHRUNG, entscheidbar)
-
-    def ausmusterung() -> Teil:
-        return _jahr_teil(zeile, ART_AUSMUSTERUNG, entscheidbar)
-
     def offen(art: str) -> bool:
         """Ist über den Antrag zu entscheiden, und ist er nicht genehmigt?"""
         return art in entscheidbar and zeile.antrag(art).status != ANTRAG_GENEHMIGT
 
-    laeuft = esj is None or esj <= jetzt
-    if asj is not None and laeuft and jetzt <= asj:
-        # Zum laufenden Schuljahr eingeführt, Antrag nicht genehmigt: auch die
-        # Einführung steht da, damit ihr Kasten ein Jahr hat.
-        if esj == jetzt and offen(ART_EINFUEHRUNG):
-            return Zusatzzeile((Teil("von "), einfuehrung(), Teil(" bis "), ausmusterung()))
-        return Zusatzzeile((Teil("bis "), ausmusterung()))
-    if asj is not None and laeuft and asj == jetzt - 1 and offen(ART_AUSMUSTERUNG):
-        # Nach dem Vorjahr ausgemustert, Antrag nicht genehmigt: das Jahr bleibt
-        # mit seinem Kasten stehen.
-        return Zusatzzeile((Teil("bis "), ausmusterung()))
-    if esj is None:
+    # Die Zeitachse: eine Einführung zu einem Schuljahr (2·Jahr) kommt vor der
+    # Ausmusterung nach demselben (2·Jahr+1).
+    ereignisse: list[tuple[int, str]] = []
+    if esj is not None and (esj > jetzt or (esj == jetzt and offen(ART_EINFUEHRUNG))):
+        ereignisse.append((2 * esj, ART_EINFUEHRUNG))
+    if asj is not None and (asj >= jetzt or (asj == jetzt - 1 and offen(ART_AUSMUSTERUNG))):
+        ereignisse.append((2 * asj + 1, ART_AUSMUSTERUNG))
+    folge = [art for _, art in sorted(ereignisse)]
+    if not folge:
         return None
-    if esj == jetzt and asj is None and offen(ART_EINFUEHRUNG):
-        return Zusatzzeile((Teil("ab "), einfuehrung()))
-    if jetzt >= esj:
-        return None
-    if asj is None or asj < esj:
-        return Zusatzzeile((Teil("ab "), einfuehrung()))
-    if asj > esj:
-        return Zusatzzeile((Teil("von "), einfuehrung(), Teil(" bis "), ausmusterung()))
-    # Einführung und Ausmusterung im selben künftigen Jahr.
-    if all(zeile.antrag(art).status == ANTRAG_GENEHMIGT
-           for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)):
-        return Zusatzzeile((einfuehrung(),))
-    return Zusatzzeile((Teil("von "), einfuehrung(), Teil(" bis "), ausmusterung()))
+
+    def jahr(art: str) -> Teil:
+        return _jahr_teil(zeile, art, entscheidbar)
+
+    teile: list[Teil] = []
+    if folge == [ART_EINFUEHRUNG, ART_AUSMUSTERUNG]:
+        if esj == asj and all(zeile.antrag(art).status == ANTRAG_GENEHMIGT for art in folge):
+            teile = [jahr(ART_EINFUEHRUNG)]
+        else:
+            teile = [Teil("von "), jahr(ART_EINFUEHRUNG), Teil(" bis "), jahr(ART_AUSMUSTERUNG)]
+    else:
+        for art in folge:
+            if teile:
+                teile.append(Teil(", "))
+            teile += [Teil("ab " if art == ART_EINFUEHRUNG else "bis "), jahr(art)]
+    return Zusatzzeile(tuple(teile))
 
 
 def zusatz_je_zeile(zeilen: tuple[Planungszeile, ...], schuljahr: str) -> tuple[Zusatzzeile, ...]:

@@ -1166,10 +1166,9 @@ tr.aufklappbar:focus-visible { outline: 2px solid var(--akzent); outline-offset:
 .planung-entscheidung .entscheidung { display: contents; }
 .planung-entscheidung .entscheidung > span { overflow-wrap: normal; }
 .planung-entscheidung .entscheidung > span:not(:empty):not(:last-child) { padding-right: .35em; }
-/* Jede Entscheidung beginnt eine neue Rasterzeile; ohne Entscheidung steht
-   die Begründung trotzdem in ihrer Spalte. */
+/* Jeder Antrag beginnt eine neue Rasterzeile (seit 2026-11-06 mit seiner
+   eigenen Begründung). */
 .planung-entscheidung .entscheidung > span:first-child { grid-column: 1; }
-.planung-entscheidung .entscheidung > span.entscheidung-begruendung { grid-column: 5; }
 .planung-entscheidung .label { font-size: 10px; }
 
 /* Die Bücherliste eines Fachs: ist ein Buch teils leihbar, teils nicht, stehen

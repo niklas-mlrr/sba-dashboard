@@ -109,6 +109,20 @@ def test_mehrere_zeilen_ergeben_je_eines_in_der_reihenfolge_der_uebergabe():
     assert [z.text for z in ergebnis] == ["bis 2026/2027", "ab 2029/2030"]
 
 
+@pytest.mark.parametrize(("ab", "nach", "erwartet"), [
+    # Ausmusterung vor der Einführung (nur aus Excel): die Ereignisse der Reihe
+    # nach (Entscheidung 2026-11-06; bis dahin nur „ab ESJ“).
+    ("2028/2029", "2027/2028", "bis 2027/2028, ab 2028/2029"),
+    # Die Ausmusterung liegt vor dem Vorjahr: sie zählt nicht mehr.
+    ("2028/2029", "2024/2025", "ab 2028/2029"),
+    # Nach dem Vorjahr, offen: sie zählt.
+    ("2028/2029", "2025/2026", "bis 2025/2026, ab 2028/2029"),
+])
+def test_eine_ausmusterung_vor_der_einfuehrung_ergibt_die_ereignisse_der_reihe_nach(
+        ab, nach, erwartet):
+    assert _text(_zeile(ab, nach)) == erwartet
+
+
 def test_ein_unlesbares_schuljahr_gibt_nichts():
     assert zusatz_der_zeile(_zeile("2027/2028"), "kaputt") is None
 
@@ -131,3 +145,19 @@ def test_eine_entschiedene_jahreszahl_nennt_entscheidung_datum_und_signatur():
     assert ausmusterung.hinweis == "Ausmusterung der Buchreihe in Jahrgang 7 genehmigt"
     offen = zusatz_der_zeile(_zeile("2027/2028"), SJ)
     assert offen is not None and all(not teil.hinweis for teil in offen.teile)
+
+
+def test_eine_entschiedene_jahreszahl_nennt_die_begruendung_ihres_antrags():
+    """Je Antrag eine Begründung (Entscheidung 2026-11-06), im Tooltip als
+    letzte Zeile; ein offener Antrag hat weiter keinen Tooltip."""
+    zeile = Planungszeile(
+        isbn="9783060000005", fach="Deutsch", jahrgang=7, eingefuehrt_ab="2027/2028",
+        ausgemustert_nach="2029/2030", leihbar=True,
+        antrag_einfuehrung=Antragsentscheidung("genehmigt"),
+        begruendung_einfuehrung="neuer Lehrplan", begruendung_ausmusterung="G9")
+    zusatz = zusatz_der_zeile(zeile, SJ)
+    assert zusatz is not None
+    einfuehrung, ausmusterung = (teil for teil in zusatz.teile if teil.art)
+    assert einfuehrung.hinweis == (
+        "Einführung der Buchreihe in Jahrgang 7 genehmigt\nBegründung: neuer Lehrplan")
+    assert ausmusterung.hinweis == ""

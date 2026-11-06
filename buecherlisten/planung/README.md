@@ -109,8 +109,8 @@ Jedes (Fach, Jahrgang)-Paar, in dem ein leihbares Buch im Vorjahr stand und
 heuer nicht mehr, bekommt beim Abgleich auf `Fächer & Jahrgang` die
 `Ausmusterung nach Schuljahr` = Kennung des Vorjahres. Ein von Hand
 eingetragener Wert bleibt. Die Fach-Seite zeigt diese Jahrgänge in der
-Bücherliste selbst, rot und durchgestrichen (siehe „Nach dem Vorjahr
-ausgemustert“ unter „Farben der Fach-Ansicht“).
+Bücherliste selbst, rot und durchgestrichen (siehe „Schrift: die Planung“
+unter „Die Tabelle der Fach-Ansicht“).
 
 **Nicht** daran hängt die Ausmusterung. Bis 2026-09-20 nahm die Spalte
 `Ausmusterung nach Schuljahr` nur bei `leihbar = ja` einen Wert an; das
@@ -256,13 +256,19 @@ von `verteile` in `app/static/mittelspalte.js`). Entschieden wird jeder
 Antrag für sich, im Buchmenü, das ein Klick auf seine Jahrgangszeile öffnet.
 
 Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
-„Ausmusterung nach Schuljahr“ je drei Spalten, dahinter eine gemeinsame:
+„Ausmusterung nach Schuljahr“ je vier Spalten:
 
 | Spalte | Inhalt |
 |--------|--------|
 | `Antrag Einführung` / `Antrag Ausmusterung` | `genehmigt` oder `abgelehnt`; leer ist offen |
 | `… Signatur`, `… Datum` | wer wann entschieden hat (bis 2026-11-04 `… Kürzel`) |
-| `Begründung` | Freitext, **eine** für beide Anträge der Zeile |
+| `Begründung Einführung` / `Begründung Ausmusterung` | Freitext je Antrag (seit 2026-11-06) |
+
+Bis 2026-11-06 gab es **eine** Spalte `Begründung` für beide Anträge der
+Zeile. Sie war zu dem Zeitpunkt überall leer; sie wird nicht mehr gelesen und
+fällt beim nächsten Speichern weg. Die Änderungsliste speichert die Begründung
+beim Antrag, zu dem sie gehört. Die `Bemerkung` (auf `Buchreihen` je
+Buchreihe, auf `Fächer & Jahrgang` je Planungszeile) ist davon unberührt.
 
 * **Entschieden wird mit Signatur.** Die Signatur ist der IServ-Name dessen,
   der angemeldet ist, das Datum ist heute - beides kommt nicht aus dem Browser
@@ -287,254 +293,289 @@ Auf `Fächer & Jahrgang` stehen dafür hinter „Einführung“ und hinter
 
 Das Planungsmenü zeigt die Entscheidungen unter der Zeile, über die ganze
 Breite und nur zum Lesen: „Einführung [genehmigt] durch MÜ am 12.10.2026.
-Begründung: …“. Die Zeile ist in zwei Hälften hinterlegt - oben nach dem
+Begründung: …“, je Antrag eine Zeile mit seiner Begründung; ein offener
+Antrag steht dort nur, wenn er begründet ist. Die Zeile ist in zwei Hälften hinterlegt - oben nach dem
 Antrag auf Einführung, unten nach dem auf Ausmusterung: genehmigt in der Farbe
 ihres Status, offen weiß, abgelehnt grau überdeckt.
 
-## Farben der Fach-Ansicht
+## Die Tabelle der Fach-Ansicht
 
-Seit 2026-10-31 zeigt die Bücherliste eines Fachs Planung und IServ-Abgleich
-zugleich (`farben.py`, ersetzt die Regeln vom 2026-10-30; am selben Tag
-nachgeschärft). Jedes Mittel hat eine Bedeutung; Verlag und Jahrgang sollen
-folgen und vergleichen bis dahin weiter wie oben beschrieben. „Dieses
-Schuljahr“ ist das ausgewählte - vorerst das laufende (`stand.schuljahr`),
-später in den Einstellungen wählbar.
+Neu gefasst am 2026-11-06: die Regeln stehen hier in der Reihenfolge, in der
+sie vorgegeben wurden; frühere Entscheidungen sind nur noch genannt, wo sie
+etwas erklären. „Dieses Schuljahr“ (SJ) ist das ausgewählte - vorerst das
+laufende (`stand.schuljahr`), später in den Einstellungen wählbar. Die Farben
+rechnet `farben.py`, den Vergleich mit IServ `vergleich.py`, den Zusatz
+`zusatz.py`, die Sortierung `static/sortieren.js`.
 
-| Mittel | zeigt | blau | rot | gelb |
-|--------|-------|------|-----|------|
-| Schrift (je Wert) | Planung, das nächste Ereignis, bis IServ es umgesetzt hat | Einführung zu diesem Schuljahr oder später | Ausmusterung nach dem Vorjahr oder später; durchgestrichen nur, wenn nach dem Vorjahr | — (grau: es gäbe das Buch nur wegen abgelehnter Einführungen) |
-| Markierung (helle Hinterlegung, Strich darunter) | IServ, nur was dieses Schuljahr gilt | fehlt in der Bücherliste (je Eintrag, Strich unten) und/oder an der Buchreihe (Strich oben) | steht in der Bücherliste noch (Strich unten); geht die Buchreihe ganz, auch oben | Titel, Verlag, Preise lauten dort anders („Bisher: …“ im Tooltip) |
-| Hintergrund | Ganzes, über alle Fächer, nur gezeigte Einträge | Zeile: jeder Jahrgang neu; Teilzeile: jeder Jahrgang mit diesem „leihbar“ neu | dasselbe für „geht“, und danach kommt keine Einführung (Zeile: jede, Teilzeile: mit ihrem „leihbar“) | — |
-| Strich vorn | Fach: die Schriftfarben der Zeile | ein Abschnitt für Blau | ein Abschnitt für Rot (Grau: abgelehnter Antrag) | zweiter Strich rechts daneben, wenn ein Feld abweicht |
+### Spalten
 
-**Strich vorn:** ein gleich hoher Abschnitt je **vorkommender Farbe** (blau,
-grau, rot), in der Reihenfolge, in der die Farben beim Lesen auftauchen:
-Teilzeile für Teilzeile in der angezeigten Reihenfolge, Jahrgang für Jahrgang aufsteigend,
-je Jahrgang erst die Jahrgangszahl, dann die Jahreszahlen des Zusatzes
-(`Markierung.strich_planung`, `strich_stil()`). Grau hat eine graue
-Jahrgangszahl oder eine abgelehnte Jahreszahl; ein
-offener Antrag färbt den Strich nicht. Die IServ-Markierungen gehen nicht in
-den Strich ein.
+Titel, Leihbar, Jahrgang, Verlag, ISBN, Neupreis, Leihgebühr, Rücklagen -
+„Rücklagen“ nur, wenn in der Tabelle mindestens eine steht. Hat eine
+Buchreihe leihbare und nicht leihbare Jahrgänge, bestehen Leihbar und
+Jahrgang aus zwei übereinanderliegenden Teilzellen: alle leihbaren Jahrgänge
+in der einen, alle nicht leihbaren in der anderen.
 
-**Mit IServ verglichen** wird nur, was in diesem Schuljahr gilt (eingeführt zu
-diesem Schuljahr oder vorher, ausgemustert nach diesem oder später): eine
-Einführung „ab 2027/2028“ ist blau geschrieben, aber nicht markiert; eine
-Ausmusterung nach diesem Schuljahr oder später ist rot geschrieben, IServ muss
-den Jahrgang aber noch führen.
+### Sortierung
 
-**Markiert wird gegen den entschiedenen Stand** (Entscheidung 2026-11-05,
-ersetzt die vom 2026-11-04, nach der ein Jahrgang mit offenem Antrag gar nicht
-markiert wurde): solange die **Ausmusterung** nach dem Vorjahr nicht genehmigt
-ist, **läuft das Buch noch** - führt IServ den Jahrgang, ist nichts markiert,
-hat IServ ihn schon entfernt, ist er blau. Solange die **Einführung** zu diesem
-Schuljahr nicht genehmigt ist, ist das Buch **noch nicht eingeführt** - fehlt
-es in IServ, ist nichts markiert, führt IServ es schon, ist es rot; plant die
-Datei die Buchreihe nur so, ist die ganze Zeile rot. Abgelehnt gilt ein Antrag
-nie: eine abgelehnte Ausmusterung lässt das Buch bleiben, eine abgelehnte
-Einführung zählt nicht. Anträge zu anderen Schuljahren ändern nichts (frühere
-Zeilen gelten als entschieden, spätere werden noch nicht verglichen). Die
-Fach-Ansicht vergleicht dafür mit `entschiedener_stand` (`farben.py`); die
-Schrift (Farbe, Durchstreichen) und der Zusatz zeigen weiter die Planung mit
-ihren Anträgen.
+Eine Liste von Sortierebenen (Tabellen mit `data-ebenen`), zu Beginn Jahrgang
+aufsteigend, dann ISBN aufsteigend. Ein Klick auf eine Überschrift setzt ihre
+Spalte an die erste Stelle; die übrigen rücken um eine nach hinten und
+behalten ihre Richtung. Stand sie schon vorn, kehrt sich ihre Richtung um,
+sonst behält sie ihre letzte (noch keine: aufsteigend).
 
-**Buchreihe:** In IServ muss die Buchreihe einem Jahrgang zugewiesen sein,
-bevor das Buch in dessen Bücherliste kommt. Fehlt an ihr ein Jahrgang, den ein
-Fach dieses Schuljahr führt, ist der Jahrgang blau markiert, mit einem Strich
-**oben** (`Abweichung.buchreihe_fehlt`, `Wert.reihe_fehlt`); fehlt er in der
-Bücherliste, mit dem Strich **unten** (`Wert.liste_fehlt`) - beides zugleich
-geht (Entscheidung 2026-11-04). Zu viele Jahrgänge an der Buchreihe schaden
-nicht und werden nie angezeigt - außer die Buchreihe geht ganz (Entscheidung
-2026-11-05): führt sie dieses Schuljahr nach dem entschiedenen Stand kein
-Fach mehr und ist keine Einführung offen oder genehmigt, hat jeder rot
-markierte Jahrgang auch den Strich **oben** („Jahrgang N ist aus der Buchreihe
-zu entfernen“, `Wert.reihe_weg`); sonst hat Rot nur den Strich unten. Die Zuweisung kommt aus
-`series_data.gradesFlat` der Bücherlisten; für Bücher ohne sie (etwa in keiner
-Liste) holt die Fach-Ansicht einmal das Inventar (`client.series.get_all()`);
-ist es nicht zu bekommen, wird die Buchreihe nicht verglichen.
+| Spalte | sortiert |
+|--------|----------|
+| Titel, Verlag | alphabetisch |
+| Leihbar | nur leihbar, beides, nur nicht leihbar |
+| Jahrgang | alle Jahrgänge der Zeile (leihbar oder nicht), Zahl für Zahl: der kleinste gegen den kleinsten, bei Gleichstand der zweitkleinste; wer keinen zweiten hat, steht vor einem mit zweitem |
+| ISBN | nach Zahl, ein „X“ am Ende zählt als 10, Platzhalter nach den gültigen |
+| Neupreis, Leihgebühr, Rücklagen | nach Zahl |
 
-**ISBN nur auf einer Seite:** Steht das Buch dieses Schuljahr in keiner
-IServ-Liste und **gibt es die Buchreihe im Inventar nicht**
-(`Abweichung.buchreihe_angelegt`), ist jedes Feld der Zeile blau markiert und
-jeder Jahrgang hat beide Striche. Gibt es die Buchreihe schon, ist die Zeile
-nicht ganz markiert: die Jahrgänge zeigen, was fehlt, und was die Datei bei
-Titel, Verlag und Preisen anders führt als die Buchreihe, ist gelb
-(Variante B, Entscheidung 2026-11-04). Ist das Inventar nicht zu bekommen,
-gilt die Zeile als neu. Steht die ISBN nur in IServ, ist jedes Feld rot, die
-Jahrgänge je Jahrgang. Geht die Buchreihe ganz, hat wie bei den Jahrgängen
-jedes rot markierte Feld auch den Strich oben (`Markierung.zeile_striche`);
-mit „nur in IServ“ haben die Felder nur den Strich oben (Entscheidung
-2026-11-05), die Jahrgänge beide. Führt nur IServ es in einem Fach, ist es aber anderswo
-geplant, sind nur die Jahrgänge rot markiert. Den Zusatz **„nur in IServ“**
-(ohne Menü) trägt der Titel nur, wenn die ISBN in einer IServ-Bücherliste
-steht und **in der ganzen Datei nicht** (Entscheidung 2026-11-04). Ein Buch,
-das die Datei kennt - etwa nach dem Vorjahr ausgemustert, IServ führt es noch
--, ist rot markiert, hat aber keinen Zusatz und behält sein Menü.
+Danach wird innerhalb jedes Buches sortiert:
 
-**Tooltips** (Entscheidung 2026-11-04; „Buchreihe“ steht wörtlich da, nicht
-der Titel): die Zeile „Buchreihe bearbeiten“. Titel, Verlag, ISBN und Preise
-(Rücklagen werden nie markiert, Entscheidung 2026-11-05): gelb „Bisher: <IServ-Wert>“, blau „Buchreihe muss in IServ angelegt
-werden“, rot mit „nur in IServ“ „Buchreihe existiert nur in IServ“, rot ohne
-„Buchreihe wird ausgemustert“, wenn die Buchreihe ganz geht (Strich oben und
-unten), sonst „Buchreihe wird vorübergehend ausgemustert“ (nur unten: eine
-Einführung kommt noch; `Markierung.reihe_weg`) - oder, wenn die Datei sie nur mit einer noch
-nicht genehmigten Einführung plant, „IServ führt Buchreihe bereits, obwohl die
-Einführung noch nicht genehmigt ist.“ (Entscheidung 2026-11-05,
-`Markierung.einfuehrung_offen`). Eine entschiedene Jahreszahl im Zusatz:
-„<Einführung/Ausmusterung> der Buchreihe in Jahrgang N <genehmigt/abgelehnt>“,
-darunter „am …“ und „durch <Signatur>“; eine offene hat keinen. Der Jahrgang
-(`farben.py`: `_schrift_hinweis`, `_iserv_hinweise`), je Aussage eine Zeile,
-erst die Schrift, dann IServ:
+* die **zwei Teilzellen** nach Leihbar und Jahrgang in der Reihenfolge und
+  Richtung, die beide in den Sortierebenen haben (ohne eigene Ebene zählt
+  Leihbar aufsteigend); nach Jahrgang die Teilzelle mit den kleineren
+  Jahrgängen zuerst, absteigend umgekehrt. Bis 2026-11-06 entschied nur die
+  vordere der beiden, bei Gleichstand immer leihbar zuerst.
+* die **Jahrgänge einer Zelle** nach der Richtung der Jahrgangsebene, auch
+  wenn sie nicht vorn steht - absteigend steht „9, 7, 5“ da (seit
+  2026-11-06; jeder Wert ist ein `.jahrgangswert` mit `data-jahrgang`).
 
-| was | Tooltip |
-|-----|---------|
-| rot durchgestrichen | „Ausmusterung der Buchreihe in Jahrgang N[ beantragt]“ |
-| blau | „Einführung der Buchreihe in Jahrgang N[ für ESJ][ beantragt]“ - „für ESJ“ nur, wenn ESJ nach dem ausgewählten Schuljahr liegt |
-| rot | „Ausmusterung der Buchreihe in Jahrgang N nach ASJ[ beantragt]“ |
-| grau | „Einführung der Buchreihe in Jahrgang N[ für ESJ] abgelehnt“, „am …“, „durch …“ - die zeitlich nächste abgelehnte |
-| Zeile ganz blau | „Buchreihe muss in IServ angelegt werden“ |
-| blau oben | „Jahrgang N ist der Buchreihe hinzuzufügen“ |
-| blau unten | „Buchreihe ist Bücherliste für Jahrgang N hinzuzufügen“ |
-| rot markiert | „Buchreihe ist aus Bücherliste für Jahrgang N in IServ zu entfernen“ |
-| rot oben (Buchreihe geht ganz) | dazu „Jahrgang N ist aus der Buchreihe zu entfernen“ |
-| rot in der einen, blau unten in der anderen Teilzeile | statt aller drei: „Buchreihe ist in Bücherliste für Jahrgang N auf <leihbar/nicht leihbar> zu setzen“ |
+Der Server liefert die Anfangsreihenfolge schon so (`_fach_reihenfolge`,
+`Markierung.teilzeilen`); das Skript ordnet bei jedem Klick neu und setzt den
+Strich vorn aus den `data-farben` der Werte in der neuen Lesefolge.
 
-„beantragt“ hängt an, solange der Antrag, der die Farbe gibt, offen ist.
+### Welche Buchreihen und Jahrgänge dastehen
+
+Die Tabelle eines Fachs zeigt jede Buchreihe, die IServ im ausgewählten
+Schuljahr in den Bücherlisten des Fachs führt, und jede, die laut
+Planungsdatei im Fach im Vorjahr lief, im ausgewählten Schuljahr läuft oder
+später laufen soll. Der Status der Einführung ist dabei egal: auch eine
+abgelehnte Einführung steht da (grau). Ob eine Buchreihe läuft, richtet sich
+nach den Ausmusterungen mit ihrem Status - eine abgelehnte findet nicht
+statt, das Buch läuft weiter (`ohne_abgelehnte_ausmusterungen`). Das gilt je
+Fach und Jahrgang (`Vergleich.gezeigte_paare`, `gruppen_nach_fach_aus_datei`):
+in der Zeile stehen nur die Jahrgänge, für die es im Fach zutrifft. Was vor
+dem Vorjahr endete, steht nicht mehr da (außer IServ führt es noch).
+
+**IServ kennt kein Fach je Jahrgang** (Entscheidung 2026-11-06): eine
+Jahrgangsliste führt die Buchreihe, und die Fächer der Buchreihe gelten für
+jeden ihrer Jahrgänge. Führt Physik ein Buch in Jg. 9 und 10, Mathe nur in 10,
+liest sich IServ auch als (Mathe, 9). Führt IServ eine Buchreihe in einem
+Jahrgang, den die Planungsdatei für ein Fach nicht vorsieht (weder im Vorjahr,
+noch in diesem oder einem späteren Schuljahr), wohl aber für ein anderes, steht
+der Jahrgang in diesem Fach weder da noch ist er markiert. Verglichen wird
+deshalb je Jahrgang (`Abweichung.iserv_jahrgaenge`, Modulkopf von
+`vergleich.py`). Eine aus IServ übernommene Zeile wie (Mathe, 9) ist in der
+Datei eingeführt und lässt sich im Menü nicht löschen - nur ausmustern, oder
+in Excel löschen. Ob die Buchreihe die richtigen Fächer hat, prüft die
+Fach-Ansicht nicht.
+
+Bis 2026-11-04 standen ganz ausgemusterte Leihbücher in einer eigenen
+Tabelle „Ausmusterungen zu diesem Schuljahr“ unter der Liste; die gibt es
+nicht mehr.
+
+### Zusatz hinter dem Jahrgang
+
+Je Eintrag (Fach, Jahrgang, leihbar) und Planungszeile die zeitlich nächsten
+Ereignisse, in dieser Reihenfolge: Ausmusterung nach dem Vorjahr (nur offen
+oder abgelehnt), Einführung zu diesem Schuljahr (nur offen oder abgelehnt),
+Ausmusterung nach diesem Schuljahr, Einführung zum nächsten, Ausmusterung
+nach dem nächsten, … Früheres zählt nie; eine Zeile ohne Einführung gilt als
+längst eingeführt.
+
+| Ereignisse | Zusatz |
+|------------|--------|
+| ein ASJ | `bis ASJ` |
+| ESJ, dann ASJ, ESJ = ASJ und beide genehmigt | `ESJ` |
+| ESJ, dann ASJ, sonst | `von ESJ bis ASJ` |
+| ein ESJ | `ab ESJ` |
+
+Die Ergebnisse stehen durch „, “ getrennt in einer Klammer hinter dem
+Jahrgang (bis 2026-11-04 „; “); ohne Ergebnis kein Zusatz. Im Ergebnis gleicht
+das der Tabelle vom 2026-10-31 mit ihren Ausnahmen; neu ist nur eine
+Ausmusterung vor der Einführung (aus Excel): `bis ASJ, ab ESJ`. So hat jeder
+Antrag, über den noch zu entscheiden ist oder der abgelehnt wurde, ein Jahr
+mit Kasten.
+
+An jeder Jahreszahl, deren Antrag offen oder abgelehnt ist, hängt ein Kasten
+(`zusatzantrag` in `app.css`): oben die Art („Einführung“/„Ausmusterung“),
+unten der Status, beide mit der Jahreszahl in einem Rahmen. Rahmen und beide
+Kästen sind rot bei Ablehnung, grau bei offen; die Jahreszahl ist bei
+Ablehnung grau. Ein genehmigter Antrag hat keinen Kasten; ein Antrag, über
+den nicht zu entscheiden ist (`zu_entscheidende_antraege`), auch nicht. Der
+Rahmen ist 2 px dick (ganze Pixel sind scharf); die beiden kleinen Kästen
+reichen bis an seine Außenkante und haben außen denselben Radius. Zwischen
+zwei Kästen nach einem Umbruch bleiben 4 px; ebenso weit steht ein Kasten von
+der Zeilengrenze (bzw. der gestrichelten Linie zwischen zwei Teilzellen) ab:
+Zelle und Teilzelle mit Kasten tragen `mit-antrag` und haben dort 2 px statt
+8 px Zellrand.
 
 **Verkehrt herum:** Eine Ausmusterung vor der Einführung (ASJ < ESJ) lässt
 sich im Menü nicht eintragen. Steht sie in Excel, nennt die Seite die Stellen
 beim Laden im Fehlermenü (`verkehrte_zeitraeume` in `app/planungsansicht.py`).
 
-**Sortierung der Fach-Ansicht** (`static/sortieren.js`, Tabellen mit
-`data-ebenen`): eine Liste von Sortierebenen, zu Beginn Jahrgang aufsteigend,
-dann ISBN aufsteigend. Ein Klick auf eine Überschrift setzt ihre Spalte an die
-erste Stelle, die übrigen rücken um eine nach hinten und behalten ihre Richtung;
-die vorderste kehrt beim Klick ihre Richtung um, eine weiter hinten behält
-ihre letzte (Entscheidung 2026-11-04). Titel und Verlag sortieren
-alphabetisch, ISBN, Neupreis und Leihgebühr nach Zahl (bei der ISBN zählt ein
-„X“ am Ende als 10, ein Platzhalter steht am Ende), „Leihbar“ aufsteigend
-als nur leihbar, beides, nur Kaufbuch. „Jahrgang“ nimmt von jedem Buch **alle
-Jahrgänge, die in der Zeile stehen** - leihbar oder nicht, egal was mit ihnen
-geplant ist - und vergleicht Zahl für Zahl: der kleinste gegen den kleinsten,
-bei Gleichstand der zweitkleinste; wer keinen zweiten hat, steht vor einem mit
-zweitem.
+### Schrift: die Planung
 
-**Zwei Teilzeilen im Buch** (leihbar und Kaufbuch) ordnet dieselbe Sortierung
-auch innerhalb des Buches, nach der Spalte, die von Leihbar und Jahrgang vorn
-steht: nach Jahrgang die Teilzeile mit den kleineren Jahrgängen zuerst (nach
-derselben Regel, absteigend umgekehrt), nach Leihbar die leihbare (absteigend
-das Kaufbuch); bei Gleichstand leihbar zuerst. Der Server liefert sie schon so
-(`Markierung.teilzeilen`, Jahrgang aufsteigend), das Skript ordnet sie bei jedem
-Klick neu - Leihbar- und Jahrgang-Zelle gleich - und setzt den Strich vorn nach
-`data-farben` der Teilzeilen in der neuen Reihenfolge.
+Die Jahrgangszahl färbt sich nach den zeitlich nächsten offenen oder
+genehmigten Ereignissen, je Eintrag (also je leihbar bzw. nicht leihbar):
 
-**Zusatz hinter dem Jahrgang** (`zusatz.py`, Entscheidung 2026-10-31): je
-Planungszeile des Eintrags (Fach, Jahrgang, „leihbar“) ein Ergebnis in
-Klammern, mehrere mit „, “ getrennt (bis 2026-11-04 „; “). Mit dem ausgewählten Schuljahr SJ, dem
-Einführungsjahr ESJ und dem Ausmusterungsjahr ASJ der Zeile:
+| Ereignis | Schrift |
+|----------|---------|
+| Ausmusterung nach dem Vorjahr | rot, durchgestrichen |
+| Einführung (zu diesem Schuljahr oder später) | blau |
+| Ausmusterung nach diesem Schuljahr oder später | rot |
 
-| Bedingung | Zusatz |
-|-----------|--------|
-| ESJ ≤ SJ ≤ ASJ (ohne ESJ: längst eingeführt) | `bis ASJ` |
-| SJ < ESJ = ASJ | `ESJ` - aber `von ESJ bis ASJ`, bis **beide** Anträge genehmigt sind |
-| SJ < ESJ < ASJ | `von ESJ bis ASJ` |
-| SJ < ESJ, ohne ASJ | `ab ESJ` |
-| sonst | nichts |
+Trifft mehreres zu, färbt das zeitlich nächste Ereignis, bis IServ es
+umgesetzt hat - dann das nächste (Entscheidung 2026-11-05). Umgesetzt ist
+eine Einführung, wenn die Bücherliste des Jahrgangs das Buch mit dem
+richtigen Häkchen führt und der Buchreihe der Jahrgang zugewiesen ist; eine
+Ausmusterung, wenn die Bücherliste es nicht mehr führt - je Jahrgang, das
+Fach zählt nicht. Ein Ereignis nach diesem Schuljahr kann IServ noch nicht
+umsetzen. Gibt es nur ein Ereignis, färbt es immer: nach dem Vorjahr
+ausgemustert und nichts danach bleibt rot und durchgestrichen.
 
-Zwei Ausnahmen, damit jeder Antrag, über den noch zu entscheiden ist (oder der
-abgelehnt wurde), ein Jahr mit Kasten hat: Ist die Einführung zum **laufenden**
-Schuljahr (ESJ = SJ) nicht genehmigt, steht `von ESJ bis ASJ` (ohne ASJ: `ab
-ESJ`) statt `bis ASJ`. Ist die Ausmusterung **nach dem Vorjahr** (ASJ = SJ-1)
-nicht genehmigt, steht `bis ASJ` statt nichts. Genehmigt, gilt wieder die
-Tabelle.
+Gibt es nur abgelehnte Anträge und das Buch läuft nicht, ist die Zahl grau
+(`_Plan.grau`). Eine abgelehnte Ausmusterung bei einem Buch, das läuft, färbt
+nicht. **Unlogisches darf gefärbt werden** (Entscheidung 2026-11-05): es fällt
+nur der abgelehnte Antrag selbst weg. Wird eine Einführung abgelehnt, färbt
+die Ausmusterung derselben Zeile trotzdem rot (`_Zeilen.nur_ausmusterung`);
+das richtet später das Mit-Ablehnen zusammengehöriger Anträge
+(`docs/roadmap.md`).
 
-An jeder Jahreszahl, deren Antrag noch offen oder abgelehnt ist, hängt ein
-Kasten (`zusatzantrag` in `app.css`): ein Rahmen in der Farbe des Status (grau
-offen, rot abgelehnt), unten „offen“/„abgelehnt“, oben die Art
-(„Einführung“/„Ausmusterung“). Ein genehmigter Antrag hat keinen Kasten; ein
-Antrag, über den nicht zu entscheiden ist (`zu_entscheidende_antraege`), auch
-nicht. Der Rahmen ist 2 px dick (ganze Pixel sind scharf); die beiden kleinen
-Kästen reichen bis an seine Außenkante und haben außen denselben Radius, ihre
-Ecken liegen also genau auf denen des Rahmens. Zwischen zwei Kästen nach
-einem Umbruch bleiben 4 px; ebenso weit steht ein Kasten von der Zeilengrenze
-(bzw. der gestrichelten Linie zwischen zwei Teilzeilen) ab: Zelle und Teilzeile
-mit Kasten tragen `mit-antrag` und haben dort 2 px statt 8 px Zellrand.
+### Hintergrund: ganz neu, ganz weg
 
-**Abgelehnte Anträge** gelten in der Fach-Ansicht nicht
-(`ohne_abgelehnte_ausmusterungen`, `Vergleich.original`): eine abgelehnte
-**Ausmusterung** lässt das Buch bleiben (der Vergleich mit IServ und die Liste
-rechnen ohne sie), eine abgelehnte **Einführung** zählt für Farbe,
-Durchstreichen und Vergleich nicht. Ihre Jahreszahl bleibt im Zusatz stehen,
-grau, mit rotem Kasten. Gibt es das Buch in der Zeile (bzw. Teilzeile) nur
-wegen abgelehnter Einführungen, also gar nicht, ist die Jahrgangszahl grau,
-der Strich vorn hat dafür einen grauen Abschnitt, und die Zeile ist grau
-hinterlegt (`ganz-grau`); bei einer abgelehnten Ausmusterung nie.
+Geprüft einmal für die ganze Buchreihe und einmal für jede Teilzeile (leihbar,
+nicht leihbar), je über alle Fächer und die gezeigten Jahrgänge:
 
-**Unlogisches darf gefärbt werden** (Entscheidung 2026-11-05): Es fällt nur
-der abgelehnte Antrag selbst weg, alles andere zählt weiter - auch wenn es
-nach der Ablehnung keinen Sinn mehr ergibt. Läuft ein Jahrgang nach einer
-abgelehnten Ausmusterung weiter, ist eine Wiedereinführung danach trotzdem
-blau; wird beim Wechsel die Ausmusterung als Leihbuch abgelehnt, zählt die
-Einführung als Kaufbuch trotzdem. Wird eine Einführung abgelehnt, läuft das
-Buch dort nicht, aber die Ausmusterung derselben Zeile färbt trotzdem: rot,
-„Ausmusterung … nach ASJ[ beantragt]“, und dann nicht grau
-(`_Zeilen.nur_ausmusterung`). Das richtet später das Mit-Ablehnen
-zusammengehöriger Anträge (`docs/roadmap.md`).
+| Hintergrund | wenn alle Jahrgangszahlen … |
+|-------------|-----------------------------|
+| rot | Ausmusterung als nächstes und letztes Ereignis haben (danach keine offene oder genehmigte Einführung im selben Fach und Jahrgang; für die Teilzeile nur eine mit ihrem „leihbar“) |
+| blau | Einführung als nächstes Ereignis haben |
+| grau | nur abgelehnte Einführungen haben und das Buch nicht läuft |
 
-**Das nächste Ereignis färbt, bis IServ es umgesetzt hat** (Entscheidung
-2026-11-05). Nach dem Vorjahr ausgemustert und später wieder eingeführt: rot
-und durchgestrichen, solange IServ den Jahrgang noch führt; führt er ihn nicht
-mehr, ist die Wiedereinführung das Nächste und der Jahrgang blau. Ohne
-Wiedereinführung bleibt er rot und durchgestrichen. Läuft ein Jahrgang noch
-und kommt nach einer späteren Ausmusterung wieder, ist er rot, auch wenn
-IServ ihn gerade nicht führt - erst die Ausmusterung, dann die
-Wiedereinführung.
+Kurz: der Hintergrund ist die Schriftfarbe, wenn sie nur nach dem einen
+nächsten Ereignis ginge und einheitlich wäre - wie weit IServ ist, zählt
+nicht (Entscheidung 2026-11-06, `_Plan.naechste`). Eingeführt zu diesem
+Schuljahr und später ausgemustert ist also blau hinterlegt, auch wenn die
+Schrift schon rot ist. Beim Wechsel ist die Leihbuch-Teilzeile rot, die
+Kaufbuch-Teilzeile blau, die Zeile ohne Hintergrund.
 
-**Roter Hintergrund** (Entscheidung 2026-11-05), wie Blau und Grau auf drei
-Ebenen, je über alle Fächer: die ganze Buchreihe, ihr Leihbuch, ihr Kaufbuch.
-Rot, wenn geplant ist (offen oder genehmigt), sie bzw. ihr Leih- oder
-Kaufbuch ganz auszumustern, ohne spätere Einführung:
+### Markierung: der Vergleich mit IServ
 
-| Ebene | rot, wenn … | eine spätere Einführung (offen oder genehmigt) im selben Fach und Jahrgang hält es auf, wenn … |
-|-------|-------------|------------------------------------------------------------------------------------------------|
-| Zeile (ganze Buchreihe) | jede Zahl rot | sie leihbar oder nicht ist |
-| Teilzeile leihbar | jede leihbare Zahl rot | sie leihbar ist |
-| Teilzeile Kaufbuch | jede nicht leihbare Zahl rot | sie nicht leihbar ist |
+Helle Hinterlegung des Texts; die Spalten Leihbar und Rücklagen werden nie
+markiert. Aus der Planungsdatei zählen nur genehmigte Anträge
+(`entschiedener_stand`, Entscheidung 2026-11-05): eine Ausmusterung nach dem
+Vorjahr gilt erst, wenn sie genehmigt ist, eine Einführung zu diesem Schuljahr
+ebenso; abgelehnte Einführungen gelten nie, ältere Anträge gelten als
+vollzogen, spätere werden noch nicht verglichen.
 
-„Später“ heißt nach der Ausmusterung, die die Zahl rot färbt
-(`_Plan.beginne`); eine abgelehnte Einführung zählt nicht. Beim Wechsel ist
-die Leihbuch-Teilzeile rot hinterlegt (das Leihbuch geht ganz), die Zeile
-nicht (das Buch kommt als Kaufbuch wieder).
+Für jede Buchreihe, in IServ oder in der Datei:
 
-**Einführung und Ausmusterung zugleich** (etwa eingeführt zu diesem Schuljahr,
-ausgemustert nach einem späteren, oder einjährig): Der Jahrgang ist blau,
-solange IServ ihn noch nicht führt - er fehlt in der Bücherliste oder an der
-Buchreihe - oder er noch nicht verglichen wird (eine spätere Einführung).
-Liefert der Vergleich am Jahrgang keine Differenz mehr, wird er rot (läuft aus).
-Strich und Hintergrund folgen der Schrift.
+* **ISBN nur in IServ**, die Datei kennt sie nicht: jedes Feld (außer Leihbar
+  und Rücklagen) rot mit Strich oben, auch der Jahrgang (seit 2026-11-06; bis
+  dahin hatte er beide Striche); hinter dem Titel unmarkiert „nur in IServ“
+  (ohne Menü).
+* **Titel, Verlag, Neupreis, Leihgebühr** einzeln: weicht der Wert ab, ist er
+  gelb mit Strich unten; gezeigt wird der der Datei, im Tooltip der aus IServ.
+  Verglichen wird mit der Buchreihe im Inventar, auch wenn sie in keiner
+  Bücherliste steht (Variante B, Entscheidung 2026-11-04).
 
-„Leihbar“ hängt am Jahrgang: gefärbt und verglichen wird je **Eintrag**
-(Fach, Jahrgang, leihbar; `aktive_eintraege`, `Abweichung.eintraege_fehlen` /
-`eintraege_nur_iserv`). „Leihbar“ steht vor „Jahrgang“; ein Buch mit Leih- und
-Kaufbuch-Jahrgängen hat in beiden Spalten zwei Teilzeilen (oben leihbar). Ein
-Wechsel ist eine Ausmusterung in der einen und eine Einführung in der anderen
-Teilzeile; das Häkchen wird nie gefärbt. Führt IServ einen Jahrgang mit dem
-anderen Häkchen, fehlt der Eintrag dort in der einen Teilzeile und steht noch in
-der anderen.
+Für jede Buchreihe, die IServ hat oder die die Datei für dieses Schuljahr
+vorsieht:
+
+* **Soll laufen, gibt es in IServ aber nicht** (keine Buchreihe im Inventar;
+  ist das Inventar nicht zu bekommen, gilt sie als neu): jedes Feld blau mit
+  Strich unten, der Jahrgang mit beiden Strichen.
+* **IServ führt sie in den Bücherlisten, sie soll dieses Schuljahr aber in
+  keinem Jahrgang laufen** und die Datei kennt sie: jedes Feld rot mit Strich
+  unten, dazu oben, wenn sie nicht wieder eingeführt werden soll - keine
+  genehmigte Einführung kommt (seit 2026-11-06; bis dahin hielt auch eine
+  offene den Strich oben auf, `Markierung.reihe_weg`).
+
+Nur am Jahrgang, wenn die ISBN auf beiden Seiten ist:
+
+* **Soll im Jahrgang laufen, die Bücherliste des Jahrgangs führt sie aber
+  nicht** (für kein Fach) oder mit dem anderen Häkchen: blau mit Strich unten,
+  dazu oben, wenn der Jahrgang auch an der Buchreihe fehlt. Fehlt er nur an
+  der Buchreihe, ist nichts markiert - der Strich oben kommt nur zusammen mit
+  dem unten (seit 2026-11-06). Zu viele Jahrgänge an der Buchreihe schaden
+  nicht. Die Zuweisung kommt aus `series_data.gradesFlat` der Bücherlisten;
+  für Bücher ohne sie holt die Fach-Ansicht einmal das Inventar
+  (`client.series.get_all()`); ist es nicht zu bekommen, wird die Buchreihe
+  nicht verglichen.
+* **Die Bücherliste des Jahrgangs führt sie, laut Datei läuft sie in dem
+  Jahrgang aber in keinem Fach** (wohl aber in anderen Jahrgängen): rot mit
+  Strich unten, in jedem Fach der Buchreihe. Bei einer Ausmusterung darf der
+  Jahrgang an der Buchreihe stehen bleiben. Führt die Datei das Fach im
+  Jahrgang mit dem anderen Häkchen, ist der IServ-Eintrag dort ebenfalls rot
+  (ein Wechsel).
+
+Mit IServ verglichen wird nur, was in diesem Schuljahr gilt: eine Einführung
+„ab 2027/2028“ ist blau geschrieben, aber nicht markiert.
+
+### Strich vorn
+
+Er zeigt die Schriftfarben der Zeile (blau, rot), Grau für einen abgelehnten
+Antrag und Gelb für abweichende Felder. Gelb steht allein vorn oder, wenn es
+auch andere Farben gibt, als zweiter Strich rechts daneben. Blau, Grau und
+Rot teilen sich den Strich in gleich hohe Abschnitte, je vorkommender Farbe
+einer, in der Reihenfolge, in der sie beim Lesen auftauchen: erst die obere
+Teilzeile Jahrgang für Jahrgang, je Jahrgang die Zahl, dann die Jahreszahlen
+des Zusatzes, dann die untere (`Markierung.strich_planung`, `strich_stil()`;
+im Browser `sortierStrichStil`). Grau ist eine graue Jahrgangszahl oder eine
+abgelehnte Jahreszahl - eine Ablehnung, die in der Zeile nicht zu sehen ist,
+färbt nicht; ein offener Antrag auch nicht. Die IServ-Markierungen gehen nicht
+in den Strich ein. Ändert die Sortierung die Lesefolge, ändert sich der Strich
+mit.
+
+### Tooltips
+
+„Buchreihe“ steht wörtlich da, nicht der Titel. `<JG>` ist „Jahrgang 5“ oder
+„Jahrgänge 5, 7-8“ (`jahrgaenge_text`). Die Zeile: „Buchreihe bearbeiten“
+(sie ist der Knopf fürs Buchmenü).
+
+Titel, Verlag, ISBN, Neupreis, Leihgebühr:
+
+| Markierung | Tooltip |
+|------------|---------|
+| gelb | „Bisher: <IServ-Wert>“ |
+| blau | „Buchreihe muss in IServ angelegt werden“ |
+| rot, mit „nur in IServ“ | „Buchreihe existiert nur in IServ“ ⏎ „Buchreihe ist aus <Bücherliste/Bücherlisten> für <JG> zu entfernen“ |
+| rot, ohne „nur in IServ“ | „Buchreihe wird [vorübergehend ]ausgemustert“ ⏎ „Buchreihe ist aus <Bücherliste/Bücherlisten> für <JG> zu entfernen“ - „vorübergehend“ nur ohne Strich oben |
+| rot, die Datei plant sie nur mit einer noch nicht genehmigten Einführung, IServ führt sie schon | statt beider Zeilen: „IServ führt Buchreihe bereits, obwohl die Einführung noch nicht genehmigt ist.“ |
+
+`<JG>` sind dort alle rot markierten Jahrgänge der Zeile (`Markierung.entfernen`).
+
+Eine genehmigte oder abgelehnte Jahreszahl im Zusatz: „<Einführung/
+Ausmusterung> der Buchreihe in <JG> <genehmigt/abgelehnt>“ ⏎ „am <Datum>“ ⏎
+„durch <Signatur>“ ⏎ „Begründung: <Begründung>“, jede Zeile nur, soweit
+bekannt. Eine offene hat keinen.
+
+Der Jahrgang, je Aussage eine Zeile, erst die Schrift, dann IServ
+(`_schrift_hinweis`, `_iserv_hinweise`):
+
+| was | Tooltip |
+|-----|---------|
+| rot durchgestrichen | „Ausmusterung der Buchreihe in <JG>[ beantragt]“ |
+| blau | „Einführung der Buchreihe in <JG>[ für ESJ][ beantragt]“ - „für ESJ“, wenn ESJ nach dem ausgewählten Schuljahr liegt |
+| rot | „Ausmusterung der Buchreihe in <JG> nach ASJ[ beantragt]“ |
+| grau | „Einführung der Buchreihe in <JG>[ für ESJ] abgelehnt“ ⏎ „am …“ ⏎ „durch …“ - die zeitlich nächste abgelehnte; „für ESJ“, wenn sie nicht zum ausgewählten Schuljahr war |
+| rot markiert (Strich egal) | „Buchreihe ist aus Bücherliste für <JG> zu entfernen“ |
+| blau, Strich oben | „<JG> ist der Buchreihe hinzuzufügen“ |
+| blau, Strich unten | „Buchreihe ist Bücherliste für <JG> hinzuzufügen“ |
+| rot in der einen, blau in der anderen Teilzeile | statt der drei: „Buchreihe ist in Bücherliste für <JG> auf <leihbar/nicht leihbar> zu setzen“ |
+
+„beantragt“ hängt an, solange der Antrag, der die Farbe gibt, offen ist. Bis
+2026-11-06 hieß es „… in IServ zu entfernen“, und ein roter Strich oben am
+Jahrgang hatte die eigene Zeile „Jahrgang N ist aus der Buchreihe zu
+entfernen“.
 
 `markierung(stand, buch, abweichung, im=…, nach=…)` ist für Verlag und Jahrgang
 vorbereitet: `im` wählt die Einträge der Zeile, `nach` die Wertspalte
 (`jahrgang` oder `fach`); `strich("iserv")` gibt den Strich einer Ansicht mit
 Schwerpunkt IServ.
-
-**Was in der Liste eines Fachs steht** (`Vergleich.gezeigte_paare` in
-`app/buecherlisten.py`, Entscheidung 2026-11-04): jedes (Fach, Jahrgang)-Paar,
-das dieses Schuljahr gilt oder erst noch kommt, und jedes, das **genau nach dem
-Vorjahr** ausgemustert ist - leihbar oder Kaufbuch. Ein ganz ausgemustertes
-Buch steht damit rot und durchgestrichen in der Liste, mit Antragskasten,
-Planungsmenü und Rücklage. Was vor dem Vorjahr endete, steht nicht mehr da;
-eine abgelehnte Ausmusterung gilt nicht. Bis 2026-11-04 standen ganz
-ausgemusterte Leihbücher in einer eigenen Tabelle „Ausmusterungen zu diesem
-Schuljahr“ unter der Liste; die gibt es nicht mehr.
 
 ## Status werden gerechnet, nie eingetragen
 

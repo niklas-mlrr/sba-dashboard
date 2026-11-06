@@ -172,7 +172,7 @@ def setze_planung(
     stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, eingefuehrt_ab: str = "",
     ausgemustert_nach: str = "", kuerzel: str = "", datum: date | None = None,
     bemerkung: str = "", antrag_einfuehrung: Antragsentscheidung | None = None,
-    antrag_ausmusterung: Antragsentscheidung | None = None, begruendung: str | None = None,
+    antrag_ausmusterung: Antragsentscheidung | None = None,
     leihbar: bool | None = None, bisher_ab: str | None = None,
 ) -> Buchplanung:
     """Trägt für **ein** Buch in **einem** Fach und Jahrgang die Zeile ein.
@@ -200,7 +200,7 @@ def setze_planung(
                         eingefuehrt_ab=eingefuehrt_ab, ausgemustert_nach=ausgemustert_nach,
                         kuerzel=kuerzel, datum=datum, bemerkung=bemerkung,
                         antrag_einfuehrung=antrag_einfuehrung,
-                        antrag_ausmusterung=antrag_ausmusterung, begruendung=begruendung,
+                        antrag_ausmusterung=antrag_ausmusterung,
                         leihbar=leihbar, bisher_ab=bisher_ab)
 
 
@@ -239,19 +239,20 @@ def _neue_zeile(
     eingefuehrt_ab: str = "", ausgemustert_nach: str = "", kuerzel: str = "",
     datum: date | None = None, bemerkung: str = "",
     antrag_einfuehrung: Antragsentscheidung | None = None,
-    antrag_ausmusterung: Antragsentscheidung | None = None, begruendung: str | None = None,
+    antrag_ausmusterung: Antragsentscheidung | None = None,
     leihbar: bool | None = None,
 ) -> Planungszeile:
     """Die Zeile nach einer Eintragung - geprüft, mit dem, was von ``bisher`` bleibt.
 
-    Die Entscheidungen über die Anträge, die Begründung und ``leihbar`` kommen,
+    Die Entscheidungen über die Anträge und ``leihbar`` kommen,
     wenn sie nicht mitgegeben werden (``None``), aus der bisherigen Zeile - so
     behält jede Eintragung sie, ohne sie zu kennen: das Planungsmenü, „Liste
     bestätigen“, der Abgleich. Eine Entscheidung gilt aber nur dem, worüber
     entschieden wurde: ändert sich ihr Schuljahr oder „leihbar“, fällt sie weg
     (Entscheidung 2026-10-30) - über das neue hat niemand entschieden. Ein
     anderer Jahrgang ist ohnehin eine andere Zeile (:func:`_finde_bisher`).
-    Eine Bemerkung lässt sie stehen.
+    Eine Bemerkung lässt sie stehen. Die Begründungen der Anträge bleiben
+    immer stehen; sie ändert nur :func:`entscheide_antrag`.
     """
     if not _JAHRGANG_VON <= jahrgang <= _JAHRGANG_BIS:
         raise UngueltigeEingabe(
@@ -288,8 +289,8 @@ def _neue_zeile(
         if antrag_einfuehrung is None else antrag_einfuehrung,
         antrag_ausmusterung=behalten(ART_AUSMUSTERUNG, nach)
         if antrag_ausmusterung is None else antrag_ausmusterung,
-        begruendung=(bisher.begruendung if bisher else "")
-        if begruendung is None else begruendung.strip(),
+        begruendung_einfuehrung=bisher.begruendung_einfuehrung if bisher else "",
+        begruendung_ausmusterung=bisher.begruendung_ausmusterung if bisher else "",
     )
 
 
@@ -345,7 +346,7 @@ def _setze_zeile(
     stand: Buchplanung, *, isbn: str, fach: str, jahrgang: int, eingefuehrt_ab: str = "",
     ausgemustert_nach: str = "", kuerzel: str = "", datum: date | None = None,
     bemerkung: str = "", antrag_einfuehrung: Antragsentscheidung | None = None,
-    antrag_ausmusterung: Antragsentscheidung | None = None, begruendung: str | None = None,
+    antrag_ausmusterung: Antragsentscheidung | None = None,
     leihbar: bool | None = None, bisher_ab: str | None = None,
 ) -> Buchplanung:
     """:func:`setze_planung` ohne die Frage, ob das Buch zum Fach gehört.
@@ -358,7 +359,7 @@ def _setze_zeile(
         bisher, isbn=isbn, fach=fach, jahrgang=jahrgang, eingefuehrt_ab=eingefuehrt_ab,
         ausgemustert_nach=ausgemustert_nach, kuerzel=kuerzel, datum=datum,
         bemerkung=bemerkung, antrag_einfuehrung=antrag_einfuehrung,
-        antrag_ausmusterung=antrag_ausmusterung, begruendung=begruendung, leihbar=leihbar,
+        antrag_ausmusterung=antrag_ausmusterung, leihbar=leihbar,
     )
     andere = tuple(z for z in stand.planung if z is not bisher)
     if any(z.schluessel == zeile.schluessel for z in andere):
@@ -505,10 +506,10 @@ def verbinde_fortlaufende(stand: Buchplanung) -> Buchplanung:
     werden ganz verbunden.
 
     Von den Anträgen bleibt der Einführungsantrag der früheren und der
-    Ausmusterungsantrag der späteren Zeile - die beiden dazwischen betrafen
-    den Wechsel, den es nun nicht mehr gibt. Kürzel und Datum der Bestätigung
-    kommen von der späteren Zeile, wenn sie eins trägt; Bemerkungen und
-    Begründungen beider bleiben stehen.
+    Ausmusterungsantrag der späteren Zeile, jeder mit seiner Begründung - die
+    beiden dazwischen betrafen den Wechsel, den es nun nicht mehr gibt. Kürzel
+    und Datum der Bestätigung kommen von der späteren Zeile, wenn sie eins
+    trägt; die Bemerkungen beider bleiben stehen.
     """
     je_paar: dict[tuple[str, str, int], list[Planungszeile]] = {}
     for zeile in stand.planung:
@@ -539,9 +540,9 @@ def _verbinde(frueher: Planungszeile, spaeter: Planungszeile) -> Planungszeile:
         frueher,
         ausgemustert_nach=spaeter.ausgemustert_nach,
         antrag_ausmusterung=spaeter.antrag_ausmusterung,
+        begruendung_ausmusterung=spaeter.begruendung_ausmusterung,
         kuerzel=bestaetigung.kuerzel, datum=bestaetigung.datum,
         bemerkung=beide(frueher.bemerkung, spaeter.bemerkung),
-        begruendung=beide(frueher.begruendung, spaeter.begruendung),
     )
 
 
@@ -901,8 +902,11 @@ def entscheide_antrag(
         antrag_einfuehrung=entscheidung if art == ART_EINFUEHRUNG else zeile.antrag_einfuehrung,
         antrag_ausmusterung=entscheidung if art == ART_AUSMUSTERUNG
         else zeile.antrag_ausmusterung,
-        begruendung=zeile.begruendung if begruendung is None else begruendung.strip(),
     )
+    if begruendung is not None and art == ART_EINFUEHRUNG:
+        neue_zeile = replace(neue_zeile, begruendung_einfuehrung=begruendung.strip())
+    elif begruendung is not None:
+        neue_zeile = replace(neue_zeile, begruendung_ausmusterung=begruendung.strip())
     return _ersetzt(stand, planung=tuple(
         neue_zeile if z is zeile else z for z in stand.planung))
 

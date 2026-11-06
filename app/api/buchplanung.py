@@ -87,11 +87,11 @@ def _als_dict(stand: Buchplanung) -> dict[str, Any]:
                             "ergebnis": antrag.status,
                             "signatur": antrag.signatur,
                             "datum": antrag.datum.isoformat() if antrag.datum else None,
+                            "begruendung": zeile.begruendung(art),
                         }
                         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
                         for antrag in (zeile.antrag(art),)
                     },
-                    "begruendung": zeile.begruendung,
                 }
                 for fach, jahrgang in stand.zeilen_des_buchs(buch)
                 for zeile in stand.zeilen_des_paars(buch.isbn, fach, jahrgang)

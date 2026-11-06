@@ -229,9 +229,10 @@
 {#
   Die Entscheidungen der Änderungsliste über eine Zeile - über die ganze Breite
   unter ihr: „Einführung [genehmigt] durch MÜ am 12.10.2026.“, je Antrag eine
-  Zeile, die Begründung (eine je Zeile) einmal am Ende. Ein offener Antrag
-  steht hier nicht; sein Stand steht hinten in der Zeile. Bricht an
-  Leerzeichen um und wird nie abgeschnitten.
+  Zeile mit seiner Begründung am Ende (je Antrag eine, seit 2026-11-06). Ein
+  offener Antrag steht hier nur mit seiner Begründung, wenn er eine hat; sein
+  Stand steht hinten in der Zeile. Bricht an Leerzeichen um und wird nie
+  abgeschnitten.
 
   Die Teile stehen in einem Raster (2026-10-31): Art, Label, „am …“,
   „durch …“, „Begründung:“ und ihr Text je in einer Spalte, damit sie in
@@ -240,21 +241,19 @@
   ihre Spalte.
 #}
 {% macro entscheidungen(zeile) -%}
-{%- set entschieden = [] -%}
+{%- set gezeigt = [] -%}
 {%- for art, wort in (("einfuehrung", "Einführung"), ("ausmusterung", "Ausmusterung")) -%}
   {%- set antrag = zeile["antrag_" ~ art] -%}
-  {%- if antrag and antrag.status != "offen" %}{% set _ = entschieden.append((wort, antrag)) %}{% endif -%}
+  {%- if antrag and (antrag.status != "offen" or antrag.begruendung) %}{% set _ = gezeigt.append((wort, antrag)) %}{% endif -%}
 {%- endfor -%}
-{%- if entschieden or zeile.begruendung %}
+{%- if gezeigt %}
 <tr class="planung-entscheidung"><td colspan="6"><div class="entscheidungen">
-  {%- for wort, antrag in entschieden %}
+  {%- for wort, antrag in gezeigt %}
   <div class="entscheidung entscheidung-{{ antrag.status }}"><span>{{ wort }}</span>
-    {#- -#}<span>{{ statuslabel(antrag.status) }}</span>
+    {#- -#}<span>{% if antrag.status != "offen" %}{{ statuslabel(antrag.status) }}{% endif %}</span>
     {#- -#}<span>{% if antrag.datum %}am {{ antrag.datum.strftime("%d.%m.%Y") }}{% endif %}</span>
     {#- -#}<span>{% if antrag.signatur %}durch {{ antrag.signatur }}{% endif %}</span>
-    {%- if loop.last and zeile.begruendung %}<span>Begründung:</span><span>{{ zeile.begruendung }}</span>{% endif %}</div>
-  {%- else %}
-  <div class="entscheidung"><span class="entscheidung-begruendung">Begründung:</span><span>{{ zeile.begruendung }}</span></div>
+    {%- if antrag.begruendung %}<span>Begründung:</span><span>{{ antrag.begruendung }}</span>{% endif %}</div>
   {%- endfor %}
 </div></td></tr>
 {%- endif -%}

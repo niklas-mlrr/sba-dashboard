@@ -16,8 +16,9 @@ eigenen Schlüssel - genau den seines Blatts in der Arbeitsmappe:
   (die alte ausgemustert, die neue eingeführt) - unterschieden an der
   Einführung.
 * **Anträge** - jede Einführung und Ausmusterung einer Planungszeile wird
-  genehmigt oder abgelehnt (:class:`Antragsentscheidung`), mit einer
-  gemeinsamen Begründung. Die Änderungsliste rechnet
+  genehmigt oder abgelehnt (:class:`Antragsentscheidung`), jede mit ihrer
+  eigenen Begründung (seit 2026-11-06; bis dahin eine gemeinsame je Zeile).
+  Die Änderungsliste rechnet
   :mod:`~buecherlisten.planung.aenderungen`.
 * **Rücklage** - eine Fachschaft möchte von einem Buch Exemplare behalten,
   statt sie wegzuwerfen. Schlüssel ist (ISBN, Fach): ein Buch kann zu mehreren
@@ -286,13 +287,16 @@ class Planungszeile:
     bemerkung: str = ""
     antrag_einfuehrung: Antragsentscheidung = field(default_factory=Antragsentscheidung)
     antrag_ausmusterung: Antragsentscheidung = field(default_factory=Antragsentscheidung)
-    # Eine Begründung für beide Anträge der Zeile.
-    begruendung: str = ""
+    # Je Antrag eine Begründung (Entscheidung 2026-11-06; bis dahin eine
+    # gemeinsame Spalte „Begründung“ für beide).
+    begruendung_einfuehrung: str = ""
+    begruendung_ausmusterung: str = ""
 
     @property
     def leer(self) -> bool:
         return not any((self.eingefuehrt_ab, self.ausgemustert_nach,
-                        self.kuerzel, self.bemerkung, self.begruendung)) \
+                        self.kuerzel, self.bemerkung, self.begruendung_einfuehrung,
+                        self.begruendung_ausmusterung)) \
             and self.datum is None \
             and self.antrag_einfuehrung.leer and self.antrag_ausmusterung.leer
 
@@ -323,6 +327,10 @@ class Planungszeile:
 
     def schuljahr_des_antrags(self, art: str) -> str:
         return self.eingefuehrt_ab if art == ART_EINFUEHRUNG else self.ausgemustert_nach
+
+    def begruendung(self, art: str) -> str:
+        return self.begruendung_einfuehrung if art == ART_EINFUEHRUNG \
+            else self.begruendung_ausmusterung
 
     @property
     def bestaetigt(self) -> bool:

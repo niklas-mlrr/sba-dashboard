@@ -1346,12 +1346,15 @@ def test_ein_antrag_wird_genehmigt_und_steht_mit_kuerzel_und_datum_in_der_datei(
     from openpyxl import load_workbook
     ws = load_workbook(str(pfad))["Fächer & Jahrgang"]
     kopf = [z.value for z in ws[1]]
-    assert kopf[3:13] == [
+    assert kopf[3:14] == [
         "leihbar",
         "Einführung", "Antrag Einführung", "Antrag Einführung Signatur",
-        "Antrag Einführung Datum", "Ausmusterung nach Schuljahr", "Antrag Ausmusterung",
-        "Antrag Ausmusterung Signatur", "Antrag Ausmusterung Datum", "Begründung",
+        "Antrag Einführung Datum", "Begründung Einführung",
+        "Ausmusterung nach Schuljahr", "Antrag Ausmusterung",
+        "Antrag Ausmusterung Signatur", "Antrag Ausmusterung Datum", "Begründung Ausmusterung",
     ]
+    assert zeile.begruendung_ausmusterung == "Nur ein Jahr gebraucht"
+    assert zeile.begruendung_einfuehrung == ""
     gelesen = lies_datei(pfad).planungszeile(DEUTSCH, "Deutsch", 9)
     assert gelesen == zeile
 
@@ -1429,7 +1432,8 @@ def test_nur_die_begruendung_laesst_die_entscheidung_stehen(stand):
                               art=ART_EINFUEHRUNG, ergebnis=None, begruendung="neuer Lehrplan")
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 7)
     assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
-    assert zeile.begruendung == "neuer Lehrplan"
+    assert (zeile.begruendung_einfuehrung, zeile.begruendung_ausmusterung) \
+        == ("neuer Lehrplan", "")
 
 
 @pytest.mark.parametrize(("felder", "teil"), [
@@ -1467,7 +1471,7 @@ def test_ein_geaendertes_schuljahr_setzt_nur_seinen_antrag_zurueck(stand):
     # "2027/28" ist dasselbe Schuljahr wie "2027/2028": die Einführung bleibt genehmigt.
     assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
     assert zeile.antrag_ausmusterung.leer
-    assert zeile.begruendung == "Grund"
+    assert (zeile.begruendung_einfuehrung, zeile.begruendung_ausmusterung) == ("Grund", "Grund")
 
 
 def test_bemerkung_und_listenbestaetigung_lassen_die_entscheidung_stehen(stand):
@@ -1485,7 +1489,8 @@ def test_bemerkung_und_listenbestaetigung_lassen_die_entscheidung_stehen(stand):
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
     assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
     assert zeile.antrag_ausmusterung.status == ANTRAG_GENEHMIGT
-    assert (zeile.kuerzel, zeile.bemerkung, zeile.begruendung) == ("FK", "neu", "Grund")
+    assert (zeile.kuerzel, zeile.bemerkung, zeile.begruendung_ausmusterung) \
+        == ("FK", "neu", "Grund")
 
 
 def test_ein_geaendertes_leihbar_setzt_die_entscheidungen_zurueck(stand):
@@ -1499,7 +1504,7 @@ def test_ein_geaendertes_leihbar_setzt_die_entscheidungen_zurueck(stand):
     ])
     zeile = stand.planungszeile(DEUTSCH, "Deutsch", 9)
     assert zeile.antrag_einfuehrung.leer and zeile.antrag_ausmusterung.leer
-    assert zeile.begruendung == "Grund"
+    assert (zeile.begruendung_einfuehrung, zeile.begruendung_ausmusterung) == ("Grund", "Grund")
 
 
 def test_ein_im_menue_entfernter_jahrgang_nimmt_seine_begruendung_mit(stand):
@@ -1520,7 +1525,7 @@ def test_eine_datei_ohne_antragsspalten_liest_alles_als_offen(tmp_path, stand):
     ws = wb["Fächer & Jahrgang"]
     for spalte in range(ws.max_column, 0, -1):
         if str(ws.cell(1, spalte).value).startswith("Antrag") \
-                or ws.cell(1, spalte).value == "Begründung":
+                or str(ws.cell(1, spalte).value).startswith("Begründung"):
             ws.delete_cols(spalte)
     wb.save(str(pfad))
 

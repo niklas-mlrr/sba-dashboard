@@ -31,6 +31,21 @@ zusätzlich je **Eintrag** verglichen: (Fach, Jahrgang, leihbar). Ein Buch steht
 in einem Jahrgang entweder als Leih- oder als Kaufbuch in der Liste; führt
 IServ es dort anders, fehlt der eine Eintrag in IServ und der andere steht nur
 noch dort (Entscheidung 2026-10-31).
+
+**IServ kennt kein Fach je Jahrgang** (Entscheidung 2026-11-06): eine
+Jahrgangsliste führt die Buchreihe, und deren Fächer gelten für jeden
+Jahrgang, in dem sie steht. Aus den Listen gelesen, steht ein Buch, das Physik
+in Jahrgang 9 und Mathe in Jahrgang 10 führt, auch in (Mathe, 9) und
+(Physik, 10). Verglichen wird deshalb je **Jahrgang** (und „leihbar“), nicht
+je Fach und Jahrgang:
+
+* Ein Eintrag der Datei fehlt in IServ nur, wenn die Jahrgangsliste das Buch
+  nicht (mit diesem „leihbar“) führt - egal für welches Fach.
+* Ein Eintrag aus IServ ist nur dann zu viel, wenn die Datei das Buch in
+  diesem Jahrgang in **keinem** Fach führt - dann in jedem Fach der Buchreihe.
+  Führt die Datei das Fach im Jahrgang mit dem anderen „leihbar“, ist er dort
+  ebenfalls zu viel (ein Wechsel). Sonst gehört er einem anderen Fach und
+  zählt im Fach nicht.
 """
 from __future__ import annotations
 
@@ -52,6 +67,8 @@ NUR_ISERV = "nur_iserv"
 Paar = tuple[str, int]
 # (Fach, Jahrgang, leihbar): ein Buch als Leih- oder als Kaufbuch in einem Paar.
 Eintrag = tuple[str, int, bool]
+# (Jahrgang, leihbar): ein Eintrag, wie IServ ihn speichert - ohne Fach.
+Jahrgangseintrag = tuple[int, bool]
 
 
 @dataclass(frozen=True)
@@ -82,6 +99,12 @@ class IservBuch:
         return frozenset((fach, jahrgang, self.leihbar_in((fach, jahrgang)))
                          for fach, jahrgang in self.paare)
 
+    @property
+    def jahrgaenge(self) -> frozenset[Jahrgangseintrag]:
+        """Was IServ wirklich speichert: die Jahrgänge, deren Liste das Buch
+        führt, je mit „leihbar“ - ohne Fach."""
+        return frozenset((jahrgang, leihbar) for _, jahrgang, leihbar in self.eintraege)
+
 
 @dataclass(frozen=True)
 class Abweichung:
@@ -106,6 +129,10 @@ class Abweichung:
     ``None``, wenn das Inventar nicht bekannt ist. Fehlt sie, fehlt sie jedem
     Jahrgang (``buchreihe_fehlt``), und die ganze Zeile ist blau markiert
     (Entscheidung 2026-11-04); gibt es sie, nur die Jahrgänge.
+
+    ``iserv_jahrgaenge`` ist, was IServ führt, je (Jahrgang, leihbar) - ohne
+    Fach (:attr:`IservBuch.jahrgaenge`). Danach fragt die Schrift, ob IServ
+    ein Ereignis schon umgesetzt hat.
     """
 
     isbn: str
@@ -118,6 +145,7 @@ class Abweichung:
     eintraege_nur_iserv: tuple[Eintrag, ...] = ()
     buchreihe_fehlt: tuple[int, ...] = ()
     buchreihe_angelegt: bool | None = None
+    iserv_jahrgaenge: frozenset[Jahrgangseintrag] = frozenset()
 
     @property
     def gleich(self) -> bool:
@@ -231,20 +259,31 @@ def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch],
                 eigen, fremd = _verlag(eigen), _verlag(fremd)
             if not _gleich(eigen, fremd):
                 felder.append((feld, fremd))
+        # IServ kennt kein Fach je Jahrgang (Modulkopf): verglichen wird je
+        # Jahrgang, gezeigt je Fach.
+        ist_jahrgaenge = ist.jahrgaenge
+        ist_leihbar = dict(ist_jahrgaenge)
+        soll_jahrgaenge = {(jahrgang, leihbar) for _, jahrgang, leihbar in soll_eintraege}
+        soll_jg = {jahrgang for _, jahrgang in soll}
         leihbar_anders = tuple(
-            (paar, ist.leihbar_in(paar)) for paar in _sortiert(soll & ist.paare)
-            if leihbar_im_schuljahr(planung, buch.isbn, paar) != ist.leihbar_in(paar)
+            (paar, ist_leihbar[paar[1]]) for paar in _sortiert(soll)
+            if paar[1] in ist_leihbar
+            and leihbar_im_schuljahr(planung, buch.isbn, paar) != ist_leihbar[paar[1]]
         )
         if leihbar_anders:
             felder.append(("leihbar", leihbar_anders[0][1]))
         ergebnis[buch.isbn] = Abweichung(
             buch.isbn, BEIDE, felder=tuple(felder),
-            fehlt_in_iserv=_sortiert(soll - ist.paare),
-            nur_in_iserv=_sortiert(ist.paare - soll),
+            fehlt_in_iserv=_sortiert({paar for paar in soll if paar[1] not in ist_leihbar}),
+            nur_in_iserv=_sortiert({paar for paar in ist.paare if paar[1] not in soll_jg}),
             leihbar_anders=leihbar_anders,
-            eintraege_fehlen=_eintraege_sortiert(soll_eintraege - ist.eintraege),
-            eintraege_nur_iserv=_eintraege_sortiert(ist.eintraege - soll_eintraege),
+            eintraege_fehlen=_eintraege_sortiert(
+                {e for e in soll_eintraege if (e[1], e[2]) not in ist_jahrgaenge}),
+            eintraege_nur_iserv=_eintraege_sortiert(
+                {e for e in ist.eintraege if (e[1], e[2]) not in soll_jahrgaenge
+                 and ((e[0], e[1]) in soll or e[1] not in soll_jg)}),
             buchreihe_fehlt=_buchreihe_fehlt(soll_eintraege, zugewiesen),
+            iserv_jahrgaenge=ist_jahrgaenge,
         )
     for isbn, ist in iserv.items():
         if isbn not in ergebnis:
@@ -254,4 +293,5 @@ def vergleiche(planung: Buchplanung, iserv: Mapping[str, IservBuch],
 
 def _nur_iserv(ist: IservBuch) -> Abweichung:
     return Abweichung(ist.isbn, NUR_ISERV, nur_in_iserv=_sortiert(ist.paare),
-                      eintraege_nur_iserv=_eintraege_sortiert(ist.eintraege))
+                      eintraege_nur_iserv=_eintraege_sortiert(ist.eintraege),
+                      iserv_jahrgaenge=ist.jahrgaenge)

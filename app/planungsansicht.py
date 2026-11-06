@@ -201,12 +201,12 @@ def _zeilen_je_isbn_und_fach(planung: Buchplanung) -> dict[str, dict[str, list[d
                     # Die Entscheidungen der Änderungsliste - im Menü nur zum Lesen.
                     **{
                         f"antrag_{art}": {"status": antrag.status, "signatur": antrag.signatur,
-                                          "datum": antrag.datum}
+                                          "datum": antrag.datum,
+                                          "begruendung": zeile.begruendung(art)}
                         for art in (ART_EINFUEHRUNG, ART_AUSMUSTERUNG)
                         if zeile.schuljahr_des_antrags(art)
                         for antrag in (zeile.antrag(art),)
                     },
-                    "begruendung": zeile.begruendung,
                 })
         zeilen[buch.isbn] = je_fach
     return zeilen

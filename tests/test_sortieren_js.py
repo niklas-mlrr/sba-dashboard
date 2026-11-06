@@ -128,9 +128,11 @@ def test_ein_klick_setzt_die_spalte_nach_vorn_und_die_anderen_behalten_ihre_rich
     assert _js(zweimal) == [_ebene(2, "liste"), _ebene(4, "text", True)]
 
 
-def _folge(teile: list[dict], art: str, absteigend: bool = False) -> list[int]:
-    kriterium = {"art": art, "absteigend": absteigend}
-    return _js(f"(m) => m.sortierTeilzeilenFolge({json.dumps(teile)}, {json.dumps(kriterium)})")  # type: ignore[return-value]
+def _folge(teile: list[dict], art: str, absteigend: bool = False,
+           *weitere: tuple[str, bool]) -> list[int]:
+    kriterien = [{"art": art, "absteigend": absteigend}] + [
+        {"art": a, "absteigend": ab} for a, ab in weitere]
+    return _js(f"(m) => m.sortierTeilzeilenFolge({json.dumps(teile)}, {json.dumps(kriterien)})")  # type: ignore[return-value]
 
 
 def test_die_teilzeilen_eines_buches_folgen_der_sortierung_nach_jahrgang():
@@ -142,16 +144,26 @@ def test_die_teilzeilen_eines_buches_folgen_der_sortierung_nach_jahrgang():
     teile = [{"leihbar": 0, "jahrgaenge": [5, 6]}, {"leihbar": 1, "jahrgaenge": [5]}]
     assert _folge(teile, "jahrgang") == [1, 0]
     assert _folge(teile, "jahrgang", True) == [0, 1]
-    # Ganz gleich: leihbar zuerst, auch absteigend.
+    # Ganz gleich ohne Ebene Leihbar: leihbar zuerst, auch absteigend.
     teile = [{"leihbar": 1, "jahrgaenge": [5]}, {"leihbar": 0, "jahrgaenge": [5]}]
     assert _folge(teile, "jahrgang") == [1, 0]
     assert _folge(teile, "jahrgang", True) == [1, 0]
+    # Mit Ebene Leihbar entscheidet deren Richtung (Entscheidung 2026-11-06).
+    assert _folge(teile, "jahrgang", False, ("leihbar", True)) == [0, 1]
 
 
 def test_die_teilzeilen_eines_buches_folgen_der_sortierung_nach_leihbar():
     teile = [{"leihbar": 1, "jahrgaenge": [5]}, {"leihbar": 0, "jahrgaenge": [7]}]
     assert _folge(teile, "leihbar") == [1, 0]
     assert _folge(teile, "leihbar", True) == [0, 1]
+
+
+def test_die_jahrgaenge_einer_zelle_folgen_der_jahrgangsebene():
+    """Entscheidung 2026-11-06: absteigend steht „9, 7, 5“ da."""
+    assert _js("(m) => m.sortierWerteFolge([5, 7, 9], false)") == [0, 1, 2]
+    assert _js("(m) => m.sortierWerteFolge([5, 7, 9], true)") == [2, 1, 0]
+    # Gleiche Jahrgänge bleiben, wie sie standen.
+    assert _js("(m) => m.sortierWerteFolge([7, 5, 7], true)") == [0, 2, 1]
 
 
 def test_der_strich_folgt_den_farben_in_der_reihenfolge_der_teilzeilen():

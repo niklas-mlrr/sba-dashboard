@@ -71,40 +71,84 @@ def test_ein_abweichender_wert_nennt_den_iserv_wert(feld, iserv_wert):
     assert not ergebnis.gleich
 
 
-def test_leihbar_wird_je_paar_verglichen():
+# Jahrgang 5 leihbar, Jahrgang 6 nicht - für jedes Fach (IServ kennt „leihbar“
+# je Eintrag einer Jahrgangsliste, nicht je Fach).
+NUR_JAHRGANG_5 = frozenset({("Erdkunde", 5), ("Politik", 5)})
+
+
+def test_leihbar_wird_je_jahrgang_verglichen():
     """In IServ steht „leihbar“ je Jahrgangsliste, in der Datei je Zeile."""
-    nur_erdkunde_5 = frozenset({("Erdkunde", 5)})
-    ergebnis = vergleiche(_stand(), _iserv(leihbar_paare=nur_erdkunde_5))[TERRA]
-    assert ergebnis.leihbar_anders == ((("Erdkunde", 6), False), (("Politik", 5), False))
+    ergebnis = vergleiche(_stand(), _iserv(leihbar_paare=NUR_JAHRGANG_5))[TERRA]
+    assert ergebnis.leihbar_anders == ((("Erdkunde", 6), False),)
     assert ergebnis.iserv == {"leihbar": False}
     assert not ergebnis.gleich
-    # Stimmt es je Paar, ist das Buch gleich - auch wenn es nur teils leihbar ist.
-    stand = _stand(Planungszeile(TERRA, "Erdkunde", 6), Planungszeile(TERRA, "Politik", 5))
-    stand = replace(stand, planung=tuple(replace(z, leihbar=(z.fach, z.jahrgang) == ("Erdkunde", 5))
-                                         for z in stand.planung))
-    assert vergleiche(stand, _iserv(leihbar_paare=nur_erdkunde_5))[TERRA].gleich
+    # Stimmt es je Jahrgang, ist das Buch gleich - auch wenn es nur teils leihbar ist.
+    stand = replace(_stand(), planung=tuple(replace(z, leihbar=z.jahrgang == 5)
+                                            for z in _stand().planung))
+    assert vergleiche(stand, _iserv(leihbar_paare=NUR_JAHRGANG_5))[TERRA].gleich
 
 
 def test_ein_wechsel_von_leihbar_vergleicht_die_zeile_die_wirkt():
     """Die alte Zeile (leihbar, bis zum Vorjahr) zählt nicht mehr, die neue schon."""
-    stand = _stand(Planungszeile(TERRA, "Politik", 5, ausgemustert_nach="2025/2026"))
+    stand = _stand(Planungszeile(TERRA, "Erdkunde", 6, ausgemustert_nach="2025/2026"))
     neu = replace(stand, planung=stand.planung + (
-        Planungszeile(TERRA, "Politik", 5, eingefuehrt_ab="2026/2027", leihbar=False),))
-    alle = frozenset({("Erdkunde", 5), ("Erdkunde", 6)})
-    assert vergleiche(neu, _iserv(leihbar_paare=alle))[TERRA].gleich
-    assert vergleiche(neu, _iserv())[TERRA].leihbar_anders == ((("Politik", 5), True),)
+        Planungszeile(TERRA, "Erdkunde", 6, eingefuehrt_ab="2026/2027", leihbar=False),))
+    assert vergleiche(neu, _iserv(leihbar_paare=NUR_JAHRGANG_5))[TERRA].gleich
+    assert vergleiche(neu, _iserv())[TERRA].leihbar_anders == ((("Erdkunde", 6), True),)
 
 
 def test_ohne_verlag_gleicht_dem_leeren_verlag():
     assert vergleiche(_stand(verlag=OHNE_VERLAG), _iserv(verlag=""))[TERRA].gleich
 
 
-def test_ein_buch_in_zwei_faechern_muss_in_beiden_stimmen():
-    ohne_politik = frozenset({("Erdkunde", 5), ("Erdkunde", 6)})
-    ergebnis = vergleiche(_stand(), _iserv(paare=ohne_politik))[TERRA]
-    assert ergebnis.fehlt_in_iserv == (("Politik", 5),)
-    assert not ergebnis.nur_in_iserv
+def test_fehlt_ein_jahrgang_in_iserv_fehlt_er_jedem_fach_darin():
+    ohne_5 = frozenset({("Erdkunde", 6), ("Politik", 6)})
+    ergebnis = vergleiche(_stand(), _iserv(paare=ohne_5))[TERRA]
+    assert ergebnis.fehlt_in_iserv == (("Erdkunde", 5), ("Politik", 5))
+    assert ergebnis.eintraege_fehlen == (("Erdkunde", 5, True), ("Politik", 5, True))
     assert not ergebnis.gleich
+
+
+def test_verglichen_wird_je_jahrgang_nicht_je_fach():
+    """IServ kennt kein Fach je Jahrgang (Entscheidung 2026-11-06): die Fächer
+    der Buchreihe gelten für jeden ihrer Jahrgänge. Führt Physik das Buch in
+    Jahrgang 9 und 10, Mathe nur in 10, liest sich IServ auch als (Mathe, 9) -
+    das ist kein Jahrgang zu viel. Erst ein Jahrgang, den die Datei in keinem
+    Fach führt, ist zu viel - in jedem Fach der Buchreihe."""
+    stand = _nur(("Mathe", 10, True), ("Physik", 9, True), ("Physik", 10, True))
+    alle = frozenset((fach, jahrgang) for fach in ("Mathe", "Physik") for jahrgang in (9, 10))
+    ergebnis = vergleiche(stand, _iserv(paare=alle))[TERRA]
+    assert ergebnis.eintraege_nur_iserv == () and ergebnis.nur_in_iserv == ()
+    assert ergebnis.gleich
+
+    mit_8 = alle | {("Mathe", 8), ("Physik", 8)}
+    ergebnis = vergleiche(stand, _iserv(paare=mit_8))[TERRA]
+    assert ergebnis.eintraege_nur_iserv == (("Mathe", 8, True), ("Physik", 8, True))
+    assert ergebnis.nur_in_iserv == (("Mathe", 8), ("Physik", 8))
+
+    # Ein Fach, das der Buchreihe fehlt, fällt hier nicht auf: Jahrgang 10
+    # steht in der Liste (die Fächer prüft später eine andere Liste).
+    nur_physik = frozenset({("Physik", 9), ("Physik", 10)})
+    assert vergleiche(stand, _iserv(paare=nur_physik))[TERRA].gleich
+
+
+def _nur(*eintraege: tuple[str, int, bool]) -> Buchplanung:
+    """Terra nur in diesen Einträgen (Fach, Jahrgang, leihbar), alle eingeführt."""
+    zeilen = tuple(Planungszeile(TERRA, f, j, leihbar=lb) for f, j, lb in eintraege)
+    stand = _stand()
+    return replace(stand, planung=zeilen, buecher=(replace(
+        stand.buecher[0], kombinationen=tuple((f, j) for f, j, _ in eintraege)),))
+
+
+def test_ein_wechsel_in_einem_fach_ist_dort_zu_viel():
+    """Führt die Datei das Fach im Jahrgang mit dem anderen „leihbar“, steht der
+    IServ-Eintrag dort zu viel - ein Fach ohne den Jahrgang zählt nicht."""
+    stand = _nur(("Mathe", 10, False), ("Physik", 9, True))
+    alle = frozenset((fach, jahrgang) for fach in ("Mathe", "Physik") for jahrgang in (9, 10))
+    ergebnis = vergleiche(stand, _iserv(paare=alle))[TERRA]
+    assert ergebnis.eintraege_fehlen == (("Mathe", 10, False),)
+    assert ergebnis.eintraege_nur_iserv == (("Mathe", 10, True),)
+    assert ergebnis.iserv_jahrgaenge == frozenset({(9, True), (10, True)})
 
 
 def test_ein_mehrjahresband_muss_in_jedem_jahrgang_stimmen():
@@ -115,17 +159,17 @@ def test_ein_mehrjahresband_muss_in_jedem_jahrgang_stimmen():
 
 @pytest.mark.parametrize("zeile, aktiv", [
     # Eingeführt in diesem Schuljahr oder vorher: aktiv.
-    (Planungszeile(TERRA, "Politik", 5, eingefuehrt_ab="2026/2027"), True),
-    (Planungszeile(TERRA, "Politik", 5, eingefuehrt_ab="2020/2021"), True),
-    (Planungszeile(TERRA, "Politik", 5, eingefuehrt_ab="2027/2028"), False),
+    (Planungszeile(TERRA, "Erdkunde", 6, eingefuehrt_ab="2026/2027"), True),
+    (Planungszeile(TERRA, "Erdkunde", 6, eingefuehrt_ab="2020/2021"), True),
+    (Planungszeile(TERRA, "Erdkunde", 6, eingefuehrt_ab="2027/2028"), False),
     # Ausgemustert nach diesem Schuljahr oder später: aktiv.
-    (Planungszeile(TERRA, "Politik", 5, ausgemustert_nach="2026/2027"), True),
-    (Planungszeile(TERRA, "Politik", 5, ausgemustert_nach="2030/2031"), True),
-    (Planungszeile(TERRA, "Politik", 5, ausgemustert_nach="2025/2026"), False),
+    (Planungszeile(TERRA, "Erdkunde", 6, ausgemustert_nach="2026/2027"), True),
+    (Planungszeile(TERRA, "Erdkunde", 6, ausgemustert_nach="2030/2031"), True),
+    (Planungszeile(TERRA, "Erdkunde", 6, ausgemustert_nach="2025/2026"), False),
 ])
 def test_die_planung_entscheidet_ueber_das_schuljahr(zeile, aktiv):
     stand = _stand(zeile)
-    assert (("Politik", 5) in aktive_paare(stand, stand.buecher[0])) is aktiv
+    assert (("Erdkunde", 6) in aktive_paare(stand, stand.buecher[0])) is aktiv
     assert vergleiche(stand, _iserv())[TERRA].gleich is aktiv
 
 
@@ -178,9 +222,9 @@ def test_ohne_vorkommen_auf_beiden_seiten_kein_vergleich():
 def test_je_eintrag_ist_ein_anderes_leihbar_ein_fehlender_und_ein_ueberzaehliger_eintrag():
     """Die Farben vergleichen je (Fach, Jahrgang, leihbar) - Entscheidung 2026-10-31."""
     abweichung = vergleiche(_stand(leihbar=False), _iserv(
-        leihbar_paare=frozenset({("Erdkunde", 5)})))[TERRA]
-    assert abweichung.eintraege_fehlen == (("Erdkunde", 5, False),)
-    assert abweichung.eintraege_nur_iserv == (("Erdkunde", 5, True),)
+        leihbar_paare=frozenset({("Erdkunde", 6)})))[TERRA]
+    assert abweichung.eintraege_fehlen == (("Erdkunde", 6, False),)
+    assert abweichung.eintraege_nur_iserv == (("Erdkunde", 6, True),)
     assert vergleiche(_stand(), _iserv())[TERRA].eintraege_fehlen == ()
 
 

@@ -283,10 +283,13 @@
   ``jahrgang`` oder ``fach`` (die Werte). Ist ein Buch in einigen Jahrgängen
   leihbar und in anderen Kaufbuch, stehen zwei Teilzeilen da, gleich hoch
   gemacht von static/buchplanung.js (``gleicheTeilzeilenAn``). Welche oben steht,
-  entscheidet die Sortierung: nach Jahrgang die mit den kleineren Jahrgängen
-  (zu Beginn), nach Leihbar die leihbare; static/sortieren.js ordnet die
-  Teilzeilen nach ``data-leihbar`` und ``data-jahrgaenge`` und setzt den Strich
-  vorn nach ``data-farben`` neu. Das Häkchen wird nie gefärbt: ein Wechsel ist
+  entscheidet die Sortierung: nach Leihbar und Jahrgang in der Reihenfolge der
+  Sortierebenen (zu Beginn die mit den kleineren Jahrgängen); static/sortieren.js
+  ordnet die Teilzeilen nach ``data-leihbar`` und ``data-jahrgaenge``, die
+  Jahrgänge jeder Zelle (``.jahrgangswert`` mit ``data-jahrgang``) nach der
+  Richtung der Jahrgangsebene, und setzt den Strich vorn nach den
+  ``data-farben`` der Werte in der neuen Lesefolge (Entscheidung 2026-11-06).
+  Das Häkchen wird nie gefärbt: ein Wechsel ist
   eine Ausmusterung in der einen und eine Einführung in der anderen Teilzeile.
   Sortiert wird die Zeile nach ``data-wert``: nur leihbar 0, beides 0.5, nur
   Kaufbuch 1; die Jahrgänge als „5,6,7“ - alle, die dastehen, egal was mit
@@ -307,6 +310,8 @@
 {%- if art == "leihbar" -%}
 <input type="checkbox" class="nur-lesen" tabindex="-1" aria-readonly="true"
   {%- if t.leihbar %} checked{% endif %} aria-label="{{ 'leihbar' if t.leihbar else 'Kaufbuch' }}: {{ t.werte | map(attribute='text') | join(', ') }}">
+{%- elif art == "jahrgang" -%}
+<span class="jahrgangswerte">{% for w in t.werte %}<span class="jahrgangswert" data-jahrgang="{{ w.jahrgang }}" data-farben="{{ w.lesefarben | join(' ') }}">{{ wert(w) }}</span>{{ ", " if not loop.last }}{% endfor %}</span>
 {%- else -%}
 <span>{% for w in t.werte %}{{ wert(w) }}{{ ", " if not loop.last }}{% endfor %}</span>
 {%- endif -%}
@@ -315,7 +320,7 @@
 <td data-wert="{{ sortwert }}" class="teilzeilen">
   {%- for t in teile %}
   <div class="teilzeile{{ ' ganz-' ~ t.ganz if t.ganz }}{{ ' mit-antrag' if art == 'jahrgang' and t.hat_antrag }}" data-leihbar="{{ 0 if t.leihbar else 1 }}"
-    data-jahrgaenge="{{ t.jahrgaenge | join(',') }}" data-farben="{{ t.farben | join(' ') }}">{{ inhalt(t) }}</div>
+    data-jahrgaenge="{{ t.jahrgaenge | join(',') }}">{{ inhalt(t) }}</div>
   {%- endfor %}</td>
 {%- else -%}
 {%- set klassen = (["ganz-" ~ teile[0].ganz] if teile and teile[0].ganz else []) + (["mit-antrag"] if art == "jahrgang" and teile and teile[0].hat_antrag else []) -%}
@@ -340,26 +345,30 @@
   unten), sonst „Buchreihe wird vorübergehend ausgemustert“ (nur unten: eine
   Einführung kommt noch). Plant die Datei es nur mit einer Einführung zu
   diesem Schuljahr, die noch nicht genehmigt ist, sagt der Tooltip das
-  (Entscheidung 2026-11-05).
+  (Entscheidung 2026-11-05) - nur das. Sonst steht unter einem roten seit
+  2026-11-06 „Buchreihe ist aus Bücherliste(n) für <JG> zu entfernen“
+  (``f.entfernen``, alle rot markierten Jahrgänge der Zeile).
 #}
 {% macro zeilenhinweis(buch, f) -%}
 {%- if f.zeile == "einfuehrung" %}Buchreihe muss in IServ angelegt werden
-{%- elif buch.isbn not in planung.isbns %}Buchreihe existiert nur in IServ
 {%- elif f.einfuehrung_offen %}IServ führt Buchreihe bereits, obwohl die Einführung noch nicht genehmigt ist.
+{%- else %}
+{%- if buch.isbn not in planung.isbns %}Buchreihe existiert nur in IServ
 {%- elif f.reihe_weg %}Buchreihe wird ausgemustert
 {%- else %}Buchreihe wird vorübergehend ausgemustert{% endif -%}
+{%- if f.entfernen %}{{ "\n" ~ f.entfernen }}{% endif -%}
+{%- endif -%}
 {%- endmacro %}
 {#
   Ein Feld einer Zeile, deren ISBN nur auf einer Seite steht (``f.zeile``):
   blau markiert, wenn die Buchreihe in IServ erst angelegt werden muss, rot,
   wenn nur IServ sie führt - mit dem Tooltip dazu; rot oben und unten, wenn
-  die Buchreihe ganz geht (``f.zeile_striche``), mit „nur in IServ“ nur oben
-  (Entscheidung 2026-11-05). Sonst ``sonst`` - das Feld,
+  die Buchreihe ganz geht, mit „nur in IServ“ nur oben (``f.zeile_striche``,
+  Entscheidung 2026-11-05). Sonst ``sonst`` - das Feld,
   wie es ohne diese Markierung aussähe.
 #}
 {% macro zeilenfeld(buch, f, inhalt, sonst) -%}
-{%- set striche = "oben" if f.zeile == "ausmusterung" and buch.isbn not in planung.isbns
-      else f.zeile_striche -%}
+{%- set striche = f.zeile_striche -%}
 {%- if f.zeile %}<span class="markierung markierung-{{ f.zeile }}{{ ' markierung-' ~ striche if striche }}" title="{{ zeilenhinweis(buch, f) }}">{{ inhalt }}</span>
 {%- else %}{{ sonst }}{% endif -%}
 {%- endmacro %}

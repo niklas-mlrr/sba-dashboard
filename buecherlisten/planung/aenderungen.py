@@ -134,7 +134,7 @@ def aenderungen_im_schuljahr(stand: Buchplanung) -> tuple[Aenderung, ...]:
                 titel=buch.titel if buch else zeile.isbn,
                 verlag=buch.verlag if buch else "",
                 fach=zeile.fach, jahrgang=zeile.jahrgang, art=art, schuljahr=angabe,
-                entscheidung=zeile.antrag(art), begruendung=zeile.begruendung,
+                entscheidung=zeile.antrag(art), begruendung=zeile.begruendung(art),
                 leihbar=zeile.leihbar,
                 neupreis=buch.neupreis if buch else None,
                 leihgebuehr=buch.leihgebuehr if buch else None,
