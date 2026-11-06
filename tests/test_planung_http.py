@@ -765,7 +765,11 @@ def test_druckmenue_der_faecher_folgt_der_vorgabe_vom_2026_11_06(
              "Anträge:", "Doppelseitig:"]
     stellen = [menue.index(f">{name}<") for name in folge]
     assert stellen == sorted(stellen)
-    assert 'name="iserv_stand" value="1" id="druck-iserv-stand" checked' in menue
+    # "IServ-Stand benutzen" ist beim Öffnen aus.
+    stand = menue.split('name="iserv_stand"')[1].split(">")[0]
+    assert "checked" not in stand
+    # Bearbeitungsdatum und Bearbeitender tragen keinen Hinweis.
+    assert "help-inline" not in menue.split('id="druck-antraege"')[1].split("Doppelseitig:")[0]
     assert 'value="nicht_versendete"' in menue
     assert "nicht_bestaetigte" not in menue and "veraenderte" not in menue
     nicht_versendete = menue.split('value="nicht_versendete"')[1].split("</label>")[0]

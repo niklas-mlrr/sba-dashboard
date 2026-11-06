@@ -800,6 +800,16 @@ html:has(.iserv-modal[open]) { overflow: hidden; }
 #druckmenue form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 #druckmenue .modal-header, #druckmenue .modal-footer { flex: none; }
 #druckmenue .modal-body { min-height: 0; overflow-y: auto; }
+/* Engere Abstände als bei IServ (Vorgabe vom 2026-11-06): zwischen den Zeilen
+   und unter den Hilfetexten ist weniger Luft. Nur hier - das Planungsmenü
+   hat dieselben Klassen und bleibt, wie es war. Die Rückgabe-Zeile hat
+   Eingabefelder von 34px Höhe; ihre Beschriftung behält deshalb 7px oben. */
+#druckmenue .form-group { margin-bottom: 6px; }
+#druckmenue .form-group:last-child { margin-bottom: 0; }
+#druckmenue .control-label { padding-top: 3px; }
+#druckmenue #druck-rueckgabe .control-label { padding-top: 7px; }
+#druckmenue .checkbox, #druckmenue .radio { min-height: 23px; padding-top: 3px; }
+#druckmenue .help-block { margin: 1px 0 4px; }
 .iserv-modal .modal-header { padding: 15px; border-bottom: 1px solid #e5e5e5; }
 .iserv-modal .modal-title { margin: 0; font-size: 24px; font-weight: 500; line-height: 1.42857143; }
 .iserv-modal .modal-body { position: relative; padding: 15px; }

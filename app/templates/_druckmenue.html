@@ -34,11 +34,11 @@
         <label class="control-label spalte-beschriftung" for="druck-iserv-stand">Stand:</label>
         <div class="spalte-inhalt">
           <div class="checkbox">
-            <label><input type="checkbox" name="iserv_stand" value="1" id="druck-iserv-stand" checked>&nbsp;IServ-Stand benutzen</label>
+            <label><input type="checkbox" name="iserv_stand" value="1" id="druck-iserv-stand">&nbsp;IServ-Stand benutzen</label>
           </div>
           <p class="small help-block">Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet,
             werden bei Buchreihen mit mehreren Fächern alle Jahrgänge allen Fächern zugeschrieben,
-            auch wenn nicht alle Jahrgänge für alle Fächer gelten.</p>
+            auch wenn einzelne Fächer die Buchreihe nicht für alle Jahrgänge möchten.</p>
         </div>
       </div>
       {% endif %}
@@ -166,11 +166,9 @@
           <p class="small help-block">Nennt je Antrag, ob er genehmigt, offen oder abgelehnt ist.</p>
           <div class="checkbox eingerueckt" id="druck-antrag-datum-zeile">
             <label><input type="checkbox" name="antrag_datum" value="1" id="druck-antrag-datum" checked>&nbsp;Bearbeitungsdatum</label>
-            <span class="small help-inline">Datum, an dem der Antrag entschieden wurde</span>
           </div>
           <div class="checkbox eingerueckt" id="druck-antrag-bearbeiter-zeile">
             <label><input type="checkbox" name="antrag_bearbeiter" value="1" id="druck-antrag-bearbeiter" checked>&nbsp;Bearbeitender</label>
-            <span class="small help-inline">Benutzername dessen, der den Antrag entschieden hat</span>
           </div>
           <div class="checkbox eingerueckt" id="druck-antrag-begruendung-zeile">
             <label><input type="checkbox" name="antrag_begruendung" value="1" id="druck-antrag-begruendung" checked>&nbsp;Begründung</label>

@@ -28,7 +28,7 @@ Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
 Doppelseitig). „nicht bestätigte" und „veränderte" sind darin durch **„nicht
 versendete"** ersetzt, das wie „Gesendet" („Fach auf Warten auf Rückmeldung
 setzen") noch gesperrt ist, bis der Status beschrieben und gespeichert wird.
-„IServ-Stand benutzen" sowie die Antrags-Häkchen werden schon mitgeschickt,
+„IServ-Stand benutzen" (beim Öffnen aus) sowie die Antrags-Häkchen werden schon mitgeschickt,
 das PDF reagiert erst mit den folgenden Schritten (Kopf und Fuß, Planungsstand,
 Anträge) darauf.
 
