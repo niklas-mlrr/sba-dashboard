@@ -791,6 +791,15 @@ tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmust
   overflow: visible;
 }
 .iserv-modal::backdrop { background: rgb(0 0 0 / .5); }
+/* Solange ein Menü offen ist, rollt nur das Menü: Mausrad und Wischen
+   gelangen sonst über den Rand eines <dialog> hinaus an die Seite dahinter. */
+html:has(.iserv-modal[open]) { overflow: hidden; }
+/* Das Druckmenü ist wie das Planungsmenü (unten) begrenzt: Kopf und Fußzeile
+   bleiben stehen, nur die Mitte rollt, wenn der Bildschirm zu niedrig ist. */
+#druckmenue[open] { display: flex; flex-direction: column; max-height: calc(100% - 60px); }
+#druckmenue form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#druckmenue .modal-header, #druckmenue .modal-footer { flex: none; }
+#druckmenue .modal-body { min-height: 0; overflow-y: auto; }
 .iserv-modal .modal-header { padding: 15px; border-bottom: 1px solid #e5e5e5; }
 .iserv-modal .modal-title { margin: 0; font-size: 24px; font-weight: 500; line-height: 1.42857143; }
 .iserv-modal .modal-body { position: relative; padding: 15px; }
