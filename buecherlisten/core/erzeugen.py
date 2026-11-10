@@ -31,15 +31,17 @@ from buecherlisten.trg_web import (
 from .daten import Ansicht, Buecherdaten
 from .layout import (
     FACH_LISTE,
+    ISERV_QUELLE,
     JAHRGANG_LISTE,
     VERLAG_LISTE,
     Listenart,
-    PageBreak,
     footer_context,
+    iserv_fach_liste,
     measure_subject_pages,
     sanitize_filename,
     subject_story,
     write_combined_confirmation_pdf,
+    write_je_fach_pdf,
     write_pdf,
 )
 
@@ -147,6 +149,7 @@ def erzeuge_buecherlisten_pdfs(
     nur_falls_noetig: bool = False,
     zuordnungen: Zuordnungen | None = None,
     ansicht: Ansicht = "fach",
+    iserv_stand: bool = False,
 ) -> list[ErzeugtesPdf]:
     """Ein PDF (``alphabet``/``aufgabenfeld``) oder eines je Gruppe (``split``).
 
@@ -156,11 +159,25 @@ def erzeuge_buecherlisten_pdfs(
     ``None`` heißt alle. Bestätigung und ``aufgabenfeld`` gibt es nur für
     Fächer. ``doppelseitig`` entspricht ``--duplex``, zusammen mit
     ``nur_falls_noetig`` ``--duplex-if-needed``. Rückgabe-Angaben wirken nur
-    mit ``bestaetigung``.
+    mit ``bestaetigung``. Im Sammel-PDF zählt jede Gruppe ihre Seiten selbst
+    und nennt sich in der Fußzeile.
+
+    ``iserv_stand`` (nur Fächer, ohne Bestätigung; Vorgabe vom 2026-11-10):
+    der Satz "Folgende Buchreihen führen die Bücherlisten …" ersetzt die
+    Einleitung, die Fußzeile nennt links unten "IServ-Bücherlisten" und
+    darüber das Erstelldatum. Dass die Daten ohne Korrekturen der Buchplanung geladen sind, ist
+    Sache des Aufrufers (:func:`~buecherlisten.core.daten.lade_buecherdaten`).
     """
-    if ansicht != "fach" and (bestaetigung or modus == "aufgabenfeld"):
-        raise ValueError("Bestätigung und Sortierung nach Aufgabenfeld gibt es nur für Fächer.")
+    if ansicht != "fach" and (bestaetigung or modus == "aufgabenfeld" or iserv_stand):
+        raise ValueError(
+            "Bestätigung, Sortierung nach Aufgabenfeld und IServ-Stand gibt es nur für Fächer.")
+    if iserv_stand and bestaetigung:
+        raise ValueError("Mit IServ-Stand gibt es keine Bestätigung.")
     art, sammel_label = _ARTEN[ansicht]
+    quelle = None
+    if iserv_stand:
+        art = iserv_fach_liste(daten.schuljahr_name, len(daten.listen_ids))
+        quelle = ISERV_QUELLE
     vorgabe = zuordnungen or Zuordnungen()
     warnungen: list[str] = []
     by_subject = daten.tabellen(ansicht)
@@ -233,24 +250,18 @@ def erzeuge_buecherlisten_pdfs(
                 school_name=schule, school_city=ort,
             )
         else:
-            blank_pages: set[int] = set()
-            story: list = []
-            for i, subject in enumerate(subjects):
-                if i > 0:
-                    story.append(PageBreak())
-                story.extend(
-                    subject_story(
-                        subject, by_subject[subject], schoolyear_name,
-                        confirmation=False, fkl_map=fkl_map, kollegium_map=kollegium_map,
-                        duplex=effective_duplex, blank_pages=blank_pages, art=art,
-                    )
+            # Seriendruck: jede Gruppe (Fach, Verlag, Jahrgang) zählt ihre
+            # Seiten selbst und nennt sich in der Fußzeile (Vorgabe vom
+            # 2026-11-10).
+            def story_fuer(_: int, subject: str, blank_pages: set[int]) -> list:
+                return subject_story(
+                    subject, by_subject[subject], schoolyear_name,
+                    duplex=effective_duplex, blank_pages=blank_pages, art=art,
                 )
-            write_pdf(
-                puffer, story, title=title,
-                footer_center=footer_context(
-                    label, schoolyear_name, school_name=schule, school_city=ort,
-                ),
-                blank_pages=blank_pages,
+
+            write_je_fach_pdf(
+                puffer, subjects, schoolyear_name, story_fuer, title=title,
+                school_name=schule, school_city=ort, quelle=quelle,
             )
         return [ErzeugtesPdf(puffer.getvalue(), dateiname, title, warnungen)]
 
@@ -273,7 +284,7 @@ def erzeuge_buecherlisten_pdfs(
             footer_center=footer_context(
                 subject, schoolyear_name, school_name=schule, school_city=ort,
             ),
-            blank_pages=einzel_leer,
+            blank_pages=einzel_leer, quelle=quelle,
         )
         ergebnisse.append(ErzeugtesPdf(
             puffer.getvalue(), f"{title_prefix}Bücherliste {subject} {sy_label}.pdf", title,

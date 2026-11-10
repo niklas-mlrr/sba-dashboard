@@ -28,9 +28,26 @@ Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
 Doppelseitig). „nicht bestätigte" und „veränderte" sind darin durch **„nicht
 versendete"** ersetzt, das wie „Gesendet" („Fach auf Warten auf Rückmeldung
 setzen") noch gesperrt ist, bis der Status beschrieben und gespeichert wird.
-„IServ-Stand benutzen" (beim Öffnen aus) sowie die Antrags-Häkchen werden schon mitgeschickt,
-das PDF reagiert erst mit den folgenden Schritten (Kopf und Fuß, Planungsstand,
-Anträge) darauf.
+Die Antrags-Häkchen werden schon mitgeschickt, das PDF reagiert erst mit den
+folgenden Schritten (Planungsstand, Anträge) darauf.
+
+**Erledigt am 2026-11-10: „IServ-Stand benutzen" im PDF der Fächer.** Die
+Fächer kommen aus den IServ-Bücherlisten, ohne die Korrekturen der Buchplanung
+und ohne Bestätigung. Vor den Tabellen steht statt der Einleitung „Folgende
+Buchreihen führt die Bücherliste / führen die Bücherlisten für das Fach <Fach>
+im <Schuljahr>." - Einzahl nur, wenn das Schuljahr genau eine Bücherliste hat.
+In der Fußzeile steht links unten „IServ-Bücherlisten", „Erstellt: <Datum>"
+eine Zeile darüber. Ohne Bücherlisten in IServ ist das Häkchen gesperrt
+(„Bücherlisten noch nicht angelegt"). Für jeden Seriendruck, mit und ohne
+IServ-Stand, gilt: jedes Fach, jeder Verlag und jeder Jahrgang zählt seine
+Seiten selbst und nennt sich in der Fußzeile.
+
+**Offen: „Schuljahr noch nicht angelegt"** (Vorgabe vom 2026-11-10). Das
+Druckmenü gilt für das ausgewählte Schuljahr. Ist es in IServ noch nicht
+angelegt, wird „IServ-Stand benutzen" gesperrt, mit „(Schuljahr noch nicht
+angelegt)" dahinter. Das kommt mit der Auswahl des Schuljahrs (unten, „eine
+Datei je Schuljahr"): bis dahin ist das ausgewählte immer das laufende
+IServ-Schuljahr, das es also immer gibt.
 
 **Offen: die Fach-Aliase.** Dasselbe Thema wie bei den Mehrjahresbänden, aber
 unkritischer: die Buchplanung übernimmt die IServ-Fachnamen unverändert, ein

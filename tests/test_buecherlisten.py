@@ -396,16 +396,20 @@ class _Erzeuger:
 
     def __init__(self) -> None:
         self.aufrufe: list[dict] = []
+        # Was lade() als korrekturen bekam, je Aufruf.
+        self.korrekturen: list = []
+        self.listen_ids = {"Jahrgang 5": 1295, "Jahrgang 6": 1296}
 
     def lade(self, client, korrekturen=None):
         from buecherlisten.core.daten import Buecherdaten
+        self.korrekturen.append(korrekturen)
         leer = {"leih": [], "kauf": []}
         return Buecherdaten(
             "2026/2027", "Schuljahr 26/27",
             {"Chemie": leer, "Deutsch": leer, "Mathematik": leer},
             je_verlag={"Klett": leer, "Westermann": leer},
             je_jahrgang={"Jahrgang 5": leer, "Jahrgang 6": leer},
-            listen_ids={"Jahrgang 5": 1295, "Jahrgang 6": 1296},
+            listen_ids=self.listen_ids,
         )
 
     def erzeuge(self, daten, **optionen):
@@ -475,7 +479,7 @@ def test_individuell_mit_allen_optionen(seiten: TestClient, erzeuger: _Erzeuger)
         "ansicht": "fach",
         "faecher": ["Chemie", "Mathematik"], "modus": "aufgabenfeld", "bestaetigung": True,
         "rueckgabe_bis": "08.10.2026", "rueckgabe_an": "Ml",
-        "doppelseitig": True, "nur_falls_noetig": True,
+        "doppelseitig": True, "nur_falls_noetig": True, "iserv_stand": False,
     }
 
 
@@ -544,6 +548,66 @@ def test_aufgabenfeld_und_bestaetigung_bleiben_beim_fach(seiten: TestClient, erz
              "/buecherliste/verlag/pdf")
     (aufruf,) = erzeuger.aufrufe
     assert aufruf["modus"] == "alphabet" and aufruf["bestaetigung"] is False
+
+
+# ── IServ-Stand (Vorgabe vom 2026-11-10) ─────────────────────────────────────
+
+@pytest.mark.parametrize("pfad", ["/buecherliste/fach/pdf", "/buecherliste/fach/Chemie/pdf"])
+def test_iserv_stand_druckt_ohne_korrekturen_und_ohne_bestaetigung(
+    seiten: TestClient, erzeuger: _Erzeuger, pfad: str,
+):
+    _anmelden(seiten)
+    antwort = _drucken(seiten, [("iserv_stand", "1"), ("bestaetigung", "1"),
+                                ("faecher_auswahl", "alle")], pfad)
+    assert antwort.status_code == 200
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf["iserv_stand"] is True and aufruf["bestaetigung"] is False
+    assert erzeuger.korrekturen == [None]
+
+
+def test_ohne_iserv_stand_gelten_die_korrekturen(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert _drucken(seiten, [("faecher_auswahl", "alle")]).status_code == 200
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf["iserv_stand"] is False
+    (korrekturen,) = erzeuger.korrekturen
+    assert callable(korrekturen)
+
+
+def test_iserv_stand_gibt_es_nur_beim_fach(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    assert _drucken(seiten, [("iserv_stand", "1")], "/buecherliste/verlag/pdf").status_code == 200
+    assert erzeuger.aufrufe[0]["iserv_stand"] is False
+    assert callable(erzeuger.korrekturen[0])
+
+
+def test_iserv_stand_ohne_buecherlisten_druckt_nicht(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    erzeuger.listen_ids = {}
+    antwort = _drucken(seiten, [("iserv_stand", "1"), ("faecher_auswahl", "alle")])
+    assert antwort.status_code == 409
+    assert "noch keine Bücherlisten angelegt" in antwort.text
+    assert erzeuger.aufrufe == []
+
+
+def _iserv_haekchen(text: str) -> str:
+    menue = text.split('<dialog id="druckmenue"')[1].split("</dialog>")[0]
+    return menue.split('id="druck-iserv-stand"')[1].split("</label>")[0]
+
+
+@pytest.mark.parametrize("pfad", ["/buecherliste/fach", "/buecherliste/fach/Chemie"])
+def test_iserv_stand_ist_mit_buecherlisten_waehlbar(seiten: TestClient, pfad: str):
+    _anmelden(seiten)
+    haekchen = _iserv_haekchen(seiten.get(pfad).text)
+    assert "disabled" not in haekchen and "noch nicht angelegt" not in haekchen
+
+
+def test_iserv_stand_ist_ohne_buecherlisten_gesperrt(seiten: TestClient, monkeypatch):
+    monkeypatch.setattr(_Schuljahre, "get_booklists", lambda self, schoolyear_id: [])
+    _anmelden(seiten)
+    haekchen = _iserv_haekchen(seiten.get("/buecherliste/fach").text)
+    assert haekchen.split(">")[0].rstrip().endswith("disabled")
+    assert "IServ-Stand benutzen (Bücherlisten noch nicht angelegt)" in haekchen
 
 
 def test_unbekannte_ansicht_druckt_nicht(seiten: TestClient, erzeuger: _Erzeuger):

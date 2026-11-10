@@ -191,10 +191,109 @@ def test_auswahl_folgt_der_reihenfolge_der_ansicht(daten):
     assert unbekannt == ["Jahrgang 3"]
 
 
-@pytest.mark.parametrize("optionen", [{"bestaetigung": True}, {"modus": "aufgabenfeld"}])
+@pytest.mark.parametrize("optionen", [
+    {"bestaetigung": True}, {"modus": "aufgabenfeld"}, {"iserv_stand": True},
+])
 def test_bestaetigung_und_aufgabenfeld_nur_fuer_faecher(daten, optionen):
     with pytest.raises(ValueError):
         erzeuge_buecherlisten_pdfs(daten, ansicht="verlag", zuordnungen=OHNE_NETZ, **optionen)
+
+
+# ── IServ-Stand (Vorgabe vom 2026-11-10) ─────────────────────────────────────
+
+def _seitentexte(inhalt: bytes) -> list[str]:
+    from pypdf import PdfReader
+    return [seite.extract_text() for seite in PdfReader(io.BytesIO(inhalt)).pages]
+
+
+def _zeilen_links(inhalt: bytes, seite: int = 0) -> dict[str, float]:
+    """Text am linken Rand der Fußzeile -> Grundlinie (Punkte vom Unterrand)."""
+    from pypdf import PdfReader
+    gefunden: dict[str, float] = {}
+
+    def merke(text, _cm, tm, _font, _size):
+        if text.strip() and tm[5] < 40 and abs(tm[4] - 72.0) < 1:
+            gefunden[text.strip()] = round(tm[5], 3)
+
+    PdfReader(io.BytesIO(inhalt)).pages[seite].extract_text(visitor_text=merke)
+    return gefunden
+
+
+@pytest.fixture()
+def iserv_daten(daten):
+    from dataclasses import replace
+    return replace(daten, schuljahr_name="Schuljahr 26/27")
+
+
+def test_iserv_stand_ersetzt_die_einleitung(iserv_daten):
+    (pdf,) = erzeuge_buecherlisten_pdfs(iserv_daten, faecher=["Deutsch"], iserv_stand=True,
+                                       zuordnungen=OHNE_NETZ)
+    text = " ".join(_seitentexte(pdf.inhalt)[0].split())
+    # Vier Bücherlisten im Schuljahr: Mehrzahl.
+    assert ("Folgende Buchreihen führen die Bücherlisten für das Fach Deutsch im "
+            "Schuljahr 26/27.") in text
+    assert "über die Schule ausgeliehen" not in text
+    assert "gesondert in der zweiten Tabelle" not in text
+    # Der Rest bleibt: Kopf und Tabellen.
+    assert "Bücherliste Deutsch" in text and "Leihbare Bücher" in text
+
+
+def test_iserv_stand_mit_einer_buecherliste_steht_in_der_einzahl(iserv_daten):
+    from dataclasses import replace
+    eine = replace(iserv_daten, listen_ids={"Jahrgang 5": 105})
+    (pdf,) = erzeuge_buecherlisten_pdfs(eine, faecher=["Deutsch"], iserv_stand=True,
+                                       zuordnungen=OHNE_NETZ)
+    text = " ".join(_seitentexte(pdf.inhalt)[0].split())
+    assert "Folgende Buchreihen führt die Bücherliste für das Fach Deutsch" in text
+
+
+def test_iserv_stand_nennt_die_quelle_unter_dem_erstelldatum(iserv_daten):
+    from buecherlisten.core.layout import FOOTER_INFO_BASELINE, FOOTER_PAGE_BASELINE
+
+    for modus in ("alphabet", "split"):
+        (pdf, *_) = erzeuge_buecherlisten_pdfs(iserv_daten, modus=modus, iserv_stand=True,
+                                              zuordnungen=OHNE_NETZ)
+        links = _zeilen_links(pdf.inhalt)
+        (erstellt,) = [y for text, y in links.items() if text.startswith("Erstellt:")]
+        assert erstellt == pytest.approx(FOOTER_PAGE_BASELINE, abs=0.01)
+        assert links["IServ-Bücherlisten"] == pytest.approx(FOOTER_INFO_BASELINE, abs=0.01)
+
+    # Ohne IServ-Stand bleibt die Fußzeile, wie sie war.
+    (pdf,) = erzeuge_buecherlisten_pdfs(iserv_daten, zuordnungen=OHNE_NETZ)
+    links = _zeilen_links(pdf.inhalt)
+    assert "IServ-Bücherlisten" not in links
+    (erstellt,) = [y for text, y in links.items() if text.startswith("Erstellt:")]
+    assert erstellt == pytest.approx(FOOTER_INFO_BASELINE, abs=0.01)
+
+
+@pytest.mark.parametrize("optionen", [
+    {}, {"iserv_stand": True}, {"modus": "aufgabenfeld"}, {"doppelseitig": True},
+])
+def test_seriendruck_der_faecher_zaehlt_je_fach(iserv_daten, optionen):
+    """Für jeden Seriendruck der Fächer (Vorgabe vom 2026-11-10)."""
+    (pdf,) = erzeuge_buecherlisten_pdfs(iserv_daten, zuordnungen=OHNE_NETZ, **optionen)
+    seiten = [t for t in _seitentexte(pdf.inhalt) if t.strip()]
+    assert len(seiten) == 2
+    for text, fach in zip(seiten, ["Deutsch", "Erdkunde"], strict=True):
+        assert "Seite 1 von 1" in text
+        assert f"Bücherliste {fach} (Schuljahr 26/27)" in text
+
+
+@pytest.mark.parametrize("ansicht", ["verlag", "jahrgang"])
+def test_seriendruck_der_verlage_und_jahrgaenge_zaehlt_je_gruppe(iserv_daten, ansicht):
+    (pdf,) = erzeuge_buecherlisten_pdfs(iserv_daten, ansicht=ansicht, zuordnungen=OHNE_NETZ)
+    gruppen = iserv_daten.gruppen(ansicht)
+    seiten = _seitentexte(pdf.inhalt)
+    assert len(seiten) == len(gruppen) > 1
+    for text, gruppe in zip(seiten, gruppen, strict=True):
+        assert "Seite 1 von 1" in text
+        assert f"Bücherliste {gruppe} (Schuljahr 26/27)" in text
+
+
+def test_iserv_stand_ohne_bestaetigung(daten):
+    with pytest.raises(ValueError):
+        erzeuge_buecherlisten_pdfs(daten, iserv_stand=True, bestaetigung=True,
+                                   zuordnungen=OHNE_NETZ)
 
 
 def _iserv_pdf(seiten: int) -> bytes:

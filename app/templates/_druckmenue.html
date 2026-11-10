@@ -15,7 +15,8 @@
   Reihenfolge der Fach-Felder: Stand, Fächer, Reihenfolge, Bestätigung,
   Rückgabe, Gesendet, Anträge, Doppelseitig.
   Bestätigung und Anträge gibt es nur ohne "IServ-Stand benutzen"; ihre
-  Felder sind sonst gesperrt (druckmenue.js).
+  Felder sind sonst gesperrt (druckmenue.js). Fehlen in IServ die
+  Bücherlisten, ist "IServ-Stand benutzen" selbst gesperrt (iserv_sperre).
 
   GET, damit alle Angaben in der URL stehen und F5 im PDF-Tab ohne Rückfrage
   dasselbe PDF neu lädt (app/api/buecherliste.py).
@@ -33,8 +34,15 @@
       <div class="form-group">
         <label class="control-label spalte-beschriftung" for="druck-iserv-stand">Stand:</label>
         <div class="spalte-inhalt">
-          <div class="checkbox">
-            <label><input type="checkbox" name="iserv_stand" value="1" id="druck-iserv-stand">&nbsp;IServ-Stand benutzen</label>
+          {#
+            Ohne Bücherlisten in IServ gibt es keinen IServ-Stand: das Häkchen
+            ist gesperrt und nennt den Grund dahinter (Vorgabe vom 2026-11-10;
+            iserv_sperre aus app/api/buecherliste.py).
+          #}
+          <div class="checkbox{% if iserv_sperre %} disabled{% endif %}">
+            <label><input type="checkbox" name="iserv_stand" value="1" id="druck-iserv-stand"
+              {%- if iserv_sperre %} disabled{% endif %}>&nbsp;IServ-Stand benutzen
+              {%- if iserv_sperre %} ({{ iserv_sperre }}){% endif %}</label>
           </div>
           <p class="small help-block">Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet,
             werden bei Buchreihen mit mehreren Fächern alle Jahrgänge allen Fächern zugeschrieben,

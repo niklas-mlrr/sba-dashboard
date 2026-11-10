@@ -3,7 +3,7 @@
 Angezeigt wird der Stand der Buchplanungs-Datei; IServ wird live geholt und
 nur verglichen, Abweichungen markiert die Vorlage (``app/buecherlisten.py``,
 zweiter Teil). Ohne Datei zeigen die Seiten IServ. Die PDFs bleiben beim Stand
-aus IServ mit den Korrekturen der Datei.
+aus IServ mit den Korrekturen der Datei, mit „IServ-Stand benutzen“ ohne sie.
 
 Wie ``GET /`` fangen diese Routen ihre Fehler selbst ab und liefern HTML: wer
 im Menü auf "Fach" klickt und nicht angemeldet ist, soll einen Satz lesen, was
@@ -223,6 +223,17 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
     return kontext, stand.planung
 
 
+def _iserv_sperre(daten: Buecherlisten) -> str | None:
+    """Warum "IServ-Stand benutzen" im Druckmenü gesperrt ist, sonst ``None``.
+
+    Gezählt werden die Listen mit Jahrgang - nur aus ihnen baut das PDF die
+    Fächer (``buecherlisten.core.daten.hole_jahrgangslisten``).
+    """
+    if not any(liste.jahrgang is not None for liste in daten.listen):
+        return "Bücherlisten noch nicht angelegt"
+    return None
+
+
 def _unbekannte_ansicht(request: Request, ansicht: str) -> Response:
     return _hinweis(request, "Unbekannte Ansicht", f"Es gibt keine Ansicht „{ansicht}“.", 404)
 
@@ -374,23 +385,33 @@ async def _pdf(request: Request, ansicht: Ansicht,
 
     ``schuelerliste`` (nur Jahrgang) holt statt der eigenen Liste die
     Druckversion aus IServ - dieselbe PDF, die dort an den Bücherlisten hängt.
+
+    ``iserv_stand`` (nur Fach) druckt IServ, wie es ist: ohne die Korrekturen
+    der Buchplanung und ohne Bestätigung (Vorgabe vom 2026-11-10).
     """
     abfrage = request.query_params
 
     def eins(name: str) -> str:
         return (abfrage.get(name) or "").strip()
 
+    iserv_stand = ansicht == "fach" and bool(eins("iserv_stand"))
     try:
         client = request.app.state.anmeldung.client()
     except (NichtAngemeldet, Abgelaufen) as exc:
         return _hinweis(request, "Nicht angemeldet",
                         f"{exc} Danach diese Seite neu laden.", 401)
     try:
+        korrekturen = None if iserv_stand else _korrekturen(request)
         daten = await run_in_threadpool(
-            lambda: lade_buecherdaten(client, korrekturen=_korrekturen(request)))
+            lambda: lade_buecherdaten(client, korrekturen=korrekturen))
     except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
         return _hinweis(request, "IServ nicht erreichbar",
                         f"Die Bücherlisten konnten nicht geladen werden: {exc}", 502)
+    if iserv_stand and not daten.listen_ids:
+        # Das Menü sperrt das Häkchen dann schon; das hier fängt alte Links ab.
+        return _hinweis(request, "IServ-Stand nicht verfügbar",
+                        f"Für das {daten.schuljahr_name} sind in IServ noch keine "
+                        "Bücherlisten angelegt.", 409)
 
     gewuenscht, modus = auswahl(list(daten.gruppen(ansicht)))
     if modus not in {"alphabet", "aufgabenfeld", "split"}:
@@ -424,7 +445,9 @@ async def _pdf(request: Request, ansicht: Ansicht,
                     ansicht=ansicht,
                     faecher=gruppen,
                     modus=modus,  # type: ignore[arg-type]
-                    bestaetigung=ansicht == "fach" and bool(eins("bestaetigung")),
+                    bestaetigung=(ansicht == "fach" and not iserv_stand
+                                  and bool(eins("bestaetigung"))),
+                    iserv_stand=iserv_stand,
                     rueckgabe_bis=eins("rueckgabe_bis") or None,
                     rueckgabe_an=eins("rueckgabe_an") or None,
                     doppelseitig=bool(eins("doppelseitig")),
@@ -468,6 +491,7 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         "ansicht": ansicht,
         # Jede Ansicht hat ein Druckmenü; nur sein Inhalt unterscheidet sich.
         "druckbar": True,
+        "iserv_sperre": _iserv_sperre(daten),
         "ansicht_name": name,
         "schuljahr": daten.schuljahr,
         "listen": daten.listen,
@@ -492,6 +516,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
+        "iserv_sperre": _iserv_sperre(daten),
         # Die Vorschläge für das Feld "Verlag" im Planungsmenü: die der
         # heutigen Listen und die der Datei (dort stehen auch die des Vorjahrs).
         "verlage": sorted(

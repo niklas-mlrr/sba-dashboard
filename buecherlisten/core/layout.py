@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -96,6 +96,10 @@ FOOTER_INFO_BASELINE = 20.142               # Grundlinie Datum / Schule+Kontext
 FOOTER_COLOR = colors.black
 # Ortszusatz, den das Original hinter dem Schulnamen führt.
 SCHOOL_CITY = "Osterode am Harz"
+# Quelle unten links in der Fußzeile der PDFs mit "IServ-Stand benutzen"
+# (Vorgabe vom 2026-11-10). "Erstellt: <Datum>" rückt dafür eine Zeile höher,
+# auf die Grundlinie von "Seite n von N".
+ISERV_QUELLE = "IServ-Bücherlisten"
 
 ACCENT_COLOR = colors.Color(0.6627, 0.2667, 0.2588)  # Original-Rot der Abschnittstitel
 RULE_COLOR = colors.black                            # Linie unter der Kopfzeile (1.0pt schwarz)
@@ -416,6 +420,23 @@ JAHRGANG_LISTE = Listenart(
     "Keine selbst anzuschaffenden Bücher in diesem Jahrgang.",
     (TITEL, FACH_NACHRANGIG, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
 )
+
+
+def iserv_fach_liste(schoolyear_name: str, listen_anzahl: int) -> Listenart:
+    """Die Fachliste mit "IServ-Stand benutzen" (Vorgabe vom 2026-11-10).
+
+    Der Satz vor den Tabellen ersetzt die Einleitung ganz. Einzahl oder
+    Mehrzahl richtet sich nach der Anzahl der Bücherlisten des Schuljahrs,
+    nicht danach, in wie vielen davon das Fach vorkommt.
+    """
+    fuehren = "führt die Bücherliste" if listen_anzahl == 1 else "führen die Bücherlisten"
+    # ``einleitung`` wird mit str.format gefüllt: geschweifte Klammern im
+    # Schuljahr dürfen dort nicht als Platzhalter gelten.
+    schuljahr = schoolyear_name.replace("{", "{{").replace("}", "}}")
+    return replace(
+        FACH_LISTE,
+        einleitung=f"Folgende Buchreihen {fuehren} für das Fach {{name}} im {schuljahr}.",
+    )
 
 
 def render_table(rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None) -> Table:
@@ -1183,6 +1204,7 @@ def footer_context(
 
 def make_footer(
     center_text: str, *, page_offset_holder: list | None = None, blank_pages: set[int] | None = None,
+    quelle: str | None = None,
 ) -> Callable[[Canvas, BaseDocTemplate], None]:
     """onPage-Callback: Fußzeile wie in den offiziellen IServ-Bücherlisten.
 
@@ -1200,7 +1222,10 @@ def make_footer(
     `blank_pages` (--duplex) listet die von `_PadToEvenPages` erzwungenen
     Leerseiten dieses Dokuments — auf ihnen wird gar nichts gezeichnet, auch
     keine Fußzeile, damit sie beim doppelseitigen Druck wirklich komplett
-    leer (weiß) bleiben."""
+    leer (weiß) bleiben.
+
+    `quelle` (z. B. ISERV_QUELLE) steht unten links; "Erstellt: <Datum>"
+    rückt dann eine Zeile höher (siehe draw_footer)."""
     generated = datetime.now().strftime("%d.%m.%Y")
 
     def _draw(c: Canvas, doc: BaseDocTemplate) -> None:
@@ -1214,19 +1239,29 @@ def make_footer(
             page_num = doc.page
         # Gruppenschlüssel für "von N": im kombinierten Bestätigungs-PDF zählt
         # jedes Fach eigenständig, und dort ist center_text je Fach verschieden.
-        c._footer_spec = (center_text, page_num, generated)
+        c._footer_spec = (center_text, page_num, generated, quelle)
 
     return _draw
 
 
-def draw_footer(c: Canvas, page_num: int, total_pages: int, center_text: str, generated: str) -> None:
+def draw_footer(
+    c: Canvas, page_num: int, total_pages: int, center_text: str, generated: str,
+    quelle: str | None = None,
+) -> None:
     """Zeichnet die zweizeilige Fußzeile an den aus dem Original übernommenen
-    absoluten Grundlinien (FOOTER_PAGE_BASELINE / FOOTER_INFO_BASELINE)."""
+    absoluten Grundlinien (FOOTER_PAGE_BASELINE / FOOTER_INFO_BASELINE).
+
+    Mit ``quelle`` steht links unten die Quelle und "Erstellt: <Datum>" eine
+    Zeile darüber, neben "Seite n von N" (Vorgabe vom 2026-11-10)."""
     c.saveState()
     c.setFillColor(FOOTER_COLOR)
     c.setFont(FOOTER_FONT, FOOTER_SIZE)
     c.drawRightString(RIGHT_EDGE, FOOTER_PAGE_BASELINE, f"Seite {page_num} von {total_pages}")
-    c.drawString(LEFT_MARGIN, FOOTER_INFO_BASELINE, f"Erstellt: {generated}")
+    if quelle:
+        c.drawString(LEFT_MARGIN, FOOTER_PAGE_BASELINE, f"Erstellt: {generated}")
+        c.drawString(LEFT_MARGIN, FOOTER_INFO_BASELINE, quelle)
+    else:
+        c.drawString(LEFT_MARGIN, FOOTER_INFO_BASELINE, f"Erstellt: {generated}")
     c.drawRightString(RIGHT_EDGE, FOOTER_INFO_BASELINE, center_text)
     c.restoreState()
 
@@ -1267,8 +1302,8 @@ class FooterCanvas(Canvas):
         for state, spec in zip(states, specs, strict=True):
             self.__dict__.update(state)
             if spec is not None:
-                center_text, page_num, generated = spec
-                draw_footer(self, page_num, totals[center_text], center_text, generated)
+                center_text, page_num, generated, quelle = spec
+                draw_footer(self, page_num, totals[center_text], center_text, generated, quelle)
             super().showPage()
         super().save()
 
@@ -1279,7 +1314,7 @@ def _ziel(path: str | Path | BinaryIO) -> str | BinaryIO:
 
 def write_pdf(
     path: str | Path | BinaryIO, story: list, title: str, footer_center: str, *,
-    blank_pages: set[int] | None = None,
+    blank_pages: set[int] | None = None, quelle: str | None = None,
 ) -> None:
     # BaseDocTemplate statt SimpleDocTemplate: dessen Frame hat 6pt Innenrand,
     # der den Inhalt gegenüber den Seitenrändern verschiebt. Hier soll der Text
@@ -1298,23 +1333,24 @@ def write_pdf(
         leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id="content",
     )
     doc.addPageTemplates(
-        [PageTemplate(id="fach", frames=[frame], onPage=make_footer(footer_center, blank_pages=blank_pages))]
+        [PageTemplate(id="fach", frames=[frame],
+                      onPage=make_footer(footer_center, blank_pages=blank_pages, quelle=quelle))]
     )
     doc.build(story, canvasmaker=FooterCanvas)
 
 
-def write_combined_confirmation_pdf(
-    path: str | Path | BinaryIO, subjects: list[str], by_subject: dict[str, dict[str, list[dict]]],
-    schoolyear_name: str, *, fkl_map: dict[str, str], kollegium_map: dict[str, str], title: str,
-    duplex: bool = False, page_counts: list[int] | None = None,
-    return_by: str | None = None, return_to: str | None = None,
-    school_name: str | None = None, school_city: str | None = None,
+def write_je_fach_pdf(
+    path: str | Path | BinaryIO, subjects: list[str], schoolyear_name: str,
+    story_fuer: Callable[[int, str, set[int]], list], *, title: str,
+    school_name: str | None = None, school_city: str | None = None, quelle: str | None = None,
 ) -> None:
-    """Wie write_pdf, aber ein eigenes PageTemplate je Fach: mit --confirmation
-    soll die Seitenzahl je Fach wieder bei 1 beginnen und die Fußzeile das
-    jeweilige Fach statt "Fächer" nennen (Bestätigungs-Vorlage ist pro Fach an
-    eine reale Person adressiert, da wirkt eine durchlaufende Gesamt-
-    Seitenzahl/"Fächer"-Fußzeile über das ganze Dokument fehl am Platz)."""
+    """Ein PDF mit mehreren Fächern, in dem jedes Fach seine Seiten selbst zählt.
+
+    Je Fach ein eigenes PageTemplate: die Seitenzahl beginnt je Fach bei 1,
+    und die Fußzeile nennt das jeweilige Fach statt "Fächer". ``story_fuer``
+    bekommt Index, Fach und die gemeinsame Menge der Leerseiten und liefert
+    die Story dieses Fachs.
+    """
     doc = BaseDocTemplate(
         _ziel(path), pagesize=A4, leftMargin=LEFT_MARGIN, rightMargin=RIGHT_MARGIN,
         topMargin=PAGE_H - FRAME_TOP, bottomMargin=BOTTOM_MARGIN, title=title,
@@ -1337,23 +1373,41 @@ def write_combined_confirmation_pdf(
         templates.append(
             PageTemplate(
                 id=template_id, frames=[frame],
-                onPage=make_footer(footer_center, page_offset_holder=[None], blank_pages=blank_pages),
+                onPage=make_footer(footer_center, page_offset_holder=[None],
+                                   blank_pages=blank_pages, quelle=quelle),
             )
         )
         if i > 0:
             story.append(NextPageTemplate(template_id))
             story.append(PageBreak())
-        story.extend(
-            subject_story(
-                subject, by_subject[subject], schoolyear_name,
-                confirmation=True, fkl_map=fkl_map, kollegium_map=kollegium_map, duplex=duplex,
-                blank_pages=blank_pages,
-                confirmation_page_count=page_counts[i] if page_counts else None,
-                return_by=return_by, return_to=return_to,
-            )
-        )
+        story.extend(story_fuer(i, subject, blank_pages))
     doc.addPageTemplates(templates)
     doc.build(story, canvasmaker=FooterCanvas)
+
+
+def write_combined_confirmation_pdf(
+    path: str | Path | BinaryIO, subjects: list[str], by_subject: dict[str, dict[str, list[dict]]],
+    schoolyear_name: str, *, fkl_map: dict[str, str], kollegium_map: dict[str, str], title: str,
+    duplex: bool = False, page_counts: list[int] | None = None,
+    return_by: str | None = None, return_to: str | None = None,
+    school_name: str | None = None, school_city: str | None = None,
+) -> None:
+    """Wie write_pdf, aber ein eigenes PageTemplate je Fach: mit --confirmation
+    soll die Seitenzahl je Fach wieder bei 1 beginnen und die Fußzeile das
+    jeweilige Fach statt "Fächer" nennen (Bestätigungs-Vorlage ist pro Fach an
+    eine reale Person adressiert, da wirkt eine durchlaufende Gesamt-
+    Seitenzahl/"Fächer"-Fußzeile über das ganze Dokument fehl am Platz)."""
+    def story_fuer(i: int, subject: str, blank_pages: set[int]) -> list:
+        return subject_story(
+            subject, by_subject[subject], schoolyear_name,
+            confirmation=True, fkl_map=fkl_map, kollegium_map=kollegium_map, duplex=duplex,
+            blank_pages=blank_pages,
+            confirmation_page_count=page_counts[i] if page_counts else None,
+            return_by=return_by, return_to=return_to,
+        )
+
+    write_je_fach_pdf(path, subjects, schoolyear_name, story_fuer, title=title,
+                      school_name=school_name, school_city=school_city)
 
 
 def sanitize_filename(name: str) -> str:
