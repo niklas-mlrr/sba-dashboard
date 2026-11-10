@@ -299,6 +299,97 @@ def test_iserv_stand_ohne_bestaetigung(daten):
                                    zuordnungen=OHNE_NETZ)
 
 
+# ── Sternchen mit IServ-Stand (Vorgabe vom 2026-11-10) ───────────────────────
+
+def _item(isbn: str, titel: str, faecher: list[str], leihbar: bool = True) -> dict:
+    return {"series": isbn, "borrowable": leihbar, "series_data": {
+        "isbn": isbn, "title": titel, "subjectsFlat": faecher, "publisher": "Klett",
+        "price": 20.0, "fee": 4.0}}
+
+
+@pytest.fixture()
+def mehrfach_daten():
+    """Mathematik mit Buchreihen, die IServ mehreren Fächern zuordnet.
+
+    Statistik (Mathe, Informatik; 5-6) und Formelsammlung (Mathe, Physik; 5-7)
+    sind leihbar, Tafelwerk (Physik, Mathe; 6-7) ist zu kaufen. Der Atlas
+    gehört drei Fächern, steht aber nur in Jahrgang 7 - kein Sternchen.
+    """
+    from buecherlisten.core.daten import Buecherdaten, build_subject_tables, sammle_je_fach_und_isbn
+
+    mathe5 = _item("9783120000001", "Mathe 5", ["Mathematik"])
+    formel = _item("9783120000002", "Formelsammlung", ["Mathematik", "Physik"])
+    tafel = _item("9783120000003", "Tafelwerk", ["Physik", "Mathematik"], leihbar=False)
+    atlas = _item("9783120000004", "Atlas", ["Erdkunde", "Mathematik", "Geschichte"])
+    statistik = _item("9783120000005", "Statistik", ["Mathematik", "Informatik"])
+
+    def liste(*items):
+        return {"sections": [{"options": [{"items": list(items)}]}]}
+
+    listen = [(5, 105, liste(mathe5, formel, statistik)),
+              (6, 106, liste(formel, tafel, statistik)),
+              (7, 107, liste(formel, tafel, atlas))]
+    return Buecherdaten(
+        "2026/2027", "Schuljahr 26/27",
+        dict(build_subject_tables(sammle_je_fach_und_isbn(listen))),
+        listen_ids={"Jahrgang 5": 105, "Jahrgang 6": 106, "Jahrgang 7": 107},
+    )
+
+
+def test_sternchen_je_faecherkombination_ueber_beide_tabellen(mehrfach_daten):
+    from buecherlisten.core.layout import _sternchen
+
+    tabellen, erklaerungen = _sternchen("Mathematik", mehrfach_daten.je_fach["Mathematik"])
+    leih = {z["titel"]: z["klasse"] for z in tabellen["leih"]}
+    # Hinter den Jahrgängen, mit einem Leerzeichen; neue Kombination, ein Stern mehr.
+    assert leih == {"Mathe 5": "5", "Statistik": "5, 6 *",
+                    "Formelsammlung": "5, 6, 7 **", "Atlas": "7"}
+    # Dieselbe Kombination in der zweiten Tabelle: dasselbe Zeichen.
+    assert [z["klasse"] for z in tabellen["kauf"]] == ["6, 7 **"]
+    assert erklaerungen == {
+        "leih": [("*", "auch für Informatik"), ("**", "auch für Physik")],
+        "kauf": [("**", "auch für Physik")],
+    }
+    # Die Daten selbst bleiben unmarkiert.
+    assert mehrfach_daten.je_fach["Mathematik"]["kauf"][0]["klasse"] == "6, 7"
+
+
+def test_sternchen_nennt_die_anderen_faecher_alphabetisch():
+    from buecherlisten.core.layout import _sternchen
+
+    zeile = {"klasse": "5, 6", "faecher": ("Physik", "Mathematik", "Chemie"),
+             "jahrgang_anzahl": 2}
+    _, erklaerungen = _sternchen("Mathematik", {"leih": [zeile], "kauf": []})
+    assert erklaerungen["leih"] == [("*", "auch für Chemie, Physik")]
+
+
+def test_iserv_stand_zeigt_hinweis_und_erklaerzeilen(mehrfach_daten):
+    (pdf,) = erzeuge_buecherlisten_pdfs(mehrfach_daten, faecher=["Mathematik"],
+                                       iserv_stand=True, zuordnungen=OHNE_NETZ)
+    text = " ".join(_seitentexte(pdf.inhalt)[0].split())
+    assert "Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet" in text
+    assert "Betroffene Buchreihen sind mit einem * markiert" in text
+    assert text.index("Folgende Buchreihen") < text.index("Da IServ") < text.index("Leihbare")
+    leih, kauf = text.split("Selbst anzuschaffende Bücher")
+    assert "* auch für Informatik ** auch für Physik" in leih
+    assert kauf.count("auch für") == 1 and "** auch für Physik" in kauf
+
+
+def test_ohne_sternchen_kein_hinweis(mehrfach_daten):
+    """Erdkunde hat nur den Atlas, und der steht in einem Jahrgang."""
+    (pdf,) = erzeuge_buecherlisten_pdfs(mehrfach_daten, faecher=["Erdkunde"],
+                                       iserv_stand=True, zuordnungen=OHNE_NETZ)
+    text = " ".join(_seitentexte(pdf.inhalt)[0].split())
+    assert "Da IServ" not in text and "auch für" not in text and "*" not in text
+
+
+def test_ohne_iserv_stand_keine_sternchen(mehrfach_daten):
+    (pdf,) = erzeuge_buecherlisten_pdfs(mehrfach_daten, faecher=["Mathematik"],
+                                       zuordnungen=OHNE_NETZ)
+    text = " ".join(_seitentexte(pdf.inhalt)[0].split())
+    assert "Da IServ" not in text and "auch für" not in text and "*" not in text
+
+
 def _iserv_pdf(seiten: int) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen.canvas import Canvas

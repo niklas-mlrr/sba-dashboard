@@ -42,6 +42,15 @@ In der Fußzeile steht links unten „IServ-Bücherlisten" (nach derselben Regel
 IServ-Stand, gilt: jedes Fach, jeder Verlag und jeder Jahrgang zählt seine
 Seiten selbst und nennt sich in der Fußzeile.
 
+**Sternchen (2026-11-10, nur mit IServ-Stand):** Eine Buchreihe, die IServ
+mehreren Fächern zuordnet und die in mehreren Jahrgängen steht, bekommt hinter
+den Jahrgängen ein „*". Jede weitere Kombination der anderen Fächer einen Stern
+mehr, gezählt je Fach über beide Tabellen. Direkt unter der Tabelle steht je
+Stern eine kleine Zeile ohne Trennlinie: „* auch für Chemie, Physik". Nur wenn
+es Sternchen gibt, folgt auf den ersten Satz ein zweiter Absatz: „Da IServ
+Fächer nicht Jahrgängen, sondern Buchreihen zuordnet, … Betroffene Buchreihen
+sind mit einem * markiert; unter der Tabelle stehen dazu die anderen Fächer."
+
 **Offen: „Schuljahr noch nicht angelegt"** (Vorgabe vom 2026-11-10). Das
 Druckmenü gilt für das ausgewählte Schuljahr. Ist es in IServ noch nicht
 angelegt, wird „IServ-Stand benutzen" gesperrt, mit „(Schuljahr noch nicht

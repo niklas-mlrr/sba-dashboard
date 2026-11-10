@@ -267,6 +267,10 @@ def _zeile(isbn: str, e: dict, sort_key: tuple) -> dict:
         "isbn": format_isbn(isbn),
         "neupreis": fmt_price(e["price"]),
         "leihgebuehr": fmt_price(e["fee"]),
+        # Für die Sternchen mit "IServ-Stand benutzen" (layout.subject_story):
+        # IServ ordnet Fächer der Buchreihe zu, nicht dem Jahrgang.
+        "faecher": tuple(e["subjects"]),
+        "jahrgang_anzahl": len(grades_sorted),
     }
 
 

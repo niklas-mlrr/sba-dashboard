@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_JUSTIFY
@@ -181,6 +182,17 @@ SIGNATURE_LINE_HEIGHT = 2 * CONFIRM_STYLE.leading
 CELL_STYLE = ParagraphStyle(
     "Zelle", parent=STYLES["Normal"], fontName=BODY_FONT, fontSize=CELL_FONT_SIZE, leading=11.5,
     splitLongWords=0,
+)
+# Einleitung, auf die noch ein Absatz folgt (Sternchen-Hinweis): eine halbe
+# Leerzeile Abstand statt des vollen Abstands zur Tabelle.
+INTRO_ABSATZ_STYLE = ParagraphStyle(
+    "IntroAbsatz", parent=INTRO_STYLE, spaceAfter=INTRO_STYLE.leading / 2,
+)
+# Erklärzeilen der Sternchen unter einer Tabelle ("* auch für Chemie"): in der
+# Schriftgröße der ISBN, eng untereinander, ohne Linien (Vorgabe 2026-11-10).
+ERKLAER_STYLE = ParagraphStyle(
+    "Erklaerung", parent=STYLES["Normal"], fontName=BODY_FONT, fontSize=ISBN_FONT_SIZE,
+    leading=ISBN_FONT_SIZE * 1.25,
 )
 
 
@@ -387,6 +399,10 @@ class Listenart:
     leer_leih: str
     leer_kauf: str
     spalten: tuple[Spalte, ...]
+    # Sternchen für Buchreihen mehrerer Fächer und Jahrgänge, mit Hinweis
+    # unter der Einleitung und Erklärzeilen unter der Tabelle - nur mit
+    # "IServ-Stand benutzen" (siehe iserv_fach_liste, _sternchen).
+    sternchen: bool = False
 
 
 _ZWEITE_TABELLE = "Bücher, die selbst anzuschaffen sind, werden gesondert in der zweiten Tabelle ausgewiesen."
@@ -433,7 +449,55 @@ def iserv_fach_liste(schoolyear_name: str, listen_anzahl: int) -> Listenart:
         FACH_LISTE,
         einleitung=(f"Folgende Buchreihen {fuehren} die {iserv_quelle(listen_anzahl)} "
                     f"für das Fach {{name}} im {schuljahr}."),
+        sternchen=True,
     )
+
+
+# Steht nach der Einleitung, wenn mindestens eine Buchreihe ein Sternchen hat
+# (Vorgabe vom 2026-11-10).
+STERNCHEN_HINWEIS = (
+    "Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet, werden bei "
+    "Buchreihen mit mehreren Fächern und Jahrgängen alle Jahrgänge allen Fächern "
+    "zugeschrieben, auch wenn einzelne Fächer die Buchreihe nicht für alle Jahrgänge "
+    "möchten. Betroffene Buchreihen sind mit einem * markiert; unter der Tabelle "
+    "stehen dazu die anderen Fächer."
+)
+
+
+def _sternchen(
+    fach: str, tables: dict[str, list[dict]],
+) -> tuple[dict[str, list[dict]], dict[str, list[tuple[str, str]]]]:
+    """Markiert Buchreihen mehrerer Fächer und Jahrgänge (Vorgabe vom 2026-11-10).
+
+    Jede Kombination der anderen Fächer bekommt einen Stern mehr ("*", "**",
+    …), in der Reihenfolge ihres ersten Auftretens, über beide Tabellen des
+    Fachs hinweg - gleiche Kombination, gleiches Zeichen. Das Zeichen steht
+    mit einem Leerzeichen hinter den Jahrgängen.
+
+    Zurück kommen die Tabellen mit markierten Kopien der Zeilen und je Tabelle
+    die Erklärzeilen ``(Sterne, "auch für <Fächer>")`` der Sterne, die in ihr
+    vorkommen, aufsteigend.
+    """
+    sterne: dict[tuple[str, ...], str] = {}
+    markiert: dict[str, list[dict]] = {}
+    erklaerungen: dict[str, list[tuple[str, str]]] = {}
+    for bucket in ("leih", "kauf"):
+        zeilen: list[dict] = []
+        in_tabelle: dict[str, tuple[str, ...]] = {}
+        for zeile in tables[bucket]:
+            andere = tuple(sorted((f for f in zeile.get("faecher", ()) if f != fach),
+                                  key=str.casefold))
+            if not andere or zeile.get("jahrgang_anzahl", 0) < 2:
+                zeilen.append(zeile)
+                continue
+            stern = sterne.setdefault(andere, "*" * (len(sterne) + 1))
+            in_tabelle[stern] = andere
+            zeilen.append({**zeile, "klasse": f"{zeile['klasse']} {stern}"})
+        markiert[bucket] = zeilen
+        erklaerungen[bucket] = [(stern, "auch für " + ", ".join(andere))
+                                for stern, andere in sorted(in_tabelle.items(),
+                                                            key=lambda e: len(e[0]))]
+    return markiert, erklaerungen
 
 
 def iserv_quelle(listen_anzahl: int) -> str:
@@ -446,9 +510,15 @@ def iserv_quelle(listen_anzahl: int) -> str:
     return "IServ-Bücherliste" if listen_anzahl == 1 else "IServ-Bücherlisten"
 
 
-def render_table(rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None) -> Table:
+def render_table(
+    rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None,
+    erklaerungen: list[tuple[str, str]] | None = None,
+) -> Table:
     """Tabelle mit ``spalten`` (Default: die der Fachliste); ohne ``with_fee``
-    entfällt die Leihgebühr."""
+    entfällt die Leihgebühr.
+
+    ``erklaerungen`` (Sterne, Text) stehen als weitere Zeilen unter der letzten,
+    über die ganze Breite, kleiner und ohne Trennlinien (siehe _sternchen)."""
     if spalten is None:
         spalten = (KLASSE, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR)
     spalten = tuple(sp for sp in spalten if with_fee or sp.key != "leihgebuehr")
@@ -607,6 +677,23 @@ def render_table(rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...
             ]
     if last_row >= 1:
         style.append(("LINEBELOW", (0, 1), (-1, last_row), 1.0, ROW_RULE_COLOR))
+    if erklaerungen:
+        # Erst nach der Breitenberechnung angehängt: die Erklärzeilen spannen
+        # über alle Spalten und sollen keine Spalte breiter machen.
+        for stern, text in erklaerungen:
+            data.append([Paragraph(f"{escape(stern)} {escape(text)}", ERKLAER_STYLE)]
+                        + [""] * (n_cols - 1))
+        erste = last_row + 1
+        style += [
+            ("SPAN", (0, zeile), (-1, zeile)) for zeile in range(erste, len(data))
+        ]
+        style += [
+            ("TOPPADDING", (0, erste), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, erste), (-1, -1), 0),
+            ("TOPPADDING", (0, erste), (-1, erste), CELL_VPAD),
+            # Nicht von der letzten Buchzeile getrennt auf die nächste Seite.
+            ("NOSPLIT", (0, last_row), (-1, -1)),
+        ]
     table = Table(data, colWidths=col_widths, repeatRows=1, hAlign="LEFT")
     table.setStyle(TableStyle(style))
     return table
@@ -1073,6 +1160,16 @@ def subject_story(
         ),
         Paragraph(art.einleitung.format(name=subject), INTRO_STYLE),
     ]
+    erklaerungen: dict[str, list[tuple[str, str]]] = {"leih": [], "kauf": []}
+    if art.sternchen:
+        tables, erklaerungen = _sternchen(subject, tables)
+        if any(erklaerungen.values()):
+            # Der Hinweis nur, wenn es Sternchen gibt; als zweiter Absatz mit
+            # einer halben Leerzeile Abstand.
+            story[-1:] = [
+                Paragraph(art.einleitung.format(name=subject), INTRO_ABSATZ_STYLE),
+                Paragraph(STERNCHEN_HINWEIS, INTRO_STYLE),
+            ]
     book_count = len(tables["leih"]) + len(tables["kauf"])
     # Bei genau einem Buch entscheidet die Anzahl seiner Klassenstufen
     # (Spalte "klasse", z.B. "5" oder "5, 6") über Singular/Plural.
@@ -1120,13 +1217,15 @@ def subject_story(
 
     story.append(Paragraph("Leihbare Bücher", SECTION_STYLE))
     if tables["leih"]:
-        story.append(render_table(tables["leih"], with_fee=True, spalten=art.spalten))
+        story.append(render_table(tables["leih"], with_fee=True, spalten=art.spalten,
+                                  erklaerungen=erklaerungen["leih"]))
     else:
         story.append(Paragraph(art.leer_leih, EMPTY_STYLE))
 
     story.append(Paragraph("Selbst anzuschaffende Bücher", SECTION_STYLE))
     if tables["kauf"]:
-        story.append(render_table(tables["kauf"], with_fee=False, spalten=art.spalten))
+        story.append(render_table(tables["kauf"], with_fee=False, spalten=art.spalten,
+                                  erklaerungen=erklaerungen["kauf"]))
     else:
         story.append(Paragraph(art.leer_kauf, EMPTY_STYLE))
 
