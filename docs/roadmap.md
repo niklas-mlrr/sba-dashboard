@@ -74,10 +74,35 @@ nur in der anderen Quelle keine Liste.
   Jahreszahl samt Präfix grau, abgelehnt durchgestrichen; einen Jahrgang nur
   wegen offener (abgelehnter) Einführungen ganz; gilt das für jeden Jahrgang
   der Zeile - neues Buch beantragt bzw. abgelehnt -, die ganze Zeile. Eine
-  genehmigte Ausmusterung nach dem Vorjahr fehlt. Die Spalte „Klasse“ bricht
+  genehmigte Ausmusterung nach dem Vorjahr fehlt. Die Spalte „Jahrgang“ bricht
   dann um, wenn es Zeilen spart, nur an Leerzeichen und nie zwischen Jahrgang
-  und erster Jahreszahl oder zwischen Präfix und Jahreszahl. Die Texte des
-  PDFs sind unverändert.
+  und erster Jahreszahl oder zwischen Präfix und Jahreszahl. Ein Jahrgang mit
+  Jahreszusatz steht allein in seiner Zeile bzw. seinen Zeilen („5, 6," /
+  „7 (ab 2027/2028)," / „8"); bricht sein Zusatz um, läuft er bündig unter
+  „ab“/„bis“/„von“ weiter (hängender Einzug). Die Texte des PDFs sind
+  unverändert.
+- *Ausgemusterte:* eine dritte Tabelle „Leihbare nach vorigem Schuljahr
+  ausgemusterte Buchreihen“ (nur, wenn es welche gibt; Spalten wie die
+  leihbaren) mit den Buchreihen, die im Fach in jedem Jahrgang, in dem sie im
+  Vorjahr leihbar waren, nach dem Vorjahr genehmigt ausgemustert werden.
+  Jahrgänge ohne Zusatz, mit und ohne Antragsinformationen gleich. Wird die
+  Buchreihe im Fach ab diesem Schuljahr wieder leihbar eingeführt (nicht
+  abgelehnt), fehlt sie hier. Ist sie in anderen Fächern für dieses Schuljahr
+  oder ein späteres genehmigt leihbar, trägt sie ein Sternchen (je Kombination
+  ein Stern mehr); unter der Tabelle steht „* weiterhin leihbar in Physik: 7,
+  8“, je weiteres Fach eine Zeile, Fächer und Jahrgänge bündig untereinander.
+  Die Jahrgänge tragen den Zusatz aus Genehmigtem („9 (ab 2027/2028)“); ein
+  Jahrgang mit Zusatz steht allein in seinen Zeilen, bricht er um, läuft er
+  bündig unter „ab“/„bis“/„von“ weiter, der nächste Jahrgang wieder am Anfang
+  der Spalte.
+- *Rücklagen:* hat in einer Tabelle leihbarer Buchreihen (auch der dritten)
+  mindestens eine eine Rücklage des Fachs (Anzahl), steht dort als letzte
+  Spalte „Rücklagen“ (eng: „Rückl.“), mit und ohne Antragsinformationen.
+
+**Erledigt am 2026-11-10: „Klasse“ heißt in den PDFs „Jahrgang“** (eng:
+„Jg.“) - in Fach- und Verlagslisten, mit und ohne IServ-Stand. Die
+Überschriften heißen „Leihbare Buchreihen“ und „Selbst anzuschaffende
+Buchreihen“, die Leertexte entsprechend („Keine leihbaren Buchreihen …“).
 
 **Offen: „Schuljahr noch nicht angelegt"** (Vorgabe vom 2026-11-10). Das
 Druckmenü gilt für das ausgewählte Schuljahr. Ist es in IServ noch nicht

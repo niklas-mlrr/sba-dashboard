@@ -216,14 +216,38 @@ def _woerter(text: str) -> list[str]:
     return [wort for wort in _UMBRUCH.split(text) if wort]
 
 
+# Ein erzwungener Zeilenumbruch in einem Zellwert: im Paragraph ``<br/>``
+# (siehe _zelle), beim Messen das Ende einer Zeile. app/planungsdruck.py setzt
+# ihn vor und hinter einen Jahrgang mit Jahreszusatz.
+ZEILENUMBRUCH = "\n"
+# Hängender Einzug (Vorgabe vom 2026-11-10): steht in einer Zeile des Werts
+# hinter „7 (“; bricht der Zusatz danach um, beginnt jede weitere Zeile
+# bündig unter seinem Anfang („ab“, „bis“, „von“). Ein Zeichen aus dem
+# privaten Bereich: kein Leerzeichen, nie gedruckt, beim Messen entfernt.
+EINZUG = "\ue000"
+
+
+def _einzug(teil: str, font: str = BODY_FONT, size: float = CELL_FONT_SIZE) -> tuple[str, str, float]:
+    """(Kopf, Rest, Breite des Kopfs) einer Zeile; ohne Einzug ist der Kopf leer."""
+    kopf, _, rest = teil.rpartition(EINZUG)
+    return kopf, rest, stringWidth(kopf, font, size) if kopf else 0.0
+
+
+def _zeilen_breite(text: str, font: str = BODY_FONT, size: float = CELL_FONT_SIZE) -> float:
+    """Die Breite der breitesten erzwungenen Zeile eines Werts."""
+    return max(stringWidth(teil.replace(EINZUG, ""), font, size)
+               for teil in text.split(ZEILENUMBRUCH))
+
+
 def _raw_width(header: str, values: list[str], *, value_size: float = CELL_FONT_SIZE) -> float:
     """Reine Inhaltsbreite (kein Zellenpolster) = längster Kopf- oder Zellentext.
 
     "Länge" heißt hier immer gemessene Textbreite (`stringWidth`), nie
-    Zeichenanzahl — ein kurzes "M" ist breiter als ein langes "iii".
+    Zeichenanzahl — ein kurzes "M" ist breiter als ein langes "iii". Ein Wert
+    mit erzwungenem Umbruch ist so breit wie seine breiteste Zeile.
     """
     widths = [stringWidth(header, HEADER_FONT, CELL_FONT_SIZE)]
-    widths += [stringWidth(v, BODY_FONT, value_size) for v in values]
+    widths += [_zeilen_breite(v, BODY_FONT, value_size) for v in values]
     return (max(widths) + WIDTH_EPSILON) if widths else 0.0
 
 
@@ -232,7 +256,27 @@ def _wrap_lines(text: str, width: float, *, font: str = BODY_FONT, size: float =
 
     Bricht ausschließlich an Leerzeichen — ein einzelnes Wort, das breiter als
     `width` ist, bleibt trotzdem als Ganzes auf einer Zeile (siehe Gotcha zu
-    splitLongWords bei CELL_STYLE)."""
+    splitLongWords bei CELL_STYLE) - und an jedem erzwungenen Umbruch. Hinter
+    einem Einzug (EINZUG) steht der Rest um die Breite des Kopfs eingerückt:
+    er bricht auf ``width`` minus diese Breite um, der Kopf hängt vor seiner
+    ersten Zeile."""
+    return [zeile for zeile, _ in _umbrochen(text, width, font=font, size=size)]
+
+
+def _umbrochen(
+    text: str, width: float, *, font: str = BODY_FONT, size: float = CELL_FONT_SIZE,
+) -> list[tuple[str, float]]:
+    """Die Zeilen von :func:`_wrap_lines` mit ihrer Breite samt Einzug."""
+    zeilen: list[tuple[str, float]] = []
+    for teil in text.split(ZEILENUMBRUCH):
+        kopf, rest, kopf_w = _einzug(teil, font, size)
+        for i, zeile in enumerate(_wrap_einfach(rest, width - kopf_w, font=font, size=size)):
+            zeilen.append((kopf + zeile if i == 0 else zeile,
+                           kopf_w + stringWidth(zeile, font, size)))
+    return zeilen
+
+
+def _wrap_einfach(text: str, width: float, *, font: str, size: float) -> list[str]:
     words = _woerter(text)
     if not words:
         return [""]
@@ -253,19 +297,22 @@ def _wrap_info(
     text: str, width: float, *, font: str = BODY_FONT, size: float = CELL_FONT_SIZE,
 ) -> tuple[int, float]:
     """(Zeilenzahl, breiteste tatsächlich benötigte Zeile) beim Umbruch auf `width`."""
-    lines = _wrap_lines(text, width, font=font, size=size)
-    max_line_w = max((stringWidth(line, font, size) for line in lines), default=0.0)
+    lines = _umbrochen(text, width, font=font, size=size)
+    max_line_w = max((breite for _, breite in lines), default=0.0)
     return len(lines), max_line_w + WIDTH_EPSILON
 
 
 def _max_word_width(values: list[str], *, font: str = BODY_FONT, size: float = CELL_FONT_SIZE) -> float:
     """Breitestes einzelnes Wort über alle Werte — `_wrap_lines` bricht nie
     innerhalb eines Worts um, also kann eine Spalte nie schmaler werden als
-    das breiteste unteilbare Wort, das in ihr vorkommt."""
+    das breiteste unteilbare Wort, das in ihr vorkommt - hinter einem Einzug
+    samt dessen Breite (das erste Wort hängt ohnehin am Kopf)."""
     widest = 0.0
     for v in values:
-        for word in _woerter(v):
-            widest = max(widest, stringWidth(word, font, size))
+        for teil in v.split(ZEILENUMBRUCH):
+            _, rest, kopf_w = _einzug(teil, font, size)
+            for word in _woerter(rest):
+                widest = max(widest, kopf_w + stringWidth(word, font, size))
     return widest + WIDTH_EPSILON if widest else 0.0
 
 
@@ -329,11 +376,13 @@ def _breiten_kandidaten(values: list[str]) -> list[float]:
     """Alle Breiten, bei denen sich der Umbruch einer Spalte ändern kann: die
     Breiten jeder zusammenhängenden Wortfolge eines Werts."""
     kandidaten = set()
-    for v in values:
-        woerter = _woerter(v)
+    for v in (teil for wert in values for teil in wert.split(ZEILENUMBRUCH)):
+        _, rest, kopf_w = _einzug(v)
+        woerter = _woerter(rest)
         for a in range(len(woerter)):
             for b in range(a + 1, len(woerter) + 1):
-                kandidaten.add(stringWidth(" ".join(woerter[a:b]), BODY_FONT, CELL_FONT_SIZE) + WIDTH_EPSILON)
+                kandidaten.add(kopf_w + stringWidth(" ".join(woerter[a:b]), BODY_FONT, CELL_FONT_SIZE)
+                               + WIDTH_EPSILON)
     return sorted(kandidaten)
 
 
@@ -399,7 +448,9 @@ class Spalte:
     rechts: bool = False
 
 
-KLASSE = Spalte("klasse", "Klasse", kurz="Kl.", kurz_nur_wenn_kopf_breiter=True)
+# Die Spalte heißt "Jahrgang" (Vorgabe vom 2026-11-10, vorher "Klasse"); der
+# Schlüssel ``klasse`` bleibt.
+KLASSE = Spalte("klasse", "Jahrgang", kurz="Jg.", kurz_nur_wenn_kopf_breiter=True)
 TITEL = Spalte("titel", "Titel", umbruch=True)
 VERLAG = Spalte("verlag", "Verlag", umbruch=True)
 ISBN = Spalte("isbn", "ISBN", schrift=ISBN_FONT_SIZE)
@@ -407,11 +458,20 @@ NEUPREIS = Spalte("neupreis", "Neupreis", rechts=True)
 LEIHGEBUEHR = Spalte("leihgebuehr", "Leihgebühr", kurz="Leihgeb.", rechts=True)
 
 
-# Klasse mit Antragsinformationen: „7 (ab 2027/2028)“ wird zu breit für eine
+# Jahrgang mit Antragsinformationen: „7 (ab 2027/2028)“ wird zu breit für eine
 # Zeile. Sie bricht wie das Fach der Jahrgangsliste nur um, wenn die Tabelle
 # dadurch weniger Zeilen braucht, und nur an gewöhnlichen Leerzeichen
-# (app/planungsdruck.py setzt geschützte, wo nicht umbrochen werden darf).
-KLASSE_UMBRUCH = Spalte("klasse", "Klasse", umbruch=True, nachrangig=True)
+# (app/planungsdruck.py setzt geschützte, wo nicht umbrochen werden darf) -
+# außer vor und hinter einem Jahrgang mit Jahreszusatz: der steht allein in
+# seinen Zeilen (ZEILENUMBRUCH, Vorgabe vom 2026-11-10).
+KLASSE_UMBRUCH = Spalte("klasse", "Jahrgang", umbruch=True, nachrangig=True,
+                        kurz="Jg.", kurz_nur_wenn_kopf_breiter=True)
+# Die Rücklagen einer Fachschaft (Exemplare je Buchreihe) - nur in den
+# Tabellen der leihbaren Buchreihen aus der Planungsdatei, und nur in einer, in
+# der mindestens eine Buchreihe eine hat (Vorgabe vom 2026-11-10;
+# app/planungsdruck.py füllt ``ruecklage``). Letzte Spalte.
+RUECKLAGEN = Spalte("ruecklage", "Rücklagen", kurz="Rückl.", kurz_nur_wenn_kopf_breiter=True,
+                    rechts=True)
 
 FACH = Spalte("fach", "Fach", umbruch=True)
 FACH_NACHRANGIG = Spalte("fach", "Fach", umbruch=True, nachrangig=True)
@@ -439,12 +499,12 @@ _ZWEITE_TABELLE = "Bücher, die selbst anzuschaffen sind, werden gesondert in de
 FACH_LISTE = Listenart(
     "Die folgenden Bücher können für das Fach {name} über die Schule ausgeliehen werden. "
     + _ZWEITE_TABELLE,
-    "Keine leihbaren Bücher in diesem Fach.",
-    "Keine selbst anzuschaffenden Bücher in diesem Fach.",
+    "Keine leihbaren Buchreihen in diesem Fach.",
+    "Keine selbst anzuschaffenden Buchreihen in diesem Fach.",
     (KLASSE, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
 )
 # Fachliste aus der Planung mit Antragsinformationen: Texte wie FACH_LISTE,
-# die Klasse darf umbrechen (Vorgabe vom 2026-11-10).
+# der Jahrgang darf umbrechen (Vorgabe vom 2026-11-10).
 FACH_LISTE_ANTRAEGE = replace(
     FACH_LISTE, spalten=(KLASSE_UMBRUCH, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
 )
@@ -453,8 +513,8 @@ FACH_LISTE_ANTRAEGE = replace(
 VERLAG_LISTE = Listenart(
     "Die folgenden Bücher des Verlags {name} können über die Schule ausgeliehen werden. "
     + _ZWEITE_TABELLE,
-    "Keine leihbaren Bücher dieses Verlags.",
-    "Keine selbst anzuschaffenden Bücher dieses Verlags.",
+    "Keine leihbaren Buchreihen dieses Verlags.",
+    "Keine selbst anzuschaffenden Buchreihen dieses Verlags.",
     (TITEL, FACH, KLASSE, ISBN, NEUPREIS, LEIHGEBUEHR),
 )
 # Jahrgang: Spalten wie in der IServ-Druckversion. Titel und Verlag brechen
@@ -463,8 +523,8 @@ VERLAG_LISTE = Listenart(
 JAHRGANG_LISTE = Listenart(
     "Die folgenden Bücher können für den {name} über die Schule ausgeliehen werden. "
     + _ZWEITE_TABELLE,
-    "Keine leihbaren Bücher in diesem Jahrgang.",
-    "Keine selbst anzuschaffenden Bücher in diesem Jahrgang.",
+    "Keine leihbaren Buchreihen in diesem Jahrgang.",
+    "Keine selbst anzuschaffenden Buchreihen in diesem Jahrgang.",
     (TITEL, FACH_NACHRANGIG, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
 )
 
@@ -535,6 +595,81 @@ def _sternchen(
     return markiert, erklaerungen
 
 
+# Hinweis unter der Tabelle der ausgemusterten Buchreihen aus der
+# Planungsdatei (Vorgabe vom 2026-11-10): je weiteres Fach eine Zeile, Fächer
+# und Jahrgänge bündig untereinander.
+WEITER_TEXT = "weiterhin leihbar in"
+
+# Je Fach (Fach, Gruppen); eine Gruppe ist (Kopf, Zusatz): „5, 6,“ ohne
+# Zusatz, oder „7 (“ mit „ab 2027/2028),“ (app/planungsdruck.py, _gruppen).
+Weiter = tuple[tuple[str, tuple[tuple[str, str], ...]], ...]
+
+
+def _weiter_sterne(zeilen: list[dict]) -> tuple[list[dict], list[tuple[str, Weiter]]]:
+    """Markiert ausgemusterte Buchreihen, die in anderen Fächern weiterhin
+    leihbar sind (``weiter``: (Fach, Jahrgänge) je Fach, app/planungsdruck.py).
+
+    Wie :func:`_sternchen`: jede Kombination bekommt einen Stern mehr, in der
+    Reihenfolge ihres ersten Auftretens; das Zeichen hängt mit geschütztem
+    Leerzeichen an den Jahrgängen. Zurück kommen die markierten Zeilen und je
+    Stern seine Fächer, aufsteigend."""
+    sterne: dict[Weiter, str] = {}
+    markiert: list[dict] = []
+    for zeile in zeilen:
+        weiter = tuple(zeile.get("weiter", ()))
+        if not weiter:
+            markiert.append(zeile)
+            continue
+        stern = sterne.setdefault(weiter, "*" * (len(sterne) + 1))
+        markiert.append({**zeile, "klasse": f"{zeile['klasse']}\xa0{stern}"})
+    return markiert, [(stern, weiter) for weiter, stern in sterne.items()]
+
+
+def _weiter_tabelle(weiter: list[tuple[str, Weiter]], breite: float) -> Table:
+    """Die Erklärzeilen der Sterne als Raster: Stern, „weiterhin leihbar in“,
+    „Fach:“, Jahrgänge. Jede Spalte ist so breit wie ihr breitester Text plus
+    ein Leerzeichen; die Jahrgänge nehmen den Rest und brechen darin um.
+
+    In den Jahrgängen beginnt jede Gruppe eine Zeile; ein Jahrgang mit Zusatz
+    steht mit hängendem Einzug hinter „7 (“, so läuft dessen Umbruch bündig
+    unter „ab“/„bis“/„von“ weiter (Vorgabe vom 2026-11-10)."""
+    luecke = stringWidth(" ", BODY_FONT, ISBN_FONT_SIZE)
+    daten = [
+        [stern if i == 0 else "", WEITER_TEXT if i == 0 else "", f"{fach}:", gruppen]
+        for stern, faecher in weiter for i, (fach, gruppen) in enumerate(faecher)
+    ]
+    breiten = [
+        max(stringWidth(zeile[spalte], BODY_FONT, ISBN_FONT_SIZE) for zeile in daten)
+        + luecke + WIDTH_EPSILON
+        for spalte in range(3)
+    ]
+    breiten.append(max(breite - sum(breiten), MIN_WRAP_COL))
+    zellen = [
+        [Paragraph(escape(text), ERKLAER_STYLE) for text in zeile[:3]]
+        + [[_jahrgangsgruppe(kopf, zusatz) for kopf, zusatz in zeile[3]]]
+        for zeile in daten
+    ]
+    tabelle = Table(zellen, colWidths=breiten, hAlign="LEFT")
+    tabelle.setStyle(_OHNE_POLSTER)
+    return tabelle
+
+
+_OHNE_POLSTER = TableStyle([
+    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ("TOPPADDING", (0, 0), (-1, -1), 0),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+])
+
+
+def _jahrgangsgruppe(kopf: str, zusatz: str) -> Paragraph:
+    """Eine Gruppe der Jahrgänge: ein Absatz, mit Zusatz hängend hinter dem
+    Kopf („7 (“) wie in der Spalte „Jahrgang“ (_zeilen_mit_einzug)."""
+    stil = _haengend(ERKLAER_STYLE, kopf) if zusatz else ERKLAER_STYLE
+    return Paragraph(escape(kopf + zusatz), stil)
+
+
 def iserv_quelle(listen_anzahl: int) -> str:
     """Quelle unten links in der Fußzeile der PDFs mit "IServ-Stand benutzen".
 
@@ -554,7 +689,7 @@ PLANUNG_QUELLE = "Planungsbücherliste"
 
 def _markup(text: str, stile: tuple[str, ...] | frozenset[str]) -> str:
     """Text für einen Paragraph: grau und/oder durchgestrichen (STIL_*)."""
-    inhalt = escape(text)
+    inhalt = escape(text.replace(EINZUG, "")).replace(ZEILENUMBRUCH, "<br/>")
     if STIL_DURCH in stile:
         inhalt = f"<strike>{inhalt}</strike>"
     if STIL_GRAU in stile:
@@ -572,6 +707,32 @@ def _zellstil(spalte: Spalte) -> ParagraphStyle:
     )
 
 
+def _haengend(stil: ParagraphStyle, kopf: str) -> ParagraphStyle:
+    """``stil`` mit hängendem Einzug um die Breite von ``kopf``."""
+    breite = stringWidth(kopf, stil.fontName, stil.fontSize)
+    return ParagraphStyle(f"{stil.name}-haengend", parent=stil,
+                          leftIndent=breite, firstLineIndent=-breite)
+
+
+def _zeilen_mit_einzug(
+    teile: tuple[tuple[str, tuple[str, ...]], ...], eigen: frozenset[str], stil: ParagraphStyle,
+) -> list[Paragraph]:
+    """Je erzwungene Zeile ein Absatz; einer mit EINZUG hängend hinter seinem
+    Kopf („7 (“), so beginnt der umgebrochene Zusatz bündig unter „ab“/„bis“/„von“."""
+    zeilen: list[list[tuple[str, tuple[str, ...]]]] = [[]]
+    for stueck, stile in teile:
+        if stueck == ZEILENUMBRUCH:
+            zeilen.append([])
+        else:
+            zeilen[-1].append((stueck, stile))
+    absaetze = []
+    for zeile in zeilen:
+        inhalt = "".join(_markup(stueck, eigen | set(stile)) for stueck, stile in zeile)
+        kopf = "".join(stueck for stueck, _ in zeile).partition(EINZUG)
+        absaetze.append(Paragraph(inhalt, _haengend(stil, kopf[0]) if kopf[1] else stil))
+    return absaetze
+
+
 def _zelle(zeile: dict, spalte: Spalte) -> Any:
     """Eine Zelle: Klartext, oder ein Paragraph, wenn die Spalte umbricht oder
     die Zeile einen Stil hat (``stil``, ``klasse_teile``, app/planungsdruck.py).
@@ -585,6 +746,8 @@ def _zelle(zeile: dict, spalte: Spalte) -> Any:
     if not zeilenstil and not teile:
         return Paragraph(text, CELL_STYLE) if spalte.umbruch else text
     eigen = frozenset((zeilenstil,)) if zeilenstil else frozenset()
+    if teile and any(stueck == EINZUG for stueck, _ in teile):
+        return _zeilen_mit_einzug(teile, eigen, _zellstil(spalte))
     if teile:
         inhalt = "".join(_markup(stueck, eigen | set(stile)) for stueck, stile in teile)
     else:
@@ -595,12 +758,14 @@ def _zelle(zeile: dict, spalte: Spalte) -> Any:
 def render_table(
     rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None,
     erklaerungen: list[tuple[str, str]] | None = None,
+    weiter: list[tuple[str, Weiter]] | None = None,
 ) -> Table:
     """Tabelle mit ``spalten`` (Default: die der Fachliste); ohne ``with_fee``
     entfällt die Leihgebühr.
 
     ``erklaerungen`` (Sterne, Text) stehen als weitere Zeilen unter der letzten,
-    über die ganze Breite, kleiner und ohne Trennlinien (siehe _sternchen)."""
+    über die ganze Breite, kleiner und ohne Trennlinien (siehe _sternchen);
+    ``weiter`` ebenso, als Raster (siehe _weiter_sterne, _weiter_tabelle)."""
     if spalten is None:
         spalten = (KLASSE, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR)
     spalten = tuple(sp for sp in spalten if with_fee or sp.key != "leihgebuehr")
@@ -629,15 +794,15 @@ def render_table(
 
     if natural_total > effective_width:
         # 2) Reicht nicht — zuerst Platz durch Abkürzen der Kopfzeilen
-        #    zurückgewinnen: "Leihgebühr" wird immer zu "Leihgeb."; "Klasse"
-        #    nur, wenn der Spaltentitel selbst breiter ist als der breiteste
-        #    Klassen-Wert (sonst würde die Abkürzung nichts bringen).
+        #    zurückgewinnen: "Leihgebühr" wird immer zu "Leihgeb."; "Jahrgang"
+        #    und "Rücklagen" nur, wenn der Spaltentitel selbst breiter ist als
+        #    der breiteste Wert (sonst würde die Abkürzung nichts bringen).
         gekuerzt: list[int] = []
         for i, sp in enumerate(spalten):
             if sp.kurz is None:
                 continue
             if sp.kurz_nur_wenn_kopf_breiter:
-                data_w = max((stringWidth(v, BODY_FONT, sp.schrift) for v in werte[i]), default=0.0)
+                data_w = max((_zeilen_breite(v, BODY_FONT, sp.schrift) for v in werte[i]), default=0.0)
                 if stringWidth(sp.kopf, HEADER_FONT, CELL_FONT_SIZE) <= data_w:
                     continue
             koepfe[i] = sp.kurz
@@ -661,7 +826,7 @@ def render_table(
 
         # 2b) Abkürzungen zurücknehmen, wenn nach der Aufteilung der
         #     umbrechenden Spalten wieder Platz dafür ist — in Spalten-
-        #     reihenfolge ("Klasse" vor "Leihgebühr"). Erst danach wird
+        #     reihenfolge ("Jahrgang" vor "Leihgebühr"). Erst danach wird
         #     verteilt, damit die dadurch länger gewordenen Spalten in der
         #     Gleichverteilung berücksichtigt sind.
         total_now = sum(breiten)
@@ -757,12 +922,16 @@ def render_table(
             ]
     if last_row >= 1:
         style.append(("LINEBELOW", (0, 1), (-1, last_row), 1.0, ROW_RULE_COLOR))
-    if erklaerungen:
+    if erklaerungen or weiter:
         # Erst nach der Breitenberechnung angehängt: die Erklärzeilen spannen
         # über alle Spalten und sollen keine Spalte breiter machen.
-        for stern, text in erklaerungen:
+        for stern, text in erklaerungen or ():
             data.append([Paragraph(f"{escape(stern)} {escape(text)}", ERKLAER_STYLE)]
                         + [""] * (n_cols - 1))
+        if weiter:
+            # Die gespannte Zelle hat rechts das Polster ihrer ersten Spalte.
+            breite = sum(col_widths) - (half_gap if n_cols > 1 else 0.0)
+            data.append([_weiter_tabelle(weiter, breite)] + [""] * (n_cols - 1))
         erste = last_row + 1
         style += [
             ("SPAN", (0, zeile), (-1, zeile)) for zeile in range(erste, len(data))
@@ -1296,19 +1465,34 @@ def subject_story(
             ),
         ]
 
-    story.append(Paragraph("Leihbare Bücher", SECTION_STYLE))
+    def leih_spalten(zeilen: list[dict]) -> tuple[Spalte, ...]:
+        if any(zeile.get("ruecklage") for zeile in zeilen):
+            return (*art.spalten, RUECKLAGEN)
+        return art.spalten
+
+    # "Buchreihen" statt "Bücher" in den Überschriften (Vorgabe vom 2026-11-10).
+    story.append(Paragraph("Leihbare Buchreihen", SECTION_STYLE))
     if tables["leih"]:
-        story.append(render_table(tables["leih"], with_fee=True, spalten=art.spalten,
+        story.append(render_table(tables["leih"], with_fee=True, spalten=leih_spalten(tables["leih"]),
                                   erklaerungen=erklaerungen["leih"]))
     else:
         story.append(Paragraph(art.leer_leih, EMPTY_STYLE))
 
-    story.append(Paragraph("Selbst anzuschaffende Bücher", SECTION_STYLE))
+    story.append(Paragraph("Selbst anzuschaffende Buchreihen", SECTION_STYLE))
     if tables["kauf"]:
         story.append(render_table(tables["kauf"], with_fee=False, spalten=art.spalten,
                                   erklaerungen=erklaerungen["kauf"]))
     else:
         story.append(Paragraph(art.leer_kauf, EMPTY_STYLE))
+
+    # Nur aus der Planungsdatei (app/planungsdruck.py) und nur, wenn es welche
+    # gibt; Spalten wie die leihbaren (Vorgabe vom 2026-11-10).
+    if tables.get("ausgemustert"):
+        story.append(Paragraph("Leihbare nach vorigem Schuljahr ausgemusterte Buchreihen",
+                               SECTION_STYLE))
+        ausgemustert, weiter = _weiter_sterne(tables["ausgemustert"])
+        story.append(render_table(ausgemustert, with_fee=True,
+                                  spalten=leih_spalten(ausgemustert), weiter=weiter))
 
     if confirmation:
         story.append(

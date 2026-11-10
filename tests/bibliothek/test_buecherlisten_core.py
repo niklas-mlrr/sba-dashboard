@@ -235,7 +235,7 @@ def test_iserv_stand_ersetzt_die_einleitung(iserv_daten):
     assert "über die Schule ausgeliehen" not in text
     assert "gesondert in der zweiten Tabelle" not in text
     # Der Rest bleibt: Kopf und Tabellen.
-    assert "Bücherliste Deutsch" in text and "Leihbare Bücher" in text
+    assert "Bücherliste Deutsch" in text and "Leihbare Buchreihen" in text
 
 
 def test_iserv_stand_mit_einer_buecherliste_steht_in_der_einzahl(iserv_daten):
@@ -381,7 +381,7 @@ def test_iserv_stand_zeigt_hinweis_und_erklaerzeilen(mehrfach_daten):
     assert "Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet" in text
     assert "Betroffene Buchreihen sind mit einem * markiert" in text
     assert text.index("Folgende Buchreihen") < text.index("Da IServ") < text.index("Leihbare")
-    leih, kauf = text.split("Selbst anzuschaffende Bücher")
+    leih, kauf = text.split("Selbst anzuschaffende Buchreihen")
     assert "* auch für Informatik ** auch für Physik" in leih
     assert kauf.count("auch für") == 1 and "** auch für Physik" in kauf
 

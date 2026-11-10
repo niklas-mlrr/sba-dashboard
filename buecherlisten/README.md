@@ -89,10 +89,13 @@ zusammengehängt, `--duplex` schiebt dabei Leerseiten ein. Die Dateien tragen
 
 ## Inhalt pro Fach
 
-Zwei Tabellen — **Leihbare Bücher** (`borrowable=True`) und **Selbst
-anzuschaffende Bücher** (`borrowable=False`: Arbeitshefte, "1x pro
-Familie"-Anschaffungen, Digitallizenzen etc.) — mit den Spalten Klasse, Titel,
-Verlag, ISBN, Neupreis, Leihgebühr.
+Zwei Tabellen — **Leihbare Buchreihen** (`borrowable=True`) und **Selbst
+anzuschaffende Buchreihen** (`borrowable=False`: Arbeitshefte, "1x pro
+Familie"-Anschaffungen, Digitallizenzen etc.) — mit den Spalten Jahrgang, Titel,
+Verlag, ISBN, Neupreis, Leihgebühr. Die Fachliste aus der Planungsdatei
+(`app/planungsdruck.py`) hat dazu die Spalte Rücklagen und die dritte Tabelle
+**Leihbare nach vorigem Schuljahr ausgemusterte Buchreihen**, beides nur, wenn
+es etwas zu zeigen gibt.
 
 - **ISBN** wird mit Bindestrichen dargestellt (`isbnlib.mask`, wie im
   Bestand-Tooling unter `../bestand/`) — die API liefert

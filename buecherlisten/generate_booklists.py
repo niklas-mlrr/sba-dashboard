@@ -3,8 +3,8 @@
 
 Holt alle Bücherlisten (eine je Jahrgang) eines Schuljahrs über die
 IServ-Ausleihe-API und stellt sie fachweise neu zusammen: pro Fach eine
-Tabelle "Leihbare Bücher" (Spalten Klasse, Titel, Verlag, ISBN, Neupreis,
-Leihgebühr) und eine Tabelle "Selbst anzuschaffende Bücher" (dieselben Spalten
+Tabelle "Leihbare Buchreihen" (Spalten Jahrgang, Titel, Verlag, ISBN, Neupreis,
+Leihgebühr) und eine Tabelle "Selbst anzuschaffende Buchreihen" (dieselben Spalten
 ohne Leihgebühr — genau wie in den offiziellen IServ-Bücherlisten-PDFs, an
 deren Aufmachung sich dieses Layout orientiert). Bücher, die in mehreren
 Jahrgängen angeboten werden (Mehrjahresbände), erscheinen einmal pro Fach mit

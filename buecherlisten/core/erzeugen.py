@@ -177,7 +177,7 @@ def erzeuge_buecherlisten_pdfs(
 
     ``antraege`` (nur Fächer, ohne ``iserv_stand``): die Tabellen tragen die
     Antragsinformationen der Planung (``app/planungsdruck.py``), die Spalte
-    „Klasse“ darf dann umbrechen (:data:`~buecherlisten.core.layout.FACH_LISTE_ANTRAEGE`).
+    „Jahrgang“ darf dann umbrechen (:data:`~buecherlisten.core.layout.FACH_LISTE_ANTRAEGE`).
     """
     if ansicht != "fach" and (bestaetigung or modus == "aufgabenfeld" or iserv_stand):
         raise ValueError(
