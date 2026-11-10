@@ -634,20 +634,21 @@ def _weiter_tabelle(weiter: list[tuple[str, Weiter]], breite: float) -> Table:
     steht mit hängendem Einzug hinter „7 (“, so läuft dessen Umbruch bündig
     unter „ab“/„bis“/„von“ weiter (Vorgabe vom 2026-11-10)."""
     luecke = stringWidth(" ", BODY_FONT, ISBN_FONT_SIZE)
-    daten = [
-        [stern if i == 0 else "", WEITER_TEXT if i == 0 else "", f"{fach}:", gruppen]
+    # Je Zeile die drei Texte vor den Jahrgängen und die Gruppen der Jahrgänge.
+    daten: list[tuple[tuple[str, str, str], tuple[tuple[str, str], ...]]] = [
+        ((stern if i == 0 else "", WEITER_TEXT if i == 0 else "", f"{fach}:"), gruppen)
         for stern, faecher in weiter for i, (fach, gruppen) in enumerate(faecher)
     ]
     breiten = [
-        max(stringWidth(zeile[spalte], BODY_FONT, ISBN_FONT_SIZE) for zeile in daten)
+        max(stringWidth(texte[spalte], BODY_FONT, ISBN_FONT_SIZE) for texte, _ in daten)
         + luecke + WIDTH_EPSILON
         for spalte in range(3)
     ]
     breiten.append(max(breite - sum(breiten), MIN_WRAP_COL))
-    zellen = [
-        [Paragraph(escape(text), ERKLAER_STYLE) for text in zeile[:3]]
-        + [[_jahrgangsgruppe(kopf, zusatz) for kopf, zusatz in zeile[3]]]
-        for zeile in daten
+    zellen: list[list[Any]] = [
+        [Paragraph(escape(text), ERKLAER_STYLE) for text in texte]
+        + [[_jahrgangsgruppe(kopf, zusatz) for kopf, zusatz in gruppen]]
+        for texte, gruppen in daten
     ]
     tabelle = Table(zellen, colWidths=breiten, hAlign="LEFT")
     tabelle.setStyle(_OHNE_POLSTER)
