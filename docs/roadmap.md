@@ -36,8 +36,8 @@ Fächer kommen aus den IServ-Bücherlisten, ohne die Korrekturen der Buchplanung
 und ohne Bestätigung. Vor den Tabellen steht statt der Einleitung „Folgende
 Buchreihen führt die Bücherliste / führen die Bücherlisten für das Fach <Fach>
 im <Schuljahr>." - Einzahl nur, wenn das Schuljahr genau eine Bücherliste hat.
-In der Fußzeile steht links unten „IServ-Bücherlisten", „Erstellt: <Datum>"
-eine Zeile darüber. Ohne Bücherlisten in IServ ist das Häkchen gesperrt
+In der Fußzeile steht links unten „IServ-Bücherlisten" (nach derselben Regel
+„IServ-Bücherliste"), „Erstellt: <Datum>" eine Zeile darüber. Ohne Bücherlisten in IServ ist das Häkchen gesperrt
 („Bücherlisten noch nicht angelegt"). Für jeden Seriendruck, mit und ohne
 IServ-Stand, gilt: jedes Fach, jeder Verlag und jeder Jahrgang zählt seine
 Seiten selbst und nennt sich in der Fußzeile.

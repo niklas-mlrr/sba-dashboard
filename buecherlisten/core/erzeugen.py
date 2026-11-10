@@ -31,12 +31,12 @@ from buecherlisten.trg_web import (
 from .daten import Ansicht, Buecherdaten
 from .layout import (
     FACH_LISTE,
-    ISERV_QUELLE,
     JAHRGANG_LISTE,
     VERLAG_LISTE,
     Listenart,
     footer_context,
     iserv_fach_liste,
+    iserv_quelle,
     measure_subject_pages,
     sanitize_filename,
     subject_story,
@@ -164,7 +164,8 @@ def erzeuge_buecherlisten_pdfs(
 
     ``iserv_stand`` (nur Fächer, ohne Bestätigung; Vorgabe vom 2026-11-10):
     der Satz "Folgende Buchreihen führen die Bücherlisten …" ersetzt die
-    Einleitung, die Fußzeile nennt links unten "IServ-Bücherlisten" und
+    Einleitung, die Fußzeile nennt links unten "IServ-Bücherlisten" (bei
+    genau einer Bücherliste im Schuljahr "IServ-Bücherliste") und
     darüber das Erstelldatum. Dass die Daten ohne Korrekturen der Buchplanung geladen sind, ist
     Sache des Aufrufers (:func:`~buecherlisten.core.daten.lade_buecherdaten`).
     """
@@ -177,7 +178,7 @@ def erzeuge_buecherlisten_pdfs(
     quelle = None
     if iserv_stand:
         art = iserv_fach_liste(daten.schuljahr_name, len(daten.listen_ids))
-        quelle = ISERV_QUELLE
+        quelle = iserv_quelle(len(daten.listen_ids))
     vorgabe = zuordnungen or Zuordnungen()
     warnungen: list[str] = []
     by_subject = daten.tabellen(ansicht)

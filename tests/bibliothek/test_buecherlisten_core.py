@@ -245,6 +245,9 @@ def test_iserv_stand_mit_einer_buecherliste_steht_in_der_einzahl(iserv_daten):
                                        zuordnungen=OHNE_NETZ)
     text = " ".join(_seitentexte(pdf.inhalt)[0].split())
     assert "Folgende Buchreihen führt die Bücherliste für das Fach Deutsch" in text
+    # Der Fuß folgt derselben Regel.
+    links = _zeilen_links(pdf.inhalt)
+    assert "IServ-Bücherliste" in links and "IServ-Bücherlisten" not in links
 
 
 def test_iserv_stand_nennt_die_quelle_unter_dem_erstelldatum(iserv_daten):

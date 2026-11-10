@@ -96,10 +96,6 @@ FOOTER_INFO_BASELINE = 20.142               # Grundlinie Datum / Schule+Kontext
 FOOTER_COLOR = colors.black
 # Ortszusatz, den das Original hinter dem Schulnamen führt.
 SCHOOL_CITY = "Osterode am Harz"
-# Quelle unten links in der Fußzeile der PDFs mit "IServ-Stand benutzen"
-# (Vorgabe vom 2026-11-10). "Erstellt: <Datum>" rückt dafür eine Zeile höher,
-# auf die Grundlinie von "Seite n von N".
-ISERV_QUELLE = "IServ-Bücherlisten"
 
 ACCENT_COLOR = colors.Color(0.6627, 0.2667, 0.2588)  # Original-Rot der Abschnittstitel
 RULE_COLOR = colors.black                            # Linie unter der Kopfzeile (1.0pt schwarz)
@@ -437,6 +433,16 @@ def iserv_fach_liste(schoolyear_name: str, listen_anzahl: int) -> Listenart:
         FACH_LISTE,
         einleitung=f"Folgende Buchreihen {fuehren} für das Fach {{name}} im {schuljahr}.",
     )
+
+
+def iserv_quelle(listen_anzahl: int) -> str:
+    """Quelle unten links in der Fußzeile der PDFs mit "IServ-Stand benutzen".
+
+    "Erstellt: <Datum>" rückt dafür eine Zeile höher, auf die Grundlinie von
+    "Seite n von N" (Vorgabe vom 2026-11-10). Einzahl wie in der Einleitung
+    (:func:`iserv_fach_liste`): nur bei genau einer Bücherliste im Schuljahr.
+    """
+    return "IServ-Bücherliste" if listen_anzahl == 1 else "IServ-Bücherlisten"
 
 
 def render_table(rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None) -> Table:
@@ -1224,7 +1230,7 @@ def make_footer(
     keine Fußzeile, damit sie beim doppelseitigen Druck wirklich komplett
     leer (weiß) bleiben.
 
-    `quelle` (z. B. ISERV_QUELLE) steht unten links; "Erstellt: <Datum>"
+    `quelle` (z. B. iserv_quelle()) steht unten links; "Erstellt: <Datum>"
     rückt dann eine Zeile höher (siehe draw_footer)."""
     generated = datetime.now().strftime("%d.%m.%Y")
 
