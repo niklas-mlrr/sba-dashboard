@@ -425,13 +425,14 @@ def iserv_fach_liste(schoolyear_name: str, listen_anzahl: int) -> Listenart:
     Mehrzahl richtet sich nach der Anzahl der Bücherlisten des Schuljahrs,
     nicht danach, in wie vielen davon das Fach vorkommt.
     """
-    fuehren = "führt die Bücherliste" if listen_anzahl == 1 else "führen die Bücherlisten"
+    fuehren = "führt" if listen_anzahl == 1 else "führen"
     # ``einleitung`` wird mit str.format gefüllt: geschweifte Klammern im
     # Schuljahr dürfen dort nicht als Platzhalter gelten.
     schuljahr = schoolyear_name.replace("{", "{{").replace("}", "}}")
     return replace(
         FACH_LISTE,
-        einleitung=f"Folgende Buchreihen {fuehren} für das Fach {{name}} im {schuljahr}.",
+        einleitung=(f"Folgende Buchreihen {fuehren} die {iserv_quelle(listen_anzahl)} "
+                    f"für das Fach {{name}} im {schuljahr}."),
     )
 
 

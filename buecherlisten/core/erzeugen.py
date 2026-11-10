@@ -163,7 +163,7 @@ def erzeuge_buecherlisten_pdfs(
     und nennt sich in der Fußzeile.
 
     ``iserv_stand`` (nur Fächer, ohne Bestätigung; Vorgabe vom 2026-11-10):
-    der Satz "Folgende Buchreihen führen die Bücherlisten …" ersetzt die
+    der Satz "Folgende Buchreihen führen die IServ-Bücherlisten …" ersetzt die
     Einleitung, die Fußzeile nennt links unten "IServ-Bücherlisten" (bei
     genau einer Bücherliste im Schuljahr "IServ-Bücherliste") und
     darüber das Erstelldatum. Dass die Daten ohne Korrekturen der Buchplanung geladen sind, ist

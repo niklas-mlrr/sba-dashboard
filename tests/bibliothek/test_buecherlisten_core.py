@@ -230,7 +230,7 @@ def test_iserv_stand_ersetzt_die_einleitung(iserv_daten):
                                        zuordnungen=OHNE_NETZ)
     text = " ".join(_seitentexte(pdf.inhalt)[0].split())
     # Vier Bücherlisten im Schuljahr: Mehrzahl.
-    assert ("Folgende Buchreihen führen die Bücherlisten für das Fach Deutsch im "
+    assert ("Folgende Buchreihen führen die IServ-Bücherlisten für das Fach Deutsch im "
             "Schuljahr 26/27.") in text
     assert "über die Schule ausgeliehen" not in text
     assert "gesondert in der zweiten Tabelle" not in text
@@ -244,7 +244,7 @@ def test_iserv_stand_mit_einer_buecherliste_steht_in_der_einzahl(iserv_daten):
     (pdf,) = erzeuge_buecherlisten_pdfs(eine, faecher=["Deutsch"], iserv_stand=True,
                                        zuordnungen=OHNE_NETZ)
     text = " ".join(_seitentexte(pdf.inhalt)[0].split())
-    assert "Folgende Buchreihen führt die Bücherliste für das Fach Deutsch" in text
+    assert "Folgende Buchreihen führt die IServ-Bücherliste für das Fach Deutsch" in text
     # Der Fuß folgt derselben Regel.
     links = _zeilen_links(pdf.inhalt)
     assert "IServ-Bücherliste" in links and "IServ-Bücherlisten" not in links

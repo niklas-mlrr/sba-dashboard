@@ -34,7 +34,7 @@ folgenden Schritten (Planungsstand, Anträge) darauf.
 **Erledigt am 2026-11-10: „IServ-Stand benutzen" im PDF der Fächer.** Die
 Fächer kommen aus den IServ-Bücherlisten, ohne die Korrekturen der Buchplanung
 und ohne Bestätigung. Vor den Tabellen steht statt der Einleitung „Folgende
-Buchreihen führt die Bücherliste / führen die Bücherlisten für das Fach <Fach>
+Buchreihen führt die IServ-Bücherliste / führen die IServ-Bücherlisten für das Fach <Fach>
 im <Schuljahr>." - Einzahl nur, wenn das Schuljahr genau eine Bücherliste hat.
 In der Fußzeile steht links unten „IServ-Bücherlisten" (nach derselben Regel
 „IServ-Bücherliste"), „Erstellt: <Datum>" eine Zeile darüber. Ohne Bücherlisten in IServ ist das Häkchen gesperrt
