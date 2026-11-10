@@ -2,8 +2,9 @@
 
 Angezeigt wird der Stand der Buchplanungs-Datei; IServ wird live geholt und
 nur verglichen, Abweichungen markiert die Vorlage (``app/buecherlisten.py``,
-zweiter Teil). Ohne Datei zeigen die Seiten IServ. Die PDFs bleiben beim Stand
-aus IServ mit den Korrekturen der Datei, mit „IServ-Stand benutzen“ ohne sie.
+zweiter Teil). Ohne Datei zeigen die Seiten IServ. Die Fach-PDF druckt ohne
+„IServ-Stand benutzen“ nur die Datei (``app/planungsdruck.py``), mit IServ ohne
+Korrekturen; Verlag und Jahrgang drucken IServ mit den Korrekturen der Datei.
 
 Wie ``GET /`` fangen diese Routen ihre Fehler selbst ab und liefern HTML: wer
 im Menü auf "Fach" klickt und nicht angemeldet ist, soll einen Satz lesen, was
@@ -65,6 +66,7 @@ from ..buecherlisten import (
     vergleiche_mit_iserv,
 )
 from ..planungsansicht import leerer_kontext, planungskontext
+from ..planungsdruck import fach_tabellen
 from ..sitzung import Abgelaufen, NichtAngemeldet
 from .gemeinsam import aktuelle_einstellungen, vorlagen
 
@@ -221,6 +223,28 @@ def _planungskontext(request: Request, schuljahr: str) -> tuple[dict[str, Any], 
         return leerer_kontext(schuljahr), None
     kontext = planungskontext(stand.planung, schuljahr=schuljahr, mtime=stand.zustand.mtime)
     return kontext, stand.planung
+
+
+def _planung_zum_druck(request: Request, schuljahr: str) -> Buchplanung | str:
+    """Der Stand der Planungsdatei für die Fach-PDF - oder warum es keinen gibt."""
+    try:
+        stand = planungsdomaene.lies(aktuelle_einstellungen(request), schuljahr)
+    except Exception as exc:  # noqa: BLE001 - eine kaputte Datei wird zur Seite
+        return f"Die Planungsdatei ist nicht lesbar: {exc}"
+    if stand is None:
+        return f"Für {schuljahr} gibt es keine Planungsdatei."
+    return stand.planung
+
+
+def _druck_sperre(ansicht: str, stand: Buchplanung | None) -> str | None:
+    """Warum sich das Druckmenü nicht öffnen lässt, sonst ``None``.
+
+    Ohne „IServ-Stand benutzen“ druckt das Fach nur die Planungsdatei; ohne
+    sie ist das Menü der Fächer gesperrt (Vorgabe vom 2026-11-10).
+    """
+    if ansicht == "fach" and stand is None:
+        return "Drucken braucht die Planungsdatei dieses Schuljahrs"
+    return None
 
 
 def _iserv_sperre(daten: Buecherlisten) -> str | None:
@@ -387,7 +411,11 @@ async def _pdf(request: Request, ansicht: Ansicht,
     Druckversion aus IServ - dieselbe PDF, die dort an den Bücherlisten hängt.
 
     ``iserv_stand`` (nur Fach) druckt IServ, wie es ist: ohne die Korrekturen
-    der Buchplanung und ohne Bestätigung (Vorgabe vom 2026-11-10).
+    der Buchplanung und ohne Bestätigung (Vorgabe vom 2026-11-10). Ohne druckt
+    das Fach nur die Planungsdatei (``app/planungsdruck.py``), mit
+    ``antragsinfo`` samt Jahreszahlen und Anträgen; ohne Datei gibt es dann
+    kein PDF. Ein ausgewähltes Fach, das die gedruckte Quelle nicht kennt,
+    bekommt keine Liste.
     """
     abfrage = request.query_params
 
@@ -395,13 +423,15 @@ async def _pdf(request: Request, ansicht: Ansicht,
         return (abfrage.get(name) or "").strip()
 
     iserv_stand = ansicht == "fach" and bool(eins("iserv_stand"))
+    aus_planung = ansicht == "fach" and not iserv_stand
+    antraege = aus_planung and bool(eins("antragsinfo"))
     try:
         client = request.app.state.anmeldung.client()
     except (NichtAngemeldet, Abgelaufen) as exc:
         return _hinweis(request, "Nicht angemeldet",
                         f"{exc} Danach diese Seite neu laden.", 401)
     try:
-        korrekturen = None if iserv_stand else _korrekturen(request)
+        korrekturen = None if ansicht == "fach" else _korrekturen(request)
         daten = await run_in_threadpool(
             lambda: lade_buecherdaten(client, korrekturen=korrekturen))
     except Exception as exc:  # noqa: BLE001 - jeder Netz- oder API-Fehler wird zur Seite
@@ -412,8 +442,24 @@ async def _pdf(request: Request, ansicht: Ansicht,
         return _hinweis(request, "IServ-Stand nicht verfügbar",
                         f"Für das {daten.schuljahr_name} sind in IServ noch keine "
                         "Bücherlisten angelegt.", 409)
+    if aus_planung:
+        planung = _planung_zum_druck(request, str(daten.schuljahr_id))
+        if isinstance(planung, str):
+            # Das Menü lässt sich dann gar nicht öffnen; das fängt alte Links ab.
+            return _hinweis(request, "Keine Planungsdatei", planung, 409)
+        daten = replace(daten, je_fach=fach_tabellen(planung, antraege=antraege))
 
     gewuenscht, modus = auswahl(list(daten.gruppen(ansicht)))
+    if ansicht == "fach":
+        # Ein Fach nur in IServ (bzw. nur in der Datei) braucht keine Liste.
+        vorhanden = {fach.casefold() for fach in daten.gruppen(ansicht)}
+        ohne_liste = bool(gewuenscht)
+        gewuenscht = [fach for fach in gewuenscht if fach.casefold() in vorhanden]
+        if ohne_liste and not gewuenscht:
+            return _hinweis(request, "Keine Bücherliste",
+                            "Für die ausgewählten Fächer gibt es "
+                            + ("in IServ" if iserv_stand else "in der Planungsdatei")
+                            + " keine Bücherliste.", 400)
     if modus not in {"alphabet", "aufgabenfeld", "split"}:
         modus = "alphabet"
     if ansicht != "fach" and modus == "aufgabenfeld":
@@ -448,6 +494,7 @@ async def _pdf(request: Request, ansicht: Ansicht,
                     bestaetigung=(ansicht == "fach" and not iserv_stand
                                   and bool(eins("bestaetigung"))),
                     iserv_stand=iserv_stand,
+                    antraege=antraege,
                     rueckgabe_bis=eins("rueckgabe_bis") or None,
                     rueckgabe_an=eins("rueckgabe_an") or None,
                     doppelseitig=bool(eins("doppelseitig")),
@@ -476,12 +523,21 @@ def uebersicht(request: Request, ansicht: str) -> Response:
     iserv_gruppen = gruppierung(daten) if gruppierung else ()
     # Was im Druckmenü zur Auswahl steht: die Gruppennamen, bei Jahrgang die
     # Listen mit Jahrgang ("Jahrgang 5", wie buecherlisten.core sie nennt).
-    # Aus IServ, nicht aus der Datei: gedruckt wird der Stand aus IServ.
+    # Aus IServ; beim Fach kommen unten die der Datei dazu.
     druck_gruppen = (
         [f"Jahrgang {liste.jahrgang}" for liste in daten.listen if liste.jahrgang is not None]
         if ansicht == "jahrgang" else [g.name for g in iserv_gruppen]
     )
     kontext, stand = _planungskontext(request, daten.kennung)
+    druck_quellen = None
+    if ansicht == "fach":
+        # Mit IServ-Stand stehen die Fächer aus IServ zur Wahl, ohne die der
+        # Datei (druckmenue.js blendet je nach Häkchen um) - so viele, wie die
+        # PDF dann Fächer hat (Vorgabe vom 2026-11-10).
+        druck_quellen = {"iserv": druck_gruppen,
+                         "planung": list(fach_tabellen(stand, antraege=True)) if stand else []}
+        druck_gruppen = sorted(set(druck_quellen["iserv"]) | set(druck_quellen["planung"]),
+                               key=str.casefold)
     vergleich = vergleiche_mit_iserv(
         daten, stand, _buchreihen(request) if ansicht == "fach" else None,
         abgelehnte_gelten_nicht=ansicht == "fach") if stand else None
@@ -491,12 +547,14 @@ def uebersicht(request: Request, ansicht: str) -> Response:
         "ansicht": ansicht,
         # Jede Ansicht hat ein Druckmenü; nur sein Inhalt unterscheidet sich.
         "druckbar": True,
+        "druck_sperre": _druck_sperre(ansicht, stand),
         "iserv_sperre": _iserv_sperre(daten),
         "ansicht_name": name,
         "schuljahr": daten.schuljahr,
         "listen": daten.listen,
         "gruppen": gruppen,
         "druck_gruppen": druck_gruppen,
+        "druck_quellen": druck_quellen,
     })
 
 
@@ -516,6 +574,7 @@ def gruppe(request: Request, ansicht: str, name: str) -> Response:
         "planung": planung,
         "ansicht": ansicht, "ansicht_name": ansicht_name, "schuljahr": daten.schuljahr,
         "druckbar": True,
+        "druck_sperre": _druck_sperre(ansicht, stand),
         "iserv_sperre": _iserv_sperre(daten),
         # Die Vorschläge für das Feld "Verlag" im Planungsmenü: die der
         # heutigen Listen und die der Datei (dort stehen auch die des Vorjahrs).

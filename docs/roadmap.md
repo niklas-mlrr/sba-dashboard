@@ -28,8 +28,9 @@ Druckmenü hakt die Fächer ohne Freigabe an. Offen bleibt daneben nur noch
 Doppelseitig). „nicht bestätigte" und „veränderte" sind darin durch **„nicht
 versendete"** ersetzt, das wie „Gesendet" („Fach auf Warten auf Rückmeldung
 setzen") noch gesperrt ist, bis der Status beschrieben und gespeichert wird.
-Die Antrags-Häkchen werden schon mitgeschickt, das PDF reagiert erst mit den
-folgenden Schritten (Planungsstand, Anträge) darauf.
+Die Antrags-Häkchen werden schon mitgeschickt; „Antragsinformationen“ wirkt
+seit 2026-11-10 (unten), Bearbeitungsdatum, Bearbeitender und Begründung noch
+nicht.
 
 **Erledigt am 2026-11-10: „IServ-Stand benutzen" im PDF der Fächer.** Die
 Fächer kommen aus den IServ-Bücherlisten, ohne die Korrekturen der Buchplanung
@@ -56,6 +57,27 @@ es Sternchen gibt, folgt auf den ersten Satz ein zweiter Absatz: „Da IServ
 Fächer nicht Jahrgängen, sondern Buchreihen zuordnet, … Betroffene Buchreihen
 sind mit einem * markiert. Unter der Tabelle sind die jeweils anderen Fächer
 aufgeführt."
+
+**Erledigt am 2026-11-10: das Fach-PDF ohne IServ-Stand kommt aus der
+Planungsdatei** (`app/planungsdruck.py`). IServ liefert dann nur Schuljahr und
+Schulanschrift; ohne Datei lässt sich das Druckmenü der Fächer nicht öffnen
+(Verlag und Jahrgang drucken weiter IServ mit den Korrekturen der Datei). Die
+Fächerauswahl zeigt mit IServ-Stand die Fächer aus IServ, ohne die der Datei
+(mit Anträgen, also auch nur beantragte), und genau diese hat die PDF: ein
+Fach ohne Genehmigtes bekommt ohne Antragsinformationen leere Tabellen, eines
+nur in der anderen Quelle keine Liste.
+- *Ohne „Antragsinformationen“:* nur, was genehmigt ist und dieses Schuljahr
+  gilt (der entschiedene Stand der Fach-Ansicht); keine Jahreszahlen, also
+  auch keine genehmigten späteren Änderungen.
+- *Mit „Antragsinformationen“:* dieselben Einträge wie die Fach-Ansicht, hinter
+  dem Jahrgang der Zusatz mit Jahreszahlen („7 (ab 2027/2028)"). Offen ist die
+  Jahreszahl samt Präfix grau, abgelehnt durchgestrichen; einen Jahrgang nur
+  wegen offener (abgelehnter) Einführungen ganz; gilt das für jeden Jahrgang
+  der Zeile - neues Buch beantragt bzw. abgelehnt -, die ganze Zeile. Eine
+  genehmigte Ausmusterung nach dem Vorjahr fehlt. Die Spalte „Klasse“ bricht
+  dann um, wenn es Zeilen spart, nur an Leerzeichen und nie zwischen Jahrgang
+  und erster Jahreszahl oder zwischen Präfix und Jahreszahl. Die Texte des
+  PDFs sind unverändert.
 
 **Offen: „Schuljahr noch nicht angelegt"** (Vorgabe vom 2026-11-10). Das
 Druckmenü gilt für das ausgewählte Schuljahr. Ist es in IServ noch nicht

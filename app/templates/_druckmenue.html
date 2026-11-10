@@ -17,6 +17,10 @@
   Bestätigung und Anträge gibt es nur ohne "IServ-Stand benutzen"; ihre
   Felder sind sonst gesperrt (druckmenue.js). Fehlen in IServ die
   Bücherlisten, ist "IServ-Stand benutzen" selbst gesperrt (iserv_sperre).
+  Ohne "IServ-Stand benutzen" druckt das Fach die Planungsdatei; ohne Datei
+  ist schon der Druckknopf der Fächer gesperrt (druck_sperre). Die Fächer der
+  Auswahl tragen ihre Quellen (data-quellen: "iserv", "planung"); zur Wahl
+  stehen nur die der gedruckten Quelle (druckmenue.js, Vorgabe vom 2026-11-10).
 
   GET, damit alle Angaben in der URL stehen und F5 im PDF-Tab ohne Rückfrage
   dasselbe PDF neu lädt (app/api/buecherliste.py).
@@ -95,7 +99,10 @@
                 class="caret"></span></button>
               <ul class="dropdown-menu faecherauswahl" role="menu">
                 {% for gruppe in gruppenliste %}
-                <li><label><input type="checkbox" name="{{ feld }}" value="{{ gruppe }}" checked
+                <li{% if druck_quellen %} data-quellen="
+                  {%- if gruppe in druck_quellen.iserv %}iserv{% endif %}
+                  {%- if gruppe in druck_quellen.iserv and gruppe in druck_quellen.planung %} {% endif %}
+                  {%- if gruppe in druck_quellen.planung %}planung{% endif %}"{% endif %}><label><input type="checkbox" name="{{ feld }}" value="{{ gruppe }}" checked
                   disabled>&nbsp;{{ gruppe }}</label></li>
                 {% endfor %}
               </ul>

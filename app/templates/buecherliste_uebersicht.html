@@ -4,7 +4,9 @@
 {% block seitenklasse %}seite-voll{% endblock %}
 {% block ueberschrift %}Bücherliste nach {{ ansicht_name }}{% endblock %}
 {% block kopfaktionen %}{{ bp.kopfknoepfe(planung, ansicht, none) }}{% if druckbar %}
-<button type="button" class="btn btn-default" id="druck-oeffnen" title="Drucken" aria-label="Drucken"><span
+<button type="button" class="btn btn-default" id="druck-oeffnen"
+  {%- if druck_sperre %} disabled title="{{ druck_sperre }}" aria-label="Drucken ({{ druck_sperre }})"
+  {%- else %} title="Drucken" aria-label="Drucken"{% endif %}><span
   class="glyphicon glyphicon-print" aria-hidden="true"></span></button>
 {% endif %}{% endblock %}
 

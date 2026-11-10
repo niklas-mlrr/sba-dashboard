@@ -18,6 +18,10 @@
 //     Option schaltet selbst auf "Individuell": nur so steht die fertige
 //     Auswahl in der PDF-URL, und F5 im PDF-Tab zeigt dieselben Fächer.
 //     "nicht versendete" ist noch gesperrt (Stand "Gesendet" fehlt).
+//   * Fächer: mit "IServ-Stand benutzen" stehen nur die aus IServ zur Wahl,
+//     ohne nur die der Planungsdatei (data-quellen am Listeneintrag). Die
+//     übrigen sind ausgeblendet und gesperrt, also nicht in der PDF-URL, und
+//     zählen in "n von m" nicht mit.
 //   * Ohne einen einzigen angehakten Eintrag lässt sich kein PDF öffnen.
 // Alle anderen Felder behalten ihren Wert, bis die Seite neu geladen wird.
 (function () {
@@ -77,11 +81,32 @@
     const haekchen = Array.from(liste.querySelectorAll('input[type="checkbox"]'));
     let zuletzt = optionen[0];
 
+    // Steht das Fach in der Quelle, die gedruckt wird? Ohne data-quellen
+    // (Verlag, Jahrgang) immer.
+    function inQuelle(h) {
+      const quellen = h.closest("li").dataset.quellen;
+      if (quellen === undefined) return true;
+      const quelle = iservStand && iservStand.checked ? "iserv" : "planung";
+      return quellen.split(" ").includes(quelle);
+    }
+    const sichtbare = () => haekchen.filter(inQuelle);
+
+    function quelleAnwenden() {
+      for (const h of haekchen) {
+        const da = inQuelle(h);
+        h.closest("li").hidden = !da;
+        h.disabled = !da || !individuell.checked;
+      }
+    }
+
     auswahlPruefen = () => {
-      const angehakt = haekchen.filter((h) => h.checked).length;
-      listenText.textContent = `${angehakt} von ${haekchen.length}`;
-      starten.disabled = individuell.checked && angehakt === 0;
+      quelleAnwenden();
+      const liste = sichtbare();
+      const angehakt = liste.filter((h) => h.checked).length;
+      listenText.textContent = `${angehakt} von ${liste.length}`;
+      starten.disabled = liste.length === 0 || (individuell.checked && angehakt === 0);
     };
+    if (iservStand) iservStand.addEventListener("change", () => auswahlPruefen());
 
     function listeOffen(offen) {
       liste.classList.toggle("open", offen);
@@ -116,12 +141,10 @@
           uebernimm(option);
           individuell.checked = true;
           listenKnopf.disabled = false;
-          for (const h of haekchen) h.disabled = false;
           auswahlPruefen();
           return;
         }
         listenKnopf.disabled = !eigene;
-        for (const h of haekchen) h.disabled = !eigene;
         if (!eigene) listeOffen(false);
         auswahlPruefen();
       });

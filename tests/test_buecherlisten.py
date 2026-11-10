@@ -391,11 +391,39 @@ def test_die_spalte_der_ueberschrift_entfaellt(seiten: TestClient, pfad: str, we
     assert weg not in koepfe and bleibt in koepfe
 
 
+def _planung(*faecher: str):
+    """Eine Planungsdatei mit je einem Buch für ``faecher`` (Jahrgang 5, leihbar)."""
+    from buecherlisten.planung import Buch, Buchplanung, Planungszeile
+    buecher = tuple(Buch(isbn=f"97830600000{i:02d}", titel=f"{fach}buch", verlag="Klett",
+                         kombinationen=((fach, 5),)) for i, fach in enumerate(faecher))
+    return Buchplanung(schuljahr="2026/2027", buecher=buecher, planung=tuple(
+        Planungszeile(isbn=buch.isbn, fach=fach, jahrgang=5, leihbar=True)
+        for buch, fach in zip(buecher, faecher, strict=True)))
+
+
+@pytest.fixture()
+def planungsdatei(monkeypatch):
+    """Ersetzt das Lesen der Planungsdatei; ``halter["planung"] = None`` heißt: keine Datei."""
+    from types import SimpleNamespace
+
+    from app import buchplanung as planungsdomaene
+    halter = {"planung": _planung("Chemie", "Deutsch", "Mathematik")}
+
+    def lies(einstellungen, schuljahr):
+        planung = halter["planung"]
+        return None if planung is None else SimpleNamespace(
+            planung=planung, zustand=SimpleNamespace(mtime=1.0))
+
+    monkeypatch.setattr(planungsdomaene, "lies", lies)
+    return halter
+
+
 class _Erzeuger:
     """Ersetzt Laden und Erzeugen; merkt sich, womit aufgerufen wurde."""
 
     def __init__(self) -> None:
         self.aufrufe: list[dict] = []
+        self.daten: list = []
         # Was lade() als korrekturen bekam, je Aufruf.
         self.korrekturen: list = []
         self.listen_ids = {"Jahrgang 5": 1295, "Jahrgang 6": 1296}
@@ -415,6 +443,7 @@ class _Erzeuger:
     def erzeuge(self, daten, **optionen):
         from buecherlisten.core.erzeugen import ErzeugtesPdf
         self.aufrufe.append(optionen)
+        self.daten.append(daten)
         return [ErzeugtesPdf(b"%PDF-1.4 test", "Bücherliste Fächer 2026-2027.pdf", "t")]
 
     def erzeuge_schueler(self, daten, hole_pdf, **optionen):
@@ -424,7 +453,7 @@ class _Erzeuger:
 
 
 @pytest.fixture()
-def erzeuger(monkeypatch) -> _Erzeuger:
+def erzeuger(monkeypatch, planungsdatei) -> _Erzeuger:
     from app.api import buecherliste
     ersatz = _Erzeuger()
     monkeypatch.setattr(buecherliste, "lade_buecherdaten", ersatz.lade)
@@ -480,6 +509,7 @@ def test_individuell_mit_allen_optionen(seiten: TestClient, erzeuger: _Erzeuger)
         "faecher": ["Chemie", "Mathematik"], "modus": "aufgabenfeld", "bestaetigung": True,
         "rueckgabe_bis": "08.10.2026", "rueckgabe_an": "Ml",
         "doppelseitig": True, "nur_falls_noetig": True, "iserv_stand": False,
+        "antraege": False,
     }
 
 
@@ -565,13 +595,90 @@ def test_iserv_stand_druckt_ohne_korrekturen_und_ohne_bestaetigung(
     assert erzeuger.korrekturen == [None]
 
 
-def test_ohne_iserv_stand_gelten_die_korrekturen(seiten: TestClient, erzeuger: _Erzeuger):
+def test_ohne_iserv_stand_druckt_das_fach_die_planungsdatei(
+    seiten: TestClient, erzeuger: _Erzeuger, planungsdatei,
+):
+    """Vorgabe vom 2026-11-10: ohne IServ-Stand zählt nur die Datei."""
     _anmelden(seiten)
+    planungsdatei["planung"] = _planung("Chemie", "Physik")
     assert _drucken(seiten, [("faecher_auswahl", "alle")]).status_code == 200
     (aufruf,) = erzeuger.aufrufe
-    assert aufruf["iserv_stand"] is False
-    (korrekturen,) = erzeuger.korrekturen
-    assert callable(korrekturen)
+    assert aufruf["iserv_stand"] is False and aufruf["antraege"] is False
+    assert aufruf["faecher"] == ["Chemie", "Physik"]
+    assert erzeuger.korrekturen == [None]
+    (daten,) = erzeuger.daten
+    assert daten.je_fach["Physik"]["leih"][0]["titel"] == "Physikbuch"
+
+
+def test_antragsinformationen_gehen_an_das_pdf(seiten: TestClient, erzeuger: _Erzeuger):
+    _anmelden(seiten)
+    _drucken(seiten, [("faecher_auswahl", "alle"), ("antragsinfo", "1")])
+    _drucken(seiten, [("faecher_auswahl", "alle"), ("antragsinfo", "1"), ("iserv_stand", "1")])
+    assert [a["antraege"] for a in erzeuger.aufrufe] == [True, False]
+    assert "klasse_teile" in erzeuger.daten[0].je_fach["Chemie"]["leih"][0]
+
+
+def test_ohne_planungsdatei_druckt_das_fach_nicht(
+    seiten: TestClient, erzeuger: _Erzeuger, planungsdatei,
+):
+    _anmelden(seiten)
+    planungsdatei["planung"] = None
+    antwort = _drucken(seiten, [("faecher_auswahl", "alle")])
+    assert antwort.status_code == 409 and "keine Planungsdatei" in antwort.text
+    # Mit IServ-Stand braucht es die Datei nicht.
+    assert _drucken(seiten, [("faecher_auswahl", "alle"),
+                             ("iserv_stand", "1")]).status_code == 200
+    assert len(erzeuger.aufrufe) == 1
+
+
+def test_ein_fach_nur_in_iserv_bekommt_keine_liste(
+    seiten: TestClient, erzeuger: _Erzeuger, planungsdatei,
+):
+    _anmelden(seiten)
+    planungsdatei["planung"] = _planung("Chemie", "Physik")
+    auswahl = [("faecher_auswahl", "individuell"), ("faecher", "Chemie"), ("faecher", "Deutsch")]
+    assert _drucken(seiten, auswahl).status_code == 200
+    assert erzeuger.aufrufe[0]["faecher"] == ["Chemie"]
+    antwort = _drucken(seiten, [("faecher_auswahl", "individuell"), ("faecher", "Deutsch")])
+    assert antwort.status_code == 400 and "in der Planungsdatei keine Bücherliste" in antwort.text
+    # Mit IServ-Stand umgekehrt: Physik steht nur in der Datei.
+    _drucken(seiten, [("iserv_stand", "1"), ("faecher_auswahl", "individuell"),
+                      ("faecher", "Physik"), ("faecher", "Mathematik")])
+    assert erzeuger.aufrufe[-1]["faecher"] == ["Mathematik"]
+
+
+def _druckknopf(text: str) -> str:
+    return text.split('id="druck-oeffnen"')[1].split(">")[0]
+
+
+@pytest.mark.parametrize("pfad", ["/buecherliste/fach", "/buecherliste/fach/Chemie"])
+def test_druckmenue_der_faecher_braucht_die_planungsdatei(
+    seiten: TestClient, planungsdatei, pfad: str,
+):
+    _anmelden(seiten)
+    planungsdatei["planung"] = None
+    assert "disabled" in _druckknopf(seiten.get(pfad).text)
+    # Verlag und Jahrgang drucken weiter aus IServ.
+    assert "disabled" not in _druckknopf(seiten.get("/buecherliste/verlag").text)
+    planungsdatei["planung"] = _planung("Chemie", "Physik")
+    assert "disabled" not in _druckknopf(seiten.get(pfad).text)
+
+
+def test_druckmenue_nennt_je_fach_seine_quellen(seiten: TestClient, planungsdatei):
+    """Mit IServ-Stand stehen die Fächer aus IServ zur Wahl, ohne die der Datei
+    (druckmenue.js blendet nach data-quellen um; Vorgabe vom 2026-11-10)."""
+    _anmelden(seiten)
+    planungsdatei["planung"] = _planung("Chemie", "Physik")
+    text = seiten.get("/buecherliste/fach").text
+    quellen = {fach: quelle for quelle, fach in re.findall(
+        r'<li data-quellen="([^"]*)"><label><input type="checkbox" name="faecher" '
+        r'value="([^"]+)"', text)}
+    assert {fach: quellen[fach] for fach in ("Chemie", "Geschichte", "Physik")} == {
+        "Chemie": "iserv planung", "Geschichte": "iserv", "Physik": "planung"}
+    assert [fach for fach, quelle in quellen.items() if "planung" in quelle] == [
+        "Chemie", "Physik"]
+    # Verlage haben nur eine Quelle.
+    assert "data-quellen" not in seiten.get("/buecherliste/verlag").text
 
 
 def test_iserv_stand_gibt_es_nur_beim_fach(seiten: TestClient, erzeuger: _Erzeuger):

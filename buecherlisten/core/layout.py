@@ -9,6 +9,7 @@ Umweg über eine Datei ausliefern kann.
 from __future__ import annotations
 
 import io
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -17,7 +18,7 @@ from typing import Any, BinaryIO
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_JUSTIFY
+from reportlab.lib.enums import TA_JUSTIFY, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -102,6 +103,12 @@ ACCENT_COLOR = colors.Color(0.6627, 0.2667, 0.2588)  # Original-Rot der Abschnit
 RULE_COLOR = colors.black                            # Linie unter der Kopfzeile (1.0pt schwarz)
 ROW_RULE_COLOR = colors.Color(0.6667, 0.6667, 0.6667)  # Zeilentrenner (1.0pt grau)
 GREY = colors.HexColor("#666666")
+# Planung mit Antragsinformationen (app/planungsdruck.py): offen ist grau,
+# abgelehnt durchgestrichen. Heller als GREY, damit es sich vom Schwarz der
+# übrigen Zeilen auch gedruckt deutlich abhebt.
+STIL_GRAU = "grau"
+STIL_DURCH = "durch"
+ANTRAG_GRAU_HEX = "#8c8c8c"
 
 # Tabellen-Typografie exakt wie im Original: durchgehend Helvetica 10, nur die
 # ISBN-Werte 8pt; Kopfzeile ist ebenfalls Helvetica 10 (nicht fett).
@@ -199,6 +206,15 @@ ERKLAER_STYLE = ParagraphStyle(
 
 WIDTH_EPSILON = 0.5
 
+# Leerzeichen, an denen umbrochen wird - wie reportlabs Paragraph: das
+# geschützte Leerzeichen (\xa0) gehört zum Wort. ``str.split()`` ohne Argument
+# trennt auch dort und würde Breiten messen, die der Satz nie erzeugt.
+_UMBRUCH = re.compile(r"[^\S\xa0]+")
+
+
+def _woerter(text: str) -> list[str]:
+    return [wort for wort in _UMBRUCH.split(text) if wort]
+
 
 def _raw_width(header: str, values: list[str], *, value_size: float = CELL_FONT_SIZE) -> float:
     """Reine Inhaltsbreite (kein Zellenpolster) = längster Kopf- oder Zellentext.
@@ -217,7 +233,7 @@ def _wrap_lines(text: str, width: float, *, font: str = BODY_FONT, size: float =
     Bricht ausschließlich an Leerzeichen — ein einzelnes Wort, das breiter als
     `width` ist, bleibt trotzdem als Ganzes auf einer Zeile (siehe Gotcha zu
     splitLongWords bei CELL_STYLE)."""
-    words = text.split()
+    words = _woerter(text)
     if not words:
         return [""]
     lines: list[str] = []
@@ -248,7 +264,7 @@ def _max_word_width(values: list[str], *, font: str = BODY_FONT, size: float = C
     das breiteste unteilbare Wort, das in ihr vorkommt."""
     widest = 0.0
     for v in values:
-        for word in v.split():
+        for word in _woerter(v):
             widest = max(widest, stringWidth(word, font, size))
     return widest + WIDTH_EPSILON if widest else 0.0
 
@@ -314,7 +330,7 @@ def _breiten_kandidaten(values: list[str]) -> list[float]:
     Breiten jeder zusammenhängenden Wortfolge eines Werts."""
     kandidaten = set()
     for v in values:
-        woerter = v.split()
+        woerter = _woerter(v)
         for a in range(len(woerter)):
             for b in range(a + 1, len(woerter) + 1):
                 kandidaten.add(stringWidth(" ".join(woerter[a:b]), BODY_FONT, CELL_FONT_SIZE) + WIDTH_EPSILON)
@@ -322,7 +338,7 @@ def _breiten_kandidaten(values: list[str]) -> list[float]:
 
 
 def _split_drei(
-    werte: tuple[list[str], list[str], list[str]], available: float,
+    werte: tuple[list[str], list[str], list[str]], available: float, kopf: str = "",
 ) -> tuple[float, float, float]:
     """Wie :func:`_split_titel_verlag`, mit einer dritten umbrechenden Spalte.
 
@@ -335,19 +351,27 @@ def _split_drei(
     # Untergrenze ist hier nur das breiteste unteilbare Wort, nicht MIN_WRAP_COL:
     # die Kandidaten sind gemessene Umbruchbreiten, und die kurzen Werte dieser
     # Spalte liegen regelmäßig darunter ("Mathematik" ist schmaler als 20 mm).
-    minimum = _max_word_width(dritte)
-    natuerlich = _raw_width("", dritte)
-    best: tuple[tuple[int, float], tuple[float, float, float]] | None = None
+    # Nie schmaler als der Kopf der dritten Spalte: der bricht nicht um
+    # („Klasse“ über Jahrgängen wie „5“).
+    kopf_w = _raw_width(kopf, []) if kopf else 0.0
+    minimum = max(_max_word_width(dritte), kopf_w)
+    natuerlich = _raw_width(kopf, dritte)
+    best: tuple[tuple[float, int, float], tuple[float, float, float]] | None = None
     for kandidat in [k for k in _breiten_kandidaten(dritte) if minimum <= k <= natuerlich] or [natuerlich]:
         infos = [_wrap_info(v, kandidat) for v in dritte]
-        dritte_w = max((w for _, w in infos), default=0.0)
+        dritte_w = max(max((w for _, w in infos), default=0.0), kopf_w)
         zeilen = [n for n, _ in infos]
         _, _, erste_w, zweite_w = _split_titel_verlag(erste, zweite, available - dritte_w, zeilen)
         gesamt = sum(
             max(_wrap_info(a, erste_w)[0], _wrap_info(b, zweite_w)[0], n)
             for a, b, n in zip(erste, zweite, zeilen, strict=True)
         )
-        key = (gesamt, erste_w + zweite_w + dritte_w)
+        # Zuerst muss die Tabelle in die Breite passen: ein Kandidat, der Titel
+        # und Verlag unter ihr breitestes Wort drückt, läuft über die rechte
+        # Kante, auch wenn er weniger Zeilen braucht. Passt keiner, der mit dem
+        # kleinsten Überstand.
+        ueberstand = max(erste_w + zweite_w + dritte_w - available, 0.0)
+        key = (round(ueberstand, 3), gesamt, erste_w + zweite_w + dritte_w)
         if best is None or key < best[0]:
             best = (key, (erste_w, zweite_w, dritte_w))
     assert best is not None
@@ -383,6 +407,12 @@ NEUPREIS = Spalte("neupreis", "Neupreis", rechts=True)
 LEIHGEBUEHR = Spalte("leihgebuehr", "Leihgebühr", kurz="Leihgeb.", rechts=True)
 
 
+# Klasse mit Antragsinformationen: „7 (ab 2027/2028)“ wird zu breit für eine
+# Zeile. Sie bricht wie das Fach der Jahrgangsliste nur um, wenn die Tabelle
+# dadurch weniger Zeilen braucht, und nur an gewöhnlichen Leerzeichen
+# (app/planungsdruck.py setzt geschützte, wo nicht umbrochen werden darf).
+KLASSE_UMBRUCH = Spalte("klasse", "Klasse", umbruch=True, nachrangig=True)
+
 FACH = Spalte("fach", "Fach", umbruch=True)
 FACH_NACHRANGIG = Spalte("fach", "Fach", umbruch=True, nachrangig=True)
 
@@ -412,6 +442,11 @@ FACH_LISTE = Listenart(
     "Keine leihbaren Bücher in diesem Fach.",
     "Keine selbst anzuschaffenden Bücher in diesem Fach.",
     (KLASSE, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
+)
+# Fachliste aus der Planung mit Antragsinformationen: Texte wie FACH_LISTE,
+# die Klasse darf umbrechen (Vorgabe vom 2026-11-10).
+FACH_LISTE_ANTRAEGE = replace(
+    FACH_LISTE, spalten=(KLASSE_UMBRUCH, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
 )
 # Verlag: der Verlag steht im Kopf, dafür das Fach - das neben dem Titel
 # umbrechen darf, weil fächerübergreifende Bücher mehrere Fächer tragen.
@@ -517,6 +552,46 @@ def iserv_quelle(listen_anzahl: int) -> str:
 PLANUNG_QUELLE = "Planungsbücherliste"
 
 
+def _markup(text: str, stile: tuple[str, ...] | frozenset[str]) -> str:
+    """Text für einen Paragraph: grau und/oder durchgestrichen (STIL_*)."""
+    inhalt = escape(text)
+    if STIL_DURCH in stile:
+        inhalt = f"<strike>{inhalt}</strike>"
+    if STIL_GRAU in stile:
+        inhalt = f'<font color="{ANTRAG_GRAU_HEX}">{inhalt}</font>'
+    return inhalt
+
+
+def _zellstil(spalte: Spalte) -> ParagraphStyle:
+    """Der Paragraph-Stil einer Spalte - wie ihr Klartext gesetzt (Größe, Ausrichtung)."""
+    if spalte.schrift == CELL_FONT_SIZE and not spalte.rechts:
+        return CELL_STYLE
+    return ParagraphStyle(
+        f"Zelle-{spalte.key}", parent=CELL_STYLE, fontSize=spalte.schrift,
+        alignment=TA_RIGHT if spalte.rechts else CELL_STYLE.alignment,
+    )
+
+
+def _zelle(zeile: dict, spalte: Spalte) -> Any:
+    """Eine Zelle: Klartext, oder ein Paragraph, wenn die Spalte umbricht oder
+    die Zeile einen Stil hat (``stil``, ``klasse_teile``, app/planungsdruck.py).
+
+    Ein Klartext-Wert, der nur wegen des Stils zum Paragraph wird, bekommt
+    geschützte Leerzeichen: gemessen wurde er einzeilig, so bleibt er es.
+    """
+    text = zeile[spalte.key]
+    zeilenstil = zeile.get("stil") or ""
+    teile = zeile.get("klasse_teile") if spalte.key == "klasse" else None
+    if not zeilenstil and not teile:
+        return Paragraph(text, CELL_STYLE) if spalte.umbruch else text
+    eigen = frozenset((zeilenstil,)) if zeilenstil else frozenset()
+    if teile:
+        inhalt = "".join(_markup(stueck, eigen | set(stile)) for stueck, stile in teile)
+    else:
+        inhalt = _markup(text if spalte.umbruch else text.replace(" ", "\xa0"), eigen)
+    return Paragraph(inhalt, _zellstil(spalte))
+
+
 def render_table(
     rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None,
     erklaerungen: list[tuple[str, str]] | None = None,
@@ -581,6 +656,7 @@ def render_table(
             (dritte_u,) = [i for i in umbruch if spalten[i].nachrangig]
             breiten[haupt[0]], breiten[haupt[1]], breiten[dritte_u] = _split_drei(
                 (werte[haupt[0]], werte[haupt[1]], werte[dritte_u]), available_tv,
+                koepfe[dritte_u],
             )
 
         # 2b) Abkürzungen zurücknehmen, wenn nach der Aufteilung der
@@ -616,10 +692,7 @@ def render_table(
 
     data: list[list] = [list(koepfe)]
     for r in rows:
-        data.append([
-            Paragraph(r[sp.key], CELL_STYLE) if sp.umbruch else r[sp.key]
-            for sp in spalten
-        ])
+        data.append([_zelle(r, sp) for sp in spalten])
 
     last_row = len(data) - 1
     # Tabellenbild wie im Original: keine Füllfarben, kein Gitternetz, 1.0pt
@@ -1183,7 +1256,8 @@ def subject_story(
     grade_count = None
     if book_count == 1:
         only_row = (tables["leih"] or tables["kauf"])[0]
-        grade_count = only_row["klasse"].count(",") + 1
+        # Mit Antragsinformationen stehen auch Kommas im Zusatz („von … bis …“).
+        grade_count = only_row.get("jahrgang_anzahl") or only_row["klasse"].count(",") + 1
     if confirmation:
         # Bestätigungs-Lauf: statt des Einleitungssatzes ein Prüfauftrag an die
         # Fachkonferenzleitung, dessen letzter Absatz auf die beiden
