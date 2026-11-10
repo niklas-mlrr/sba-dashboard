@@ -459,8 +459,8 @@ STERNCHEN_HINWEIS = (
     "Da IServ Fächer nicht Jahrgängen, sondern Buchreihen zuordnet, werden bei "
     "Buchreihen mit mehreren Fächern und Jahrgängen alle Jahrgänge allen Fächern "
     "zugeschrieben, auch wenn einzelne Fächer die Buchreihe nicht für alle Jahrgänge "
-    "möchten. Betroffene Buchreihen sind mit einem * markiert; unter der Tabelle "
-    "stehen dazu die anderen Fächer."
+    "möchten. Betroffene Buchreihen sind mit einem * markiert. Unter der Tabelle "
+    "sind die jeweils anderen Fächer aufgeführt."
 )
 
 

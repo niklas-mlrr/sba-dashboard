@@ -49,7 +49,8 @@ mehr, gezählt je Fach über beide Tabellen. Direkt unter der Tabelle steht je
 Stern eine kleine Zeile ohne Trennlinie: „* auch für Chemie, Physik". Nur wenn
 es Sternchen gibt, folgt auf den ersten Satz ein zweiter Absatz: „Da IServ
 Fächer nicht Jahrgängen, sondern Buchreihen zuordnet, … Betroffene Buchreihen
-sind mit einem * markiert; unter der Tabelle stehen dazu die anderen Fächer."
+sind mit einem * markiert. Unter der Tabelle sind die jeweils anderen Fächer
+aufgeführt."
 
 **Offen: „Schuljahr noch nicht angelegt"** (Vorgabe vom 2026-11-10). Das
 Druckmenü gilt für das ausgewählte Schuljahr. Ist es in IServ noch nicht
