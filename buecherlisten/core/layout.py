@@ -510,6 +510,13 @@ def iserv_quelle(listen_anzahl: int) -> str:
     return "IServ-Bücherliste" if listen_anzahl == 1 else "IServ-Bücherlisten"
 
 
+# Quelle unten links in der Fußzeile aller Bücherlisten-PDFs ohne "IServ-Stand
+# benutzen": sie zeigen den Stand der Buchplanung (Excel-Datei), nicht IServ
+# (Vorgabe vom 2026-11-10). Immer Einzahl; gleiche Stelle und gleiche
+# Verschiebung wie bei iserv_quelle().
+PLANUNG_QUELLE = "Planungsbücherliste"
+
+
 def render_table(
     rows: list[dict], *, with_fee: bool, spalten: tuple[Spalte, ...] | None = None,
     erklaerungen: list[tuple[str, str]] | None = None,
@@ -1496,7 +1503,7 @@ def write_combined_confirmation_pdf(
     schoolyear_name: str, *, fkl_map: dict[str, str], kollegium_map: dict[str, str], title: str,
     duplex: bool = False, page_counts: list[int] | None = None,
     return_by: str | None = None, return_to: str | None = None,
-    school_name: str | None = None, school_city: str | None = None,
+    school_name: str | None = None, school_city: str | None = None, quelle: str | None = None,
 ) -> None:
     """Wie write_pdf, aber ein eigenes PageTemplate je Fach: mit --confirmation
     soll die Seitenzahl je Fach wieder bei 1 beginnen und die Fußzeile das
@@ -1513,7 +1520,7 @@ def write_combined_confirmation_pdf(
         )
 
     write_je_fach_pdf(path, subjects, schoolyear_name, story_fuer, title=title,
-                      school_name=school_name, school_city=school_city)
+                      school_name=school_name, school_city=school_city, quelle=quelle)
 
 
 def sanitize_filename(name: str) -> str:

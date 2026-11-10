@@ -37,7 +37,12 @@ und ohne Bestätigung. Vor den Tabellen steht statt der Einleitung „Folgende
 Buchreihen führt die IServ-Bücherliste / führen die IServ-Bücherlisten für das Fach <Fach>
 im <Schuljahr>." - Einzahl nur, wenn das Schuljahr genau eine Bücherliste hat.
 In der Fußzeile steht links unten „IServ-Bücherlisten" (nach derselben Regel
-„IServ-Bücherliste"), „Erstellt: <Datum>" eine Zeile darüber. Ohne Bücherlisten in IServ ist das Häkchen gesperrt
+„IServ-Bücherliste"), „Erstellt: <Datum>" eine Zeile darüber. Ohne IServ-Stand
+steht an derselben Stelle „Planungsbücherliste" (immer Einzahl) - das PDF zeigt
+dann den Stand der Buchplanung. Das gilt für jedes Bücherlisten-PDF (Fach,
+Verlag, Jahrgang, mit und ohne Bestätigung): „Erstellt: <Datum>" steht immer
+eine Zeile über der Quelle. Offen: „IServ-Stand benutzen" auch für Verlag und
+Jahrgang. Ohne Bücherlisten in IServ ist das Häkchen gesperrt
 („Bücherlisten noch nicht angelegt"). Für jeden Seriendruck, mit und ohne
 IServ-Stand, gilt: jedes Fach, jeder Verlag und jeder Jahrgang zählt seine
 Seiten selbst und nennt sich in der Fußzeile.

@@ -32,6 +32,7 @@ from .daten import Ansicht, Buecherdaten
 from .layout import (
     FACH_LISTE,
     JAHRGANG_LISTE,
+    PLANUNG_QUELLE,
     VERLAG_LISTE,
     Listenart,
     footer_context,
@@ -168,6 +169,9 @@ def erzeuge_buecherlisten_pdfs(
     genau einer Bücherliste im Schuljahr "IServ-Bücherliste") und
     darüber das Erstelldatum. Dass die Daten ohne Korrekturen der Buchplanung geladen sind, ist
     Sache des Aufrufers (:func:`~buecherlisten.core.daten.lade_buecherdaten`).
+    Ohne ``iserv_stand`` nennt die Fußzeile jeder Ansicht an derselben Stelle
+    "Planungsbücherliste" (immer Einzahl,
+    :data:`~buecherlisten.core.layout.PLANUNG_QUELLE`).
     """
     if ansicht != "fach" and (bestaetigung or modus == "aufgabenfeld" or iserv_stand):
         raise ValueError(
@@ -175,7 +179,8 @@ def erzeuge_buecherlisten_pdfs(
     if iserv_stand and bestaetigung:
         raise ValueError("Mit IServ-Stand gibt es keine Bestätigung.")
     art, sammel_label = _ARTEN[ansicht]
-    quelle = None
+    # Die Fußzeile nennt immer die Quelle, "Erstellt: <Datum>" steht darüber.
+    quelle = PLANUNG_QUELLE
     if iserv_stand:
         art = iserv_fach_liste(daten.schuljahr_name, len(daten.listen_ids))
         quelle = iserv_quelle(len(daten.listen_ids))
@@ -248,7 +253,7 @@ def erzeuge_buecherlisten_pdfs(
                 fkl_map=fkl_map, kollegium_map=kollegium_map, title=title,
                 duplex=effective_duplex, page_counts=page_counts,
                 return_by=rueckgabe_bis, return_to=rueckgabe_an,
-                school_name=schule, school_city=ort,
+                school_name=schule, school_city=ort, quelle=quelle,
             )
         else:
             # Seriendruck: jede Gruppe (Fach, Verlag, Jahrgang) zählt ihre

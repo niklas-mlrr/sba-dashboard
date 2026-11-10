@@ -261,12 +261,23 @@ def test_iserv_stand_nennt_die_quelle_unter_dem_erstelldatum(iserv_daten):
         assert erstellt == pytest.approx(FOOTER_PAGE_BASELINE, abs=0.01)
         assert links["IServ-Bücherlisten"] == pytest.approx(FOOTER_INFO_BASELINE, abs=0.01)
 
-    # Ohne IServ-Stand bleibt die Fußzeile, wie sie war.
-    (pdf,) = erzeuge_buecherlisten_pdfs(iserv_daten, zuordnungen=OHNE_NETZ)
-    links = _zeilen_links(pdf.inhalt)
-    assert "IServ-Bücherlisten" not in links
-    (erstellt,) = [y for text, y in links.items() if text.startswith("Erstellt:")]
-    assert erstellt == pytest.approx(FOOTER_INFO_BASELINE, abs=0.01)
+
+@pytest.mark.parametrize("optionen", [
+    {"modus": "alphabet"}, {"modus": "split"}, {"modus": "aufgabenfeld"},
+    {"bestaetigung": True}, {"bestaetigung": True, "modus": "split"},
+    {"ansicht": "verlag"}, {"ansicht": "verlag", "modus": "split"},
+    {"ansicht": "jahrgang"}, {"ansicht": "jahrgang", "modus": "split"},
+])
+def test_ohne_iserv_stand_nennt_jede_ansicht_die_planungsbuecherliste(iserv_daten, optionen):
+    """Vorgabe vom 2026-11-10: überall Quelle unten, "Erstellt" darüber; immer Einzahl."""
+    from buecherlisten.core.layout import FOOTER_INFO_BASELINE, FOOTER_PAGE_BASELINE
+
+    for pdf in erzeuge_buecherlisten_pdfs(iserv_daten, zuordnungen=OHNE_NETZ, **optionen):
+        links = _zeilen_links(pdf.inhalt)
+        assert "IServ-Bücherlisten" not in links and "Planungsbücherlisten" not in links
+        (erstellt,) = [y for text, y in links.items() if text.startswith("Erstellt:")]
+        assert erstellt == pytest.approx(FOOTER_PAGE_BASELINE, abs=0.01)
+        assert links["Planungsbücherliste"] == pytest.approx(FOOTER_INFO_BASELINE, abs=0.01)
 
 
 @pytest.mark.parametrize("optionen", [
