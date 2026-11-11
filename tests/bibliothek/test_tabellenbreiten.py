@@ -19,10 +19,12 @@ from buecherlisten.core.layout import (  # noqa: E402
     MIN_GAP,
     MIN_WRAP_COL,
     RUECKLAGEN,
+    TRENNSTELLE,
     _lange_koepfe,
     _max_word_width,
     _raw_width,
     _wrap_info,
+    _wrap_lines,
     render_table,
 )
 
@@ -129,10 +131,10 @@ def test_koepfe_bleiben_kurz_wenn_der_platz_fuer_zeilen_gebraucht_wird():
 
 
 def test_nichts_bricht_um_ohne_hoehe_zu_sparen():
-    """Neben dem zweizeiligen Titel bliebe der Verlag auch umbrochen bei zwei
-    Zeilen - er tut es trotzdem nicht, solange es keine Zeile spart."""
+    """Neben dem dreizeiligen Titel bliebe die Zeile auch mit umbrochenem
+    Verlag dreizeilig - er bricht nicht um, weil es keine Zeile spart."""
     zeile = _zeile("5", "Elemente Chemie Oberstufe, Ausgabe Niedersachsen "
-                        "Klassen 11-13 G9 mit noch mehr Text dahinter", "C. C. Buchner")
+                        "Klassen 11-13 G9 mit Text", "C. C. Buchner")
     tabelle = _gesetzt([zeile])
     assert _zeilen(zeile["titel"], _inhalte(tabelle)[1]) > 1
     assert _zeilen(zeile["verlag"], _inhalte(tabelle)[2]) == 1
@@ -167,3 +169,68 @@ def test_ein_hinterer_kopf_wird_lang_wenn_ein_vorderer_nicht_passt():
     breiten = [10.0, 100.0, 20.0]
     lang = {0: 50.0, 2: 30.0}  # +40, +10
     assert _lange_koepfe(breiten, lang, sum(breiten) + 20.0) == (2,)
+
+
+# ── Notfall-Trennung und Mindestabstand (Vorgabe vom 2026-11-11) ─────────────
+
+LANG_OHNE_STRICH = "Donaudampfschifffahrtsgesellschaftskapitänsmützenabzeichen"
+LANG_MIT_STRICH = "Bibliographisches-Institut-Brockhaus-Wissenmedia"
+
+
+def _texte(tabelle, spalte: int) -> list[str]:
+    """Die gesetzten Zeilen jeder Zelle einer Spalte (``<br/>`` getrennt)."""
+    texte = []
+    for zeile in tabelle._cellvalues[1:]:
+        zelle = zeile[spalte]
+        zelle = zelle[0] if isinstance(zelle, tuple) else zelle
+        texte.append(getattr(zelle, "text", zelle))
+    return texte
+
+
+def _abstand(tabelle) -> float:
+    return tabelle._cellStyles[1][1].leftPadding * 2
+
+
+def test_zu_lange_woerter_werden_getrennt_bis_die_tabelle_passt():
+    tabelle = _gesetzt([_zeile("5, 6", LANG_OHNE_STRICH, LANG_MIT_STRICH),
+                        _zeile("7", "Kurshefte Geschichte Einführungsphase", "Cornelsen")])
+    assert sum(tabelle._colWidths) == pytest.approx(CONTENT_WIDTH)
+    assert _abstand(tabelle) >= MIN_GAP - 1e-6
+    titel, verlag = _texte(tabelle, 1), _texte(tabelle, 2)
+    # Der Verlag bricht nur hinter seinen Bindestrichen, der Titel zeichenweise.
+    assert all(zeile.endswith("-") for zeile in verlag[0].split("<br/>")[:-1])
+    assert verlag[0].replace("<br/>", "") == LANG_MIT_STRICH
+    assert "<br/>" in titel[0] and titel[0].replace("<br/>", "") == LANG_OHNE_STRICH
+    # Nur die zu langen Wörter: die andere Zeile bleibt, wie sie war.
+    assert "<br/>" not in titel[1] and "<br/>" not in verlag[1]
+    assert not any(TRENNSTELLE in t for t in titel + verlag)
+
+
+def test_nur_das_noetige_wird_getrennt():
+    """Reicht das Trennen am Bindestrich, wird nicht zeichenweise getrennt."""
+    tabelle = _gesetzt([_zeile("5", "Atlas", LANG_MIT_STRICH + "-Verlagsgruppe")])
+    (verlag,) = _texte(tabelle, 2)
+    teile = (LANG_MIT_STRICH + "-Verlagsgruppe").split("-")
+    assert all(zeile.rstrip("-") and set(zeile.rstrip("-").split("-")) <= set(teile)
+               for zeile in verlag.split("<br/>"))
+
+
+def test_ohne_ueberlauf_wird_nichts_getrennt():
+    tabelle = _gesetzt(GESCHICHTE)
+    assert not any("<br/>" in t for t in _texte(tabelle, 1) + _texte(tabelle, 2))
+
+
+def test_trennstelle_bricht_ohne_leerzeichen_um():
+    text = f"ab{TRENNSTELLE}cd ef"
+    assert _wrap_lines(text, 1.0) == ["ab", "cd", "ef"]
+    assert _wrap_lines(text, 1000.0) == ["abcd ef"]
+
+
+def test_der_mindestabstand_wird_nie_unterschritten():
+    """Passt die Tabelle gar nicht (zu breite einzeilige Spalte), läuft sie
+    über - die Abstände bleiben trotzdem beim Mindestabstand."""
+    zeile = {**_zeile("5", "Atlas", "Klett"), "neupreis": "1" * 120 + " €"}
+    tabelle = _gesetzt([zeile])
+    assert sum(tabelle._colWidths) > CONTENT_WIDTH
+    assert _abstand(tabelle) == pytest.approx(MIN_GAP)
+    assert MIN_GAP == 8.0

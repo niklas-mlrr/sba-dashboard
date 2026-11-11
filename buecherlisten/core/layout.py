@@ -123,12 +123,15 @@ ISBN_FONT_SIZE = 8.0
 # Mindestbreite mehr - nur ihr breitestes Wort und ihren Kopf (Vorgabe vom
 # 2026-11-11, siehe _aufteilen).
 MIN_WRAP_COL = 20 * mm
-# Mindestabstand zwischen zwei Spalten (14pt = 7pt je Seite), auch wenn der
-# Inhalt die Tabellenbreite fast ausfüllt — sonst kann der rechnerisch
-# gleichmäßig verteilte Rest pro Lücke gegen 0 gehen und Text ohne sichtbaren
-# Abstand aneinanderstoßen (beobachtet 2026-08-18, "Klasse"-Wert direkt vor
-# dem Titel).
-MIN_GAP = 14.0
+# Mindestabstand zwischen zwei Spalten (4 pt je Seite), auch wenn der Inhalt
+# die Tabellenbreite fast ausfüllt — sonst kann der rechnerisch gleichmäßig
+# verteilte Rest pro Lücke gegen 0 gehen und Text ohne sichtbaren Abstand
+# aneinanderstoßen (beobachtet 2026-08-18, "Klasse"-Wert direkt vor dem
+# Titel). Er wird nie unterschritten (Vorgabe vom 2026-11-11: 8 pt; die
+# IServ-Bücherliste hat 16 pt, ausgemessen an "Bücherliste Jahrgang 5.pdf").
+MIN_GAP = 8.0
+# Spalt zwischen den beiden Unterschriftslinien des Bestätigungs-Blocks.
+SIGNATUR_SPALT = 14.0
 # Abstand einer Tabellenzeile zur Trennlinie darüber/darunter (Original: 4pt).
 CELL_VPAD = 2.0
 # Siehe TOPPADDING/BOTTOMPADDING in render_table.
@@ -218,6 +221,24 @@ def _woerter(text: str) -> list[str]:
     return [wort for wort in _UMBRUCH.split(text) if wort]
 
 
+# Notfall-Trennstelle (Vorgabe vom 2026-11-11): in einem Wort, das die Tabelle
+# sonst über den rechten Rand drückt, eine Stelle, an der ohne Leerzeichen
+# umbrochen werden darf - hinter einem Bindestrich oder zwischen zwei Zeichen
+# (siehe _notfall_trennen). Ein Zeichen aus dem privaten Bereich, nie gedruckt.
+TRENNSTELLE = "\ue001"
+
+
+def _stuecke(text: str) -> list[tuple[str, str]]:
+    """Die unteilbaren Stücke eines Texts, je mit dem, was sie vom vorigen
+    trennt: " " zwischen Wörtern, "" an einer TRENNSTELLE."""
+    stuecke: list[tuple[str, str]] = []
+    for wort in _woerter(text):
+        for i, stueck in enumerate(wort.split(TRENNSTELLE)):
+            if stueck:
+                stuecke.append((" " if i == 0 else "", stueck))
+    return stuecke
+
+
 # Ein erzwungener Zeilenumbruch in einem Zellwert: im Paragraph ``<br/>``
 # (siehe _zelle), beim Messen das Ende einer Zeile. app/planungsdruck.py setzt
 # ihn vor und hinter einen Jahrgang mit Jahreszusatz.
@@ -279,18 +300,18 @@ def _umbrochen(
 
 
 def _wrap_einfach(text: str, width: float, *, font: str, size: float) -> list[str]:
-    words = _woerter(text)
-    if not words:
+    stuecke = _stuecke(text)
+    if not stuecke:
         return [""]
     lines: list[str] = []
-    current = words[0]
-    for word in words[1:]:
-        candidate = f"{current} {word}"
+    current = stuecke[0][1]
+    for trenner, stueck in stuecke[1:]:
+        candidate = current + trenner + stueck
         if stringWidth(candidate, font, size) <= width:
             current = candidate
         else:
             lines.append(current)
-            current = word
+            current = stueck
     lines.append(current)
     return lines
 
@@ -313,8 +334,8 @@ def _max_word_width(values: list[str], *, font: str = BODY_FONT, size: float = C
     for v in values:
         for teil in v.split(ZEILENUMBRUCH):
             _, rest, kopf_w = _einzug(teil, font, size)
-            for word in _woerter(rest):
-                widest = max(widest, kopf_w + stringWidth(word, font, size))
+            for _, stueck in _stuecke(rest):
+                widest = max(widest, kopf_w + stringWidth(stueck, font, size))
     return widest + WIDTH_EPSILON if widest else 0.0
 
 
@@ -324,12 +345,54 @@ def _breiten_kandidaten(values: list[str]) -> list[float]:
     kandidaten = set()
     for v in (teil for wert in values for teil in wert.split(ZEILENUMBRUCH)):
         _, rest, kopf_w = _einzug(v)
-        woerter = _woerter(rest)
-        for a in range(len(woerter)):
-            for b in range(a + 1, len(woerter) + 1):
-                kandidaten.add(kopf_w + stringWidth(" ".join(woerter[a:b]), BODY_FONT, CELL_FONT_SIZE)
-                               + WIDTH_EPSILON)
+        stuecke = _stuecke(rest)
+        for a in range(len(stuecke)):
+            folge = stuecke[a][1]
+            kandidaten.add(kopf_w + stringWidth(folge, BODY_FONT, CELL_FONT_SIZE) + WIDTH_EPSILON)
+            for trenner, stueck in stuecke[a + 1:]:
+                folge += trenner + stueck
+                kandidaten.add(kopf_w + stringWidth(folge, BODY_FONT, CELL_FONT_SIZE) + WIDTH_EPSILON)
     return sorted(kandidaten)
+
+
+def _notfall_trennen(
+    werte: list[list[str]], koepfe: list[float], verfuegbar: float, teilbar: list[list[bool]],
+) -> list[list[str]]:
+    """Die Werte der umbrechenden Spalten, so getrennt, dass die Tabelle in die
+    Breite passt (Vorgabe vom 2026-11-11).
+
+    Solange nicht einmal jede Spalte auf ihr breitestes Stück passt, wird das
+    breiteste Stück aufgebrochen, das eine Spalte breiter als ihren Kopf hält:
+    zuerst hinter seinen Bindestrichen, hat es keine (mehr), zwischen allen
+    Zeichen - überall, wo es in dieser Spalte steht. Nur Zellen mit
+    ``teilbar`` werden getrennt (nicht die Jahrgänge mit Zusatz). Passt es
+    auch dann nicht, bleibt der Überstand.
+    """
+    werte = [list(spalte) for spalte in werte]
+    while sum(max(_max_word_width(w), k) for w, k in zip(werte, koepfe, strict=True)) > verfuegbar:
+        breitestes: tuple[float, int, str] | None = None
+        for s, (spalte, kopf_w) in enumerate(zip(werte, koepfe, strict=True)):
+            stuecke = [stueck for wert, ja in zip(spalte, teilbar[s], strict=True) if ja
+                       for teil in wert.split(ZEILENUMBRUCH)
+                       for _, stueck in _stuecke(_einzug(teil)[1]) if len(stueck) > 1]
+            if not stuecke:
+                continue
+            stueck = max(stuecke, key=lambda x: stringWidth(x, BODY_FONT, CELL_FONT_SIZE))
+            breite = stringWidth(stueck, BODY_FONT, CELL_FONT_SIZE) + WIDTH_EPSILON
+            # Nur ein Stück, das seine Spalte breit hält, macht sie schmaler.
+            if breite > kopf_w and breite >= _max_word_width(spalte) - 1e-6 and (
+                    breitestes is None or breite > breitestes[0]):
+                breitestes = (breite, s, stueck)
+        if breitestes is None:
+            break
+        _, s, stueck = breitestes
+        if re.search(r"-(?=.)", stueck):
+            getrennt = re.sub(r"-(?=.)", "-" + TRENNSTELLE, stueck)
+        else:
+            getrennt = TRENNSTELLE.join(stueck)
+        werte[s] = [wert.replace(stueck, getrennt) if ja else wert
+                    for wert, ja in zip(werte[s], teilbar[s], strict=True)]
+    return werte
 
 
 @dataclass(frozen=True)
@@ -712,6 +775,8 @@ def _zelle(zeile: dict, spalte: Spalte) -> Any:
     zeilenstil = zeile.get("stil") or ""
     teile = zeile.get("klasse_teile") if spalte.key == "klasse" else None
     if not zeilenstil and not teile:
+        if spalte.umbruch and ZEILENUMBRUCH in text:
+            return Paragraph(_markup(text, frozenset()), CELL_STYLE)
         return Paragraph(text, CELL_STYLE) if spalte.umbruch else text
     eigen = frozenset((zeilenstil,)) if zeilenstil else frozenset()
     if teile and any(stueck == EINZUG for stueck, _ in teile):
@@ -763,9 +828,17 @@ def render_table(
     # 2) Die umbrechenden Spalten teilen sich den Rest so, dass die Tabelle
     #    am wenigsten Zeilen hoch ist; jede ist danach nur so breit wie ihre
     #    breiteste Zeile (siehe _aufteilen).
+    #    Passt nicht einmal jedes breiteste Wort, werden die zu breiten
+    #    Wörter vorher getrennt (siehe _notfall_trennen).
+    kopf_breiten = [_raw_width(koepfe[i], []) for i in umbruch]
+    verfuegbar = effective_width - sum(breiten)
+    teilbar = [[not (spalten[i].key == "klasse" and r.get("klasse_teile")) for r in rows]
+               for i in umbruch]
+    for i, getrennt in zip(umbruch, _notfall_trennen(
+            [werte[i] for i in umbruch], kopf_breiten, verfuegbar, teilbar), strict=True):
+        werte[i] = getrennt
     for i, breite in zip(umbruch, _aufteilen(
-            [werte[i] for i in umbruch], [_raw_width(koepfe[i], []) for i in umbruch],
-            effective_width - sum(breiten)), strict=True):
+            [werte[i] for i in umbruch], kopf_breiten, verfuegbar), strict=True):
         breiten[i] = breite
 
     # 3) Bleibt Platz, werden möglichst viele Köpfe lang geschrieben (siehe
@@ -780,10 +853,11 @@ def render_table(
     # 4) Restplatz gleichmäßig auf alle Spaltenzwischenräume verteilen —
     #    jede Spalte bleibt exakt so breit wie ihr tatsächlich benötigter
     #    Inhalt (keine Spalte länger als der längste Inhalt einer Zeile).
-    #    Dank effective_width in Schritt 1-3 ist gap hier immer >= MIN_GAP
-    #    (außer ein einzelnes Wort ist breiter als der ganze Platz).
+    #    Dank effective_width in Schritt 1-3 ist gap hier immer >= MIN_GAP.
+    #    Passt die Tabelle selbst nach der Notfall-Trennung nicht, bleibt es
+    #    bei MIN_GAP und sie läuft rechts über, statt dass Text aneinanderstößt.
     total_content = sum(breiten)
-    gap = max(CONTENT_WIDTH - total_content, 0.0) / n_gaps if n_gaps else 0.0
+    gap = max((CONTENT_WIDTH - total_content) / n_gaps, MIN_GAP) if n_gaps else 0.0
     half_gap = gap / 2
 
     # colWidths braucht die VOLLE Spaltenbreite inkl. ihres Anteils an der
@@ -795,6 +869,11 @@ def render_table(
         for i, w in enumerate(breiten)
     ]
 
+    # Notfall-getrennte Zellen bekommen ihre Zeilen fest: reportlab kennt
+    # die TRENNSTELLE nicht, gesetzt wird wie gemessen.
+    rows = [{**r, **{sp.key: ZEILENUMBRUCH.join(_wrap_lines(werte[i][z], breiten[i]))
+                     for i, sp in enumerate(spalten) if TRENNSTELLE in werte[i][z]}}
+            for z, r in enumerate(rows)]
     data: list[list] = [list(koepfe)]
     for r in rows:
         data.append([_zelle(r, sp) for sp in spalten])
@@ -1139,7 +1218,7 @@ class ConfirmationBlock(Flowable):
         # "Unterschrift Fachkonferenzleitung <Fach>" mit einer eigenen Linie.
         # Eine leere Spalter dazwischen (ohne Linie) sorgt für einen
         # sichtbaren Spalt zwischen den beiden Linien.
-        sig_col_w = (self.width - MIN_GAP) / 2
+        sig_col_w = (self.width - SIGNATUR_SPALT) / 2
         self._sig_table = Table(
             [
                 ["", "", ""],
@@ -1149,7 +1228,7 @@ class ConfirmationBlock(Flowable):
                     Paragraph(signature_label, SIGNATURE_LABEL_STYLE),
                 ],
             ],
-            colWidths=[sig_col_w, MIN_GAP, sig_col_w],
+            colWidths=[sig_col_w, SIGNATUR_SPALT, sig_col_w],
             rowHeights=[SIGNATURE_LINE_HEIGHT, None],
         )
         self._sig_table.setStyle(TableStyle([
