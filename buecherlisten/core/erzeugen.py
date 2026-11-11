@@ -31,7 +31,6 @@ from buecherlisten.trg_web import (
 from .daten import Ansicht, Buecherdaten
 from .layout import (
     FACH_LISTE,
-    FACH_LISTE_ANTRAEGE,
     JAHRGANG_LISTE,
     PLANUNG_QUELLE,
     VERLAG_LISTE,
@@ -176,8 +175,7 @@ def erzeuge_buecherlisten_pdfs(
     :data:`~buecherlisten.core.layout.PLANUNG_QUELLE`).
 
     ``antraege`` (nur Fächer, ohne ``iserv_stand``): die Tabellen tragen die
-    Antragsinformationen der Planung (``app/planungsdruck.py``), die Spalte
-    „Jahrgang“ darf dann umbrechen (:data:`~buecherlisten.core.layout.FACH_LISTE_ANTRAEGE`).
+    Antragsinformationen der Planung (``app/planungsdruck.py``).
     """
     if ansicht != "fach" and (bestaetigung or modus == "aufgabenfeld" or iserv_stand):
         raise ValueError(
@@ -187,8 +185,6 @@ def erzeuge_buecherlisten_pdfs(
     if antraege and (ansicht != "fach" or iserv_stand):
         raise ValueError("Antragsinformationen gibt es nur für Fächer ohne IServ-Stand.")
     art, sammel_label = _ARTEN[ansicht]
-    if antraege:
-        art = FACH_LISTE_ANTRAEGE
     # Die Fußzeile nennt immer die Quelle, "Erstellt: <Datum>" steht darüber.
     quelle = PLANUNG_QUELLE
     if iserv_stand:

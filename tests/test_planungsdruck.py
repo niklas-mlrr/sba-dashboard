@@ -16,7 +16,7 @@ from buecherlisten.core.erzeugen import Zuordnungen, erzeuge_buecherlisten_pdfs
 from buecherlisten.core.layout import (
     CONTENT_WIDTH,
     EINZUG,
-    FACH_LISTE_ANTRAEGE,
+    FACH_LISTE,
     STIL_DURCH,
     STIL_GRAU,
     _wrap_lines,
@@ -133,8 +133,8 @@ def test_von_bis_bricht_nur_vor_bis():
 
 def test_zellen_tragen_den_stil(planung):
     leih = _je_titel(fach_tabellen(planung, antraege=True)["Chemie"]["leih"])
-    klasse, titel, isbn = FACH_LISTE_ANTRAEGE.spalten[0], FACH_LISTE_ANTRAEGE.spalten[1], \
-        FACH_LISTE_ANTRAEGE.spalten[3]
+    klasse, titel, isbn = FACH_LISTE.spalten[0], FACH_LISTE.spalten[1], \
+        FACH_LISTE.spalten[3]
     grau = _zelle(leih["Neu beantragt"], titel)
     assert 'color="#8c8c8c"' in grau.text and "Neu beantragt" in grau.text
     durch = _zelle(leih["Neu abgelehnt"], isbn)
@@ -165,7 +165,7 @@ def test_klasse_bricht_um_wenn_es_zeilen_spart(planung):
     zeilen = fach_tabellen(planung, antraege=True)["Chemie"]["leih"]
     lang = {**zeilen[0], "klasse": ", ".join([f"{j}{NBSP}(ab{NBSP}2027/2028)" for j in range(5, 11)])}
     lang.pop("klasse_teile")
-    tabelle = render_table([lang], with_fee=True, spalten=FACH_LISTE_ANTRAEGE.spalten)
+    tabelle = render_table([lang], with_fee=True, spalten=FACH_LISTE.spalten)
     einzeilig = stringWidth(lang["klasse"], "Helvetica", 10)
     assert tabelle._colWidths[0] < einzeilig * 0.6
     # Die Tabelle bleibt in der Breite des Satzspiegels.
@@ -196,7 +196,7 @@ def test_jahrgang_mit_jahreszusatz_steht_allein_in_seinen_zeilen():
         "5,", "6,", f"7{NBSP}(von{NBSP}2027/2028", f"bis{NBSP}2028/2029),", "8,", "9"]
     # Je Zeile ein Absatz; der mit Zusatz hängt hinter „7 (“: sein Umbruch
     # beginnt bündig unter „von“ (Vorgabe vom 2026-11-10).
-    erste, zusatz, letzte = _zelle(zeile, FACH_LISTE_ANTRAEGE.spalten[0])
+    erste, zusatz, letzte = _zelle(zeile, FACH_LISTE.spalten[0])
     assert (erste.text, letzte.text) == ("5, 6,", "8, 9")
     einzug = stringWidth(f"7{NBSP}(", "Helvetica", 10)
     assert zusatz.style.leftIndent == pytest.approx(einzug)
@@ -209,7 +209,7 @@ def test_jahrgang_mit_jahreszusatz_steht_allein_in_seinen_zeilen():
     zusatz.wrap(breite, 1000.0)
     assert len(zusatz.blPara.lines) == 2
     # Die Spalte ist so breit wie die breiteste Zeile, nicht wie der ganze Wert.
-    tabelle = render_table([zeile], with_fee=True, spalten=FACH_LISTE_ANTRAEGE.spalten)
+    tabelle = render_table([zeile], with_fee=True, spalten=FACH_LISTE.spalten)
     assert tabelle._colWidths[0] < stringWidth(zeile["klasse"], "Helvetica", 10)
 
 
