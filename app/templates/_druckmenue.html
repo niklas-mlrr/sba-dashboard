@@ -14,6 +14,9 @@
   nur Jahrgänge haben die Schülerliste, also die Druckversion aus IServ.
   Reihenfolge der Fach-Felder: Stand, Fächer, Reihenfolge, Bestätigung,
   Rückgabe, Gesendet, Anträge, Doppelseitig.
+  "Doppelseitig" gibt es nur auf der Übersicht, wo mehrere Gruppen in eine
+  PDF gehen; auf der Seite eines einzelnen Fachs (Verlags, Jahrgangs) fehlt
+  es (Vorgabe vom 2026-11-11, der Server ignoriert es dort auch).
   Bestätigung und Anträge gibt es nur ohne "IServ-Stand benutzen"; ihre
   Felder sind sonst gesperrt (druckmenue.js). Fehlen in IServ die
   Bücherlisten, ist "IServ-Stand benutzen" selbst gesperrt (iserv_sperre).
@@ -192,6 +195,7 @@
       </div>
       {% endif %}
 
+      {% if druck_gruppen %}
       <div class="form-group">
         <label class="control-label spalte-beschriftung">Doppelseitig:</label>
         <div class="spalte-inhalt">
@@ -205,6 +209,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-default" id="druck-abbrechen">Abbrechen</button>

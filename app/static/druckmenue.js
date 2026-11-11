@@ -2,7 +2,7 @@
 //
 // Dieselbe Datei für Fach, Verlag und Jahrgang: Stand, Bestätigung, Rückgabe,
 // Anträge und Reihenfolge gibt es nur bei Fach, die Schülerliste nur bei
-// Jahrgang, die Auswahl nur auf der Übersicht. Was fehlt, wird hier
+// Jahrgang, die Auswahl und "Doppelseitig" nur auf der Übersicht. Was fehlt, wird hier
 // übersprungen.
 //
 // Regeln, die hier und nirgends sonst stehen:
@@ -61,13 +61,15 @@
         zeile.classList.toggle("disabled", !mitAntraegen);
       }
     }
-    fallsNoetig.disabled = !doppelseitig.checked;
-    fallsNoetigZeile.classList.toggle("disabled", !doppelseitig.checked);
+    if (doppelseitig) {
+      fallsNoetig.disabled = !doppelseitig.checked;
+      fallsNoetigZeile.classList.toggle("disabled", !doppelseitig.checked);
+    }
   }
   if (iservStand) {
     for (const feld of [iservStand, bestaetigung, antragsinfo]) feld.addEventListener("change", sperren);
   }
-  doppelseitig.addEventListener("change", sperren);
+  if (doppelseitig) doppelseitig.addEventListener("change", sperren);
 
   // ── Auswahl (nur auf der Übersicht) ───────────────────────────────────────
   const individuell = document.getElementById("druck-individuell");

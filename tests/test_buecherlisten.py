@@ -520,6 +520,25 @@ def test_einzelnes_fach_wird_eigenes_pdf(seiten: TestClient, erzeuger: _Erzeuger
     assert erzeuger.aufrufe[0]["modus"] == "split"
 
 
+@pytest.mark.parametrize("pfad", ["/buecherliste/fach/Chemie/pdf", "/buecherliste/jahrgang/Jahrgang 5/pdf"])
+def test_einzelne_gruppe_druckt_nie_doppelseitig(seiten: TestClient, erzeuger: _Erzeuger, pfad: str):
+    _anmelden(seiten)
+    assert _drucken(seiten, [("doppelseitig", "1"), ("falls_noetig", "1")], pfad).status_code == 200
+    (aufruf,) = erzeuger.aufrufe
+    assert aufruf["doppelseitig"] is False and aufruf["nur_falls_noetig"] is False
+
+
+@pytest.mark.parametrize("pfad, da", [
+    ("/buecherliste/fach", True), ("/buecherliste/fach/Chemie", False),
+    ("/buecherliste/jahrgang", True),
+])
+def test_doppelseitig_steht_nur_im_menue_der_uebersicht(seiten: TestClient, pfad: str, da: bool):
+    _anmelden(seiten)
+    menue = seiten.get(pfad).text.split('<dialog id="druckmenue"')[1].split("</dialog>")[0]
+    assert ('id="druck-doppelseitig"' in menue) is da
+    assert ('id="druck-falls-noetig"' in menue) is da
+
+
 @pytest.mark.parametrize("felder, pfad", [
     ([("faecher_auswahl", "individuell")], "/buecherliste/fach/pdf"),
     ([("faecher_auswahl", "individuell"), ("faecher", "Alchemie")], "/buecherliste/fach/pdf"),

@@ -393,14 +393,20 @@ async def pdf_gruppen(request: Request, ansicht: str) -> Response:
 
 @router.get("/buecherliste/{ansicht}/{name:path}/pdf")
 async def pdf_gruppe(request: Request, ansicht: str, name: str) -> Response:
-    """PDF eines Fachs, Verlags oder Jahrgangs, aus dem Druckmenü seiner Seite."""
+    """PDF eines Fachs, Verlags oder Jahrgangs, aus dem Druckmenü seiner Seite.
+
+    Ohne "Doppelseitig": das gibt es nur beim Druck mehrerer Gruppen
+    (Vorgabe vom 2026-11-11); alte Links mit ``doppelseitig`` wirken nicht.
+    """
     if ansicht not in _ANSICHTEN:
         return _unbekannte_ansicht(request, ansicht)
-    return await _pdf(request, cast(Ansicht, ansicht), lambda alle: ([name], "split"))
+    return await _pdf(request, cast(Ansicht, ansicht), lambda alle: ([name], "split"),
+                      doppelseitig_erlaubt=False)
 
 
 async def _pdf(request: Request, ansicht: Ansicht,
-               auswahl: Callable[[list[str]], tuple[list[str], str]]) -> Response:
+               auswahl: Callable[[list[str]], tuple[list[str], str]],
+               *, doppelseitig_erlaubt: bool = True) -> Response:
     """Lädt die Daten, wählt die Gruppen und liefert das PDF zum Anzeigen.
 
     ``Content-Disposition: inline`` sorgt dafür, dass der Browser das PDF im
@@ -472,6 +478,8 @@ async def _pdf(request: Request, ansicht: Ansicht,
                         if unbekannt else "Es ist nichts ausgewählt.", 400)
 
     schuelerliste = ansicht == "jahrgang" and bool(eins("schuelerliste"))
+    doppelseitig = doppelseitig_erlaubt and bool(eins("doppelseitig"))
+    nur_falls_noetig = doppelseitig and bool(eins("falls_noetig"))
     try:
         if schuelerliste:
             (pdf, *_) = await run_in_threadpool(
@@ -480,8 +488,8 @@ async def _pdf(request: Request, ansicht: Ansicht,
                     lambda listen_id: client.admin.get_booklist_pdf(daten.schuljahr_id, listen_id),
                     jahrgaenge=gruppen,
                     modus="split" if modus == "split" else "alphabet",
-                    doppelseitig=bool(eins("doppelseitig")),
-                    nur_falls_noetig=bool(eins("falls_noetig")),
+                    doppelseitig=doppelseitig,
+                    nur_falls_noetig=nur_falls_noetig,
                 )
             )
         else:
@@ -497,8 +505,8 @@ async def _pdf(request: Request, ansicht: Ansicht,
                     antraege=antraege,
                     rueckgabe_bis=eins("rueckgabe_bis") or None,
                     rueckgabe_an=eins("rueckgabe_an") or None,
-                    doppelseitig=bool(eins("doppelseitig")),
-                    nur_falls_noetig=bool(eins("falls_noetig")),
+                    doppelseitig=doppelseitig,
+                    nur_falls_noetig=nur_falls_noetig,
                 )
             )
     except Exception as exc:  # noqa: BLE001
