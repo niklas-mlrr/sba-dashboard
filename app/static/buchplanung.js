@@ -722,8 +722,9 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       bemerkung: werte.bemerkung || "",
     };
     // Die ISBN gehört nicht zur Buchreihe, die verglichen wird: beim
-    // Hinzufügen ist sie die Wahl des Buchs, bei „ISBN folgt“ wird sie
-    // nachgetragen (``nachgetragen``), sonst steht sie gesperrt da.
+    // Hinzufügen ist sie die Wahl des Buchs, sonst wird sie nachgetragen
+    // („ISBN folgt“) oder korrigiert (``nachgetragen``). Unverändert ändert
+    // sie auf dem Server nichts.
     const isbn = reihe.isbn || "";
     delete reihe.isbn;
     return {
@@ -870,10 +871,9 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       })));
   }
 
-  // Der Block „Buchreihe“: Titel, Verlag und Preise so, wie sie dastehen - die
-  // ISBN steht nur zum Lesen da und geht nicht mit. Ob etwas davon eine
-  // Korrektur ist, entscheidet der Server; er kennt die IServ-Werte aus der
-  // Datei. Hier wird nur geprüft, was IServ im selben Dialog als Pflichtfeld
+  // Der Block „Buchreihe“: ISBN, Titel, Verlag und Preise so, wie sie dastehen.
+  // Ob etwas davon eine Korrektur ist, entscheidet der Server; er kennt die
+  // IServ-Werte aus der Datei. Hier wird nur geprüft, was IServ im selben Dialog als Pflichtfeld
   // führt. ``undefined`` heißt: nicht speichern, die Meldung steht schon da.
   function buchreihe() {
     const bereich = menue.querySelector("[data-buchreihe]");
@@ -888,13 +888,17 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
         feld.focus();
         return undefined;
       }
-      // Die gesperrte ISBN eines Buchs geht nicht mit; nur die offene - beim
-      // Hinzufügen und bei „ISBN folgt“. Ob sie gültig ist, prüft der Server.
+      // Ein gesperrtes Feld geht nicht mit. Ob die ISBN gültig ist, prüft
+      // der Server.
       if (feld.disabled) continue;
       werte[feld.dataset.buchreiheFeld] = feld.value.trim();
     }
     // Die ISBN ist kein Pflichtfeld: ohne steht ein Buch unter „ISBN folgt“.
+    // Nur wo schon eine stand, wäre leer ein Versehen - der Server ließe sie
+    // dann still, wie sie war.
+    const isbnFeld = bereich.querySelector('[data-buchreihe-feld="isbn"]');
     const pflicht = [["titel", "den Titel"], ["verlag", "den Verlag"]];
+    if (isbnFeld && isbnFeld.defaultValue) pflicht.unshift(["isbn", "die ISBN"]);
     for (const [name, text] of pflicht) {
       if (!werte[name]) {
         meldeImMenue(menue, "Bitte " + text + " eintragen.");

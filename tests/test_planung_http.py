@@ -1079,9 +1079,9 @@ def test_das_menue_zeigt_die_buchreihe_vor_der_planung(
     for feld in ("isbn", "titel", "verlag", "neupreis", "leihgebuehr"):
         assert f'data-buchreihe-feld="{feld}"' in vorlage
     assert 'value="22.50"' in vorlage
-    # Die ISBN ist gesperrt (grau, nicht anklickbar): sie ist der Schlüssel.
+    # Die ISBN ist offen: ein Tippfehler lässt sich korrigieren (2026-11-12).
     isbn_feld = vorlage.split('data-buchreihe-feld="isbn"')[1].split(">")[0]
-    assert "disabled" in isbn_feld
+    assert "disabled" not in isbn_feld and 'value="978-3-06-000000-5"' in isbn_feld
     # Die Verlage für die Vorschläge, einmal je Seite.
     verlage = text.split('id="planung-verlage">')[1].split("</script>")[0]
     assert json.loads(verlage) == ["Cornelsen", "Klett", "Langenscheidt", "Westermann"]
@@ -1123,24 +1123,22 @@ def test_korrektur_uebersteht_den_abgleich(
     assert "in IServ: Deutschbuch 5" in seiten.get("/buecherliste/fach/Deutsch").text
 
 
-def test_eine_isbn_im_koerper_der_buchreihe_aendert_nichts(
+def test_die_isbn_eines_anderen_buchs_wird_abgewiesen_und_nichts_gespeichert(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
-    """Die ISBN steht im Menü nur zum Lesen; der Server weist eine andere ab.
-
-    Nachtragen lässt sie sich nur bei einem Buch unter „ISBN folgt“.
-    """
+    """Korrigieren ja (2026-11-12), aber nicht auf ein Buch, das es schon gibt:
+    zwei Einträge liefen sonst still zusammen. Auch Titel und Verlag bleiben."""
     antwort = seiten.post("/api/buchplanung/buch", json={
         "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
         "zeilen": [{"jahrgang": 5}],
-        "buchreihe": {**_buchreihe("Deutschbuch 5", "Cornelsen"), "isbn": "9783161484100"},
+        "buchreihe": {**_buchreihe("Deutschbuch 5 neu", "Cornelsen"), "isbn": TERRA},
         "mtime": abgeglichen["mtime"],
     })
     assert antwort.status_code == 400
-    assert antwort.json()["fehler"] == "Die ISBN eines Buchs lässt sich nicht ändern."
+    assert "gehört schon zu" in antwort.json()["fehler"]
     stand = seiten.get("/api/buchplanung", params={"schuljahr": "2026/2027"}).json()
-    assert any(b["isbn"] == DEUTSCH for b in stand["planung"]["buecher"])
-    assert not any(b["isbn"] == "9783161484100" for b in stand["planung"]["buecher"])
+    deutsch = next(b for b in stand["planung"]["buecher"] if b["isbn"] == DEUTSCH)
+    assert deutsch["titel"] == "Deutschbuch 5"
 
 
 def test_leerer_titel_wird_mit_einem_satz_abgewiesen(
@@ -2319,6 +2317,37 @@ def test_ein_buch_ohne_isbn_steht_unter_isbn_folgt_bis_sie_nachgetragen_ist(
     text = seiten.get("/buecherliste/fach/Deutsch").text
     assert "OHNE-ISBN-1" not in text
     assert "<samp>978-3-16-148410-0</samp>" in _zeile_von(text, NEU)
+
+
+def test_eine_vertippte_isbn_wird_im_menue_korrigiert(
+    seiten: TestClient, abgeglichen: dict,
+) -> None:
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    vorher = _vorher(text, DEUTSCH, "Deutsch")
+    koerper = {
+        "schuljahr": "2026/2027", "isbn": DEUTSCH, "fach": "Deutsch",
+        "zeilen": [{**z, "bisher_ab": z["eingefuehrt_ab"]} for z in vorher["zeilen"].values()],
+        "ruecklage": vorher["ruecklage"], "vorher": vorher,
+    }
+    # Unverändert mitgeschickt - so, wie das Menü sie anzeigt - ändert sie nichts.
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        **koerper, "buchreihe": {**vorher["buchreihe"], "isbn": "978-3-06-000000-5"}})
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    assert f'<tr data-isbn="{DEUTSCH}"' in text
+    vorher = _vorher(text, DEUTSCH, "Deutsch")
+    antwort = seiten.post("/api/buchplanung/buch", json={
+        **koerper, "vorher": vorher,
+        "buchreihe": {**vorher["buchreihe"], "isbn": "978-3-16-148410-0"}})
+    assert antwort.status_code == 200, antwort.text
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    stand = seiten.get("/api/buchplanung", params={"schuljahr": "2026/2027"}).json()
+    isbns = {b["isbn"] for b in stand["planung"]["buecher"]}
+    assert NEU in isbns and DEUTSCH not in isbns
+    assert "<samp>978-3-16-148410-0</samp>" in _zeile_von(text, NEU)
+    # IServ führt noch die alte ISBN: der Vergleich zeigt sie, bis sie dort
+    # ebenfalls korrigiert ist.
+    assert "nur in IServ" in _zeile_von(text, DEUTSCH)
 
 
 def test_teils_leihbar_steht_in_zwei_teilzeilen_je_fuer_sich_gefaerbt(

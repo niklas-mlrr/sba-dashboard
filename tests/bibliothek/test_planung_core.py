@@ -1627,7 +1627,7 @@ def test_die_isbn_wird_nachgetragen_und_alles_zieht_mit(stand):
     assert neu.bemerkung("9783161484100").bemerkung == "kommt im Juli"
 
 
-def test_eine_isbn_laesst_sich_nur_fuer_einen_platzhalter_und_nur_neu_nachtragen(stand):
+def test_eine_isbn_laesst_sich_nur_gueltig_und_nur_neu_nachtragen(stand):
     stand = fuege_buch_hinzu(stand, isbn="", fach="Deutsch",
                              buchreihe=Buchreiheneingabe(titel="Neu", verlag="Klett"),
                              zeilen=[Jahrgangseingabe(jahrgang=7, eingefuehrt_ab="2027/2028")])
@@ -1635,5 +1635,22 @@ def test_eine_isbn_laesst_sich_nur_fuer_einen_platzhalter_und_nur_neu_nachtragen
         ersetze_isbn(stand, alt="OHNE-ISBN-1", neu=DEUTSCH)
     with pytest.raises(UngueltigeEingabe, match="keine gültige ISBN"):
         ersetze_isbn(stand, alt="OHNE-ISBN-1", neu="12345")
-    with pytest.raises(UngueltigeEingabe, match="lässt sich nicht ändern"):
-        ersetze_isbn(stand, alt=DEUTSCH, neu="9783161484100")
+    with pytest.raises(UngueltigeEingabe, match="gehört schon zu „Neu“"):
+        ersetze_isbn(stand, alt=DEUTSCH, neu="OHNE-ISBN-1")
+
+
+def test_eine_vertippte_isbn_wird_korrigiert_und_alles_zieht_mit(stand):
+    """Wie in IServ lässt sich auch eine echte ISBN ändern (Entscheidung 2026-11-12)."""
+    stand = entscheide_antrag(
+        setze_planung(stand, isbn=DEUTSCH, fach="Deutsch", jahrgang=7,
+                      eingefuehrt_ab="2027/2028"),
+        isbn=DEUTSCH, fach="Deutsch", jahrgang=7, art=ART_EINFUEHRUNG,
+        ergebnis="genehmigt", signatur="SL")
+    neu = ersetze_isbn(stand, alt=DEUTSCH, neu="978-3-16-148410-0")
+    assert neu.buch(DEUTSCH) is None
+    assert neu.buch("9783161484100").titel == "Deutschbuch 5"
+    assert not any(z.isbn == DEUTSCH for z in neu.planung)
+    zeile = neu.planungszeile("9783161484100", "Deutsch", 7)
+    assert zeile.antrag_einfuehrung.status == ANTRAG_GENEHMIGT
+    # Dieselbe ISBN, nur anders geschrieben, ändert nichts.
+    assert ersetze_isbn(stand, alt=DEUTSCH, neu="978-3-06-000000-5") is stand

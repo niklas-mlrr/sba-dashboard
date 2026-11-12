@@ -310,7 +310,7 @@ def schreibe_buchplanung(
         stand = setze_buchplanung(
             stand, isbn=isbn, fach=fach, zeilen=zeilen, ruecklage=ruecklage,
         )
-        # Zuletzt: die ISBN eines Buchs, das bisher „ISBN folgt“ hieß.
+        # Zuletzt die ISBN: nachgetragen („ISBN folgt“) oder korrigiert.
         if buchreihe is not None and (buchreihe.isbn or "").strip():
             stand = ersetze_isbn(stand, alt=isbn, neu=buchreihe.isbn or "")
         return stand

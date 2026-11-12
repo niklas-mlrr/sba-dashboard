@@ -383,12 +383,11 @@
     <input class="form-control" data-buchreihe-feld="isbn" placeholder="ISBN folgt"
       aria-label="ISBN" autocomplete="off" spellcheck="false" inputmode="numeric">
     {% else %}
-    {# Gesperrt (Entscheidung 2026-09-24): die ISBN ist der Schlüssel des Buchs
-       und wird im Menü nicht geändert. ``disabled`` wie die Felder eines
-       archivierten Schuljahrs in IServ: grau, nicht anklickbar. Mitgeschickt
-       wird sie nicht. #}
+    {# Offen (Entscheidung 2026-11-12, vorher gesperrt): ein Tippfehler beim
+       Anlegen muss sich korrigieren lassen - in IServ geht das auch. Mit dem
+       Buch ziehen Jahrgänge, Anträge und Rücklagen um (``ersetze_isbn``). #}
     <input class="form-control" data-buchreihe-feld="isbn" value="{{ buch.isbn_anzeige }}"
-      disabled aria-label="ISBN" autocomplete="off" spellcheck="false">
+      required aria-label="ISBN" autocomplete="off" spellcheck="false" inputmode="numeric">
     {% endif %}
   </div>
   <div class="form-group">
@@ -455,10 +454,12 @@
     eintragen - Jahrgänge, Anträge und Rücklage bleiben dabei erhalten.</p>
   {% elif buch.von_hand %}
   <p class="small help-block">Dieses Buch steht nicht in IServ, sondern wurde hier
-    hinzugefügt. Titel, Verlag und Preise gelten, wie sie hier stehen.</p>
+    hinzugefügt. ISBN, Titel, Verlag und Preise gelten, wie sie hier stehen.</p>
   {% else %}
   <p class="small help-block">Die Angaben gelten im Dashboard - in den Bücherlisten, im
-    PDF und in der Planungsdatei. In IServ selbst ändert sich nichts.</p>
+    PDF und in der Planungsdatei. In IServ selbst ändert sich nichts. Eine korrigierte
+    ISBN bitte auch in IServ ändern - bis dahin steht das Buch unter der alten ISBN als
+    „nur in IServ“ in der Liste.</p>
   {% endif %}
 </div>
 {% endmacro %}

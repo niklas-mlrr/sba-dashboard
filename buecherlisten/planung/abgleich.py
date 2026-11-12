@@ -570,8 +570,8 @@ def _ohne_verwaiste(stand: Buchplanung, isbn: str) -> Buchplanung:
 class Buchreiheneingabe:
     """Der Block „Buchreihe“ des Planungsmenüs - die änderbaren Felder.
 
-    Ohne ISBN: sie ist der Schlüssel des Buchs und steht im Menü nur zum
-    Lesen. Ein leerer Preis ist leer. „Leihbar“ steht nicht hier, sondern je
+    Die ISBN ist der Schlüssel des Buchs; geändert wird sie getrennt und
+    zuletzt (:func:`ersetze_isbn`). Ein leerer Preis ist leer. „Leihbar“ steht nicht hier, sondern je
     Jahrgang (:class:`Jahrgangseingabe`).
     """
 
@@ -582,8 +582,8 @@ class Buchreiheneingabe:
     # Die Spalte ``Bemerkung`` auf ``Buchreihen`` - eine je Buch, für alle
     # Fächer. ``None`` heißt: bleibt, wie es dasteht.
     bemerkung: str | None = None
-    # Nur bei einem Buch, das noch unter einem Platzhalter steht: die
-    # nachgetragene ISBN (:func:`ersetze_isbn`). Leer oder ``None``: bleibt.
+    # Die ISBN, wie sie im Menü steht - nachgetragen bei einem Platzhalter,
+    # sonst vielleicht korrigiert (:func:`ersetze_isbn`). Leer oder ``None``: bleibt.
     isbn: str | None = None
 
 
@@ -677,18 +677,25 @@ def _naechster_platzhalter(stand: Buchplanung) -> str:
 
 
 def ersetze_isbn(stand: Buchplanung, *, alt: str, neu: str) -> Buchplanung:
-    """Trägt die ISBN eines Buchs nach, das bisher unter einem Platzhalter stand.
+    """Trägt die ISBN eines Buchs nach oder korrigiert sie.
 
-    Nur ein Platzhalter lässt sich ersetzen: eine echte ISBN ist der Schlüssel
-    des Buchs und bleibt. Die neue muss gültig sein und darf noch zu keinem
-    Buch der Datei gehören - zwei Einträge für ein Buch würden sonst still
-    zusammenlaufen. Mit dem Buch ziehen seine Jahrgänge, Rücklagen und die
-    Bemerkung um; Anträge und Bestätigungen hängen an den Jahrgängen.
+    Nachgetragen wird bei einem Buch unter einem Platzhalter („ISBN folgt“),
+    korrigiert bei einem Tippfehler - wie IServ die ISBN einer Buchreihe auch
+    ändern lässt (Entscheidung 2026-11-12, vorher war sie gesperrt). Dieselbe
+    ISBN, nur anders geschrieben, ändert nichts. Die neue muss gültig sein und
+    darf noch zu keinem anderen Buch der Datei gehören - zwei Einträge für ein
+    Buch würden sonst still zusammenlaufen. Mit dem Buch ziehen seine
+    Jahrgänge, Rücklagen und die Bemerkung um; Anträge und Bestätigungen
+    hängen an den Jahrgängen.
+
+    In IServ ändert sich nichts. Steht das Buch dort noch unter der alten
+    ISBN, zeigt der Vergleich auf den Seiten es als „nur in IServ“, bis es
+    auch dort korrigiert ist.
     """
     buch = _geprueftes_buch(stand, alt)
-    if not ist_platzhalter_isbn(alt):
-        raise UngueltigeEingabe("Die ISBN eines Buchs lässt sich nicht ändern.")
     isbn = _gepruefte_isbn(stand, neu)
+    if isbn == alt:
+        return stand
     vorhanden = stand.buch(isbn)
     if vorhanden is not None:
         raise UngueltigeEingabe(

@@ -200,8 +200,8 @@ class RuecklageEingabe(BaseModel):
 class BuchreiheEingabe(BaseModel):
     """Der Block „Buchreihe“ des Menüs - die Felder, wie IServ sie nennt.
 
-    Korrigiert wird nur in der Datei, nicht in IServ. Ohne ISBN: sie steht im
-    Menü nur zum Lesen. Ein leerer Preis heißt: gilt wie in IServ.
+    Korrigiert wird nur in der Datei, nicht in IServ. Ein leerer Preis heißt:
+    gilt wie in IServ.
     """
 
     titel: str = ""
@@ -209,7 +209,7 @@ class BuchreiheEingabe(BaseModel):
     neupreis: float | None = None
     leihgebuehr: float | None = None
     bemerkung: str | None = None
-    # Nur bei einem Buch unter „ISBN folgt“: die nachgetragene ISBN.
+    # Die ISBN aus dem Menü: nachgetragen („ISBN folgt“) oder korrigiert.
     isbn: str | None = None
 
 
