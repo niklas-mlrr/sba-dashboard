@@ -776,7 +776,7 @@ def test_druckmenue_der_faecher_folgt_der_vorgabe_vom_2026_11_06(
     assert antraege.count("help-inline") == 4
     assert antraege.index("Jahreszahlen") < antraege.index(">Antragsinformationen:<") \
         < antraege.index("Bearbeitungsdatum")
-    for name, hinweis in (("Jahreszahlen", "formatiert nach Status"),
+    for name, hinweis in (("Jahreszahlen", "je Jahrgang, formatiert nach Status"),
                           ("Bearbeitungsdatum", "wann entschieden"),
                           ("Bearbeitender", "IServ-Benutzername"),
                           ("Begründung", "falls vorhanden")):
