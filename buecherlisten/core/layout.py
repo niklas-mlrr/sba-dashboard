@@ -708,7 +708,9 @@ def _anmerkungen_tabelle(zeilen: tuple[tuple[str, ...], ...], breite: float) -> 
     Leerzeichen; eine, die in keiner Zeile etwas hat, fällt weg. Die letzte
     nimmt den Rest und bricht darin um; ein Text mit EINZUG („Begründung: “)
     hängt hinter seinem Kopf, sein Umbruch läuft bündig unter dem Anfang des
-    Begründungstexts weiter."""
+    Begründungstexts weiter. Eine Spalte nur aus Zahlen (der Jahrgang) steht
+    rechtsbündig, Einer über Einern, Zehner über Zehnern; ihr Leerzeichen
+    steht dann rechts von der Zahl."""
     luecke = stringWidth(" ", BODY_FONT, ISBN_FONT_SIZE)
     n = max(len(zeile) for zeile in zeilen)
     voll = [tuple(zeile) + ("",) * (n - len(zeile)) for zeile in zeilen]
@@ -720,13 +722,23 @@ def _anmerkungen_tabelle(zeilen: tuple[tuple[str, ...], ...], breite: float) -> 
         for s in range(len(spalten) - 1)
     ]
     breiten.append(max(breite - sum(breiten), MIN_WRAP_COL))
-    zellen: list[list[Any]] = [[_anmerkung(text) for text in zeile] for zeile in daten]
+    rechts = [all(zeile[s].isdigit() for zeile in daten if zeile[s])
+              for s in range(len(spalten))]
+    zellen: list[list[Any]] = [[_anmerkung(text, rechts=rechts[s]) for s, text in enumerate(zeile)]
+                               for zeile in daten]
     tabelle = Table(zellen, colWidths=breiten, hAlign="LEFT")
     tabelle.setStyle(_OHNE_POLSTER)
+    tabelle.setStyle(TableStyle([("RIGHTPADDING", (s, 0), (s, -1), luecke)
+                                 for s, zahl in enumerate(rechts) if zahl]))
     return tabelle
 
 
-def _anmerkung(text: str) -> Paragraph:
+_ERKLAER_RECHTS = ParagraphStyle("Erklaerung-rechts", parent=ERKLAER_STYLE, alignment=TA_RIGHT)
+
+
+def _anmerkung(text: str, *, rechts: bool = False) -> Paragraph:
+    if rechts:
+        return Paragraph(_markup(text, ()), _ERKLAER_RECHTS)
     kopf, _, rest = text.rpartition(EINZUG)
     stil = _haengend(ERKLAER_STYLE, kopf) if kopf else ERKLAER_STYLE
     return Paragraph(_markup(kopf + rest, ()), stil)

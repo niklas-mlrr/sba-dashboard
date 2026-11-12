@@ -9,6 +9,7 @@ import io
 from datetime import date
 
 import pytest
+from reportlab.lib.enums import TA_RIGHT
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from app.planungsdruck import NBSP, Antragsdetails, fach_tabellen
@@ -461,18 +462,18 @@ def test_anmerkungen_sortiert_und_jahrgang_nur_einmal(anmerkungs_planung):
     am5, am6 = "am 05.11.2026", "am 06.11.2026"
     durch_m, durch_e = "durch max.mustermann", "durch erika.musterfrau"
     assert leih["Viele Anträge"]["anmerkungen"] == (
-        (f"Jahrgang{NBSP}6", "Ausmusterung", "2027/2028", "abgelehnt", am6, durch_e,
+        ("Jahrgang", "6", "Ausmusterung", "2027/2028", "abgelehnt", am6, durch_e,
          f"Begründung: {EINZUG}Wird noch gebraucht."),
         # Gleiches Schuljahr: die Einführung zuerst.
-        (f"Jahrgang{NBSP}7", "Einführung", SJ, "genehmigt", am5, durch_m, f"Begründung: {EINZUG}Neu"),
-        ("", "Ausmusterung", SJ, "genehmigt", am5, durch_m, ""),
-        ("", "Einführung", "2028/2029", "abgelehnt", am6, durch_e, ""),
-        (f"Jahrgang{NBSP}9", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m, ""),
+        ("Jahrgang", "7", "Einführung", SJ, "genehmigt", am5, durch_m, f"Begründung: {EINZUG}Neu"),
+        ("", "", "Ausmusterung", SJ, "genehmigt", am5, durch_m, ""),
+        ("", "", "Einführung", "2028/2029", "abgelehnt", am6, durch_e, ""),
+        ("Jahrgang", "9", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m, ""),
     )
     assert _je_titel(tabellen["kauf"])["Kaufbuch"]["anmerkungen"] == (
-        (f"Jahrgang{NBSP}5", "Einführung", SJ, "genehmigt", am5, durch_m, ""),)
+        ("Jahrgang", "5", "Einführung", SJ, "genehmigt", am5, durch_m, ""),)
     assert _je_titel(tabellen["ausgemustert"])["Ausgemustert"]["anmerkungen"] == (
-        (f"Jahrgang{NBSP}11", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m,
+        ("Jahrgang", "11", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m,
          f"Begründung: {EINZUG}Veraltet."),)
 
 
@@ -480,14 +481,14 @@ def test_anmerkungen_nur_mit_dem_angehakten(anmerkungs_planung):
     nur_datum = _je_titel(fach_tabellen(anmerkungs_planung, antraege=True, details=Antragsdetails(
         datum=True))["Chemie"]["leih"])
     assert nur_datum["Ohne Begründung"]["anmerkungen"] == (
-        (f"Jahrgang{NBSP}10", "Einführung", "2027/2028", "genehmigt", "am 05.11.2026"),)
+        ("Jahrgang", "10", "Einführung", "2027/2028", "genehmigt", "am 05.11.2026"),)
     # Nur „Begründung“: ein Antrag ohne Begründung fehlt, eine Buchreihe ohne
     # einen solchen hat keine Anmerkungen; der Jahrgang steht im ersten, der bleibt.
     begruendung = fach_tabellen(anmerkungs_planung, antraege=True,
                                 details=Antragsdetails(begruendung=True))["Chemie"]
     leih = _je_titel(begruendung["leih"])
     assert "anmerkungen" not in leih["Ohne Begründung"]
-    assert [z[0] for z in leih["Viele Anträge"]["anmerkungen"]] == [f"Jahrgang{NBSP}6", f"Jahrgang{NBSP}7"]
+    assert [z[1] for z in leih["Viele Anträge"]["anmerkungen"]] == ["6", "7"]
     assert "anmerkungen" not in _je_titel(begruendung["kauf"])["Kaufbuch"]
 
 
@@ -503,16 +504,23 @@ def test_anmerkungen_buendig_und_begruendung_haengend():
     from buecherlisten.core.layout import _anmerkungen_tabelle
 
     tabelle = _anmerkungen_tabelle((
-        (f"Jahrgang{NBSP}6", "Ausmusterung", "2027/2028", "abgelehnt", "",
+        ("Jahrgang", "6", "Ausmusterung", "2027/2028", "abgelehnt", "",
          f"Begründung: {EINZUG}Zeile 1\nZeile 2"),
-        ("", "Einführung", SJ, "genehmigt", "", ""),
+        ("", "", "Einführung", SJ, "genehmigt", "", ""),
+        ("Jahrgang", "10", "Einführung", SJ, "genehmigt", "", ""),
     ), 300.0)
     # Die in keiner Zeile gefüllte Spalte fällt weg.
-    assert len(tabelle._colWidths) == 5
+    assert len(tabelle._colWidths) == 6
     luecke = stringWidth(" ", "Helvetica", 8)
-    assert tabelle._colWidths[1] == pytest.approx(
+    assert tabelle._colWidths[2] == pytest.approx(
         stringWidth("Ausmusterung", "Helvetica", 8) + luecke, abs=0.6)
-    begruendung = tabelle._cellvalues[0][4]
+    # Der Jahrgang rechtsbündig, das Leerzeichen rechts von ihm.
+    sechs, _, zehn = (zeile[1] for zeile in tabelle._cellvalues)
+    assert sechs.style.alignment == zehn.style.alignment == TA_RIGHT
+    assert tabelle._cellvalues[0][2].style.alignment != TA_RIGHT
+    assert tabelle._cellStyles[2][1].rightPadding == pytest.approx(luecke)
+    assert tabelle._cellStyles[2][2].rightPadding == 0
+    begruendung = tabelle._cellvalues[0][5]
     einzug = stringWidth("Begründung: ", "Helvetica", 8)
     assert begruendung.style.leftIndent == pytest.approx(einzug)
     assert begruendung.style.firstLineIndent == pytest.approx(-einzug)
