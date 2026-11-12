@@ -22,7 +22,6 @@ from buecherlisten.planung import (
     ANTRAG_GENEHMIGT,
     ART_AUSMUSTERUNG,
     ART_EINFUEHRUNG,
-    FACH_BESTAETIGT,
     OHNE_VERLAG,
     PLANUNG_AUSGEMUSTERT,
     Buchplanung,
@@ -36,6 +35,10 @@ from buecherlisten.planung import (
     zu_entscheidende_antraege,
 )
 
+# Die bisherigen Importnamen bleiben verfügbar; der Vertrag gehört nicht zur Anzeige.
+from .planungsstand import eintrag_stand as eintrag_stand
+from .planungsstand import fach_stand as fach_stand
+
 
 def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, Any]:
     """Der Kontext ohne Datei: die Seiten zeigen dann IServ und ggf. ``fehler``."""
@@ -47,59 +50,6 @@ def leerer_kontext(schuljahr: str, *, fehler: str | None = None) -> dict[str, An
         "verlage": [], "buecher": [], "isbns": set(),
         "eintrag": lambda isbn, fach: None, "fachstand": lambda fach: None,
     }
-
-
-# ── Was ein Menü beim Öffnen gesehen hat ─────────────────────────────────────
-#
-# Jedes Menü der Fach-Seite bekommt beim Rendern den Stand des Eintrags mit,
-# den es ändert, und schickt ihn beim Speichern als ``vorher`` zurück. Der
-# Server rechnet denselben Schnappschuss aus der Datei neu (``app/buchplanung.py``):
-# ist er gleich, wird gespeichert - auch wenn sich an anderen Büchern etwas
-# geändert hat; ist er anders, bekommt der Browser den neuen und legt beide
-# nebeneinander (Entscheidung 2026-10-30). Deshalb steht er hier, an **einer**
-# Stelle, und nur in JSON-Werten: Vorlage und Server müssen ihn gleich bauen.
-
-
-def eintrag_stand(planung: Buchplanung, isbn: str, fach: str) -> dict[str, Any] | None:
-    """Das Buchmenü eines Buchs in einem Fach als Schnappschuss - ``None`` ohne Buch.
-
-    Die Zeilen sind nach „Jahrgang|Einführung“ geschlüsselt, so wie das Menü
-    sie kennt (``data-bisher-jahrgang``/``data-bisher-ab``). ``ruecklage`` ist
-    ``None`` bei einem Buch, für das es keine geben kann - dann hat das Menü
-    keinen Block dafür.
-    """
-    buch = planung.buch(isbn)
-    if buch is None:
-        return None
-    bemerkung = planung.bemerkung(isbn)
-    ruecklage = planung.ruecklage(isbn, fach)
-    return {
-        "buchreihe": {
-            "titel": buch.titel, "verlag": "" if buch.verlag == OHNE_VERLAG else buch.verlag,
-            "neupreis": buch.neupreis, "leihgebuehr": buch.leihgebuehr,
-            "bemerkung": bemerkung.bemerkung if bemerkung else "",
-        },
-        "zeilen": {
-            f"{zeile.jahrgang}|{zeile.eingefuehrt_ab}": {
-                "jahrgang": zeile.jahrgang, "eingefuehrt_ab": zeile.eingefuehrt_ab,
-                "ausgemustert_nach": zeile.ausgemustert_nach, "leihbar": zeile.leihbar,
-                "bemerkung": zeile.bemerkung,
-            }
-            for zeile in planung.planung if (zeile.isbn, zeile.fach) == (isbn, fach)
-        },
-        "ruecklage": {
-            "anzahl": ruecklage.anzahl if ruecklage else None,
-            "bemerkung": ruecklage.bemerkung if ruecklage else "",
-        } if planung.leihbar(isbn) else None,
-    }
-
-
-def fach_stand(planung: Buchplanung, fach: str) -> dict[str, Any]:
-    """Die Bestätigung einer Fachliste als Schnappschuss - für die beiden Kopfmenüs."""
-    kuerzel, datum = fach_bestaetigung(planung, fach)
-    if fach_status(planung, fach).status != FACH_BESTAETIGT:
-        kuerzel, datum = "", None
-    return {"fach": {"kuerzel": kuerzel, "datum": datum.isoformat() if datum else None}}
 
 
 def verkehrte_zeitraeume(planung: Buchplanung) -> str | None:

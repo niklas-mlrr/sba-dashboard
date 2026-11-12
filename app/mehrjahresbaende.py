@@ -21,7 +21,6 @@ nachkorrigiert, und genau der korrigierte Stand soll auf der Seite stehen.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
 from pathlib import Path
 
 from buecherlisten.core.erzeugen import aufgabenfeld_zuordnung
@@ -46,11 +45,12 @@ from mehrjahresbaende.core.laden import AusleiheClient
 from .excel import (
     Dateizustand,
     ExcelFehlt,
-    Konflikt,
     UngueltigeAenderung,
     arbeitsmappe_sperren,
     lade_mappe,
+    pruefe_dateiversion,
     speichere_mappe,
+    validiere_mtime,
 )
 from .settings import Einstellungen
 
@@ -149,17 +149,11 @@ def schreibe_marke(
         raise ExcelFehlt(
             "Es gibt noch keine Mehrjahresbände-Datei. Bitte zuerst „Aus IServ erzeugen“."
         )
-    if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):
-        raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
+    erwartet = validiere_mtime(mtime)
 
     with arbeitsmappe_sperren(pfad):
         zustand = Dateizustand.von(pfad)
-        if abs(zustand.mtime - float(mtime)) > 1e-6:
-            raise Konflikt(
-                "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
-                "die Änderung erneut eintragen.",
-                zustand.mtime,
-            )
+        pruefe_dateiversion(zustand, erwartet)
         wb = lade_mappe(pfad)
         ws = _blatt(wb)
         vorher = lies_blatt(ws)

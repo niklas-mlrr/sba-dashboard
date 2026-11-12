@@ -251,6 +251,23 @@ class Dateizustand:
                    geaendert=datetime.fromtimestamp(stat.st_mtime))
 
 
+def validiere_mtime(mtime: object) -> float:
+    """Prüft den gesehenen Versionsstand, bevor ein Schreibpfad die Mappe sperrt."""
+    if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):
+        raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
+    return float(mtime)
+
+
+def pruefe_dateiversion(zustand: Dateizustand, erwartet: float) -> None:
+    """Vergleicht die Version unter dem Mappenschloss, noch vor dem Laden."""
+    if abs(zustand.mtime - erwartet) > 1e-6:
+        raise Konflikt(
+            "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
+            "die Änderung erneut eintragen.",
+            zustand.mtime,
+        )
+
+
 @dataclass(frozen=True)
 class Schreibergebnis:
     ref: str
@@ -480,19 +497,13 @@ def schreibe_zelle(
             f"Die Spalte {spalte!r} ist nicht änderbar. {erlaubte_spalten_satz()}"
         )
     neuer_wert = pruefe_wert(wert)
-    if isinstance(mtime, bool) or not isinstance(mtime, (int, float)) or not isfinite(mtime):
-        raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
+    erwartet = validiere_mtime(mtime)
 
     with arbeitsmappe_sperren(pfad):
         if not pfad.is_file():
             raise ExcelFehlt(f"Excel-Datei nicht gefunden: {pfad}")
         zustand = Dateizustand.von(pfad)
-        if abs(zustand.mtime - float(mtime)) > 1e-6:
-            raise Konflikt(
-                "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
-                "die Änderung erneut eintragen.",
-                zustand.mtime,
-            )
+        pruefe_dateiversion(zustand, erwartet)
 
         wb = lade_mappe(pfad)
         ws = raster_blatt(wb, blattname)

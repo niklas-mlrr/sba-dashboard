@@ -26,7 +26,6 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
-from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -64,13 +63,14 @@ from buecherlisten.planung.laden import AusleiheClient
 from .excel import (
     Dateizustand,
     ExcelFehlt,
-    Konflikt,
     UngueltigeAenderung,
     arbeitsmappe_sperren,
     lade_mappe,
+    pruefe_dateiversion,
     speichere_mappe,
+    validiere_mtime,
 )
-from .planungsansicht import eintrag_stand, fach_stand
+from .planungsstand import EintragStand, FachStand, eintrag_stand, fach_stand
 from .settings import Einstellungen
 
 
@@ -158,14 +158,14 @@ class Eintrag:
     """Der Eintrag, den ein Menü ändert - so, wie es ihn beim Öffnen gesehen hat.
 
     ``vorher`` ist der Schnappschuss aus der Seite, ``stand_von`` rechnet
-    denselben aus der Datei (``app/planungsansicht.py``). Mit einem ``Eintrag``
+    denselben aus der Datei (``app/planungsstand.py``). Mit einem ``Eintrag``
     zählt nicht mehr, ob sich die **Datei** geändert hat (``mtime``), sondern
     nur, ob sich **dieser Eintrag** geändert hat: was zwei Leute an zwei
     Büchern tun, stört sich nicht (Entscheidung 2026-10-30).
     """
 
     vorher: Any
-    stand_von: Callable[[Buchplanung], Any]
+    stand_von: Callable[[Buchplanung], EintragStand | FachStand | None]
 
 
 class EintragGeaendert(Exception):
@@ -175,7 +175,7 @@ class EintragGeaendert(Exception):
     die Eingabe und lässt wählen, was bleibt.
     """
 
-    def __init__(self, aktuell: Any) -> None:
+    def __init__(self, aktuell: EintragStand | FachStand | None) -> None:
         super().__init__("Dieser Eintrag wurde inzwischen geändert.")
         self.aktuell = aktuell
 
@@ -216,18 +216,12 @@ def _aendere(
             "Für dieses Schuljahr gibt es noch keine Buchplanungs-Datei. Bitte zuerst "
             "„Aus IServ aktualisieren“."
         )
-    if eintrag is None and (isinstance(mtime, bool) or not isinstance(mtime, (int, float))
-                            or not isfinite(mtime)):
-        raise UngueltigeAenderung("Es fehlt eine gültige Änderungszeit der geladenen Datei.")
+    erwartet = validiere_mtime(mtime) if eintrag is None else None
 
     with arbeitsmappe_sperren(pfad):
         zustand = Dateizustand.von(pfad)
-        if eintrag is None and abs(zustand.mtime - float(mtime or 0)) > 1e-6:
-            raise Konflikt(
-                "Die Datei wurde inzwischen geändert. Bitte die Seite neu laden und "
-                "die Änderung erneut eintragen.",
-                zustand.mtime,
-            )
+        if erwartet is not None:
+            pruefe_dateiversion(zustand, erwartet)
         wb = lade_mappe(pfad)
         try:
             vorher = lies_mappe(wb)
