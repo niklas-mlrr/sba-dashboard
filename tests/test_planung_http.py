@@ -768,8 +768,15 @@ def test_druckmenue_der_faecher_folgt_der_vorgabe_vom_2026_11_06(
     # "IServ-Stand benutzen" ist beim Öffnen aus.
     stand = menue.split('name="iserv_stand"')[1].split(">")[0]
     assert "checked" not in stand
-    # Bearbeitungsdatum und Bearbeitender tragen keinen Hinweis.
-    assert "help-inline" not in menue.split('id="druck-antraege"')[1].split("Doppelseitig:")[0]
+    # Hinter jedem Häkchen unter "Anträge:" steht ein grauer Hinweis (Vorgabe vom 2026-11-12).
+    antraege = menue.split('id="druck-antraege"')[1].split("Doppelseitig:")[0]
+    for name, hinweis in (("Antragsinformationen",
+                           "Jahreszahl je Jahrgang, formatiert nach Antragsstatus"),
+                          ("Bearbeitungsdatum", "wann entschieden"),
+                          ("Bearbeitender", "welcher IServ-Benutzername entschieden hat"),
+                          ("Begründung", "falls vorhanden")):
+        assert (f'&nbsp;{name}</label>\n            <span class="small help-inline">{hinweis}</span>'
+                in antraege)
     assert 'value="nicht_versendete"' in menue
     assert "nicht_bestaetigte" not in menue and "veraenderte" not in menue
     nicht_versendete = menue.split('value="nicht_versendete"')[1].split("</label>")[0]
