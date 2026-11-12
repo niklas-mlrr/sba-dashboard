@@ -461,18 +461,18 @@ def test_anmerkungen_sortiert_und_jahrgang_nur_einmal(anmerkungs_planung):
     am5, am6 = "am 05.11.2026", "am 06.11.2026"
     durch_m, durch_e = "durch max.mustermann", "durch erika.musterfrau"
     assert leih["Viele Anträge"]["anmerkungen"] == (
-        ("6", "Ausmusterung", "2027/2028", "abgelehnt", am6, durch_e,
+        (f"Jahrgang{NBSP}6", "Ausmusterung", "2027/2028", "abgelehnt", am6, durch_e,
          f"Begründung: {EINZUG}Wird noch gebraucht."),
         # Gleiches Schuljahr: die Einführung zuerst.
-        ("7", "Einführung", SJ, "genehmigt", am5, durch_m, f"Begründung: {EINZUG}Neu"),
+        (f"Jahrgang{NBSP}7", "Einführung", SJ, "genehmigt", am5, durch_m, f"Begründung: {EINZUG}Neu"),
         ("", "Ausmusterung", SJ, "genehmigt", am5, durch_m, ""),
         ("", "Einführung", "2028/2029", "abgelehnt", am6, durch_e, ""),
-        ("9", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m, ""),
+        (f"Jahrgang{NBSP}9", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m, ""),
     )
     assert _je_titel(tabellen["kauf"])["Kaufbuch"]["anmerkungen"] == (
-        ("5", "Einführung", SJ, "genehmigt", am5, durch_m, ""),)
+        (f"Jahrgang{NBSP}5", "Einführung", SJ, "genehmigt", am5, durch_m, ""),)
     assert _je_titel(tabellen["ausgemustert"])["Ausgemustert"]["anmerkungen"] == (
-        ("11", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m,
+        (f"Jahrgang{NBSP}11", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m,
          f"Begründung: {EINZUG}Veraltet."),)
 
 
@@ -480,14 +480,14 @@ def test_anmerkungen_nur_mit_dem_angehakten(anmerkungs_planung):
     nur_datum = _je_titel(fach_tabellen(anmerkungs_planung, antraege=True, details=Antragsdetails(
         datum=True))["Chemie"]["leih"])
     assert nur_datum["Ohne Begründung"]["anmerkungen"] == (
-        ("10", "Einführung", "2027/2028", "genehmigt", "am 05.11.2026"),)
+        (f"Jahrgang{NBSP}10", "Einführung", "2027/2028", "genehmigt", "am 05.11.2026"),)
     # Nur „Begründung“: ein Antrag ohne Begründung fehlt, eine Buchreihe ohne
     # einen solchen hat keine Anmerkungen; der Jahrgang steht im ersten, der bleibt.
     begruendung = fach_tabellen(anmerkungs_planung, antraege=True,
                                 details=Antragsdetails(begruendung=True))["Chemie"]
     leih = _je_titel(begruendung["leih"])
     assert "anmerkungen" not in leih["Ohne Begründung"]
-    assert [z[0] for z in leih["Viele Anträge"]["anmerkungen"]] == ["6", "7"]
+    assert [z[0] for z in leih["Viele Anträge"]["anmerkungen"]] == [f"Jahrgang{NBSP}6", f"Jahrgang{NBSP}7"]
     assert "anmerkungen" not in _je_titel(begruendung["kauf"])["Kaufbuch"]
 
 
@@ -503,7 +503,8 @@ def test_anmerkungen_buendig_und_begruendung_haengend():
     from buecherlisten.core.layout import _anmerkungen_tabelle
 
     tabelle = _anmerkungen_tabelle((
-        ("6", "Ausmusterung", "2027/2028", "abgelehnt", "", f"Begründung: {EINZUG}Zeile 1\nZeile 2"),
+        (f"Jahrgang{NBSP}6", "Ausmusterung", "2027/2028", "abgelehnt", "",
+         f"Begründung: {EINZUG}Zeile 1\nZeile 2"),
         ("", "Einführung", SJ, "genehmigt", "", ""),
     ), 300.0)
     # Die in keiner Zeile gefüllte Spalte fällt weg.
@@ -529,7 +530,7 @@ def test_anmerkungen_in_der_zeile_der_buchreihe(anmerkungs_planung):
     assert ("SPAN", (0, 2), (-1, 2)) in tabelle._spanCmds
     # pypdf liest jede Zelle als eigene Zeile.
     text = " ".join(_pdf_text_mit(anmerkungs_planung, ALLE_DETAILS).split())
-    assert "6 Ausmusterung 2027/2028 abgelehnt am 06.11.2026 durch erika.musterfrau" in text
+    assert "Jahrgang 6 Ausmusterung 2027/2028 abgelehnt am 06.11.2026 durch erika.musterfrau" in text
     assert "Begründung: Veraltet." in text
 
 

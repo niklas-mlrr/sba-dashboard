@@ -32,8 +32,8 @@ Die Antrags-Häkchen werden schon mitgeschickt; „Antragsinformationen“ wirkt
 seit 2026-11-10 (unten), Bearbeitungsdatum, Bearbeitender und Begründung seit
 2026-11-12: Jede Buchreihe trägt dann in ihrer Zeile, unter den Zellen und
 über alle Spalten, je genehmigtem oder abgelehntem Antrag (Ausmusterung ab
-nach dem Vorjahr, Einführung ab diesem Schuljahr) eine Anmerkung „<Jahrgang>
-<Einführung/Ausmusterung> <ESJ/ASJ> <genehmigt/abgelehnt> am <Datum> durch
+nach dem Vorjahr, Einführung ab diesem Schuljahr) eine Anmerkung „Jahrgang
+<Jahrgang> <Einführung/Ausmusterung> <ESJ/ASJ> <genehmigt/abgelehnt> am <Datum> durch
 <Signatur> Begründung: <Text>“, bündig untereinander, nur mit dem
 Angehakten (``app/planungsdruck.py``).
 

@@ -52,7 +52,7 @@ Anmerkungen zu Anträgen (Vorgabe vom 2026-11-12): Mit Antragsinformationen
 und mindestens einem der Häkchen „Bearbeitungsdatum“, „Bearbeitender“,
 „Begründung“ (:class:`Antragsdetails`) trägt jede Buchreihe aller drei
 Tabellen ``anmerkungen``: je genehmigtem oder abgelehntem Antrag ihrer
-Planungszeilen (Fach, ISBN, „leihbar“) eine Zeile mit den Zellen Jahrgang,
+Planungszeilen (Fach, ISBN, „leihbar“) eine Zeile mit den Zellen „Jahrgang 7“,
 „Einführung“/„Ausmusterung“, ESJ/ASJ, „genehmigt“/„abgelehnt“, „am <Datum>“,
 „durch <Signatur>“, „Begründung: <Text>“ - nur die angehakten der letzten
 drei. Dazu zählt jede Ausmusterung nach dem Vorjahr oder später und jede
@@ -152,7 +152,7 @@ def _anmerkungen(zeilen: Iterable[Planungszeile], jetzt: int,
     ergebnis: list[tuple[str, ...]] = []
     for i, ((jahrgang, _, _), texte) in enumerate(antraege):
         erste = i == 0 or antraege[i - 1][0][0] != jahrgang
-        ergebnis.append((str(jahrgang) if erste else "", *texte))
+        ergebnis.append((f"Jahrgang{NBSP}{jahrgang}" if erste else "", *texte))
     return tuple(ergebnis)
 
 
