@@ -8,8 +8,8 @@
 // Regeln, die hier und nirgends sonst stehen:
 //   * Mit "IServ-Stand benutzen" sind Bestätigung, Rückgabe und Anträge
 //     gesperrt: sie gibt es nur ohne. Ohne "Bestätigungsaufforderung" sind
-//     die Rückgabe-Felder gesperrt, ohne "Antragsinformationen" die
-//     Häkchen darunter und ohne "Für doppelseitigen Druck optimieren" das
+//     die Rückgabe-Felder gesperrt, ohne "Jahreszahlen" die
+//     Häkchen unter "Antragsinformationen:" und ohne "Für doppelseitigen Druck optimieren" das
 //     Häkchen "falls nötig". Gesperrte Felder schickt der Browser nicht mit.
 //   * Die Auswahl steht bei jedem Öffnen auf "Alle".
 //   * Wechsel auf "Individuell": die Häkchen zeigen die Gruppen der zuletzt
@@ -40,6 +40,7 @@
     haekchen: document.getElementById(`druck-antrag-${name}`),
     zeile: document.getElementById(`druck-antrag-${name}-zeile`),
   }));
+  const antragUeberschrift = document.getElementById("druck-antrag-ueberschrift");
   const doppelseitig = document.getElementById("druck-doppelseitig");
   const fallsNoetig = document.getElementById("druck-falls-noetig");
   const fallsNoetigZeile = document.getElementById("druck-falls-noetig-zeile");
@@ -60,6 +61,7 @@
         haekchen.disabled = !mitAntraegen;
         zeile.classList.toggle("disabled", !mitAntraegen);
       }
+      antragUeberschrift.classList.toggle("disabled", !mitAntraegen);
     }
     if (doppelseitig) {
       fallsNoetig.disabled = !doppelseitig.checked;

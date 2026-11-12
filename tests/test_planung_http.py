@@ -768,15 +768,16 @@ def test_druckmenue_der_faecher_folgt_der_vorgabe_vom_2026_11_06(
     # "IServ-Stand benutzen" ist beim Öffnen aus.
     stand = menue.split('name="iserv_stand"')[1].split(">")[0]
     assert "checked" not in stand
-    # Unter "Anträge:" je Häkchen ein grauer Hinweis in einer Zeile (Vorgabe vom
-    # 2026-11-12): bei "Antragsinformationen" darunter (dahinter ist zu wenig
-    # Platz), bei den übrigen dahinter.
+    # Unter "Anträge:" (Vorgabe vom 2026-11-12): "Jahreszahlen", darunter die
+    # Zwischenzeile "Antragsinformationen:" mit den drei Häkchen; hinter jedem
+    # Häkchen ein grauer Hinweis in einer Zeile, kein Hilfetext darunter.
     antraege = menue.split('id="druck-antraege"')[1].split("Doppelseitig:")[0]
-    assert ('&nbsp;Antragsinformationen</label>\n          </div>\n          '
-            '<p class="small help-block">Jahreszahlen formatiert nach Antragsstatus</p>'
-            in antraege)
-    assert antraege.count("help-inline") == 3
-    for name, hinweis in (("Bearbeitungsdatum", "wann entschieden"),
+    assert "help-block" not in antraege
+    assert antraege.count("help-inline") == 4
+    assert antraege.index("Jahreszahlen") < antraege.index(">Antragsinformationen:<") \
+        < antraege.index("Bearbeitungsdatum")
+    for name, hinweis in (("Jahreszahlen", "formatiert nach Status"),
+                          ("Bearbeitungsdatum", "wann entschieden"),
                           ("Bearbeitender", "IServ-Benutzername"),
                           ("Begründung", "falls vorhanden")):
         assert (f'&nbsp;{name}</label>\n            <span class="small help-inline">{hinweis}</span>'

@@ -848,6 +848,10 @@ html:has(.iserv-modal[open]) { overflow: hidden; }
 }
 .iserv-modal .checkbox.disabled label, .iserv-modal input:disabled { cursor: not-allowed; }
 .iserv-modal .checkbox.disabled { color: #777; }
+/* Zwischenzeile ohne Häkchen ("Antragsinformationen:"), so hoch wie eine Häkchenzeile. */
+.iserv-modal .unterueberschrift { min-height: 27px; padding-top: 7px; }
+#druckmenue .unterueberschrift { min-height: 23px; padding-top: 3px; }
+.iserv-modal .unterueberschrift.disabled { color: #777; }
 .iserv-modal .eingerueckt { display: flex; align-items: baseline; margin-left: 20px; }
 .iserv-modal .eingerueckt label { flex: none; }
 .iserv-modal .help-block { display: block; margin: 5px 0 10px; color: #737373; }
@@ -877,7 +881,8 @@ html:has(.iserv-modal[open]) { overflow: hidden; }
 .iserv-modal .eingabe-vor { flex: 0 0 22px; }
 .iserv-modal .eingabe-nach { color: #737373; font-size: 85%; }
 .iserv-modal .gesperrt .eingabe-vor, .iserv-modal .gesperrt .eingabe-nach, .iserv-modal .gesperrt .control-label,
-.iserv-modal .gesperrt .checkbox label, .iserv-modal .gesperrt .help-block, .iserv-modal .gesperrt .help-inline { color: #aaa; }
+.iserv-modal .gesperrt .checkbox label, .iserv-modal .gesperrt .help-block, .iserv-modal .gesperrt .help-inline,
+.iserv-modal .gesperrt .unterueberschrift { color: #aaa; }
 .iserv-modal .gesperrt input[type="checkbox"] { cursor: not-allowed; }
 
 .iserv-modal .radio-mit-auswahl { display: flex; align-items: center; gap: 12px; }
