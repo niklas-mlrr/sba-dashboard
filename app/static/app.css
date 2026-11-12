@@ -848,10 +848,10 @@ html:has(.iserv-modal[open]) { overflow: hidden; }
 }
 .iserv-modal .checkbox.disabled label, .iserv-modal input:disabled { cursor: not-allowed; }
 .iserv-modal .checkbox.disabled { color: #777; }
-/* Zwischenzeile ohne Häkchen ("Antragsinformationen:"), so hoch wie eine Häkchenzeile. */
-.iserv-modal .unterueberschrift { min-height: 27px; padding-top: 7px; }
-#druckmenue .unterueberschrift { min-height: 23px; padding-top: 3px; }
-.iserv-modal .unterueberschrift.disabled { color: #777; }
+/* Zwischenzeile ohne Häkchen ("Antragsinformationen:"): sieht aus wie eine zweite
+   Zeile der Beschriftung darüber - bündig mit deren Text (20px wie das Häkchen,
+   dazu das &nbsp; im Text), ohne eigenen Abstand nach oben. */
+.iserv-modal .unterueberschrift { padding-left: 20px; }
 .iserv-modal .eingerueckt { display: flex; align-items: baseline; margin-left: 20px; }
 .iserv-modal .eingerueckt label { flex: none; }
 .iserv-modal .help-block { display: block; margin: 5px 0 10px; color: #737373; }

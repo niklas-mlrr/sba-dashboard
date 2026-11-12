@@ -40,7 +40,6 @@
     haekchen: document.getElementById(`druck-antrag-${name}`),
     zeile: document.getElementById(`druck-antrag-${name}-zeile`),
   }));
-  const antragUeberschrift = document.getElementById("druck-antrag-ueberschrift");
   const doppelseitig = document.getElementById("druck-doppelseitig");
   const fallsNoetig = document.getElementById("druck-falls-noetig");
   const fallsNoetigZeile = document.getElementById("druck-falls-noetig-zeile");
@@ -61,7 +60,6 @@
         haekchen.disabled = !mitAntraegen;
         zeile.classList.toggle("disabled", !mitAntraegen);
       }
-      antragUeberschrift.classList.toggle("disabled", !mitAntraegen);
     }
     if (doppelseitig) {
       fallsNoetig.disabled = !doppelseitig.checked;

@@ -774,7 +774,7 @@ def test_druckmenue_der_faecher_folgt_der_vorgabe_vom_2026_11_06(
     antraege = menue.split('id="druck-antraege"')[1].split("Doppelseitig:")[0]
     assert "help-block" not in antraege
     assert antraege.count("help-inline") == 4
-    assert antraege.index("Jahreszahlen") < antraege.index(">Antragsinformationen:<") \
+    assert antraege.index("Jahreszahlen") < antraege.index(">&nbsp;Antragsinformationen:<") \
         < antraege.index("Bearbeitungsdatum")
     for name, hinweis in (("Jahreszahlen", "je Jahrgang, formatiert nach Status"),
                           ("Bearbeitungsdatum", "wann entschieden"),
