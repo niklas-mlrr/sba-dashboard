@@ -701,6 +701,37 @@ def _jahrgangsgruppe(kopf: str, zusatz: str) -> Paragraph:
     return Paragraph(escape(kopf + zusatz), stil)
 
 
+def _anmerkungen_tabelle(zeilen: tuple[tuple[str, ...], ...], breite: float) -> Table:
+    """Die Anmerkungen zu den Anträgen einer Buchreihe (app/planungsdruck.py,
+    Vorgabe vom 2026-11-12) als Raster: je Antrag eine Zeile, die Zellen bündig
+    untereinander. Jede Spalte ist so breit wie ihr breitester Text plus ein
+    Leerzeichen; eine, die in keiner Zeile etwas hat, fällt weg. Die letzte
+    nimmt den Rest und bricht darin um; ein Text mit EINZUG („Begründung: “)
+    hängt hinter seinem Kopf, sein Umbruch läuft bündig unter dem Anfang des
+    Begründungstexts weiter."""
+    luecke = stringWidth(" ", BODY_FONT, ISBN_FONT_SIZE)
+    n = max(len(zeile) for zeile in zeilen)
+    voll = [tuple(zeile) + ("",) * (n - len(zeile)) for zeile in zeilen]
+    spalten = [s for s in range(n) if any(zeile[s] for zeile in voll)]
+    daten = [[zeile[s] for s in spalten] for zeile in voll]
+    breiten = [
+        max(_zeilen_breite(zeile[s], BODY_FONT, ISBN_FONT_SIZE) for zeile in daten)
+        + luecke + WIDTH_EPSILON
+        for s in range(len(spalten) - 1)
+    ]
+    breiten.append(max(breite - sum(breiten), MIN_WRAP_COL))
+    zellen: list[list[Any]] = [[_anmerkung(text) for text in zeile] for zeile in daten]
+    tabelle = Table(zellen, colWidths=breiten, hAlign="LEFT")
+    tabelle.setStyle(_OHNE_POLSTER)
+    return tabelle
+
+
+def _anmerkung(text: str) -> Paragraph:
+    kopf, _, rest = text.rpartition(EINZUG)
+    stil = _haengend(ERKLAER_STYLE, kopf) if kopf else ERKLAER_STYLE
+    return Paragraph(_markup(kopf + rest, ()), stil)
+
+
 def iserv_quelle(listen_anzahl: int) -> str:
     """Quelle unten links in der Fußzeile der PDFs mit "IServ-Stand benutzen".
 
@@ -798,7 +829,10 @@ def render_table(
 
     ``erklaerungen`` (Sterne, Text) stehen als weitere Zeilen unter der letzten,
     über die ganze Breite, kleiner und ohne Trennlinien (siehe _sternchen);
-    ``weiter`` ebenso, als Raster (siehe _weiter_sterne, _weiter_tabelle)."""
+    ``weiter`` ebenso, als Raster (siehe _weiter_sterne, _weiter_tabelle).
+    Die ``anmerkungen`` einer Zeile (app/planungsdruck.py) stehen als Raster
+    in ihr unter ihren Zellen, über alle Spalten; die Trennlinie kommt erst
+    darunter (siehe _anmerkungen_tabelle)."""
     if spalten is None:
         spalten = (KLASSE, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR)
     spalten = tuple(sp for sp in spalten if with_fee or sp.key != "leihgebuehr")
@@ -874,9 +908,21 @@ def render_table(
     rows = [{**r, **{sp.key: ZEILENUMBRUCH.join(_wrap_lines(werte[i][z], breiten[i]))
                      for i, sp in enumerate(spalten) if TRENNSTELLE in werte[i][z]}}
             for z, r in enumerate(rows)]
+    # Eine über alle Spalten gespannte Zelle hat rechts das Polster ihrer
+    # ersten Spalte.
+    spann_breite = sum(col_widths) - (half_gap if n_cols > 1 else 0.0)
     data: list[list] = [list(koepfe)]
+    # Je Buchreihe ihre erste und letzte Zeile in data; mit Anmerkungen
+    # (erst nach der Breitenberechnung angehängt, sie machen keine Spalte
+    # breiter) sind es zwei.
+    buchreihen: list[tuple[int, int]] = []
     for r in rows:
         data.append([_zelle(r, sp) for sp in spalten])
+        anfang = len(data) - 1
+        if r.get("anmerkungen"):
+            data.append([_anmerkungen_tabelle(r["anmerkungen"], spann_breite)]
+                        + [""] * (n_cols - 1))
+        buchreihen.append((anfang, len(data) - 1))
 
     last_row = len(data) - 1
     # Tabellenbild wie im Original: keine Füllfarben, kein Gitternetz, 1.0pt
@@ -939,8 +985,16 @@ def render_table(
                 ("TOPPADDING", (i, 1), (i, -1), CELL_VPAD - VPAD_SHIFT + ISBN_VSHIFT),
                 ("BOTTOMPADDING", (i, 1), (i, -1), CELL_VPAD + VPAD_SHIFT - ISBN_VSHIFT),
             ]
-    if last_row >= 1:
-        style.append(("LINEBELOW", (0, 1), (-1, last_row), 1.0, ROW_RULE_COLOR))
+    for anfang, ende in buchreihen:
+        style.append(("LINEBELOW", (0, ende), (-1, ende), 1.0, ROW_RULE_COLOR))
+        if ende > anfang:
+            # Die Anmerkungen gehören zur Buchreihe: keine Linie dazwischen,
+            # nicht von ihr getrennt auf die nächste Seite.
+            style += [
+                ("SPAN", (0, ende), (-1, ende)),
+                ("TOPPADDING", (0, ende), (-1, ende), 0),
+                ("NOSPLIT", (0, anfang), (-1, ende)),
+            ]
     if erklaerungen or weiter:
         # Erst nach der Breitenberechnung angehängt: die Erklärzeilen spannen
         # über alle Spalten und sollen keine Spalte breiter machen.
@@ -948,9 +1002,7 @@ def render_table(
             data.append([Paragraph(f"{escape(stern)} {escape(text)}", ERKLAER_STYLE)]
                         + [""] * (n_cols - 1))
         if weiter:
-            # Die gespannte Zelle hat rechts das Polster ihrer ersten Spalte.
-            breite = sum(col_widths) - (half_gap if n_cols > 1 else 0.0)
-            data.append([_weiter_tabelle(weiter, breite)] + [""] * (n_cols - 1))
+            data.append([_weiter_tabelle(weiter, spann_breite)] + [""] * (n_cols - 1))
         erste = last_row + 1
         style += [
             ("SPAN", (0, zeile), (-1, zeile)) for zeile in range(erste, len(data))
@@ -959,8 +1011,8 @@ def render_table(
             ("TOPPADDING", (0, erste), (-1, -1), 0),
             ("BOTTOMPADDING", (0, erste), (-1, -1), 0),
             ("TOPPADDING", (0, erste), (-1, erste), CELL_VPAD),
-            # Nicht von der letzten Buchzeile getrennt auf die nächste Seite.
-            ("NOSPLIT", (0, last_row), (-1, -1)),
+            # Nicht von der letzten Buchreihe getrennt auf die nächste Seite.
+            ("NOSPLIT", (0, buchreihen[-1][0] if buchreihen else last_row), (-1, -1)),
         ]
     table = Table(data, colWidths=col_widths, repeatRows=1, hAlign="LEFT")
     table.setStyle(TableStyle(style))

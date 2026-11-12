@@ -6,11 +6,12 @@ genehmigt und laufend, beantragt, abgelehnt, ausgemustert, später eingeführt.
 from __future__ import annotations
 
 import io
+from datetime import date
 
 import pytest
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
-from app.planungsdruck import NBSP, fach_tabellen
+from app.planungsdruck import NBSP, Antragsdetails, fach_tabellen
 from buecherlisten.core.daten import Buecherdaten
 from buecherlisten.core.erzeugen import Zuordnungen, erzeuge_buecherlisten_pdfs
 from buecherlisten.core.layout import (
@@ -419,3 +420,125 @@ def test_weiter_jahrgang_mit_zusatz_allein_und_buendig():
     assert erste.style.leftIndent == letzte.style.leftIndent == 0
     zusatz.wrap(stringWidth(f"7{NBSP}(von{NBSP}2027/2028", "Helvetica", 8) + 1, 1000.0)
     assert len(zusatz.blPara.lines) == 2
+
+
+# ── Anmerkungen zu entschiedenen Anträgen (Vorgabe vom 2026-11-12) ───────────
+
+ALLE_DETAILS = Antragsdetails(datum=True, bearbeiter=True, begruendung=True)
+
+
+def _entschieden(ergebnis: str, signatur: str = "max.mustermann", tag: int = 5):
+    return Antragsentscheidung(ergebnis, signatur, date(2026, 11, tag))
+
+
+@pytest.fixture()
+def anmerkungs_planung() -> Buchplanung:
+    g, a = _entschieden("genehmigt"), _entschieden("abgelehnt", "erika.musterfrau", 6)
+    return Buchplanung(schuljahr=SJ, buecher=(
+        _buch(A, "Viele Anträge"), _buch(B, "Ohne Begründung"), _buch(F, "Ausgemustert"),
+        _buch(H, "Kaufbuch"),
+    ), planung=(
+        # Zu alt: Einführung vor diesem Schuljahr, Ausmusterung vor dem Vorjahr.
+        _zeile(A, 5, eingefuehrt_ab="2025/2026", antrag_einfuehrung=g),
+        _zeile(A, 6, ausgemustert_nach="2027/2028", antrag_ausmusterung=a,
+               begruendung_ausmusterung="Wird noch gebraucht."),
+        _zeile(A, 7, eingefuehrt_ab=SJ, antrag_einfuehrung=g, begruendung_einfuehrung="Neu",
+               ausgemustert_nach=SJ, antrag_ausmusterung=g),
+        _zeile(A, 7, eingefuehrt_ab="2028/2029", antrag_einfuehrung=a),
+        # Offen: keine Anmerkung.
+        _zeile(A, 8, eingefuehrt_ab="2027/2028"),
+        # Genehmigt ausgemustert nach dem Vorjahr: zählt.
+        _zeile(A, 9, ausgemustert_nach="2025/2026", antrag_ausmusterung=g),
+        _zeile(B, 10, eingefuehrt_ab="2027/2028", antrag_einfuehrung=g),
+        _ausmusterung(F, 11, status=g, begruendung_ausmusterung="Veraltet."),
+        _zeile(H, 5, leihbar=False, eingefuehrt_ab=SJ, antrag_einfuehrung=g),
+    ))
+
+
+def test_anmerkungen_sortiert_und_jahrgang_nur_einmal(anmerkungs_planung):
+    tabellen = fach_tabellen(anmerkungs_planung, antraege=True, details=ALLE_DETAILS)["Chemie"]
+    leih = _je_titel(tabellen["leih"])
+    am5, am6 = "am 05.11.2026", "am 06.11.2026"
+    durch_m, durch_e = "durch max.mustermann", "durch erika.musterfrau"
+    assert leih["Viele Anträge"]["anmerkungen"] == (
+        ("6", "Ausmusterung", "2027/2028", "abgelehnt", am6, durch_e,
+         f"Begründung: {EINZUG}Wird noch gebraucht."),
+        # Gleiches Schuljahr: die Einführung zuerst.
+        ("7", "Einführung", SJ, "genehmigt", am5, durch_m, f"Begründung: {EINZUG}Neu"),
+        ("", "Ausmusterung", SJ, "genehmigt", am5, durch_m, ""),
+        ("", "Einführung", "2028/2029", "abgelehnt", am6, durch_e, ""),
+        ("9", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m, ""),
+    )
+    assert _je_titel(tabellen["kauf"])["Kaufbuch"]["anmerkungen"] == (
+        ("5", "Einführung", SJ, "genehmigt", am5, durch_m, ""),)
+    assert _je_titel(tabellen["ausgemustert"])["Ausgemustert"]["anmerkungen"] == (
+        ("11", "Ausmusterung", "2025/2026", "genehmigt", am5, durch_m,
+         f"Begründung: {EINZUG}Veraltet."),)
+
+
+def test_anmerkungen_nur_mit_dem_angehakten(anmerkungs_planung):
+    nur_datum = _je_titel(fach_tabellen(anmerkungs_planung, antraege=True, details=Antragsdetails(
+        datum=True))["Chemie"]["leih"])
+    assert nur_datum["Ohne Begründung"]["anmerkungen"] == (
+        ("10", "Einführung", "2027/2028", "genehmigt", "am 05.11.2026"),)
+    # Nur „Begründung“: ein Antrag ohne Begründung fehlt, eine Buchreihe ohne
+    # einen solchen hat keine Anmerkungen; der Jahrgang steht im ersten, der bleibt.
+    begruendung = fach_tabellen(anmerkungs_planung, antraege=True,
+                                details=Antragsdetails(begruendung=True))["Chemie"]
+    leih = _je_titel(begruendung["leih"])
+    assert "anmerkungen" not in leih["Ohne Begründung"]
+    assert [z[0] for z in leih["Viele Anträge"]["anmerkungen"]] == ["6", "7"]
+    assert "anmerkungen" not in _je_titel(begruendung["kauf"])["Kaufbuch"]
+
+
+@pytest.mark.parametrize(("antraege", "details"), [
+    (True, Antragsdetails()), (False, ALLE_DETAILS)])
+def test_ohne_haekchen_oder_antragsinformationen_keine_anmerkungen(
+        anmerkungs_planung, antraege, details):
+    tabellen = fach_tabellen(anmerkungs_planung, antraege=antraege, details=details)["Chemie"]
+    assert not any("anmerkungen" in zeile for zeilen in tabellen.values() for zeile in zeilen)
+
+
+def test_anmerkungen_buendig_und_begruendung_haengend():
+    from buecherlisten.core.layout import _anmerkungen_tabelle
+
+    tabelle = _anmerkungen_tabelle((
+        ("6", "Ausmusterung", "2027/2028", "abgelehnt", "", f"Begründung: {EINZUG}Zeile 1\nZeile 2"),
+        ("", "Einführung", SJ, "genehmigt", "", ""),
+    ), 300.0)
+    # Die in keiner Zeile gefüllte Spalte fällt weg.
+    assert len(tabelle._colWidths) == 5
+    luecke = stringWidth(" ", "Helvetica", 8)
+    assert tabelle._colWidths[1] == pytest.approx(
+        stringWidth("Ausmusterung", "Helvetica", 8) + luecke, abs=0.6)
+    begruendung = tabelle._cellvalues[0][4]
+    einzug = stringWidth("Begründung: ", "Helvetica", 8)
+    assert begruendung.style.leftIndent == pytest.approx(einzug)
+    assert begruendung.style.firstLineIndent == pytest.approx(-einzug)
+    assert "Zeile 1<br/>Zeile 2" in begruendung.text
+
+
+def test_anmerkungen_in_der_zeile_der_buchreihe(anmerkungs_planung):
+    leih = fach_tabellen(anmerkungs_planung, antraege=True, details=ALLE_DETAILS)["Chemie"]["leih"]
+    tabelle = render_table(leih, with_fee=True, spalten=FACH_LISTE.spalten)
+    # Kopf, je Buchreihe ihre Zeile und darunter die Anmerkungen.
+    assert len(tabelle._cellvalues) == 1 + 2 * len(leih)
+    befehle = tabelle._linecmds
+    linien = sorted(start[1] for name, start, *_ in befehle if name == "LINEBELOW" and start[1])
+    assert linien == [2, 4]
+    assert ("SPAN", (0, 2), (-1, 2)) in tabelle._spanCmds
+    # pypdf liest jede Zelle als eigene Zeile.
+    text = " ".join(_pdf_text_mit(anmerkungs_planung, ALLE_DETAILS).split())
+    assert "6 Ausmusterung 2027/2028 abgelehnt am 06.11.2026 durch erika.musterfrau" in text
+    assert "Begründung: Veraltet." in text
+
+
+def _pdf_text_mit(planung: Buchplanung, details: Antragsdetails) -> str:
+    from pypdf import PdfReader
+
+    daten = Buecherdaten(SJ, "Schuljahr 26/27",
+                         fach_tabellen(planung, antraege=True, details=details))
+    (pdf,) = erzeuge_buecherlisten_pdfs(daten, faecher=["Chemie"], antraege=True,
+                                        zuordnungen=Zuordnungen(fkl={}, kollegium={},
+                                                                aufgabenfeld={}))
+    return "".join(seite.extract_text() for seite in PdfReader(io.BytesIO(pdf.inhalt)).pages)

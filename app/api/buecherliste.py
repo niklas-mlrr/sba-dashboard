@@ -66,7 +66,7 @@ from ..buecherlisten import (
     vergleiche_mit_iserv,
 )
 from ..planungsansicht import leerer_kontext, planungskontext
-from ..planungsdruck import fach_tabellen
+from ..planungsdruck import Antragsdetails, fach_tabellen
 from ..sitzung import Abgelaufen, NichtAngemeldet
 from .gemeinsam import aktuelle_einstellungen, vorlagen
 
@@ -419,7 +419,9 @@ async def _pdf(request: Request, ansicht: Ansicht,
     ``iserv_stand`` (nur Fach) druckt IServ, wie es ist: ohne die Korrekturen
     der Buchplanung und ohne Bestätigung (Vorgabe vom 2026-11-10). Ohne druckt
     das Fach nur die Planungsdatei (``app/planungsdruck.py``), mit
-    ``antragsinfo`` samt Jahreszahlen und Anträgen; ohne Datei gibt es dann
+    ``antragsinfo`` samt Jahreszahlen und Anträgen - und mit ``antrag_datum``,
+    ``antrag_bearbeiter``, ``antrag_begruendung`` den Anmerkungen zu
+    entschiedenen Anträgen (Vorgabe vom 2026-11-12); ohne Datei gibt es dann
     kein PDF. Ein ausgewähltes Fach, das die gedruckte Quelle nicht kennt,
     bekommt keine Liste.
     """
@@ -453,7 +455,11 @@ async def _pdf(request: Request, ansicht: Ansicht,
         if isinstance(planung, str):
             # Das Menü lässt sich dann gar nicht öffnen; das fängt alte Links ab.
             return _hinweis(request, "Keine Planungsdatei", planung, 409)
-        daten = replace(daten, je_fach=fach_tabellen(planung, antraege=antraege))
+        details = Antragsdetails(datum=bool(eins("antrag_datum")),
+                                 bearbeiter=bool(eins("antrag_bearbeiter")),
+                                 begruendung=bool(eins("antrag_begruendung")))
+        daten = replace(daten, je_fach=fach_tabellen(planung, antraege=antraege,
+                                                     details=details))
 
     gewuenscht, modus = auswahl(list(daten.gruppen(ansicht)))
     if ansicht == "fach":

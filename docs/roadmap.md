@@ -29,8 +29,13 @@ Doppelseitig). „nicht bestätigte" und „veränderte" sind darin durch **„n
 versendete"** ersetzt, das wie „Gesendet" („Fach auf Warten auf Rückmeldung
 setzen") noch gesperrt ist, bis der Status beschrieben und gespeichert wird.
 Die Antrags-Häkchen werden schon mitgeschickt; „Antragsinformationen“ wirkt
-seit 2026-11-10 (unten), Bearbeitungsdatum, Bearbeitender und Begründung noch
-nicht.
+seit 2026-11-10 (unten), Bearbeitungsdatum, Bearbeitender und Begründung seit
+2026-11-12: Jede Buchreihe trägt dann in ihrer Zeile, unter den Zellen und
+über alle Spalten, je genehmigtem oder abgelehntem Antrag (Ausmusterung ab
+nach dem Vorjahr, Einführung ab diesem Schuljahr) eine Anmerkung „<Jahrgang>
+<Einführung/Ausmusterung> <ESJ/ASJ> <genehmigt/abgelehnt> am <Datum> durch
+<Signatur> Begründung: <Text>“, bündig untereinander, nur mit dem
+Angehakten (``app/planungsdruck.py``).
 
 **Erledigt am 2026-11-10: „IServ-Stand benutzen" im PDF der Fächer.** Die
 Fächer kommen aus den IServ-Bücherlisten, ohne die Korrekturen der Buchplanung

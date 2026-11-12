@@ -637,6 +637,30 @@ def test_antragsinformationen_gehen_an_das_pdf(seiten: TestClient, erzeuger: _Er
     assert "klasse_teile" in erzeuger.daten[0].je_fach["Chemie"]["leih"][0]
 
 
+def test_haekchen_der_antragsinformationen_gehen_an_die_tabellen(
+    seiten: TestClient, erzeuger: _Erzeuger, monkeypatch,
+):
+    """Vorgabe vom 2026-11-12: Bearbeitungsdatum, Bearbeitender, Begründung -
+    nur zusammen mit „Antragsinformationen“."""
+    from app.api import buecherliste as modul
+    from app.planungsdruck import KEINE_DETAILS, Antragsdetails
+
+    gesehen: list[tuple[bool, Antragsdetails]] = []
+    echt = modul.fach_tabellen
+
+    def fach_tabellen(planung, *, antraege, details=KEINE_DETAILS):
+        gesehen.append((antraege, details))
+        return echt(planung, antraege=antraege, details=details)
+
+    monkeypatch.setattr(modul, "fach_tabellen", fach_tabellen)
+    _anmelden(seiten)
+    _drucken(seiten, [("faecher_auswahl", "alle"), ("antragsinfo", "1"),
+                      ("antrag_datum", "1"), ("antrag_begruendung", "1")])
+    _drucken(seiten, [("faecher_auswahl", "alle"), ("antrag_bearbeiter", "1")])
+    assert gesehen == [(True, Antragsdetails(datum=True, begruendung=True)),
+                       (False, Antragsdetails(bearbeiter=True))]
+
+
 def test_ohne_planungsdatei_druckt_das_fach_nicht(
     seiten: TestClient, erzeuger: _Erzeuger, planungsdatei,
 ):

@@ -48,6 +48,22 @@ Leihbare Buchreihen beider Tabellen tragen die Rücklage ihrer Fachschaft
 Tabelle eine, bekommt diese Tabelle die Spalte „Rücklagen“ als letzte (Vorgabe
 vom 2026-11-10).
 
+Anmerkungen zu Anträgen (Vorgabe vom 2026-11-12): Mit Antragsinformationen
+und mindestens einem der Häkchen „Bearbeitungsdatum“, „Bearbeitender“,
+„Begründung“ (:class:`Antragsdetails`) trägt jede Buchreihe aller drei
+Tabellen ``anmerkungen``: je genehmigtem oder abgelehntem Antrag ihrer
+Planungszeilen (Fach, ISBN, „leihbar“) eine Zeile mit den Zellen Jahrgang,
+„Einführung“/„Ausmusterung“, ESJ/ASJ, „genehmigt“/„abgelehnt“, „am <Datum>“,
+„durch <Signatur>“, „Begründung: <Text>“ - nur die angehakten der letzten
+drei. Dazu zählt jede Ausmusterung nach dem Vorjahr oder später und jede
+Einführung zu diesem Schuljahr oder später. Sortiert nach Jahrgang, dann
+Schuljahr, bei Gleichstand die Einführung zuerst; der Jahrgang steht nur in
+seiner ersten Zeile. Ein Antrag, bei dem alles Angehakte leer ist (etwa nur
+„Begründung“ und keine da), fehlt. Hinter „Begründung: “ steht
+:data:`~buecherlisten.core.layout.EINZUG`: bricht sie um, läuft sie bündig
+unter ihrem Anfang weiter. Gesetzt werden sie in der Zeile der Buchreihe
+unter deren Zellen, über alle Spalten (``buecherlisten.core.layout``).
+
 Zurück kommen Tabellen im Format von
 :func:`buecherlisten.core.daten.build_subject_tables`, je Zeile dazu
 ``klasse_teile`` (Text und Stil je Stück) und ``stil`` (der ganzen Zeile).
@@ -55,6 +71,7 @@ Zurück kommen Tabellen im Format von
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 from buecherlisten.core.daten import fmt_grades, fmt_price, format_isbn
@@ -63,6 +80,8 @@ from buecherlisten.planung import (
     ANTRAG_ABGELEHNT,
     ANTRAG_GENEHMIGT,
     ANTRAG_OFFEN,
+    ART_AUSMUSTERUNG,
+    ART_EINFUEHRUNG,
     OHNE_VERLAG,
     Antragsentscheidung,
     Buch,
@@ -82,6 +101,59 @@ _ANTRAGSSTIL = {ANTRAG_OFFEN: STIL_GRAU, ANTRAG_ABGELEHNT: STIL_DURCH}
 
 Eintrag = tuple[str, int, bool]
 Stueck = tuple[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True)
+class Antragsdetails:
+    """Die Häkchen unter „Antragsinformationen“ im Druckmenü: was die
+    Anmerkungen eines entschiedenen Antrags nennen (Vorgabe vom 2026-11-12)."""
+
+    datum: bool = False
+    bearbeiter: bool = False
+    begruendung: bool = False
+
+    @property
+    def gewaehlt(self) -> bool:
+        return self.datum or self.bearbeiter or self.begruendung
+
+
+KEINE_DETAILS = Antragsdetails()
+
+_ART_WORT = {ART_EINFUEHRUNG: "Einführung", ART_AUSMUSTERUNG: "Ausmusterung"}
+
+
+def _anmerkungen(zeilen: Iterable[Planungszeile], jetzt: int,
+                 details: Antragsdetails) -> tuple[tuple[str, ...], ...]:
+    """Die Anmerkungen einer Buchreihe, je Antrag eine Zeile (Modulkopf)."""
+    antraege: list[tuple[tuple[int, int, bool], tuple[str, ...]]] = []
+    for zeile in zeilen:
+        for art, jahr, ab in ((ART_EINFUEHRUNG, zeile.beginn, jetzt),
+                              (ART_AUSMUSTERUNG, zeile.ende, jetzt - 1)):
+            antrag = zeile.antrag(art)
+            if jahr is None or jahr < ab or antrag.status not in (ANTRAG_GENEHMIGT,
+                                                                   ANTRAG_ABGELEHNT):
+                continue
+            angaben: list[str] = []
+            if details.datum:
+                angaben.append(f"am {antrag.datum:%d.%m.%Y}" if antrag.datum else "")
+            if details.bearbeiter:
+                angaben.append(f"durch {antrag.signatur.strip()}" if antrag.signatur.strip()
+                               else "")
+            if details.begruendung:
+                # Zeilenumbrüche der Begründung bleiben (ZEILENUMBRUCH ist "\n").
+                text = zeile.begruendung(art).replace("\r\n", "\n").replace("\r", "\n").strip()
+                angaben.append(f"Begründung: {EINZUG}{text}" if text else "")
+            if not any(angaben):
+                continue
+            antraege.append(((zeile.jahrgang, jahr, art == ART_AUSMUSTERUNG),
+                             (_ART_WORT[art], zeile.schuljahr_des_antrags(art).strip(),
+                              antrag.status, *angaben)))
+    antraege.sort(key=lambda a: a[0])
+    ergebnis: list[tuple[str, ...]] = []
+    for i, ((jahrgang, _, _), texte) in enumerate(antraege):
+        erste = i == 0 or antraege[i - 1][0][0] != jahrgang
+        ergebnis.append((str(jahrgang) if erste else "", *texte))
+    return tuple(ergebnis)
 
 
 @dataclass(frozen=True)
@@ -329,9 +401,13 @@ def _ruecklage(planung: Buchplanung, isbn: str, fach: str) -> str:
     return str(ruecklage.anzahl) if ruecklage and ruecklage.anzahl else ""
 
 
-def fach_tabellen(planung: Buchplanung, *, antraege: bool) -> dict[str, dict[str, list[dict]]]:
+def fach_tabellen(planung: Buchplanung, *, antraege: bool,
+                  details: Antragsdetails = KEINE_DETAILS) -> dict[str, dict[str, list[dict]]]:
     """Fach -> {"leih": [...], "kauf": [...], "ausgemustert": [...]}, sortiert
     nach Jahrgängen und Titel.
+
+    Mit ``antraege`` und gewählten ``details`` trägt jede Zeile
+    ``anmerkungen`` (Modulkopf); ohne ``antraege`` wirken ``details`` nicht.
 
     Die Fächer sind immer die der Datei mit Anträgen: so viele, wie das
     Druckmenü ohne IServ-Stand zur Wahl stellt. Ein Fach, das ohne
@@ -349,12 +425,24 @@ def fach_tabellen(planung: Buchplanung, *, antraege: bool) -> dict[str, dict[str
     def leer() -> dict[str, list[dict]]:
         return {"leih": [], "kauf": [], "ausgemustert": []}
 
+    je_buchreihe: dict[tuple[str, str, bool], list[Planungszeile]] = defaultdict(list)
+    if antraege and jetzt is not None and details.gewaehlt:
+        for planungszeile in planung.planung:
+            je_buchreihe[(planungszeile.fach, planungszeile.isbn,
+                          planungszeile.leihbar)].append(planungszeile)
+
+    def anmerken(zeile: dict, schluessel: tuple[str, str, bool]) -> dict:
+        if jetzt is None or schluessel not in je_buchreihe:
+            return zeile
+        anmerkungen = _anmerkungen(je_buchreihe[schluessel], jetzt, details)
+        return {**zeile, "anmerkungen": anmerkungen} if anmerkungen else zeile
+
     tabellen: dict[str, dict[str, list[dict]]] = {fach: leer() for fach, _, _ in alle}
     for (fach, isbn, leihbar), eintraege in werte.items():
         buch = planung.buch(isbn)
         if buch is None:
             continue
-        zeile = _zeile(buch, eintraege, antraege=antraege)
+        zeile = anmerken(_zeile(buch, eintraege, antraege=antraege), (fach, isbn, leihbar))
         if leihbar:
             zeile["ruecklage"] = _ruecklage(planung, isbn, fach)
         tabellen.setdefault(fach, leer())["leih" if leihbar else "kauf"].append(zeile)
@@ -368,6 +456,7 @@ def fach_tabellen(planung: Buchplanung, *, antraege: bool) -> dict[str, dict[str
         zeile = {**_zeile(buch, eintraege, antraege=False),
                  "ruecklage": _ruecklage(planung, isbn, fach),
                  "weiter": tuple((f, weiter[isbn][f]) for f in andere)}
+        zeile = anmerken(zeile, (fach, isbn, True))
         tabellen.setdefault(fach, leer())["ausgemustert"].append(zeile)
     for tabelle in tabellen.values():
         for zeilen in tabelle.values():
