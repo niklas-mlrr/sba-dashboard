@@ -113,7 +113,12 @@ def test_ausleihe_rad_entspricht_dem_quellbaum():
         for p in quelle.rglob("*")
         if p.is_file() and p.suffix in {".py", ".typed"} and "__pycache__" not in p.parts
     }
-    assert im_rad == im_quellbaum, (
+    # Zeilenenden zählen nicht: ein Windows-Checkout (core.autocrlf, so auch
+    # in der CI) hat CRLF im Quellbaum, das Rad wurde aus einem LF-Baum gebaut.
+    def _lf(dateien: dict[str, bytes]) -> dict[str, bytes]:
+        return {name: inhalt.replace(b"\r\n", b"\n") for name, inhalt in dateien.items()}
+
+    assert _lf(im_rad) == _lf(im_quellbaum), (
         "wheels/ ist veraltet: uv run python tools/wheelhouse.py --nur-ausleihe"
     )
 
