@@ -5,7 +5,9 @@ import subprocess
 from pathlib import Path
 
 WURZEL = Path(__file__).resolve().parents[1]
-START = WURZEL / "START.bat"
+# START.bat liegt eine Ebene ueber programm/: im Programmordner der Lehrkraft
+# soll ausser ihr nichts zu sehen sein.
+START = WURZEL.parent / "START.bat"
 ANFORDERUNGEN = WURZEL / "requirements.txt"
 UV_EXPORT = [
     "uv",
@@ -60,11 +62,11 @@ def test_start_spiegelt_keine_arbeitsmappe_mit():
     for name in ("*.xlsx", "config.local.json", "*.dashboard-cache.json",
                  "*.sba-dashboard.lock"):
         assert name in zeile, name
-    # Der Ausschluss gilt fuer BEIDE robocopy-Aufrufe, nicht nur fuer den des
-    # Dashboards - sonst kaeme die Mappe ueber das Nachbarrepo mit. Es waren
+    # Es gibt genau einen robocopy-Aufruf, und der traegt den Ausschluss. Bis
+    # 2026-11-15 waren es zwei (dazu der Nachbarordner ausleihe-api), davor
     # drei, bis sba-bestand am 2026-09-18 in dieses Repo aufging.
     kopierzeilen = [z for z in inhalt.splitlines() if z.startswith("robocopy ")]
-    assert len(kopierzeilen) == 2
+    assert len(kopierzeilen) == 1
     assert all("%AUSSCHLUSS%" in z for z in kopierzeilen)
 
 
@@ -131,79 +133,79 @@ def test_start_schreibt_die_ausgelieferte_konfiguration_nicht_fort():
     assert '"%VENV%\\Scripts\\python.exe" -m app.start' in inhalt
 
 
-def test_start_installiert_die_geschwister_ins_venv_statt_pythonpath():
+def test_start_spiegelt_nur_den_programmordner():
+    """Oben im Programmordner liegt fuer die Lehrkraft nur START.bat.
+
+    Alles andere steckt in ``programm``; gespiegelt wird genau dieser Ordner,
+    an denselben Ort wie vor dem Umzug, damit ein eingerichteter Rechner
+    seine Umgebung behaelt. Fehlt der Ordner (ZIP nur geoeffnet, nicht
+    entpackt), sagt START.bat das, statt robocopy scheitern zu lassen.
+    """
+    inhalt = START.read_text(encoding="utf-8")
+
+    assert 'set "PROGRAMM=%~dp0programm"' in inhalt
+    pruefung = 'if not exist "%PROGRAMM%\\app\\" goto :programmordner_fehlt'
+    assert pruefung in inhalt
+    assert inhalt.index(pruefung) < inhalt.index("robocopy ")
+    (kopie,) = [z for z in inhalt.splitlines() if z.startswith("robocopy ")]
+    assert kopie.startswith('robocopy "%PROGRAMM%" "%CODE%\\sba-dashboard" /MIR')
+    assert "ausleihe-api" not in kopie
+    # Python sucht ein mitgebrachtes Python ebenfalls im Unterordner.
+    assert 'call :pruefe_python "%PROGRAMM%\\python\\python.exe"' in inhalt
+
+
+def test_start_installiert_den_client_als_rad_statt_pythonpath():
     """Die laufende Anwendung darf an keinem Ordner mehr hängen, nur am venv.
 
-    Ein ``PYTHONPATH`` auf die Nachbarordner koppelt die *Laufzeit* an eine
-    Ordnerstruktur: ein halb gespiegelter Baum oder ein Fenster mit altem
-    ``PYTHONPATH`` bricht die Anwendung an einer Stelle, an der niemand sucht.
-    Begründung und Rollback stehen in ``docs/verteilung.md``.
-
-    Installiert wird seit 2026-09-18 nur noch ein Paket. ``bestand`` und
-    ``buecherlisten`` lagen bis dahin im Geschwister-Repo sba-bestand und
-    mussten deshalb denselben Weg gehen; sie liegen jetzt in diesem Repo, also
-    im gespiegelten Arbeitsverzeichnis selbst, und werden von dort importiert
-    wie ``app``. Dass sie NICHT mehr in dieser Zeile stehen, ist damit kein
-    Rückfall auf einen Ordner daneben - die Zusicherung auf den fehlenden
-    ``PYTHONPATH`` oben gilt unverändert.
+    Ein ``PYTHONPATH`` auf Nachbarordner koppelt die *Laufzeit* an eine
+    Ordnerstruktur. Seit 2026-11-15 gibt es auch keinen Nachbarordner mehr:
+    der Programmordner auf dem Rechner der Lehrkraft ist nur dieses Repo, der
+    IServ-Client liegt als fertiges Rad in ``programm/wheels``.
     """
     inhalt = START.read_text(encoding="utf-8")
 
     assert "set \"PYTHONPATH=" not in inhalt
+    assert "--no-build-isolation" not in inhalt
+    assert '"%~dp0..\\ausleihe-api"' not in inhalt
     assert (
-        '"%VENV%\\Scripts\\python.exe" -m pip install --no-build-isolation --no-deps '
-        '--quiet "%CODE%\\ausleihe-api"'
+        'for %%W in ("%WHEELS%\\iserv_ausleihe_api-*.whl") do set "AUSLEIHE_RAD=%%~fW"'
     ) in inhalt
-    # Und zwar genau ein Paket: ein zweiter Pfad in dieser Zeile waere ein
-    # Ordner, an dem die Laufzeit wieder haengt. (Der Name sba-bestand steht in
-    # START.bat noch in einem Kommentar - deshalb wird die Zeile geprueft, nicht
-    # die Datei.)
-    assert "sba-bestand" not in next(
-        z for z in inhalt.splitlines() if "pip install --no-build-isolation" in z
+    assert "if not defined AUSLEIHE_RAD goto :radfehler" in inhalt
+    installieren = (
+        '"%VENV%\\Scripts\\python.exe" -m pip install --no-index --no-deps '
+        '--force-reinstall --quiet "%AUSLEIHE_RAD%"'
     )
-    # Auch in einem venv aus einem abgebrochenen Start, das ohne setuptools
-    # liegen blieb ("Cannot import 'setuptools.build_meta'").
-    nachsehen = (
-        '"%VENV%\\Scripts\\python.exe" -c "import setuptools" >nul 2>&1\n'
-        "if errorlevel 1 call :pip_install setuptools\n"
-        "if errorlevel 1 goto :pipfehler\n"
+    assert installieren in inhalt
+    # Kein setuptools mehr: gebaut wird auf dem Schul-Rechner nichts.
+    assert "call :pip_install --upgrade pip\n" in inhalt
+    assert "setuptools" not in "\n".join(
+        z for z in inhalt.splitlines() if not z.lstrip().startswith("rem")
     )
-    assert nachsehen in inhalt
-    assert inhalt.index(nachsehen) < inhalt.index("pip install --no-build-isolation")
-    assert inhalt.index('if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig') < (
-        inhalt.index(nachsehen)
-    )
-    # setuptools muss im venv liegen, sonst hat --no-build-isolation kein Backend.
-    # wheel nicht mehr: setuptools baut seit 70.1 selbst Raeder.
-    assert "call :pip_install --upgrade pip setuptools\n" in inhalt
 
 
-def test_start_installiert_die_geschwister_nur_bei_geaenderten_quellen():
-    """Ein gewöhnlicher Start soll nichts bauen.
+def test_start_installiert_den_client_nur_bei_geaendertem_rad():
+    """Ein gewöhnlicher Start soll nichts installieren.
 
-    ``robocopy`` meldet mit Rückgabecode 1 "es wurde etwas kopiert" - genau
-    daran hängt die Frage, ob neu installiert werden muss.
+    Verglichen wird Byte fuer Byte mit einer Kopie des zuletzt installierten
+    Rads - die Versionsnummer steigt nicht bei jeder Aenderung. Die Kopie
+    entsteht erst nach erfolgreichem Install, und auch ein venv ohne Client
+    (abgebrochener Start) wird erkannt.
     """
     inhalt = START.read_text(encoding="utf-8")
 
-    assert 'set "GESCHWISTER_NEU=0"' in inhalt
-    assert inhalt.count('if errorlevel 1 set "GESCHWISTER_NEU=1"') == 1
-    assert 'if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"' in inhalt
-    assert 'if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig' in inhalt
-    # Ein abgebrochener Start hinterliess ein venv ohne Client, und robocopy
-    # meldete danach nichts Neues. Gefragt wird deshalb auch das venv selbst.
-    pruefung = (
-        '"%VENV%\\Scripts\\python.exe" -c "import ausleihe" >nul 2>&1 '
-        '|| set "GESCHWISTER_NEU=1"'
+    vergleich = 'fc /b "%AUSLEIHE_RAD%" "%AUSLEIHE_STAND%" >nul 2>&1'
+    assert vergleich in inhalt
+    assert 'if not exist "%AUSLEIHE_STAND%" goto :client_installieren' in inhalt
+    nachsehen = '"%VENV%\\Scripts\\python.exe" -c "import ausleihe" >nul 2>&1'
+    assert nachsehen in inhalt
+    assert inhalt.index(vergleich) < inhalt.index(nachsehen) < inhalt.index(
+        "\n:client_installieren\n"
     )
-    assert pruefung in inhalt
-    assert inhalt.index(pruefung) < inhalt.index(
-        'if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig'
-    )
-    # Ein Kopierfehler bleibt ein Kopierfehler: die 8er-Pruefung steht davor.
-    assert inhalt.index("if errorlevel 8 goto :kopierfehler") < inhalt.index(
-        'if errorlevel 1 set "GESCHWISTER_NEU=1"'
-    )
+    ablegen = 'copy /y "%AUSLEIHE_RAD%" "%AUSLEIHE_STAND%" >nul'
+    assert inhalt.index("--force-reinstall") < inhalt.index(ablegen)
+    # Der Client kommt nach den Paketen aus requirements.txt (seine
+    # Abhaengigkeit requests steht dort).
+    assert inhalt.index("\n:pakete_fertig\n") < inhalt.index("\n:client_installieren\n")
 
 
 def test_jedes_start_label_wird_angesprungen_und_existiert_genau_einmal():
@@ -231,7 +233,7 @@ def test_start_nimmt_nur_ein_python_mit_venv():
         '%* -c "import sys, venv, ensurepip; '
         'sys.exit(sys.version_info < (3, 10))" >nul 2>&1'
     ) in inhalt
-    for kandidat in ('"%~dp0python\\python.exe"', "py -3", "python3"):
+    for kandidat in ('"%PROGRAMM%\\python\\python.exe"', "py -3", "python3"):
         assert f"call :pruefe_python {kandidat}" in inhalt, kandidat
     assert "if defined PY_OHNE_VENV goto :python_unvollstaendig" in inhalt
     # Ein gefundenes Python wird von spaeteren Kandidaten nicht ueberschrieben.
@@ -262,14 +264,14 @@ def test_start_sucht_python_3_auch_hinter_einem_python_2():
 def test_start_installiert_zuerst_ohne_internet():
     """Die Schulrechner erreichen PyPI nicht direkt (WinError 10061).
 
-    Jeder pip-Install geht deshalb zuerst gegen ``wheels/`` neben START.bat,
-    ohne Index. Erst wenn das scheitert, geht es ins Netz, mit dem Proxy, den
-    Windows fuer pypi.org nennt. ``wheels/`` liegt auf dem Netzlaufwerk und
-    wird nicht nach %LOCALAPPDATA% gespiegelt.
+    Jeder pip-Install geht deshalb zuerst gegen ``programm/wheels/``, ohne
+    Index. Erst wenn das scheitert, geht es ins Netz, mit dem Proxy, den
+    Windows fuer pypi.org nennt. ``wheels/`` wird nicht nach %LOCALAPPDATA%
+    gespiegelt.
     """
     inhalt = START.read_text(encoding="utf-8")
 
-    assert 'set "WHEELS=%CD%\\wheels"' in inhalt
+    assert 'set "WHEELS=%CD%\\programm\\wheels"' in inhalt
     offline = (
         '"%VENV%\\Scripts\\python.exe" -m pip install --no-index '
         '--find-links "%WHEELS%" --quiet %*'
@@ -280,7 +282,7 @@ def test_start_installiert_zuerst_ohne_internet():
     assert "if not defined PROXY_GEPRUEFT call :proxy_ermitteln" in inhalt
     assert "GetSystemWebProxy().GetProxy($u)" in inhalt
     assert 'do set "PIP_PROXY=%%X"' in inhalt
-    # Ausser dem Unterprogramm und dem Geschwister-Install ruft niemand pip direkt.
+    # Ausser dem Unterprogramm und dem Client-Install ruft niemand pip direkt.
     direkt = [z for z in inhalt.splitlines() if "-m pip install" in z]
     assert len(direkt) == 3, direkt
     zeile = next(z for z in inhalt.splitlines() if z.startswith('set "AUSSCHLUSS='))

@@ -28,7 +28,9 @@ from pathlib import Path
 
 _HERE = Path(__file__).parent
 _ROOT = _HERE.parent
-_API_ROOT = _ROOT.parent / "ausleihe-api"
+# _ROOT ist programm/, das Repo liegt eine Ebene darüber - ausleihe-api also
+# zwei Ebenen höher (``<irgendein-ordner>/ausleihe-api``).
+_API_ROOT = _ROOT.parent.parent / "ausleihe-api"
 
 # Wie in buecherlisten/generate_booklists.py: die Zugangsdaten liegen in der
 # ``.env`` des Geschwister-Repos, und ``ausleihe`` kommt aus dem Venv oder

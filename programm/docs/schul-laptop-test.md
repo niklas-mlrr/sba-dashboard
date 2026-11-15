@@ -130,12 +130,13 @@ nicht der Traceback.
 
 | # | Schritt | Erwartet | Notieren |
 |---|---------|----------|----------|
-| B1 | Fenster schließen, `START.bat` erneut | Kein „Pakete werden installiert", kein „Bibliotheken werden eingerichtet" | Ausgabe |
+| B1 | Fenster schließen, `START.bat` erneut | Kein „Pakete werden installiert", kein „Bibliothek wird eingerichtet" | Ausgabe |
 | B2 | Dauer bis der Browser aufgeht | **deutlich unter A2**, Zielmarke wenige Sekunden | Dauer |
 
-Erscheint bei B1 doch „Bibliotheken werden eingerichtet", meldet `robocopy` bei
-jedem Lauf Änderungen. Dann ist die Ursache zu suchen (Zeitstempel über SMB),
-sonst baut jeder Start unnötig.
+Erscheint bei B1 doch „Bibliothek wird eingerichtet", hält `START.bat` das Rad
+in `programm\wheels` für geändert oder findet den Client im venv nicht. Dann
+`%LOCALAPPDATA%\sba-dashboard\venv\ausleihe-api.installed.whl` mit dem Rad
+vergleichen, sonst installiert jeder Start unnötig.
 
 ### C. Migration einer alten Konfiguration
 

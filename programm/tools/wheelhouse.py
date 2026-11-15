@@ -6,16 +6,26 @@ Ordner und geht erst ins Netz, wenn hier etwas fehlt. Gebaut wird für 64-Bit-
 Windows und jede Python-Version von 3.10 bis 3.14, weil auf den Rechnern
 nicht festliegt, welches Python 3 installiert ist.
 
+Dazu kommt ein Rad des IServ-Clients ``ausleihe-api``, gebaut aus dem
+Geschwister-Repo. Der Programmordner auf dem Rechner der Lehrkraft ist nur
+dieses Repo; einen Ordner ``ausleihe-api`` daneben gibt es dort nicht.
+
 Nach jeder Änderung an ``requirements.txt`` neu ausführen::
 
     uv run python tools/wheelhouse.py
+
+Nach einer Änderung nur an ``ausleihe-api`` genügt (ohne Download)::
+
+    uv run python tools/wheelhouse.py --nur-ausleihe
 
 ``tests/test_wheelhouse.py`` prüft, dass der Ordner zur ``requirements.txt``
 passt.
 """
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -27,14 +37,20 @@ from packaging.requirements import Requirement
 WURZEL = Path(__file__).resolve().parent.parent
 ANFORDERUNGEN = WURZEL / "requirements.txt"
 ZIEL = WURZEL / "wheels"
+# programm/ -> Repo -> Sammelordner, in dem ausleihe-api als Geschwister liegt.
+AUSLEIHE_QUELLE = WURZEL.parent.parent / "ausleihe-api"
+AUSLEIHE_NAME = "iserv-ausleihe-api"
+# Fester Zeitstempel fuer die Eintraege im Rad: so ist ein neu gebautes Rad aus
+# unveraendertem Quellcode Byte fuer Byte gleich, und Git sieht keine Aenderung.
+# START.bat vergleicht genau diese Bytes mit dem zuletzt installierten Rad.
+REPRODUZIERBAR = "315532800"  # 1980-01-01, das Minimum fuer ZIP-Zeitstempel
 PYTHON_VERSIONEN = ("3.10", "3.11", "3.12", "3.13", "3.14")
 PLATTFORM = "win_amd64"
-# Was START.bat neben requirements.txt braucht: setuptools fuer den Install von
-# ausleihe-api mit --no-build-isolation, dazu pip fuer das Upgrade direkt nach
-# dem Anlegen des venv. Rein Python, also fuer alle Versionen gleich. "wheel"
-# fehlt mit Absicht: setuptools baut seit 70.1 selbst Raeder, und wheel zoege
-# "packaging" als weitere Abhaengigkeit nach.
-WERKZEUGE = ("pip", "setuptools")
+# Was START.bat neben requirements.txt braucht: pip fuer das Upgrade direkt nach
+# dem Anlegen des venv. Rein Python, also fuer alle Versionen gleich.
+# setuptools stand hier, bis ausleihe-api als fertiges Rad mitkam (2026-11-15):
+# vorher baute START.bat den Client mit --no-build-isolation aus dem Quellbaum.
+WERKZEUGE = ("pip",)
 
 
 def windows_umgebung(python_version: str) -> dict[str, str]:
@@ -93,13 +109,48 @@ def herunterladen(ziel: Path) -> None:
         )
 
 
+def ausleihe_bauen(ziel: Path) -> Path:
+    """Baut das Rad von ``ausleihe-api`` nach ``ziel`` und gibt seinen Pfad zurück.
+
+    Rein Python, ein Rad für alle Versionen. Die ``.env`` im Quellbaum kommt
+    nicht mit: setuptools packt nur das Paket ``ausleihe`` ein
+    (``packages.find`` dort), geprüft in ``tests/test_wheelhouse.py``.
+    """
+    if not (AUSLEIHE_QUELLE / "pyproject.toml").is_file():
+        sys.exit(f"ausleihe-api nicht gefunden: {AUSLEIHE_QUELLE}")
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(
+            ["uv", "build", "--wheel", "--quiet", "--out-dir", tmp, str(AUSLEIHE_QUELLE)],
+            check=True,
+            env={**os.environ, "SOURCE_DATE_EPOCH": REPRODUZIERBAR},
+        )
+        (rad,) = Path(tmp).glob("*.whl")
+        return Path(shutil.copy2(rad, ziel / rad.name))
+
+
+def ausleihe_raeder(ordner: Path = ZIEL) -> list[Path]:
+    praefix = AUSLEIHE_NAME.replace("-", "_") + "-"
+    return sorted(ordner.glob(praefix + "*.whl"))
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--nur-ausleihe", action="store_true",
+        help="nur das Rad von ausleihe-api neu bauen, nichts herunterladen",
+    )
+    if parser.parse_args().nur_ausleihe:
+        for alt in ausleihe_raeder():
+            alt.unlink()
+        print(f"Gebaut: {ausleihe_bauen(ZIEL).name}")
+        return
     # In einen frischen Ordner laden und erst dann tauschen: so bleiben keine
     # Räder alter Pins liegen, und ein abgebrochener Lauf lässt wheels/ intakt.
     with tempfile.TemporaryDirectory(dir=WURZEL) as tmp:
         neu = Path(tmp) / "wheels"
         neu.mkdir()
         herunterladen(neu)
+        ausleihe_bauen(neu)
         if ZIEL.exists():
             shutil.rmtree(ZIEL)
         neu.rename(ZIEL)

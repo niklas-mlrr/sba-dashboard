@@ -8,6 +8,22 @@ druck aus IServ.
 Die Anwendung läuft lokal auf dem Rechner der Lehrkraft und hört nur auf
 `127.0.0.1`. Die Mappe enthält personenbezogene Zahlen.
 
+## Aufbau dieses Ordners
+
+```
+START.bat     der einzige Einstieg für die Lehrkraft: Doppelklick
+programm/     alles andere - Code, Tests, Doku, mitgelieferte Pakete
+.github/      CI und diese README (nur für GitHub, nicht im ZIP-Download)
+```
+
+Das ist für eine Codebase ungewöhnlich, mit Absicht: der Ordner landet so, wie
+er ist, auf dem Rechner einer Lehrkraft, und dort soll es genau eine Datei zum
+Doppelklicken geben (seit 2026-11-15). Die Excel-Dateien liegen nicht hier,
+sondern weiter nur auf dem Netzlaufwerk. Der ZIP-Download von GitHub enthält
+nur `START.bat` und `programm/` (`export-ignore` in `.gitattributes`),
+`tests/test_programmordner.py` hält das fest. **Alle Befehle unten laufen in
+`programm/`.**
+
 ## Stand
 
 Lesen, Schreiben, Abrufen und Starten sind fertig und gegen die echte Mappe
@@ -16,7 +32,7 @@ Bücherlisten speichern** — Freigabe durch die
 Fachkonferenzleitungen, Einführung und Ausmusterung je Fach und Jahrgang sowie
 Rücklagen für die Fachschaften. Er liegt als Exceldatei je Schuljahr neben der
 Bestandsmappe (`buecherlisten/planung/`,
-[`docs/architektur.md`](docs/architektur.md#die-buchplanung-listen-freigeben-einführung-und-ausmusterung),
+[`docs/architektur.md`](../programm/docs/architektur.md#die-buchplanung-listen-freigeben-einführung-und-ausmusterung),
 Regeln in [`buecherlisten/planung/README.md`](buecherlisten/planung/README.md)); eingetragen wird in
 den Bücherlisten-Seiten selbst. Seit 2026-09-20 öffnet dort ein Klick auf eine
 Buchzeile ein **Planungsmenü** (Einführung und Ausmusterung je Jahrgang,
@@ -36,23 +52,23 @@ Datum und Begründung (Spalten „Antrag …“ und „Begründung“ auf
 „Fächer & Jahrgang“). Seit 2026-09-19 gibt es außerdem den Reiter **Mehrjahresbände**: er vergleicht
 die Jahrgangs-Bücherlisten zweier Schuljahre und schreibt daraus die Übersicht,
 welche Bücher abzugeben sind — weiter in dieselbe Exceldatei wie bisher
-(`mehrjahresbaende/`, [`docs/architektur.md`](docs/architektur.md#die-mehrjahresbände-übersicht)). Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
+(`mehrjahresbaende/`, [`docs/architektur.md`](../programm/docs/architektur.md#die-mehrjahresbände-übersicht)). Kopf und Bücherlisten (nach Fach, Verlag und Jahrgang, alle drei mit Druck
 als PDF) folgen seit 2026-09-17 dem IServ-Modul Schulbuchausleihe. Beim
 Jahrgang druckt „Schülerliste" die Druckversion aus IServ statt der eigenen. Offen ist vor
-allem der **Testlauf auf dem Schul-Laptop** ([Prüfliste](docs/schul-laptop-test.md)).
+allem der **Testlauf auf dem Schul-Laptop** ([Prüfliste](../programm/docs/schul-laptop-test.md)).
 
 | Dokument | Wofür |
 |----------|-------|
-| [`docs/nachfolge-anleitung.md`](docs/nachfolge-anleitung.md) | Bedienung, ohne Vorwissen |
-| [`docs/architektur.md`](docs/architektur.md) | Warum es so gebaut ist |
-| [`docs/verteilung.md`](docs/verteilung.md) | Wie es auf den Laptop kommt, Migration und Rollback |
-| [`docs/roadmap.md`](docs/roadmap.md) | Was offen ist |
-| [`docs/schul-laptop-test.md`](docs/schul-laptop-test.md) | Prüfliste für den Testlauf |
+| [`docs/nachfolge-anleitung.md`](../programm/docs/nachfolge-anleitung.md) | Bedienung, ohne Vorwissen |
+| [`docs/architektur.md`](../programm/docs/architektur.md) | Warum es so gebaut ist |
+| [`docs/verteilung.md`](../programm/docs/verteilung.md) | Wie es auf den Laptop kommt, Migration und Rollback |
+| [`docs/roadmap.md`](../programm/docs/roadmap.md) | Was offen ist |
+| [`docs/schul-laptop-test.md`](../programm/docs/schul-laptop-test.md) | Prüfliste für den Testlauf |
 
 `docs/archiv/` enthält abgeschlossene Dokumente, die nur noch als Beleg dienen —
 derzeit den v1-Erstellungsplan.
 
-[`docs/architektur.md`](docs/architektur.md) ist die **kanonische** Beschreibung
+[`docs/architektur.md`](../programm/docs/architektur.md) ist die **kanonische** Beschreibung
 des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 
 | Route | Zweck |
@@ -88,7 +104,7 @@ des Entwurfs. Was dort steht, wird hier nicht wiederholt, sondern verlinkt.
 
 Jede Fehlerantwort hat die Form `{"fehler": "<deutscher Klartext>"}`; welche
 Ausnahme zu welchem Status wird, steht als Tabelle in
-[`docs/architektur.md`](docs/architektur.md#ausnahme--http-steht-an-genau-einer-stelle).
+[`docs/architektur.md`](../programm/docs/architektur.md#ausnahme--http-steht-an-genau-einer-stelle).
 
 Bedient wird das Programm über ein **eigenes Fenster** (tkinter): dort meldet man
 sich bei IServ an, stellt Server und Ordner der Mappe ein, öffnet die Seite
@@ -96,31 +112,33 @@ erneut und beendet das Dashboard — auch dann, wenn der Browser-Tab längst zu 
 Die Zugangsdaten werden **nie gespeichert**; sie liegen für die Laufzeit im
 IServ-Client und verfallen nach 30 Minuten ohne Abruf. Warum das Passwort
 überhaupt gehalten werden muss und was das Zeitschloss daran ändert, steht in
-[`docs/architektur.md`](docs/architektur.md#die-anmeldung-einmal-im-fenster-mit-zeitschloss).
+[`docs/architektur.md`](../programm/docs/architektur.md#die-anmeldung-einmal-im-fenster-mit-zeitschloss).
 
 Änderbar ist nur **Bestellt**, und nur über den Zeilenschlüssel —
 `/api/cell` nimmt keine freie Zellreferenz entgegen, und die beim Laden gesehene
 `mtime` ist Pflicht. Warum es diese vier Schutzschichten braucht und was jede
 einzelne verhindert, steht in
-[`docs/architektur.md`](docs/architektur.md#der-schreibpfad-vier-schutzschichten).
+[`docs/architektur.md`](../programm/docs/architektur.md#der-schreibpfad-vier-schutzschichten).
 
 Alle Anfragen müssen an `127.0.0.1` oder `localhost` adressiert sein
 (`Host`-Prüfung gegen DNS-Rebinding), und zustandsändernde Anfragen mit fremdem
 `Origin` werden abgelehnt. Beides ist keine Anmeldung — Begründung und Grenzen
-in [`docs/architektur.md`](docs/architektur.md#was-die-bindung-allein-nicht-abdeckt).
+in [`docs/architektur.md`](../programm/docs/architektur.md#was-die-bindung-allein-nicht-abdeckt).
 Auf dem Entwicklungs-VPS kommen über `SBA_ZUSATZ_HOSTS` (aus der nicht
 versionierten `start.local.env`) die Tailnet-Namen dazu, damit das Dashboard
 hinter Tailscale Serve unter `http://<vps-name>:8765` erreichbar ist — siehe
-[`docs/architektur.md`](docs/architektur.md#ausnahme-der-entwicklungs-vps-hinter-tailscale-serve-2026-10-19).
+[`docs/architektur.md`](../programm/docs/architektur.md#ausnahme-der-entwicklungs-vps-hinter-tailscale-serve-2026-10-19).
 
 ## Entwickeln
 
-Das **Geschwister-Layout ist verbindlich** (siehe `../README.md`):
+Das **Geschwister-Layout ist verbindlich** (siehe `README.md` im
+Sammelordner):
 
 ```
 <irgendein-ordner>/
   ausleihe-api/     IServ-Client + .env
   sba-dashboard/    dieses Repo
+    programm/       das Python-Projekt (pyproject.toml bindet ../../ausleihe-api)
 ```
 
 Bis 2026-09-18 stand daneben ein drittes Repo, `sba-bestand`. Seine beiden
@@ -139,9 +157,10 @@ vorlage/            leere Excel-Vorlage für START.sh und die Tests
 ```
 
 Was die beiden Pakete enthalten und warum sie hier liegen, steht in
-[`docs/bibliothek.md`](docs/bibliothek.md).
+[`docs/bibliothek.md`](../programm/docs/bibliothek.md).
 
 ```bash
+cd programm
 uv sync --all-groups
 uv run pytest            # offline, ohne IServ und ohne echte Excel-Datei
 uv run ruff check app tests bestand buecherlisten mehrjahresbaende
@@ -187,7 +206,7 @@ beschrieben; Anpassungen landen in einer Benutzerkonfiguration im
 plattformabhängigen Ordner (`SBA_CONFIG_DIR` überschreibt ihn), und
 `--config PATH` schaltet in den Arbeitskopie-Modus. Welcher Ordner auf welcher
 Plattform, was validiert wird und wie eine alte Vollkopie migriert wird, steht
-in [`docs/architektur.md`](docs/architektur.md#zwei-ebenen-ausgelieferter-standard--benutzerkonfiguration).
+in [`docs/architektur.md`](../programm/docs/architektur.md#zwei-ebenen-ausgelieferter-standard--benutzerkonfiguration).
 
 ```bash
 uv run python -m app.start           # freier Port, Fenster; Browser nach der Anmeldung
@@ -210,7 +229,7 @@ Das Geschwister-Layout aus `ausleihe-api/` und `sba-dashboard/` bleibt für die
 Python-Abhängigkeiten nötig.
 
 ```bash
-cd ~/projects/sba/sba-dashboard
+cd ~/projects/sba/sba-dashboard/programm
 chmod +x START.sh       # nur beim ersten Mal
 ./START.sh
 ```
@@ -221,8 +240,8 @@ Beim ersten Start braucht der Mac [`uv`](https://docs.astral.sh/uv/):
 brew install uv
 ```
 
-Die Kopie liegt danach als `Bestand- und Nachbestellungsliste 2026.xlsx` im
-Projektordner selbst — sichtbar, damit man sie im Dateimanager findet und in
+Die Kopie liegt danach als `Bestand- und Nachbestellungsliste 2026.xlsx` in
+`programm/` — sichtbar, damit man sie im Dateimanager findet und in
 Excel öffnen kann — und bleibt bei weiteren Starts erhalten. Daneben entsteht
 `config.local.json`, die auf sie zeigt. Beides ist in `.gitignore` und wird von
 `START.bat` nicht auf einen Schul-Rechner gespiegelt. Zum Zurücksetzen die
@@ -240,15 +259,14 @@ für eine kontrollierte Aktualisierung der Vorlage gedacht.
 
 ## Auf dem Schul-Laptop
 
-`START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen, die
-beiden Quellbäume nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten
-Mal ein venv anlegen, `ausleihe-api` dort hinein installieren, dann
-`python -m app.start`. Bei späteren Starts vergleicht es `requirements.txt` mit
-dem zuletzt erfolgreich installierten Stand und aktualisiert Pakete nur bei einer
-Änderung; den Client installiert es nur neu, wenn `robocopy` gemeldet hat, dass
-sich an seinen Quellen etwas geändert hat. `bestand/` und `buecherlisten/`
-brauchen diesen Weg seit 2026-09-18 nicht mehr — sie liegen im gespiegelten
-Projektbaum selbst und werden von dort importiert wie `app`.
+`START.bat` ist der einzige Einstieg für die Lehrkraft: Python suchen,
+`programm/` nach `%LOCALAPPDATA%\sba-dashboard\` spiegeln, beim ersten Mal ein
+venv anlegen, die Pakete und den IServ-Client aus `programm/wheels/` dort hinein
+installieren, dann `python -m app.start`. Bei späteren Starts vergleicht es
+`requirements.txt` und das Rad des Clients Byte für Byte mit dem zuletzt
+erfolgreich installierten Stand und installiert nur bei einer Änderung.
+`bestand/` und `buecherlisten/` liegen im gespiegelten Projektbaum selbst und
+werden von dort importiert wie `app`.
 
 `requirements.txt` wird erzeugt, nicht von Hand gepflegt:
 
@@ -265,11 +283,10 @@ uv run python tools/wheelhouse.py
 ```
 
 Die Schulrechner erreichen PyPI nicht direkt (pip endet mit `WinError 10061`).
-`wheels/` enthält deshalb jedes Paket aus `requirements.txt` plus `pip` und
-`setuptools` als fertiges Rad für 64-Bit-Windows und Python 3.10 bis 3.14,
-zusammen rund 60 MB, und liegt bewusst im Repo. `START.bat` installiert zuerst
-ohne Internet aus diesem Ordner (er bleibt auf dem Netzlaufwerk und wird nicht
-gespiegelt). Nur wenn das scheitert, geht es übers Netz, mit dem Proxy, den
+`wheels/` enthält deshalb jedes Paket aus `requirements.txt` plus `pip` als
+fertiges Rad für 64-Bit-Windows und Python 3.10 bis 3.14, dazu ein Rad von
+`ausleihe-api`, zusammen rund 60 MB, und liegt bewusst im Repo. `START.bat`
+installiert zuerst ohne Internet aus diesem Ordner (er wird nicht gespiegelt). Nur wenn das scheitert, geht es übers Netz, mit dem Proxy, den
 Windows per PAC/WPAD für pypi.org nennt. `tests/test_wheelhouse.py` schlägt fehl,
 sobald `wheels/` nicht mehr zu `requirements.txt` passt.
 
@@ -278,15 +295,25 @@ Schulrechnern ist das ein Python 2.7, das Python 3 liegt ohne py-Launcher
 daneben. Durchsucht werden jeder PATH-Treffer, die Registry (PEP 514) und die
 üblichen Installationsordner; genommen wird das erste Python ab 3.10 mit `venv`.
 
-`ausleihe-api` steht bewusst nicht darin: als Pfad-Abhängigkeit hätte es in einer
-Datei, die auf einem fremden Rechner mit `pip install -r` verarbeitet wird, keine
-gültige Adresse. `START.bat` installiert es stattdessen aus dem gespiegelten
-Quellbaum mit `pip install --no-build-isolation --no-deps` in dasselbe venv. **Zur Laufzeit ist deshalb kein `PYTHONPATH` mehr nötig** — die
-Anwendung hängt an nichts außer dem venv.
+`ausleihe-api` steht bewusst nicht in `requirements.txt`: als Pfad-Abhängigkeit
+hätte es in einer Datei, die auf einem fremden Rechner mit `pip install -r`
+verarbeitet wird, keine gültige Adresse. Einen Nachbarordner `ausleihe-api` gibt
+es auf dem Rechner der Lehrkraft ohnehin nicht. `tools/wheelhouse.py` baut den
+Client deshalb aus dem Geschwister-Repo als Rad nach `wheels/` (reproduzierbar:
+gleicher Quellcode, gleiche Bytes), und `START.bat` installiert es mit
+`--no-deps --force-reinstall`. **Nach jeder Änderung an `ausleihe-api`:**
+
+```bash
+uv run python tools/wheelhouse.py --nur-ausleihe
+```
+
+`tests/test_wheelhouse.py` vergleicht das Rad mit dem Quellbaum daneben und
+schlägt fehl, wenn das vergessen wurde. **Zur Laufzeit ist kein `PYTHONPATH`
+nötig** — die Anwendung hängt an nichts außer dem venv.
 
 Warum es zwei Repos bleiben (und seit 2026-09-18 nicht mehr drei), was die
 Alternativen wären (uv-Workspace, versionierte Wheels) und wie man den Schritt
-zurückdreht, steht in [`docs/verteilung.md`](docs/verteilung.md).
+zurückdreht, steht in [`docs/verteilung.md`](../programm/docs/verteilung.md).
 
 ## Gestaltung
 

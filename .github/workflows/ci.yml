@@ -14,10 +14,12 @@ on:
 #
 #   $GITHUB_WORKSPACE/
 #     sba-dashboard/   <- dieses Repo
+#       START.bat      <- oben liegt für die Lehrkraft nur der Starter
+#       programm/      <- das eigentliche Projekt, hier laufen alle Schritte
 #     ausleihe-api/    <- Geschwister-Repo, öffentlich
 #
-# pyproject.toml bindet ausleihe-api über [tool.uv.sources] als relativen,
-# editierbaren Pfad ein ("../ausleihe-api") - ohne dieses Layout schlägt schon
+# programm/pyproject.toml bindet ausleihe-api über [tool.uv.sources] als
+# relativen, editierbaren Pfad ein ("../../ausleihe-api") - ohne dieses Layout schlägt schon
 # `uv sync` fehl. Derselbe Pfad steht dort als mypy_path: der editable-Install
 # legt kein Paket in site-packages, mypy findet ausleihe also nur über den
 # Quellbaum daneben. Der Auscheck-Schritt holt den Standardzweig - wer hier
@@ -65,7 +67,7 @@ jobs:
             abdeckungsschwelle: ""
     defaults:
       run:
-        working-directory: sba-dashboard
+        working-directory: sba-dashboard/programm
     steps:
       - name: sba-dashboard auschecken
         uses: actions/checkout@v5
@@ -100,7 +102,7 @@ jobs:
         uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
-          cache-dependency-glob: "sba-dashboard/uv.lock"
+          cache-dependency-glob: "sba-dashboard/programm/uv.lock"
 
       - name: Abhängigkeiten installieren
         run: uv sync --all-groups
@@ -128,7 +130,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: sba-dashboard
+        working-directory: sba-dashboard/programm
     steps:
       - name: sba-dashboard auschecken
         uses: actions/checkout@v5
@@ -152,7 +154,7 @@ jobs:
         uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
-          cache-dependency-glob: "sba-dashboard/uv.lock"
+          cache-dependency-glob: "sba-dashboard/programm/uv.lock"
 
       # Eigener Schritt mit lesbarer Ausgabe statt nur über pytest (das prüft
       # zusätzlich tests/test_windows_start.py::test_requirements_entsprechen_dem_uv_export,

@@ -1,6 +1,8 @@
 # Verteilungsgrenze: zwei Repos, ein venv
 
-Stand: 2026-09-04, zur Zusammenlegung fortgeschrieben am 2026-09-18. Diese
+Stand: 2026-09-04, zur Zusammenlegung fortgeschrieben am 2026-09-18, zum
+Programmordner (nur `START.bat` oben, alles andere in `programm/`, Client als
+Rad) am 2026-11-15 — siehe [den Abschnitt dazu](#der-programmordner-auf-dem-rechner-der-lehrkraft-2026-11-15). Diese
 Datei beantwortet eine Frage, die der Wartbarkeits-Durchgang aufgeworfen hat:
 **wie kommen `ausleihe-api` und `sba-dashboard` auf den Schul-Laptop, ohne dass
 die Anwendung davon abhängt, wo genau die Ordner liegen?**
@@ -158,6 +160,44 @@ gibt es dann allerdings keine Anmeldemaske, und damit keinen Abruf ohne
 `POST /api/anmeldung` von Hand. Auf dem Schul-Laptop ist das deshalb ein Punkt
 der Prüfliste (A2b), nicht eine Annahme.
 
+## Der Programmordner auf dem Rechner der Lehrkraft (2026-11-15)
+
+Der Programmordner liegt **lokal** auf dem Rechner der Person, die das Programm
+benutzt — ein entpackter ZIP-Download von GitHub, ein Klon oder eine Kopie
+dieses Repos. Auf dem Netzlaufwerk liegen nur die Excel-Dateien, daran ändert
+sich nichts. Damit dieser Ordner für jemanden ohne technisches Vorwissen
+verständlich ist, liegt oben nur noch `START.bat`; alles andere steckt in
+`programm/`:
+
+```
+sba-dashboard/
+  START.bat
+  programm/    app/, bestand/, ..., wheels/, pyproject.toml, START.sh, ...
+  .github/     nur für GitHub; per export-ignore nicht im ZIP-Download
+```
+
+Drei Folgen, die über das Verschieben hinausgehen:
+
+* **Der IServ-Client kommt als Rad mit.** Der Abschnitt „Gewählt" oben setzte
+  voraus, dass `ausleihe-api` als Nachbarordner neben dem Programmordner liegt.
+  Auf dem Rechner der Lehrkraft tut es das nicht. `tools/wheelhouse.py` baut den
+  Client deshalb aus dem Geschwister-Repo nach `programm/wheels/`, und
+  `START.bat` installiert ihn von dort (`--no-index --no-deps --force-reinstall`).
+  Die Grenze aus Möglichkeit 3 bleibt: entwickelt wird weiter gegen den
+  editable-Pfad (`../../ausleihe-api`), ausgeliefert wird ein Install. Das ist
+  **nicht** Möglichkeit 2: es gibt keine Versionen und keine Veröffentlichung,
+  nur einen Bauschritt (`uv run python tools/wheelhouse.py --nur-ausleihe`), und
+  `tests/test_wheelhouse.py` vergleicht das Rad mit dem Quellbaum daneben — ein
+  vergessener Neubau fällt also in der Suite auf, nicht in der Schule. Das Rad
+  wird mit festem `SOURCE_DATE_EPOCH` gebaut, gleicher Quellcode ergibt
+  gleiche Bytes; daran erkennt `START.bat`, ob neu installiert werden muss.
+  `setuptools` und `--no-build-isolation` sind damit weggefallen.
+* **Gespiegelt wird nur `programm/`**, an denselben Ort wie vorher
+  (`%LOCALAPPDATA%\sba-dashboard\app\sba-dashboard`). Ein eingerichteter
+  Rechner behält venv, Benutzerkonfiguration und Cache.
+* **Fehlt `programm/` neben `START.bat`** — typisch, wenn eine ZIP-Datei nur im
+  Explorer geöffnet und nicht entpackt wurde —, sagt `START.bat` genau das.
+
 ## Migration
 
 Auf einem Laptop, der schon einmal mit der alten `START.bat` gestartet wurde,
@@ -169,6 +209,11 @@ genügt ein Doppelklick auf die neue:
    bleiben im venv liegen; das ist Ballast, kein Fehler.
 3. Der IServ-Client wird ins venv installiert.
 4. Der Start setzt keinen `PYTHONPATH` mehr.
+
+Seit 2026-11-15 kommt bei einem schon eingerichteten Rechner hinzu: der erste
+Start installiert den Client einmal aus `programm\wheels` neu (es gibt noch
+keine Kopie des installierten Rads im venv) und löscht den nicht mehr
+gebrauchten Spiegel `%LOCALAPPDATA%\sba-dashboard\app\ausleihe-api`.
 
 Ein vorhandenes venv muss **nicht** gelöscht werden. Wer sauber anfangen will,
 löscht `%LOCALAPPDATA%\sba-dashboard\venv`; der nächste Start legt es neu an.

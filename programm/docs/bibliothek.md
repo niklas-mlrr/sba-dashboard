@@ -68,7 +68,7 @@ Für die **Abrufe** braucht das Tooling das Repo
 [`ausleihe-api`](https://github.com/niklas-mlrr/ausleihe-api) **direkt neben**
 diesem — dort liegen der Python-Client (`ausleihe`) und die `.env` mit den
 IServ-Zugangsdaten. Das Layout und die Einrichtung stehen in der
-[README](../README.md); hier gilt nur der eine Punkt:
+[README](../../.github/README.md); hier gilt nur der eine Punkt:
 
 Dieses Repo hält bewusst **keine eigenen Secrets**. Fehlt `ausleihe-api/.env`,
 brechen die beiden CLIs mit einer Meldung zu fehlenden `ISERV_*`-Variablen ab.

@@ -10,7 +10,7 @@ dependencies = [
     "openpyxl>=3.1,<4",
     # ISBN mit Bindestrichen auf den Bücherlisten-Seiten (app/buecherlisten.py).
     "isbnlib>=3.10",
-    # Geschwister-Repo, siehe [tool.uv.sources] und ../README.md
+    # Geschwister-Repo, siehe [tool.uv.sources] und ../../README.md
     "iserv-ausleihe-api",
     # Ab hier die Abhängigkeiten von bestand/ und buecherlisten/:
     #
@@ -39,9 +39,11 @@ dev = ["pytest>=8,<9", "pytest-timeout>=2.3,<3", "pytest-cov>=5,<8", "httpx2>=0.
        "ruff>=0.8,<1", "mypy>=1.11,<2"]
 
 # Das Geschwister-Layout ist verbindlich: ausleihe-api und sba-dashboard liegen
-# nebeneinander. Wer eines woandershin klont, bricht beide.
+# nebeneinander. Wer eines woandershin klont, bricht beide. Das Projekt selbst
+# steht in sba-dashboard/programm/ (oben im Repo liegt fuer die Lehrkraft nur
+# START.bat), daher zwei Ebenen nach oben.
 [tool.uv.sources]
-iserv-ausleihe-api = { path = "../ausleihe-api", editable = true }
+iserv-ausleihe-api = { path = "../../ausleihe-api", editable = true }
 
 [tool.uv]
 package = false
@@ -153,7 +155,7 @@ python_version = "3.10"
 # nachgeprüft mit `reveal_type` (2026-09-05: viermal "Any" bei grünem Lauf).
 # Der relative Pfad ist zulässig, weil das Geschwister-Layout verbindlich ist
 # (siehe [tool.uv.sources] oben).
-mypy_path = "../ausleihe-api"
+mypy_path = "../../ausleihe-api"
 
 # Der eigentliche Zweck: eine Funktion ohne Annotationen überspringt mypy
 # stillschweigend samt Rumpf. Ohne diese Zeile hielte die Prüfung nicht, was

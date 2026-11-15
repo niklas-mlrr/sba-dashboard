@@ -38,6 +38,13 @@ Drei Dinge, die dabei wichtig sind:
 
 **Doppelklick auf `START.bat`.** Das ist alles.
 
+`START.bat` ist die einzige Datei oben im Programmordner. Daneben liegt nur der
+Ordner `programm` — darin steckt das Programm selbst, dort muss man nichts
+anfassen. (Windows blendet die Endung oft aus, dann heißt die Datei nur
+„START".) Kam der Programmordner als ZIP-Datei, muss er zuerst entpackt werden:
+Rechtsklick auf die ZIP-Datei, **Alle extrahieren…**, dann im entpackten Ordner
+`START.bat` doppelklicken.
+
 Es öffnen sich ein schwarzes Fenster mit Text und das **Programmfenster**.
 Das zeigt zuerst ein paar Sekunden „Das Programm startet …“; solange sind die
 Knöpfe grau. Danach melden Sie sich dort mit Ihrem IServ-Konto an; dann öffnet sich der Browser

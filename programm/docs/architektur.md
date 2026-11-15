@@ -948,11 +948,14 @@ Kern gekürzt — nicht in einem eigenen Umbaulauf.
 
 ## Warum das venv nach %LOCALAPPDATA%
 
-`START.bat` spiegelt die drei Quellbäume vom Netzlaufwerk nach
-`%LOCALAPPDATA%\sba-dashboard\app\` und legt das venv daneben. Ein venv auf
-einem SMB-Laufwerk ist quälend langsam und übersteht keinen Verbindungsabbruch.
-Kopiert wird nur der Programmcode — die Excel-Datei bleibt, wo sie ist, sonst
-gäbe es zwei Wahrheiten.
+`START.bat` spiegelt `programm/` nach `%LOCALAPPDATA%\sba-dashboard\app\`
+und legt das venv daneben. Ausgeführt wird von dort, nicht aus dem
+Programmordner: der darf verschoben, neu entpackt oder durch eine neuere
+Fassung ersetzt werden, ohne dass die eingerichtete Umgebung daran zerbricht.
+(Der Grund war ursprünglich ein anderer — der Programmordner lag auf dem
+Netzlaufwerk, und ein venv auf SMB ist quälend langsam. Er gilt nicht mehr, der
+Aufbau hat sich trotzdem bewährt.) Kopiert wird nur der Programmcode — die
+Excel-Datei bleibt auf dem Netzlaufwerk, sonst gäbe es zwei Wahrheiten.
 
 Eine Kopie von `requirements.txt` im venv bezeichnet den zuletzt erfolgreich
 installierten Stand. `START.bat` führt `pip install` erneut aus, wenn die
@@ -960,20 +963,16 @@ gespiegelte Datei davon abweicht. Der Marker wird erst nach erfolgreicher
 Installation ersetzt. Ein abgebrochenes Update wird beim nächsten Start daher
 erneut versucht.
 
-Die beiden Geschwister-Repos werden in dasselbe venv **installiert**, nicht über
-den `PYTHONPATH` untergeschoben. Ein `PYTHONPATH` koppelt die *laufende*
-Anwendung an eine Ordnerstruktur; ein halb gespiegelter Baum oder ein Fenster mit
-altem `PYTHONPATH` bricht sie dann an einer Stelle, an der niemand mehr sucht.
-Nach dem Install hängt sie an nichts außer dem venv, und die gespiegelten
-Quellbäume sind nur noch Bauzutat.
-
-Damit das auch offline funktioniert, bekommt das venv beim Anlegen `setuptools`
-und `wheel` mit; installiert wird dann mit `--no-build-isolation --no-deps`.
-Ohne `--no-build-isolation` holte sich pip bei jedem Update ein Build-Backend aus
-dem Netz — genau der Fall, der auf dem Schul-Laptop nicht verlässlich klappt.
-`--no-deps` hält `requirements.txt` als einzige Quelle für Paketversionen.
-Neu installiert wird nur, wenn `robocopy` gemeldet hat, dass sich an den beiden
-Bäumen etwas geändert hat, oder wenn das venv neu ist.
+Der IServ-Client wird in dasselbe venv **installiert**, nicht über den
+`PYTHONPATH` untergeschoben. Ein `PYTHONPATH` koppelt die *laufende* Anwendung
+an eine Ordnerstruktur; ein halb gespiegelter Baum oder ein Fenster mit altem
+`PYTHONPATH` bricht sie dann an einer Stelle, an der niemand mehr sucht. Er
+liegt als fertiges Rad in `programm/wheels/` (gebaut von `tools/wheelhouse.py`
+aus dem Geschwister-Repo), also braucht der Install weder Netz noch
+Build-Backend. Derselbe Marker-Mechanismus wie bei `requirements.txt` — eine
+Kopie des installierten Rads im venv, Vergleich Byte für Byte — entscheidet, ob
+neu installiert wird; `--no-deps` hält `requirements.txt` als einzige Quelle für
+Paketversionen.
 
 Warum es überhaupt drei Repos bleiben und was die Alternativen wären (uv-
 Workspace, versionierte Wheels), steht mit Migration und Rollback in

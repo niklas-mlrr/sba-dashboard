@@ -2,32 +2,41 @@
 rem ==========================================================================
 rem  Schulbuchausleihe - Bestand und Nachbestellung
 rem
-rem  Doppelklick genuegt. Was hier passiert und warum:
+rem  Doppelklick genuegt. Im Programmordner liegt fuer die Lehrkraft mit
+rem  Absicht nur diese Datei; alles andere steckt im Unterordner "programm".
+rem  Was hier passiert und warum:
 rem
 rem  1. Python suchen (portabel -> py-Launcher -> PATH). Ohne Admin-Rechte.
-rem  2. Die beiden Quellordner vom Netzlaufwerk nach %LOCALAPPDATA% spiegeln.
-rem     Ausgefuehrt wird lokal: ein venv auf einem SMB-Laufwerk ist quaelend
-rem     langsam und geht bei Verbindungsabbruch kaputt.
-rem  3. Beim ersten Start ein venv anlegen und die Pakete installieren.
-rem     Der IServ-Client wird dabei richtig ins venv installiert, nicht ueber
-rem     den PYTHONPATH untergeschoben: die laufende Anwendung haengt dann an
-rem     keinem Ordner mehr, nur noch am venv und am eigenen Quellbaum.
+rem  2. Den Ordner "programm" nach %LOCALAPPDATA% spiegeln. Ausgefuehrt wird
+rem     von dort: der Programmordner darf verschoben, neu entpackt oder durch
+rem     eine neuere Fassung ersetzt werden, ohne dass die eingerichtete
+rem     Umgebung daran zerbricht.
+rem  3. Beim ersten Start ein venv anlegen und die Pakete installieren, alle
+rem     aus programm\wheels - auch den IServ-Client, der dort als fertiges Rad
+rem     liegt. Die laufende Anwendung haengt danach an keinem Ordner mehr,
+rem     nur noch am venv und am eigenen Quellbaum.
 rem  4. Server starten. Die Excel-Datei bleibt die ganze Zeit auf dem
 rem     Netzlaufwerk - kopiert wird nur der Programmcode.
 rem ==========================================================================
 setlocal EnableExtensions
 pushd "%~dp0"
 
+rem Fehlt "programm" neben dieser Datei, ist meist eine ZIP-Datei nicht
+rem entpackt worden: Windows zeigt ihren Inhalt an und startet die Datei
+rem daraus, ohne den Rest mitzunehmen.
+set "PROGRAMM=%~dp0programm"
+if not exist "%PROGRAMM%\app\" goto :programmordner_fehlt
+
 set "ZIEL=%LOCALAPPDATA%\sba-dashboard"
 set "CODE=%ZIEL%\app"
 set "VENV=%ZIEL%\venv"
 set "ANFORDERUNGEN=%CODE%\sba-dashboard\requirements.txt"
 set "INSTALLSTAND=%VENV%\requirements.installed.txt"
-rem Die mitgelieferten Pakete (wheels\, erzeugt von tools\wheelhouse.py)
-rem bleiben auf dem Netzlaufwerk und werden nicht gespiegelt: rund 60 MB, die
-rem nur bei Einrichtung und Update gelesen werden. %CD% statt %~dp0, weil pushd
-rem einem UNC-Pfad oben einen Laufwerksbuchstaben gegeben hat.
-set "WHEELS=%CD%\wheels"
+rem Die mitgelieferten Pakete (programm\wheels\, erzeugt von
+rem tools\wheelhouse.py) werden nicht gespiegelt: rund 60 MB, die nur bei
+rem Einrichtung und Update gelesen werden. %CD% statt %~dp0, weil pushd einem
+rem UNC-Pfad oben einen Laufwerksbuchstaben gegeben hat.
+set "WHEELS=%CD%\programm\wheels"
 set "PIP_DISABLE_PIP_VERSION_CHECK=1"
 
 echo ==========================================================
@@ -52,7 +61,7 @@ rem die ueblichen Installationsordner. Der erste brauchbare gewinnt.
 set "PYEXE="
 set "PY_OHNE_VENV="
 set "PY_OHNE_VENV_VERSION="
-if exist "%~dp0python\python.exe" call :pruefe_python "%~dp0python\python.exe"
+if exist "%PROGRAMM%\python\python.exe" call :pruefe_python "%PROGRAMM%\python\python.exe"
 call :pruefe_python py -3
 call :pruefe_python python3
 for /f "delims=" %%P in ('where python 2^>nul') do call :pruefe_python "%%P"
@@ -88,7 +97,8 @@ echo   Programmdateien werden aktualisiert...
 if not exist "%CODE%" mkdir "%CODE%" >nul 2>&1
 
 rem Ausgeschlossen werden auch die Entwicklungsartefakte des Repo-Kopierers:
-rem .mypy_cache allein sind tausende Dateien.
+rem .mypy_cache allein sind tausende Dateien. "python" ist ein mitgebrachtes
+rem portables Python (siehe oben), das von seinem Platz aus laeuft.
 rem
 rem *.xlsx gehoert seit 2026-09-05 in diese Liste: START.sh legt seine private
 rem Arbeitskopie jetzt im Projektordner selbst ab (vorher in .local, das hier
@@ -98,19 +108,15 @@ rem Beide zu nehmen ist richtig: die Vorlage braucht nur START.sh und die
 rem Testsuite, im Produktivmodus liegt die echte Mappe auf dem Netzlaufwerk.
 rem Dazu config.local.json (zeigt auf die Arbeitskopie) und die Nachbardateien,
 rem die neben einer geoeffneten Mappe entstehen.
-set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude htmlcov node_modules backups wheels /XF *.pyc .coverage *.xlsx config.local.json *.dashboard-cache.json *.sba-dashboard.lock"
-rem robocopy meldet mit Rueckgabecode 1 "es wurde etwas kopiert". Genau daran
-rem haengt weiter unten die Frage, ob der IServ-Client neu installiert werden
-rem muss - sonst liefe nach einem Update weiter der alte Stand.
-set "GESCHWISTER_NEU=0"
-robocopy "%~dp0."          "%CODE%\sba-dashboard" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
+set "AUSSCHLUSS=/XD .git .venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .claude htmlcov node_modules backups wheels python /XF *.pyc .coverage *.xlsx config.local.json *.dashboard-cache.json *.sba-dashboard.lock"
+rem Das Ziel heisst weiter "sba-dashboard", wie vor dem Umzug in "programm"
+rem (2026-11-15): so bleibt ein schon eingerichteter Rechner, wie er ist.
+robocopy "%PROGRAMM%" "%CODE%\sba-dashboard" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% >nul
 if errorlevel 8 goto :kopierfehler
-rem Nur noch ein Nachbarordner: bestand\ und buecherlisten\ lagen bis
-rem 2026-09-18 im eigenen Repo sba-bestand und wurden hier gespiegelt; sie
-rem liegen jetzt IN sba-dashboard und kommen mit dem Spiegel darueber.
-robocopy "%~dp0..\ausleihe-api" "%CODE%\ausleihe-api" /MIR /NJH /NJS /NDL /NP /R:1 /W:1 %AUSSCHLUSS% /XF .env >nul
-if errorlevel 8 goto :kopierfehler
-if errorlevel 1 set "GESCHWISTER_NEU=1"
+rem Bis 2026-11-15 wurde hier zusaetzlich der Nachbarordner ..\ausleihe-api
+rem gespiegelt und aus dem Spiegel installiert. Der Client kommt jetzt als Rad
+rem aus programm\wheels (Schritt 3b); der alte Spiegel ist nur noch Ballast.
+if exist "%CODE%\ausleihe-api\" rmdir /s /q "%CODE%\ausleihe-api" >nul 2>&1
 rem Die ausgelieferte config.json wird NICHT mehr hierher kopiert. Sie ist der
 rem Standard; was die Lehrkraft auswaehlt, legt die Anwendung selbst in
 rem "%ZIEL%\config.json" ab und legt nur die abweichenden Schluessel hinein.
@@ -135,11 +141,9 @@ if not exist "%VENV%\Scripts\python.exe" (
     %PYEXE% -m venv "%VENV%"
     if errorlevel 1 goto :venvfehler
     set "VENV_NEU=1"
-    rem setuptools gehoert mit ins venv: nur dann laesst sich das
-    rem Geschwister-Paket unten mit --no-build-isolation installieren, also
-    rem auch dann noch, wenn der Laptop gerade kein Internet hat. wheel braucht
-    rem es nicht mehr, setuptools baut seit 70.1 selbst Raeder.
-    call :pip_install --upgrade pip setuptools
+    rem setuptools kam hier bis 2026-11-15 mit, fuer den Bau des IServ-Clients
+    rem aus dem Quellbaum. Er kommt jetzt fertig als Rad, gebaut wird nichts.
+    call :pip_install --upgrade pip
     if errorlevel 1 goto :pipfehler
 )
 
@@ -165,39 +169,35 @@ if "%VENV_NEU%"=="1" echo   Einrichtung fertig.
 :pakete_fertig
 
 rem ── 3b. Der IServ-Client ins venv ─────────────────────────────────────────
-rem Nicht editable und nicht ueber den PYTHONPATH, sondern ein gewoehnlicher
-rem Install aus dem gespiegelten Quellbaum. Damit haengt die laufende Anwendung
-rem an nichts ausser dem venv; ein halb geloeschter Spiegelordner oder ein
-rem vergessenes PYTHONPATH-Fenster kann sie nicht mehr auf halbem Weg brechen.
-rem --no-build-isolation nutzt das oben installierte setuptools statt eines
-rem frisch heruntergeladenen; --no-deps, weil requirements.txt die einzige
-rem Quelle fuer Paketversionen bleibt.
+rem Er liegt als fertiges Rad in programm\wheels, gebaut von
+rem tools\wheelhouse.py aus dem Geschwister-Repo ausleihe-api. Bis 2026-11-15
+rem wurde er hier aus dem gespiegelten Nachbarordner ..\ausleihe-api gebaut;
+rem den gibt es im Programmordner auf dem Rechner der Lehrkraft aber nicht.
+rem --no-deps, weil requirements.txt die einzige Quelle fuer Paketversionen
+rem bleibt; --force-reinstall, weil die Versionsnummer nicht bei jeder
+rem Aenderung steigt und pip ein "schon installiert" sonst glaubt.
 rem
-rem Bis 2026-09-18 wurde hier ein zweites Paket installiert, sba-bestand. Das
-rem ist mit der Zusammenlegung entfallen, ohne die Regel zu brechen: bestand\
-rem und buecherlisten\ liegen jetzt neben app\ im Arbeitsverzeichnis, aus dem
-rem der Start unten laeuft - sie werden von dort importiert wie app selbst und
-rem haengen damit an genau derselben einen Kopie, nicht an einem Nachbarordner.
-rem
-rem Dazu die Frage an das venv selbst, ob es den Client hat. Nur nach robocopy
-rem und VENV_NEU zu gehen reichte nicht: brach ein Start nach dem Spiegeln,
-rem aber vor diesem Schritt ab (pip ohne Internet), meldete robocopy beim
-rem naechsten Mal "nichts geaendert", der Install wurde uebersprungen, und das
-rem Anmeldefenster endete mit "No module named 'ausleihe'".
-if "%VENV_NEU%"=="1" set "GESCHWISTER_NEU=1"
-"%VENV%\Scripts\python.exe" -c "import ausleihe" >nul 2>&1 || set "GESCHWISTER_NEU=1"
-if "%GESCHWISTER_NEU%"=="0" goto :geschwister_fertig
+rem Neu installiert wird, wenn sich das Rad von dem zuletzt installierten
+rem unterscheidet (Byte fuer Byte, wie bei requirements.txt oben) oder wenn
+rem das venv den Client nicht hat: ein Start, der nach dem Anlegen des venv
+rem abbrach, endete sonst im Anmeldefenster mit "No module named 'ausleihe'".
+rem Die Kopie wird erst nach erfolgreichem Install abgelegt.
+set "AUSLEIHE_RAD="
+for %%W in ("%WHEELS%\iserv_ausleihe_api-*.whl") do set "AUSLEIHE_RAD=%%~fW"
+if not defined AUSLEIHE_RAD goto :radfehler
+set "AUSLEIHE_STAND=%VENV%\ausleihe-api.installed.whl"
+if not exist "%AUSLEIHE_STAND%" goto :client_installieren
+fc /b "%AUSLEIHE_RAD%" "%AUSLEIHE_STAND%" >nul 2>&1
+if errorlevel 1 goto :client_installieren
+"%VENV%\Scripts\python.exe" -c "import ausleihe" >nul 2>&1
+if not errorlevel 1 goto :client_fertig
+:client_installieren
 echo   Bibliothek wird eingerichtet...
-rem --no-build-isolation braucht setuptools im venv. Es kommt sonst nur beim
-rem Anlegen hinein, und seit Python 3.12 bringt ein venv es nicht mehr selbst
-rem mit: ein venv aus einem abgebrochenen Start endete hier mit "Cannot import
-rem 'setuptools.build_meta'". Deshalb nachsehen und notfalls nachinstallieren.
-"%VENV%\Scripts\python.exe" -c "import setuptools" >nul 2>&1
-if errorlevel 1 call :pip_install setuptools
-if errorlevel 1 goto :pipfehler
-"%VENV%\Scripts\python.exe" -m pip install --no-build-isolation --no-deps --quiet "%CODE%\ausleihe-api"
-if errorlevel 1 goto :geschwisterfehler
-:geschwister_fertig
+"%VENV%\Scripts\python.exe" -m pip install --no-index --no-deps --force-reinstall --quiet "%AUSLEIHE_RAD%"
+if errorlevel 1 goto :clientfehler
+copy /y "%AUSLEIHE_RAD%" "%AUSLEIHE_STAND%" >nul
+if errorlevel 1 goto :installstandfehler
+:client_fertig
 
 rem ── 4. Starten ────────────────────────────────────────────────────────────
 set "PYTHONUTF8=1"
@@ -276,12 +276,25 @@ pause
 popd
 exit /b 1
 
+:programmordner_fehlt
+echo   DER ORDNER "programm" FEHLT.
+echo.
+echo   Er muss im selben Ordner liegen wie diese Datei. Meist heisst das:
+echo   die ZIP-Datei wurde nur geoeffnet, nicht entpackt.
+echo.
+echo     1. Rechtsklick auf die ZIP-Datei, "Alle extrahieren..."
+echo     2. Im entpackten Ordner diese Datei erneut doppelklicken
+echo.
+pause
+popd
+exit /b 1
+
 :kopierfehler
 echo.
-echo   Die Programmdateien liessen sich nicht kopieren.
-echo   Meist heisst das: das Netzlaufwerk ist gerade nicht verbunden.
-echo   Bitte im Explorer pruefen, ob der Ordner "Buchausleihe Admins"
-echo   zu oeffnen ist, und es dann erneut versuchen.
+echo   Die Programmdateien liessen sich nicht kopieren nach:
+echo     %CODE%
+echo   Bitte alle Fenster des Programms schliessen und es erneut versuchen.
+echo   Klappt es dann immer noch nicht, Niklas Bescheid geben.
 echo.
 pause
 popd
@@ -311,7 +324,7 @@ exit /b 1
 :pipfehler
 echo.
 echo   Die benoetigten Pakete liessen sich nicht installieren.
-echo   Weder die mitgelieferten Pakete (Ordner "wheels" neben dieser Datei)
+echo   Weder die mitgelieferten Pakete (Ordner "programm\wheels")
 echo   noch das Internet haben gereicht. Bitte Niklas Bescheid geben.
 echo.
 if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1
@@ -319,11 +332,21 @@ pause
 popd
 exit /b 1
 
-:geschwisterfehler
+:radfehler
+echo.
+echo   Im Ordner "programm\wheels" fehlt die IServ-Bibliothek
+echo   (iserv_ausleihe_api-....whl). Der Programmordner ist unvollstaendig.
+echo   Bitte ihn neu herunterladen bzw. entpacken; hilft das nicht,
+echo   Niklas Bescheid geben.
+echo.
+pause
+popd
+exit /b 1
+
+:clientfehler
 echo.
 echo   Die mitgelieferte Bibliothek liess sich nicht einrichten.
-echo   Meist heisst das: das Netzlaufwerk war beim Kopieren nicht vollstaendig
-echo   verbunden. Bitte es erneut versuchen und, falls es wieder passiert,
+echo   Bitte es erneut versuchen und, falls es wieder passiert,
 echo   Niklas Bescheid geben.
 echo.
 if "%VENV_NEU%"=="1" rmdir /s /q "%VENV%" >nul 2>&1

@@ -529,7 +529,7 @@ wheels = [
 [[package]]
 name = "iserv-ausleihe-api"
 version = "0.2.0"
-source = { editable = "../ausleihe-api" }
+source = { editable = "../../ausleihe-api" }
 dependencies = [
     { name = "requests" },
 ]
@@ -1325,7 +1325,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "isbnlib", specifier = ">=3.10" },
-    { name = "iserv-ausleihe-api", editable = "../ausleihe-api" },
+    { name = "iserv-ausleihe-api", editable = "../../ausleihe-api" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "openpyxl", specifier = ">=3.1,<4" },
     { name = "pypdf", specifier = ">=5,<7" },

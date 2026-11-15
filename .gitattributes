@@ -1,0 +1,5 @@
+# Der ZIP-Download von GitHub (git archive) soll fuer die Lehrkraft nur
+# START.bat und programm/ enthalten. .github/ gehoert zu GitHub selbst (CI,
+# README der Repo-Startseite), diese Datei zu Git.
+/.github export-ignore
+/.gitattributes export-ignore

@@ -8,6 +8,7 @@ nur als langsamer Umweg übers Internet, der genau dort nicht geht.
 from __future__ import annotations
 
 import importlib.util
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -62,8 +63,59 @@ def test_keine_raeder_alter_pins():
         for a in wheelhouse.anforderungen(version)
     }
     werkzeuge = {canonicalize_name(w) for w in wheelhouse.WERKZEUGE}
+    werkzeuge.add(canonicalize_name(wheelhouse.AUSLEIHE_NAME))
     for name, version, *_ in RAEDER:
         assert name in werkzeuge or (name, str(version)) in gebraucht, f"{name} {version}"
+
+
+def test_ausleihe_api_liegt_als_genau_ein_rad_bei():
+    """Ohne den Client endet die Einrichtung mit "No module named 'ausleihe'".
+
+    Der Programmordner auf dem Rechner der Lehrkraft ist nur dieses Repo, ein
+    Nachbarordner ``ausleihe-api`` existiert dort nicht. ``START.bat`` nimmt
+    das Rad über ein Muster; zwei Räder machten die Wahl zufällig.
+    """
+    raeder = wheelhouse.ausleihe_raeder()
+    assert len(raeder) == 1, raeder
+    assert parse_wheel_filename(raeder[0].name)[3] & _passende_tags("3.10")
+
+
+def test_ausleihe_rad_enthaelt_nur_das_paket():
+    """Im Quellbaum von ausleihe-api liegt die ``.env`` mit IServ-Zugangsdaten."""
+    (rad,) = wheelhouse.ausleihe_raeder()
+    with zipfile.ZipFile(rad) as archiv:
+        namen = archiv.namelist()
+    fremd = [n for n in namen if not n.startswith(("ausleihe/", "iserv_ausleihe_api-"))]
+    assert fremd == []
+    assert not any(".env" in n.lower() for n in namen)
+
+
+@pytest.mark.skipif(
+    not (wheelhouse.AUSLEIHE_QUELLE / "ausleihe").is_dir(),
+    reason="ausleihe-api liegt nicht als Geschwister-Repo daneben",
+)
+def test_ausleihe_rad_entspricht_dem_quellbaum():
+    """Ein vergessener Neubau fiele sonst erst in der Schule auf.
+
+    Entwickelt wird gegen den Quellbaum daneben (editable), ausgeliefert wird
+    das Rad. Weichen beide ab, liefe auf dem Schul-Rechner ein anderer Client
+    als in jedem Test hier.
+    """
+    (rad,) = wheelhouse.ausleihe_raeder()
+    quelle = wheelhouse.AUSLEIHE_QUELLE / "ausleihe"
+    with zipfile.ZipFile(rad) as archiv:
+        im_rad = {
+            n: archiv.read(n) for n in archiv.namelist()
+            if n.startswith("ausleihe/") and not n.endswith("/")
+        }
+    im_quellbaum = {
+        f"ausleihe/{p.relative_to(quelle).as_posix()}": p.read_bytes()
+        for p in quelle.rglob("*")
+        if p.is_file() and p.suffix in {".py", ".typed"} and "__pycache__" not in p.parts
+    }
+    assert im_rad == im_quellbaum, (
+        "wheels/ ist veraltet: uv run python tools/wheelhouse.py --nur-ausleihe"
+    )
 
 
 def test_marker_werden_fuer_windows_ausgewertet():

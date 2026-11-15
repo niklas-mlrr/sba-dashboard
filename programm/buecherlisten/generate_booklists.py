@@ -124,7 +124,9 @@ _ROOT = _HERE.parent
 # sba-bestand hält keine eigenen Secrets: Die IServ-Credentials liegen in der
 # ``.env`` des Geschwister-Repos ausleihe-api. Beide Repos werden nebeneinander
 # geklont (``<irgendein-ordner>/{ausleihe-api,sba-bestand}``).
-_API_ROOT = _ROOT.parent / "ausleihe-api"
+# _ROOT ist programm/, das Repo liegt eine Ebene darüber - ausleihe-api also
+# zwei Ebenen höher (``<irgendein-ordner>/ausleihe-api``).
+_API_ROOT = _ROOT.parent.parent / "ausleihe-api"
 
 # ``ausleihe`` kommt normalerweise aus dem Venv (editable-Install, siehe
 # pyproject). Fallback auf das Geschwister-Repo, damit das Skript auch ohne
