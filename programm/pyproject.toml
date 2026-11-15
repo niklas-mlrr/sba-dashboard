@@ -5,7 +5,11 @@ description = "Weboberfläche für die Bestands- und Nachbestellungsliste der Sc
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
-    "uvicorn[standard]>=0.34",
+    # Ohne [standard]: httptools, watchfiles, pyyaml, websockets brauchen auf
+    # einem neuen Python oder Windows-ARM einen C-Compiler, sobald es kein
+    # fertiges Rad gibt (2026-11-15). Die App braucht keines davon - uvicorn
+    # nimmt dann h11 und asyncio, fuer einen lokalen Einzelnutzer reicht das.
+    "uvicorn>=0.34",
     "jinja2>=3.1",
     "openpyxl>=3.1,<4",
     # ISBN mit Bindestrichen auf den Bücherlisten-Seiten (app/buecherlisten.py).

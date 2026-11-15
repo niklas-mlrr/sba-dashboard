@@ -26,19 +26,32 @@ _spec.loader.exec_module(wheelhouse)
 RAEDER = [parse_wheel_filename(p.name) for p in wheelhouse.ZIEL.glob("*.whl")]
 
 
-def _passende_tags(python_version: str) -> set:
+ZIELE = [
+    (plattform, version)
+    for plattform, versionen in wheelhouse.ZIELE.items()
+    for version in versionen
+]
+
+
+def _passende_tags(python_version: str, plattform_name: str = "win_amd64") -> set:
     version = tuple(int(teil) for teil in python_version.split("."))
-    plattform = [wheelhouse.PLATTFORM]
+    plattform = [plattform_name]
     return set(cpython_tags(version, platforms=plattform)) | set(
         compatible_tags(version, interpreter=f"cp{version[0]}{version[1]}",
                         platforms=plattform)
     )
 
 
-@pytest.mark.parametrize("python_version", wheelhouse.PYTHON_VERSIONEN)
-def test_jeder_pin_hat_ein_passendes_rad(python_version):
-    tags = _passende_tags(python_version)
-    for anforderung in wheelhouse.anforderungen(python_version):
+@pytest.mark.parametrize(("plattform", "python_version"), ZIELE)
+def test_jeder_pin_hat_ein_passendes_rad(plattform, python_version):
+    """Fehlt ein Rad, kompiliert pip - und scheitert ohne Visual C++.
+
+    So geschehen am 2026-11-15 auf einem ARM-Laptop mit Python 3.15: die
+    Räder waren nur für x64 und bis 3.14 da, httptools, pyyaml, watchfiles
+    und pydantic-core endeten mit "Microsoft Visual C++ 14.0 is required".
+    """
+    tags = _passende_tags(python_version, plattform)
+    for anforderung in wheelhouse.anforderungen(python_version, plattform=plattform):
         (pin,) = anforderung.specifier
         treffer = [
             rad for rad in RAEDER
@@ -46,7 +59,9 @@ def test_jeder_pin_hat_ein_passendes_rad(python_version):
             and str(rad[1]) == pin.version
             and rad[3] & tags
         ]
-        assert treffer, f"{anforderung.name}=={pin.version} fehlt für Python {python_version}"
+        assert treffer, (
+            f"{anforderung.name}=={pin.version} fehlt für {plattform}, Python {python_version}"
+        )
 
 
 def test_die_werkzeuge_liegen_bei():
@@ -59,8 +74,8 @@ def test_keine_raeder_alter_pins():
     """Ein Rad, das keinem aktuellen Pin entspricht, ist toter Ballast im Repo."""
     gebraucht = {
         (canonicalize_name(a.name), next(iter(a.specifier)).version)
-        for version in wheelhouse.PYTHON_VERSIONEN
-        for a in wheelhouse.anforderungen(version)
+        for plattform, version in ZIELE
+        for a in wheelhouse.anforderungen(version, plattform=plattform)
     }
     werkzeuge = {canonicalize_name(w) for w in wheelhouse.WERKZEUGE}
     werkzeuge.add(canonicalize_name(wheelhouse.AUSLEIHE_NAME))
@@ -77,7 +92,8 @@ def test_ausleihe_api_liegt_als_genau_ein_rad_bei():
     """
     raeder = wheelhouse.ausleihe_raeder()
     assert len(raeder) == 1, raeder
-    assert parse_wheel_filename(raeder[0].name)[3] & _passende_tags("3.10")
+    for plattform, version in ZIELE:
+        assert parse_wheel_filename(raeder[0].name)[3] & _passende_tags(version, plattform)
 
 
 def test_ausleihe_rad_enthaelt_nur_das_paket():
@@ -123,10 +139,18 @@ def test_ausleihe_rad_entspricht_dem_quellbaum():
     )
 
 
-def test_marker_werden_fuer_windows_ausgewertet():
-    """uvloop gibt es unter Windows nicht; pip download sähe das nicht."""
-    namen = {a.name for a in wheelhouse.anforderungen("3.14")}
-    assert "uvloop" not in namen
-    alt = {str(a.specifier) for a in wheelhouse.anforderungen("3.10") if a.name == "websockets"}
-    neu = {str(a.specifier) for a in wheelhouse.anforderungen("3.14") if a.name == "websockets"}
-    assert alt != neu
+def test_marker_werden_fuer_das_ziel_ausgewertet(tmp_path):
+    """pip download wertet Marker gegen sein eigenes Python aus, nicht gegen das Ziel."""
+    datei = tmp_path / "requirements.txt"
+    datei.write_text(
+        "exceptiongroup==1.3.1 ; python_full_version < '3.11'\n"
+        "uvloop==0.22.1 ; sys_platform != 'win32'\n"
+        "nurarm==1.0 ; platform_machine == 'ARM64'\n",
+        encoding="utf-8",
+    )
+    alt = {a.name for a in wheelhouse.anforderungen("3.10", datei)}
+    neu = {a.name for a in wheelhouse.anforderungen("3.15", datei)}
+    arm = {a.name for a in wheelhouse.anforderungen("3.15", datei, plattform="win_arm64")}
+    assert alt == {"exceptiongroup"}
+    assert neu == set()
+    assert arm == {"nurarm"}

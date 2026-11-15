@@ -284,8 +284,12 @@ uv run python tools/wheelhouse.py
 
 Die Schulrechner erreichen PyPI nicht direkt (pip endet mit `WinError 10061`).
 `wheels/` enthält deshalb jedes Paket aus `requirements.txt` plus `pip` als
-fertiges Rad für 64-Bit-Windows und Python 3.10 bis 3.14, dazu ein Rad von
-`ausleihe-api`, zusammen rund 60 MB, und liegt bewusst im Repo. `START.bat`
+fertiges Rad für 64-Bit-Windows auf x64 (Python 3.10 bis 3.15) und auf ARM
+(3.11 bis 3.15), dazu ein Rad von `ausleihe-api`, zusammen rund 90 MB, und
+liegt bewusst im Repo. Fehlt ein Rad, versucht pip zu kompilieren, und das
+scheitert ohne Visual C++ (2026-11-15 auf einem ARM-Laptop mit Python 3.15).
+Deshalb auch `uvicorn` ohne `[standard]`: httptools, pyyaml, watchfiles und
+websockets braucht die App nicht. `START.bat`
 installiert zuerst ohne Internet aus diesem Ordner (er wird nicht gespiegelt). Nur wenn das scheitert, geht es übers Netz, mit dem Proxy, den
 Windows per PAC/WPAD für pypi.org nennt. `tests/test_wheelhouse.py` schlägt fehl,
 sobald `wheels/` nicht mehr zu `requirements.txt` passt.

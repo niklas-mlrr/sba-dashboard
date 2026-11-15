@@ -33,7 +33,7 @@ set "VENV=%ZIEL%\venv"
 set "ANFORDERUNGEN=%CODE%\sba-dashboard\requirements.txt"
 set "INSTALLSTAND=%VENV%\requirements.installed.txt"
 rem Die mitgelieferten Pakete (programm\wheels\, erzeugt von
-rem tools\wheelhouse.py) werden nicht gespiegelt: rund 60 MB, die nur bei
+rem tools\wheelhouse.py) werden nicht gespiegelt: rund 90 MB, die nur bei
 rem Einrichtung und Update gelesen werden. %CD% statt %~dp0, weil pushd einem
 rem UNC-Pfad oben einen Laufwerksbuchstaben gegeben hat.
 set "WHEELS=%CD%\programm\wheels"

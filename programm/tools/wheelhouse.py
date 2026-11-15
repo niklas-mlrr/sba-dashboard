@@ -3,8 +3,11 @@
 Die Schulrechner erreichen PyPI nicht direkt (der Proxy ist nur dem Browser
 bekannt). ``START.bat`` installiert deshalb zuerst ohne Internet aus diesem
 Ordner und geht erst ins Netz, wenn hier etwas fehlt. Gebaut wird für 64-Bit-
-Windows und jede Python-Version von 3.10 bis 3.14, weil auf den Rechnern
-nicht festliegt, welches Python 3 installiert ist.
+Windows auf x64 und auf ARM (``ZIELE``) und jede Python-Version, die dort
+vorkommen kann, weil auf den Rechnern nicht festliegt, welches Python 3
+installiert ist. Fehlt ein Rad, versucht pip zu kompilieren - und das
+scheitert auf einem Rechner ohne Visual C++ immer (2026-11-15: ARM-Laptop mit
+Python 3.15).
 
 Dazu kommt ein Rad des IServ-Clients ``ausleihe-api``, gebaut aus dem
 Geschwister-Repo. Der Programmordner auf dem Rechner der Lehrkraft ist nur
@@ -44,8 +47,13 @@ AUSLEIHE_NAME = "iserv-ausleihe-api"
 # unveraendertem Quellcode Byte fuer Byte gleich, und Git sieht keine Aenderung.
 # START.bat vergleicht genau diese Bytes mit dem zuletzt installierten Rad.
 REPRODUZIERBAR = "315532800"  # 1980-01-01, das Minimum fuer ZIP-Zeitstempel
-PYTHON_VERSIONEN = ("3.10", "3.11", "3.12", "3.13", "3.14")
-PLATTFORM = "win_amd64"
+PYTHON_VERSIONEN = ("3.10", "3.11", "3.12", "3.13", "3.14", "3.15")
+# Plattform -> Python-Versionen. Windows auf ARM hat erst seit 3.11 offizielle
+# Installer, und pydantic-core liefert für ARM erst ab 3.11 Räder.
+ZIELE = {
+    "win_amd64": PYTHON_VERSIONEN,
+    "win_arm64": PYTHON_VERSIONEN[1:],
+}
 # Was START.bat neben requirements.txt braucht: pip fuer das Upgrade direkt nach
 # dem Anlegen des venv. Rein Python, also fuer alle Versionen gleich.
 # setuptools stand hier, bis ausleihe-api als fertiges Rad mitkam (2026-11-15):
@@ -53,12 +61,12 @@ PLATTFORM = "win_amd64"
 WERKZEUGE = ("pip",)
 
 
-def windows_umgebung(python_version: str) -> dict[str, str]:
+def windows_umgebung(python_version: str, plattform: str = "win_amd64") -> dict[str, str]:
     """Marker-Umgebung eines CPython unter 64-Bit-Windows."""
     return {
         "implementation_name": "cpython",
         "os_name": "nt",
-        "platform_machine": "AMD64",
+        "platform_machine": "ARM64" if plattform == "win_arm64" else "AMD64",
         "platform_python_implementation": "CPython",
         "platform_system": "Windows",
         "python_full_version": f"{python_version}.0",
@@ -67,13 +75,14 @@ def windows_umgebung(python_version: str) -> dict[str, str]:
     }
 
 
-def anforderungen(python_version: str, datei: Path = ANFORDERUNGEN) -> list[Requirement]:
+def anforderungen(python_version: str, datei: Path = ANFORDERUNGEN,
+                  plattform: str = "win_amd64") -> list[Requirement]:
     """Die Pins aus ``requirements.txt``, die für diese Python-Version gelten.
 
     Die Marker werden hier ausgewertet und nicht von pip: ``pip download``
     wertet sie gegen das Python aus, das es ausführt, nicht gegen das Ziel.
     """
-    umgebung = windows_umgebung(python_version)
+    umgebung = windows_umgebung(python_version, plattform)
     ergebnis = []
     for zeile in datei.read_text(encoding="utf-8").splitlines():
         if not zeile or zeile.startswith(("#", " ")):
@@ -92,21 +101,23 @@ def _pip() -> list[str]:
 
 
 def herunterladen(ziel: Path) -> None:
-    for version in PYTHON_VERSIONEN:
-        pins = [str(a).split(";")[0].strip() for a in anforderungen(version)]
-        print(f"Python {version}: {len(pins)} Pakete", flush=True)
-        subprocess.run(
-            [
-                *_pip(), "download", "--quiet",
-                "--only-binary=:all:", "--no-deps",
-                "--platform", PLATTFORM,
-                "--python-version", version,
-                "--implementation", "cp",
-                "--dest", str(ziel),
-                *pins, *WERKZEUGE,
-            ],
-            check=True,
-        )
+    for plattform, versionen in ZIELE.items():
+        for version in versionen:
+            pins = [str(a).split(";")[0].strip()
+                    for a in anforderungen(version, plattform=plattform)]
+            print(f"{plattform}, Python {version}: {len(pins)} Pakete", flush=True)
+            subprocess.run(
+                [
+                    *_pip(), "download", "--quiet",
+                    "--only-binary=:all:", "--no-deps",
+                    "--platform", plattform,
+                    "--python-version", version,
+                    "--implementation", "cp",
+                    "--dest", str(ziel),
+                    *pins, *WERKZEUGE,
+                ],
+                check=True,
+            )
 
 
 def ausleihe_bauen(ziel: Path) -> Path:
