@@ -707,19 +707,33 @@ def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dic
     kopf = text[text.index('<header class="kopf mit-mitte">'):text.index("</header>")]
     legende = kopf[kopf.index('class="kopfmitte farblegende"'):]
     assert kopf.index('class="kopfaktionen"') < kopf.index("farblegende") < kopf.index("<h1>")
-    gruppen = [legende.index(k) for k in ("Zahl gefärbt", "Hinterlegung", "Markierung (IServ)")]
+    gruppen = [legende.index(k) for k in ("Jahrgang", "Buchreihe</div>", "IServ-Vergleich")]
     assert gruppen == sorted(gruppen)
+    # Buchreihe: der Text steht im Kästchen.
+    for klasse, text in (("einfuehrung", "Einführung"), ("ausmusterung", "Ausmusterung"),
+                         ("grau", "Einführung abgelehnt")):
+        assert f'<div class="flaeche ganz-{klasse}">{text}</div>' in legende
     # Rot in einer Zeile, erst normal, dann durchgestrichen.
     assert ('<span class="schrift-ausmusterung">7</span> <span class="schrift-ausmusterung durch">'
             '7</span></span> Ausmusterung (nach Vorjahr)</div>') in legende
-    # Bei IServ blau, dann gelb, dann rot.
+    # Bei IServ blau, dann gelb, dann rot; ganze Felder stehen selbst markiert
+    # da, am Jahrgang blau erst Strich oben, dann unten.
     stellen = [legende.index(k) for k in (
-        "Buchreihe anlegen", "in Bücherliste eintragen", "Jahrgang an Buchreihe",
-        "Wert lautet in IServ anders", "aus Bücherliste entfernen", "nur in IServ")]
+        '<span class="markierung markierung-einfuehrung">Buchreihe anlegen</span>',
+        "markierung-oben\">7</span></span> in Buchreihe ergänzen",
+        "in Bücherliste eintragen",
+        '<span class="markierung markierung-aenderung">Wert lautet in IServ anders</span>',
+        '<span class="markierung markierung-ausmusterung markierung-oben">nur in IServ</span>',
+        "aus Bücherliste entfernen")]
     assert stellen == sorted(stellen)
+    # Rot am Jahrgang: ohne und mit Strich oben nebeneinander, in einer Zeile.
+    assert ('<span class="markierung markierung-ausmusterung">7</span> <span class="markierung '
+            'markierung-ausmusterung markierung-oben-unten">7</span></span> aus Bücherliste '
+            'entfernen') in legende
+    assert "Abc" not in legende
     for klasse in ("schrift-einfuehrung", "schrift-ausmusterung durch", "schrift-grau",
                    "flaeche ganz-einfuehrung", "flaeche ganz-ausmusterung", "flaeche ganz-grau",
-                   "markierung-einfuehrung markierung-oben", "markierung-ausmusterung markierung-oben",
+                   "markierung-einfuehrung markierung-oben", "markierung-ausmusterung markierung-oben-unten",
                    "markierung-aenderung"):
         assert klasse in legende, klasse
 

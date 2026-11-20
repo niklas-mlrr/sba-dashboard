@@ -239,12 +239,15 @@ body {
 .farblegende-gruppe { white-space: nowrap; }
 .farblegende .muster { display: inline-block; min-width: 2.4rem; text-align: center; }
 .farblegende .markierung { padding: 0 5px; line-height: 1.35; }
+/* Buchreihe: der Text steht im Kästchen, alle Kästchen gleich breit. */
 .farblegende .flaeche {
-  min-width: 0;
-  width: 2.4rem;
-  height: .85rem;
-  vertical-align: -1px;
+  padding: 0 6px;
+  margin-bottom: 1px;
   border: 1px solid var(--rand);
+  border-radius: 2px;
+  color: var(--iserv-text);
+  /* 14,4 + 2 Rand + 1 Abstand = 17,4 px: so hoch wie eine Zeile daneben. */
+  line-height: 1.2;
 }
 .farblegende .flaeche.ganz-einfuehrung { background: var(--einfuehrung-reihe); }
 .farblegende .flaeche.ganz-ausmusterung { background: var(--ausmusterung-reihe); }

@@ -27,42 +27,46 @@
 {% endif %}{% endblock %}
 {#
   Die Farblegende der Fach-Ansicht (2026-11-20), oben zwischen Überschrift und
-  Knöpfen: Schrift (Planung), Hinterlegung (ganze Zeile) und Markierung
-  (Abgleich mit IServ). Die Muster tragen dieselben Klassen wie die Tabelle,
-  sehen also immer so aus wie dort. Nur mit Datei: ohne sie färbt nichts.
-  Strich vorn und Antragskästen stehen bewusst nicht darin.
+  Knöpfen: Jahrgang (Schrift der Planung), Buchreihe (Hinterlegung der ganzen
+  Zeile, der Text steht im Kästchen) und IServ-Vergleich (Markierung). Die
+  Muster tragen dieselben Klassen wie die Tabelle, sehen also immer so aus wie
+  dort. Nur mit Datei: ohne sie färbt nichts. Strich vorn und Antragskästen
+  stehen bewusst nicht darin.
 #}
 {% set mit_legende = ansicht == "fach" and not liste and gruppe and planung.mtime is not none %}
 {% block kopfklasse %}{% if mit_legende %} mit-mitte{% endif %}{% endblock %}
 {% block kopfmitte %}{% if mit_legende %}
 <div class="kopfmitte farblegende" role="note" aria-label="Legende der Farben">
   <div class="farblegende-gruppe">
-    <div class="farblegende-kopf">Zahl gefärbt</div>
+    <div class="farblegende-kopf">Jahrgang</div>
     <div><span class="muster"><span class="schrift-einfuehrung">7</span></span> Einführung</div>
     {#- Eine Zeile für beide Rot: erst normal, dann durchgestrichen (nach Vorjahr). -#}
     <div><span class="muster"><span class="schrift-ausmusterung">7</span> <span class="schrift-ausmusterung durch">7</span></span> Ausmusterung (nach Vorjahr)</div>
     <div><span class="muster"><span class="schrift-grau">7</span></span> Einführung abgelehnt</div>
   </div>
   <div class="farblegende-gruppe">
-    <div class="farblegende-kopf">Hinterlegung</div>
-    <div><span class="muster flaeche ganz-einfuehrung"></span> Buchreihe ganz neu</div>
-    <div><span class="muster flaeche ganz-ausmusterung"></span> Buchreihe ganz weg</div>
-    <div><span class="muster flaeche ganz-grau"></span> nur abgelehnte Einführungen</div>
+    <div class="farblegende-kopf">Buchreihe</div>
+    <div class="flaeche ganz-einfuehrung">Einführung</div>
+    <div class="flaeche ganz-ausmusterung">Ausmusterung</div>
+    <div class="flaeche ganz-grau">Einführung abgelehnt</div>
   </div>
-  {#- Zwei Spalten zu je drei: blau, dann gelb und rot. Ist das Fenster zu
-      schmal, rutscht die ganze Gruppe unter die beiden anderen. -#}
+  {#- Zwei Spalten zu je drei: blau, dann gelb und rot. Was ganze Felder
+      markiert, steht selbst markiert da; am Jahrgang eine 7 als Muster, blau
+      erst der Strich oben (Buchreihe), dann der unten (Bücherliste). Ist das
+      Fenster zu schmal, rutscht die ganze Gruppe unter die beiden anderen. -#}
   <div class="farblegende-gruppe farblegende-iserv">
-    <div class="farblegende-kopf">Markierung (IServ)</div>
+    <div class="farblegende-kopf">IServ-Vergleich</div>
     <div class="farblegende-spalten">
       <div>
-        <div><span class="muster"><span class="markierung markierung-einfuehrung">Abc</span></span> Buchreihe anlegen</div>
+        <div><span class="markierung markierung-einfuehrung">Buchreihe anlegen</span></div>
+        <div><span class="muster"><span class="markierung markierung-einfuehrung markierung-oben">7</span></span> in Buchreihe ergänzen</div>
         <div><span class="muster"><span class="markierung markierung-einfuehrung">7</span></span> in Bücherliste eintragen</div>
-        <div><span class="muster"><span class="markierung markierung-einfuehrung markierung-oben">7</span></span> Jahrgang an Buchreihe ergänzen</div>
       </div>
       <div>
-        <div><span class="muster"><span class="markierung markierung-aenderung">Abc</span></span> Wert lautet in IServ anders</div>
-        <div><span class="muster"><span class="markierung markierung-ausmusterung">7</span></span> aus Bücherliste entfernen</div>
-        <div><span class="muster"><span class="markierung markierung-ausmusterung markierung-oben">7</span></span> nur in IServ</div>
+        <div><span class="markierung markierung-aenderung">Wert lautet in IServ anders</span></div>
+        <div><span class="markierung markierung-ausmusterung markierung-oben">nur in IServ</span></div>
+        {#- Rot am Jahrgang: unten immer, oben dazu, wenn die Buchreihe ganz geht. -#}
+        <div><span class="muster"><span class="markierung markierung-ausmusterung">7</span> <span class="markierung markierung-ausmusterung markierung-oben-unten">7</span></span> aus Bücherliste entfernen</div>
       </div>
     </div>
   </div>
