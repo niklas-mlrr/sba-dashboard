@@ -207,7 +207,7 @@ body {
    die ganze Breite darunter. */
 .kopf.mit-mitte {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(min-content, 1fr) auto;
   align-items: center;
   column-gap: 2rem;
 }
@@ -215,6 +215,13 @@ body {
 .kopf.mit-mitte > h1 { grid-column: 1; grid-row: 1; }
 .kopf.mit-mitte > .kopfmitte { grid-column: 2; grid-row: 1; justify-self: center; }
 .kopf.mit-mitte > .kopfaktionen { grid-column: 3; grid-row: 1; float: none; margin-top: 0; }
+/* Zu schmal für alle drei nebeneinander: die Mitte in eine eigene Zeile
+   unter Überschrift und Knöpfe. */
+@media (max-width: 1100px) {
+  .kopf.mit-mitte { grid-template-columns: minmax(0, 1fr) auto; }
+  .kopf.mit-mitte > .kopfaktionen { grid-column: 2; }
+  .kopf.mit-mitte > .kopfmitte { grid-column: 1 / -1; grid-row: 2; justify-self: start; margin-bottom: .6rem; }
+}
 /* Die Farblegende der Fach-Ansicht: je Gruppe eine Spalte, die Muster mit
    denselben Klassen wie die Tabelle. */
 .farblegende {
@@ -226,6 +233,10 @@ body {
   color: var(--text-leise);
 }
 .farblegende-kopf { font-weight: 600; color: var(--iserv-text); margin-bottom: 1px; }
+/* IServ: zwei Spalten zu je drei, die als Ganzes umbrechen - bei zu
+   schmalem Fenster unter Schrift und Hinterlegung. */
+.farblegende-spalten { display: flex; gap: 0 1.6rem; }
+.farblegende-gruppe { white-space: nowrap; }
 .farblegende .muster { display: inline-block; min-width: 2.4rem; text-align: center; }
 .farblegende .markierung { padding: 0 5px; line-height: 1.35; }
 .farblegende .flaeche {

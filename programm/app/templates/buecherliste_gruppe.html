@@ -40,7 +40,7 @@
     <div class="farblegende-kopf">Zahl gefärbt</div>
     <div><span class="muster"><span class="schrift-einfuehrung">7</span></span> Einführung</div>
     <div><span class="muster"><span class="schrift-ausmusterung">7</span></span> Ausmusterung</div>
-    <div><span class="muster"><span class="schrift-ausmusterung durch">7</span></span> nach Vorjahr ausgemustert</div>
+    <div><span class="muster"><span class="schrift-ausmusterung durch">7</span></span> Ausmusterung (nach Vorjahr)</div>
     <div><span class="muster"><span class="schrift-grau">7</span></span> Einführung abgelehnt</div>
   </div>
   <div class="farblegende-gruppe">
@@ -49,13 +49,22 @@
     <div><span class="muster flaeche ganz-ausmusterung"></span> Buchreihe ganz weg</div>
     <div><span class="muster flaeche ganz-grau"></span> nur abgelehnte Einführungen</div>
   </div>
-  <div class="farblegende-gruppe">
+  {#- Zwei Spalten zu je drei: blau, dann gelb und rot. Ist das Fenster zu
+      schmal, rutscht die ganze Gruppe unter die beiden anderen. -#}
+  <div class="farblegende-gruppe farblegende-iserv">
     <div class="farblegende-kopf">Markierung (IServ)</div>
-    <div><span class="muster"><span class="markierung markierung-einfuehrung">7</span></span> in Bücherliste eintragen</div>
-    <div><span class="muster"><span class="markierung markierung-einfuehrung markierung-oben">7</span></span> Jahrgang an Buchreihe ergänzen</div>
-    <div><span class="muster"><span class="markierung markierung-ausmusterung">7</span></span> aus Bücherliste entfernen</div>
-    <div><span class="muster"><span class="markierung markierung-ausmusterung markierung-oben">7</span></span> nur in IServ</div>
-    <div><span class="muster"><span class="markierung markierung-aenderung">Abc</span></span> Wert lautet in IServ anders</div>
+    <div class="farblegende-spalten">
+      <div>
+        <div><span class="muster"><span class="markierung markierung-einfuehrung">Abc</span></span> Buchreihe anlegen</div>
+        <div><span class="muster"><span class="markierung markierung-einfuehrung">7</span></span> in Bücherliste eintragen</div>
+        <div><span class="muster"><span class="markierung markierung-einfuehrung markierung-oben">7</span></span> Jahrgang an Buchreihe ergänzen</div>
+      </div>
+      <div>
+        <div><span class="muster"><span class="markierung markierung-aenderung">Abc</span></span> Wert lautet in IServ anders</div>
+        <div><span class="muster"><span class="markierung markierung-ausmusterung">7</span></span> aus Bücherliste entfernen</div>
+        <div><span class="muster"><span class="markierung markierung-ausmusterung markierung-oben">7</span></span> nur in IServ</div>
+      </div>
+    </div>
   </div>
 </div>
 {% endif %}{% endblock %}

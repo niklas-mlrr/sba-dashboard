@@ -709,6 +709,12 @@ def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dic
     assert kopf.index('class="kopfaktionen"') < kopf.index("farblegende") < kopf.index("<h1>")
     gruppen = [legende.index(k) for k in ("Zahl gefärbt", "Hinterlegung", "Markierung (IServ)")]
     assert gruppen == sorted(gruppen)
+    # Rot erst normal, dann durchgestrichen; bei IServ blau, dann gelb, dann rot.
+    for folge in (("Ausmusterung</div>", "Ausmusterung (nach Vorjahr)"),
+                  ("Buchreihe anlegen", "in Bücherliste eintragen", "Jahrgang an Buchreihe",
+                   "Wert lautet in IServ anders", "aus Bücherliste entfernen", "nur in IServ")):
+        stellen = [legende.index(k) for k in folge]
+        assert stellen == sorted(stellen), folge
     for klasse in ("schrift-einfuehrung", "schrift-ausmusterung durch", "schrift-grau",
                    "flaeche ganz-einfuehrung", "flaeche ganz-ausmusterung", "flaeche ganz-grau",
                    "markierung-einfuehrung markierung-oben", "markierung-ausmusterung markierung-oben",
