@@ -232,7 +232,7 @@ body {
   line-height: 1.45;
   color: var(--text-leise);
 }
-.farblegende-kopf { font-weight: 600; color: var(--iserv-text); margin-bottom: 1px; }
+.farblegende-kopf { font-weight: 600; color: var(--iserv-text); }
 /* IServ: zwei Spalten zu je drei, die als Ganzes umbrechen - bei zu
    schmalem Fenster unter Schrift und Hinterlegung. */
 .farblegende-spalten { display: flex; gap: 0 1.6rem; }

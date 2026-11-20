@@ -724,8 +724,13 @@ def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dic
         "in Bücherliste eintragen",
         '<span class="markierung markierung-aenderung">Wert lautet in IServ anders</span>',
         '<span class="markierung markierung-ausmusterung markierung-oben">nur in IServ</span>',
-        "aus Bücherliste entfernen")]
+        "aus Bücherliste entfernen",
+        '<span class="markierung markierung-ausmusterung markierung-oben-unten">Buchreihe '
+        'ausgemustert</span> <span class="markierung markierung-ausmusterung">(vorübergehend)</span>')]
     assert stellen == sorted(stellen)
+    # Die rechte IServ-Spalte beginnt auf Höhe der Überschrift: die steht in der linken.
+    links, rechts = legende.split('<div class="farblegende-spalten">', 1)[1].split("</div>\n      <div>", 1)
+    assert "IServ-Vergleich" in links and "Wert lautet in IServ anders" in rechts
     # Rot am Jahrgang: ohne und mit Strich oben nebeneinander, in einer Zeile.
     assert ('<span class="markierung markierung-ausmusterung">7</span> <span class="markierung '
             'markierung-ausmusterung markierung-oben-unten">7</span></span> aus Bücherliste '
