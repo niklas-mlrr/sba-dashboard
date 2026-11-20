@@ -238,6 +238,9 @@ body {
 .farblegende-spalten { display: flex; gap: 0 1.6rem; }
 .farblegende-gruppe { white-space: nowrap; }
 .farblegende .muster { display: inline-block; min-width: 2.4rem; text-align: center; }
+/* IServ: die Jahrgangszahlen bündig unter dem markierten Text darüber, und
+   hinter jedem Muster derselbe Abstand - auch hinter den zwei roten. */
+.farblegende-iserv .muster { min-width: 0; text-align: left; margin-right: .6rem; }
 .farblegende .markierung { padding: 0 5px; line-height: 1.35; }
 /* Buchreihe: der Text steht im Kästchen, alle Kästchen gleich breit. */
 .farblegende .flaeche {
