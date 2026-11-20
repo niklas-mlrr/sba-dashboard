@@ -202,6 +202,42 @@ body {
 }
 /* Der Abruf-Knopf steht rechts in der Überschriftenzeile (pull-right). */
 .kopfaktionen { float: right; display: flex; gap: .6rem; margin-top: -5px; }
+/* Mit etwas in der Mitte (``kopfmitte``, base.html): Überschrift links,
+   Mitte, Knöpfe rechts in einem Raster; was danach kommt („« Zurück“), über
+   die ganze Breite darunter. */
+.kopf.mit-mitte {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 2rem;
+}
+.kopf.mit-mitte > * { grid-column: 1 / -1; }
+.kopf.mit-mitte > h1 { grid-column: 1; grid-row: 1; }
+.kopf.mit-mitte > .kopfmitte { grid-column: 2; grid-row: 1; justify-self: center; }
+.kopf.mit-mitte > .kopfaktionen { grid-column: 3; grid-row: 1; float: none; margin-top: 0; }
+/* Die Farblegende der Fach-Ansicht: je Gruppe eine Spalte, die Muster mit
+   denselben Klassen wie die Tabelle. */
+.farblegende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem 1.6rem;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-leise);
+}
+.farblegende-kopf { font-weight: 600; color: var(--iserv-text); margin-bottom: 1px; }
+.farblegende .muster { display: inline-block; min-width: 2.4rem; text-align: center; }
+.farblegende .markierung { padding: 0 5px; line-height: 1.35; }
+.farblegende .flaeche {
+  min-width: 0;
+  width: 2.4rem;
+  height: .85rem;
+  vertical-align: -1px;
+  border: 1px solid var(--rand);
+}
+.farblegende .flaeche.ganz-einfuehrung { background: var(--einfuehrung-reihe); }
+.farblegende .flaeche.ganz-ausmusterung { background: var(--ausmusterung-reihe); }
+.farblegende .flaeche.ganz-grau { background: var(--grau-reihe); }
 .meta { margin: 0; color: var(--text-leise); font-size: .875rem; }
 
 .hinweis {

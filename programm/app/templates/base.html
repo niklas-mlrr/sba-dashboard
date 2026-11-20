@@ -56,8 +56,15 @@
   </nav>
 
   <div class="seite {% block seitenklasse %}{% endblock %}">
-    <header class="kopf">
+    {#
+      ``kopfmitte`` steht zwischen Überschrift und Knöpfen (die Farblegende der
+      Fach-Ansicht). Eine Seite, die ihn füllt, setzt ``kopfklasse`` auf
+      " mit-mitte": dann ordnet ein Raster die drei Teile nebeneinander an.
+      Sonst bleibt der Kopf, wie er war.
+    #}
+    <header class="kopf{% block kopfklasse %}{% endblock %}">
       <div class="kopfaktionen">{% block kopfaktionen %}{% endblock %}</div>
+      {% block kopfmitte %}{% endblock %}
       <h1>{% block ueberschrift %}Bestand und Nachbestellung{% endblock %}</h1>
       {% block unter_ueberschrift %}{% endblock %}
     </header>

@@ -700,6 +700,35 @@ def test_fachseite_bietet_freigabe_und_planungsmenue(
     assert 'data-planung="preis"' not in text
 
 
+def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dict) -> None:
+    """Zwischen Überschrift und Knöpfen, in der Reihenfolge Schrift,
+    Hinterlegung, Markierung - mit den Klassen der Tabelle."""
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    kopf = text[text.index('<header class="kopf mit-mitte">'):text.index("</header>")]
+    legende = kopf[kopf.index('class="kopfmitte farblegende"'):]
+    assert kopf.index('class="kopfaktionen"') < kopf.index("farblegende") < kopf.index("<h1>")
+    gruppen = [legende.index(k) for k in ("Zahl gefärbt", "Hinterlegung", "Markierung (IServ)")]
+    assert gruppen == sorted(gruppen)
+    for klasse in ("schrift-einfuehrung", "schrift-ausmusterung durch", "schrift-grau",
+                   "flaeche ganz-einfuehrung", "flaeche ganz-ausmusterung", "flaeche ganz-grau",
+                   "markierung-einfuehrung markierung-oben", "markierung-ausmusterung markierung-oben",
+                   "markierung-aenderung"):
+        assert klasse in legende, klasse
+
+
+@pytest.mark.parametrize("pfad", ["/buecherliste/verlag/Klett", "/buecherliste/fach"])
+def test_farblegende_nur_auf_der_fachseite(seiten: TestClient, abgeglichen: dict, pfad: str) -> None:
+    text = seiten.get(pfad).text
+    assert "farblegende" not in text
+    assert '<header class="kopf">' in text
+
+
+def test_ohne_datei_keine_farblegende(seiten: TestClient) -> None:
+    _anmelden(seiten)
+    text = seiten.get("/buecherliste/fach/Deutsch").text
+    assert "farblegende" not in text
+
+
 def test_jahrgang_eines_laufenden_buchs_traegt_nur_die_ausmusterung(
     seiten: TestClient, abgeglichen: dict,
 ) -> None:
@@ -1453,6 +1482,8 @@ def _ohne_tags(text: str) -> str:
 
 
 def _markiert(text: str) -> bool:
+    # Erst hinter dem Kopf: dort oben steht die Farblegende mit allen Mustern.
+    text = text.split("</header>", 1)[-1]
     return any(f'{art}"' in text or f"{art} " in text
                for art in ("aenderung", "einfuehrung", "ausmusterung"))
 

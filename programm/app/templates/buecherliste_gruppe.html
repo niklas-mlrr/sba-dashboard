@@ -25,6 +25,40 @@
 {% endif %}{% if liste and liste.paket %}
 <label class="iserv-knopf"><input type="checkbox" id="paketansicht" checked>&nbsp;Paketansicht</label>
 {% endif %}{% endblock %}
+{#
+  Die Farblegende der Fach-Ansicht (2026-11-20), oben zwischen Überschrift und
+  Knöpfen: Schrift (Planung), Hinterlegung (ganze Zeile) und Markierung
+  (Abgleich mit IServ). Die Muster tragen dieselben Klassen wie die Tabelle,
+  sehen also immer so aus wie dort. Nur mit Datei: ohne sie färbt nichts.
+  Strich vorn und Antragskästen stehen bewusst nicht darin.
+#}
+{% set mit_legende = ansicht == "fach" and not liste and gruppe and planung.mtime is not none %}
+{% block kopfklasse %}{% if mit_legende %} mit-mitte{% endif %}{% endblock %}
+{% block kopfmitte %}{% if mit_legende %}
+<div class="kopfmitte farblegende" role="note" aria-label="Legende der Farben">
+  <div class="farblegende-gruppe">
+    <div class="farblegende-kopf">Zahl gefärbt</div>
+    <div><span class="muster"><span class="schrift-einfuehrung">7</span></span> Einführung</div>
+    <div><span class="muster"><span class="schrift-ausmusterung">7</span></span> Ausmusterung</div>
+    <div><span class="muster"><span class="schrift-ausmusterung durch">7</span></span> nach Vorjahr ausgemustert</div>
+    <div><span class="muster"><span class="schrift-grau">7</span></span> Einführung abgelehnt</div>
+  </div>
+  <div class="farblegende-gruppe">
+    <div class="farblegende-kopf">Hinterlegung</div>
+    <div><span class="muster flaeche ganz-einfuehrung"></span> Buchreihe ganz neu</div>
+    <div><span class="muster flaeche ganz-ausmusterung"></span> Buchreihe ganz weg</div>
+    <div><span class="muster flaeche ganz-grau"></span> nur abgelehnte Einführungen</div>
+  </div>
+  <div class="farblegende-gruppe">
+    <div class="farblegende-kopf">Markierung (IServ)</div>
+    <div><span class="muster"><span class="markierung markierung-einfuehrung">7</span></span> in Bücherliste eintragen</div>
+    <div><span class="muster"><span class="markierung markierung-einfuehrung markierung-oben">7</span></span> Jahrgang an Buchreihe ergänzen</div>
+    <div><span class="muster"><span class="markierung markierung-ausmusterung">7</span></span> aus Bücherliste entfernen</div>
+    <div><span class="muster"><span class="markierung markierung-ausmusterung markierung-oben">7</span></span> nur in IServ</div>
+    <div><span class="muster"><span class="markierung markierung-aenderung">Abc</span></span> Wert lautet in IServ anders</div>
+  </div>
+</div>
+{% endif %}{% endblock %}
 {% block unter_ueberschrift %}<p class="zurueck"><a href="/buecherliste/{{ ansicht }}">« Zurück zur Übersicht</a></p>{% endblock %}
 
 {% block kopfzeile %}
