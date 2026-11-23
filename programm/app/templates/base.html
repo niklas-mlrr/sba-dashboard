@@ -65,8 +65,10 @@
     <header class="kopf{% block kopfklasse %}{% endblock %}">
       <div class="kopfaktionen">{% block kopfaktionen %}{% endblock %}</div>
       {% block kopfmitte %}{% endblock %}
-      <h1>{% block ueberschrift %}Bestand und Nachbestellung{% endblock %}</h1>
-      {% block unter_ueberschrift %}{% endblock %}
+      <div class="kopftitel">
+        <h1>{% block ueberschrift %}Bestand und Nachbestellung{% endblock %}</h1>
+        {% block unter_ueberschrift %}{% endblock %}
+      </div>
     </header>
     {% block kopfzeile %}{% endblock %}
     <main>

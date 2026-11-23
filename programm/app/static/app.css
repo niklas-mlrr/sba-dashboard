@@ -202,32 +202,47 @@ body {
 }
 /* Der Abruf-Knopf steht rechts in der Überschriftenzeile (pull-right). */
 .kopfaktionen { float: right; display: flex; gap: .6rem; margin-top: -5px; }
-/* Mit etwas in der Mitte (``kopfmitte``, base.html): Überschrift links,
-   Mitte, Knöpfe rechts in einem Raster; was danach kommt („« Zurück“), über
-   die ganze Breite darunter. */
+/* Mit etwas in der Mitte (``kopfmitte``, base.html), wie die Kopfzeile einer
+   Bücherliste bei IServ: Titel (Name, dahinter der Stand) links, Knöpfe rechts
+   auf Höhe des Namens, die Legende in der Mitte - mit gleichem Abstand zu
+   beiden. Sie steht mittig in der ganzen Höhe der Kopfzeile, beginnt aber nie
+   über dem Titel.
+   Wird es eng, gibt zuerst der Titel nach (der Stand bricht unter den Namen,
+   der selbst nie umbricht), erst danach die Legende (ihre Gruppen brechen
+   um): der flex-shrink des Titels ist viel größer als der der Legende. Die Knöpfe haben
+   feste Größe und bleiben stehen. */
 .kopf.mit-mitte {
-  display: grid;
-  grid-template-columns: auto minmax(min-content, 1fr) auto;
-  align-items: center;
-  column-gap: 2rem;
+  --zeile: calc(28px * 1.1);   /* eine Zeile der Überschrift */
+  --zurueck: 20px;             /* „« Zurück“ darunter */
+  display: flex;
+  align-items: flex-start;
 }
-.kopf.mit-mitte > * { grid-column: 1 / -1; }
-.kopf.mit-mitte > h1 { grid-column: 1; grid-row: 1; margin-top: 0; }
-/* „« Zurück“ steht unter der Überschrift; Legende und Knöpfe gehen über
-   beide Zeilen und stehen damit mittig in der Höhe der ganzen Kopfzeile. */
-.kopf.mit-mitte > .zurueck { grid-column: 1; grid-row: 2; }
-.kopf.mit-mitte > .kopfmitte { grid-column: 2; grid-row: 1 / 3; justify-self: center; }
-.kopf.mit-mitte > .kopfaktionen { grid-column: 3; grid-row: 1 / 3; float: none; margin-top: 0; }
-/* Der Stand der Liste (Label hinter dem Namen) steht mit Legende unter der
-   Überschrift: Name und Stand zusammen füllen mehr von der Höhe der Legende. */
-.kopf.mit-mitte > h1 .label { display: block; width: fit-content; margin-top: .45rem; top: 0; }
-/* Zu schmal für alle drei nebeneinander: die Mitte in eine eigene Zeile
-   unter Überschrift und Knöpfe. */
+.kopf.mit-mitte > * { margin-left: 0; margin-right: 0; }
+.kopf.mit-mitte > .kopftitel { flex: 0 1000000 auto; order: 1; margin-right: 2rem; }
+.kopf.mit-mitte .kopfname { white-space: nowrap; }
+.kopf.mit-mitte .kopftitel h1 { margin: 0; }
+.kopf.mit-mitte .zurueck { line-height: var(--zurueck); }
+/* Die Mitte von Name und Stand bleibt, wo die Mitte des Namens allein stünde:
+   bricht der Stand um, wandert der Name eine halbe Zeile nach oben, der Stand
+   steht darunter. „« Zurück“ wandert mit und bleibt unter dem Stand. */
+.kopf.mit-mitte > .kopftitel { transform: translateY(calc(-50% + (var(--zeile) + var(--zurueck)) / 2)); }
+.kopf.mit-mitte > .kopfmitte { flex: 0 1 auto; order: 2; align-self: center; margin: 0 auto; }
+.kopf.mit-mitte > .kopfmitte.farblegende { flex-wrap: wrap; }
+.kopf.mit-mitte > .kopfaktionen {
+  float: none;
+  flex: none;
+  order: 3;
+  align-self: flex-start;
+  align-items: center;
+  height: var(--zeile);
+  margin: 0 0 0 2rem;
+}
+/* Zu schmal selbst für die umgebrochene Legende: die Mitte in eine eigene
+   Zeile unter Titel und Knöpfe. */
 @media (max-width: 1100px) {
-  .kopf.mit-mitte { grid-template-columns: minmax(0, 1fr) auto; }
-  .kopf.mit-mitte > .kopfaktionen { grid-column: 2; grid-row: 1; }
-  .kopf.mit-mitte > .zurueck { grid-column: 1 / -1; grid-row: 3; }
-  .kopf.mit-mitte > .kopfmitte { grid-column: 1 / -1; grid-row: 2; justify-self: start; margin-bottom: .6rem; }
+  .kopf.mit-mitte { flex-wrap: wrap; }
+  .kopf.mit-mitte > .kopftitel { flex: 1 1 0; min-width: min-content; }
+  .kopf.mit-mitte > .kopfmitte { flex: 1 1 100%; order: 4; margin: .6rem 0 0; align-self: flex-start; }
 }
 /* Die Farblegende der Fach-Ansicht: je Gruppe eine Spalte, die Muster mit
    denselben Klassen wie die Tabelle. */

@@ -7,7 +7,7 @@
   Label (dort „veröffentlicht“, hier offen/Antrag ausstehend/bestätigt), ohne
   Schuljahr.
 #}
-{% block ueberschrift %}Bücherliste {{ titel }}{% if ansicht == "fach" and not liste %} {{ bp.fachlabel(planung.fach_je_name.get(gruppe.name)) }}{% else %}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endif %}{% endblock %}
+{% block ueberschrift %}<span class="kopfname">Bücherliste {{ titel }}</span>{% if ansicht == "fach" and not liste %} {{ bp.fachlabel(planung.fach_je_name.get(gruppe.name)) }}{% else %}<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endif %}{% endblock %}
 {#
   "Paketansicht" nur bei Paketausleihe: an = Grundpaket und Wahlbereiche
   getrennt wie bei IServ, aus = alle Bücher in einer Tabelle. Beide Ansichten
