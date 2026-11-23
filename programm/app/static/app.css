@@ -866,6 +866,8 @@ tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmust
 .btn-primary:hover:not(:disabled) { background-color: #286090; border-color: #204d74; }
 .btn .caret { margin-left: 0; }
 .kopfaktionen .btn .glyphicon { top: 2px; }
+/* Fach-Ansicht: das Drucksymbol wie bei IServ (Bootstraps .glyphicon, top: 1px). */
+.kopf.fach-kopf .kopfaktionen .btn .glyphicon { top: 1px; }
 
 .iserv-modal {
   width: 600px;
