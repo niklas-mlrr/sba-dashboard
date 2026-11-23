@@ -202,17 +202,17 @@ body {
 }
 /* Der Abruf-Knopf steht rechts in der Überschriftenzeile (pull-right). */
 .kopfaktionen { float: right; display: flex; gap: .6rem; margin-top: -5px; }
-/* Fach-Ansicht: Knöpfe, Überschrift, „« Zurück“ und Strich genau wie die
-   Detailseite einer Bücherliste bei IServ (partials/schoolyear/booklists/
+/* Einzelne Bücherliste (Fach, Verlag, Jahrgang): Knöpfe, Überschrift,
+   „« Zurück“ und Strich genau wie die Detailseite einer Bücherliste bei IServ (partials/schoolyear/booklists/
    booklist_detail.html mit Bootstrap 3.3.7 + normalize.css, 2026-11-23 in
    Chromium nachgemessen): Knöpfe als ul.list-inline.pull-right - Oberkante
    bündig mit der Überschrift, 10 px Abstand (li je 5 px Polster), rechts 5 px
    eingerückt; „« Zurück“ als <p> mit 10 px darunter, dann 9 px bis zum Strich. */
-.kopf.fach-kopf .kopfaktionen { gap: 10px; margin-top: 0; margin-right: 5px; }
-.kopf.fach-kopf .zurueck { margin-bottom: 10px; line-height: 20px; }
+.kopf.listenkopf .kopfaktionen { gap: 10px; margin-top: 0; margin-right: 5px; }
+.kopf.listenkopf .zurueck { margin-bottom: 10px; line-height: 20px; }
 /* Mit etwas in der Mitte (``kopfmitte``, base.html), wie die Kopfzeile einer
    Bücherliste bei IServ: Titel (Name, dahinter der Stand) links, Knöpfe rechts
-   an derselben Stelle wie bei IServ (.fach-kopf oben), die Legende in der
+   an derselben Stelle wie bei IServ (.listenkopf oben), die Legende in der
    Mitte - mit gleichem Abstand zu beiden.
    Wird es eng, gibt zuerst der Titel nach (der Stand bricht unter den Namen,
    der selbst nie umbricht), erst danach die Legende (ihre Gruppen brechen
@@ -866,8 +866,8 @@ tr.zeile-ausmusterung > td:first-child { box-shadow: inset 4px 0 0 var(--ausmust
 .btn-primary:hover:not(:disabled) { background-color: #286090; border-color: #204d74; }
 .btn .caret { margin-left: 0; }
 .kopfaktionen .btn .glyphicon { top: 2px; }
-/* Fach-Ansicht: das Drucksymbol wie bei IServ (Bootstraps .glyphicon, top: 1px). */
-.kopf.fach-kopf .kopfaktionen .btn .glyphicon { top: 1px; }
+/* Einzelne Bücherliste: das Drucksymbol wie bei IServ (Bootstraps .glyphicon, top: 1px). */
+.kopf.listenkopf .kopfaktionen .btn .glyphicon { top: 1px; }
 
 .iserv-modal {
   width: 600px;

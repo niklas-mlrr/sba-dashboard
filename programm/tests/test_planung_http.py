@@ -704,7 +704,7 @@ def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dic
     """Zwischen Überschrift und Knöpfen, in der Reihenfolge Schrift,
     Hinterlegung, Markierung - mit den Klassen der Tabelle."""
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    kopf = text[text.index('<header class="kopf fach-kopf mit-mitte">'):text.index("</header>")]
+    kopf = text[text.index('<header class="kopf listenkopf mit-mitte">'):text.index("</header>")]
     legende = kopf[kopf.index('class="kopfmitte farblegende"'):]
     assert kopf.index('class="kopfaktionen"') < kopf.index("farblegende") < kopf.index("<h1>")
     gruppen = [legende.index(k) for k in ("Jahrgang", "Buchreihe</div>", "IServ-Vergleich")]
@@ -747,7 +747,7 @@ def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dic
 def test_farblegende_nur_auf_der_fachseite(seiten: TestClient, abgeglichen: dict, pfad: str) -> None:
     text = seiten.get(pfad).text
     assert "farblegende" not in text
-    assert '<header class="kopf">' in text
+    assert "mit-mitte" not in text
 
 
 def test_ohne_datei_keine_farblegende(seiten: TestClient) -> None:
