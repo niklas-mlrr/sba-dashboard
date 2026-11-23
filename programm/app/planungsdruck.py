@@ -64,6 +64,15 @@ seiner ersten Zeile. Ein Antrag, bei dem alles Angehakte leer ist (etwa nur
 unter ihrem Anfang weiter. Gesetzt werden sie in der Zeile der Buchreihe
 unter deren Zellen, über alle Spalten (``buecherlisten.core.layout``).
 
+Die Texte vor den Tabellen setzt ``buecherlisten.core.layout`` (Vorgabe vom
+2026-11-23): Einleitung oder, mit Bestätigung, der Prüfauftrag; dazu je ein
+Absatz für Jahreszahlen (wenn in der Spalte „Jahrgang“ ein Zusatz oder Stil
+steht), Anmerkungen (wenn eine Zeile welche trägt) und Rücklagen. Mit
+Bestätigung steht die Spalte „Rücklagen“ in den leihbaren und den
+ausgemusterten Buchreihen immer, sonst nur in einer Tabelle, in der eine
+Buchreihe eine Rücklage hat; ``ruecklage`` ist dann leer. Rücklagen sind
+Wünsche, die nur teilweise oder gar nicht erfüllt werden können.
+
 Zurück kommen Tabellen im Format von
 :func:`buecherlisten.core.daten.build_subject_tables`, je Zeile dazu
 ``klasse_teile`` (Text und Stil je Stück) und ``stil`` (der ganzen Zeile).

@@ -528,15 +528,18 @@ class Listenart:
     # unter der Einleitung und Erklärzeilen unter der Tabelle - nur mit
     # "IServ-Stand benutzen" (siehe iserv_fach_liste, _sternchen).
     sternchen: bool = False
+    # Die Fach-Liste aus der Planungsdatei (nicht IServ): ihre Einleitung
+    # nennt das Schuljahr, und die Hinweise vor den Tabellen gelten für sie.
+    planung: bool = False
 
 
 _ZWEITE_TABELLE = "Bücher, die selbst anzuschaffen sind, werden gesondert in der zweiten Tabelle ausgewiesen."
 FACH_LISTE = Listenart(
-    "Die folgenden Bücher können für das Fach {name} über die Schule ausgeliehen werden. "
-    + _ZWEITE_TABELLE,
+    "Folgende Buchreihen sind für das Fach {name} im {schuljahr} vorgesehen.",
     "Keine leihbaren Buchreihen in diesem Fach.",
     "Keine selbst anzuschaffenden Buchreihen in diesem Fach.",
     (KLASSE, TITEL, VERLAG, ISBN, NEUPREIS, LEIHGEBUEHR),
+    planung=True,
 )
 # Verlag: der Verlag steht im Kopf, dafür das Fach - das neben dem Titel
 # umbrechen darf, weil fächerübergreifende Bücher mehrere Fächer tragen.
@@ -575,6 +578,7 @@ def iserv_fach_liste(schoolyear_name: str, listen_anzahl: int) -> Listenart:
         einleitung=(f"Folgende Buchreihen {fuehren} die {iserv_quelle(listen_anzahl)} "
                     f"für das Fach {{name}} im {schuljahr}."),
         sternchen=True,
+        planung=False,
     )
 
 
@@ -587,6 +591,95 @@ STERNCHEN_HINWEIS = (
     "möchten. Betroffene Buchreihen sind mit einem * markiert. Unter der Tabelle "
     "sind die jeweils anderen Fächer aufgeführt."
 )
+
+
+# Texte vor den Tabellen der Fach-Liste aus der Planungsdatei (Vorgabe vom
+# 2026-11-23). Ohne Prüfauftrag folgen auf den Einleitungssatz die Sätze zu den
+# Tabellen, mit ihm die Absätze von :func:`_pruefauftrag`; danach, je nachdem,
+# was im PDF vorkommt, die Erklärungen zu Jahreszahlen, Anmerkungen und
+# Rücklagen (:func:`_hinweise`).
+STAND_SATZ = "Aufgeführt ist der genehmigte Stand für dieses Schuljahr."
+ZWEITE_TABELLE_SATZ = ("Buchreihen, die selbst anzuschaffen sind, werden gesondert in der "
+                       "zweiten Tabelle ausgewiesen.")
+DRITTE_TABELLE_SATZ = ("Leihbare Buchreihen, die nach dem vorigen Schuljahr ausgemustert wurden, "
+                       "werden gesondert in der dritten Tabelle ausgewiesen.")
+JAHRESZAHLEN_HINWEIS = (
+    "Die Jahreszahlen in Klammern hinter einem Jahrgang geben an, ab welchem Schuljahr eine "
+    "Buchreihe in diesem Jahrgang eingeführt wird („ab“) und bis zu welchem Schuljahr sie "
+    "dort letztmals verwendet wird („bis“). Schwarz dargestellte Angaben sind genehmigt, "
+    "grau dargestellte Anträge sind noch nicht entschieden, durchgestrichene Anträge wurden "
+    "abgelehnt."
+)
+ANMERKUNGEN_HINWEIS = (
+    "Unter einer Buchreihe sind die bereits entschiedenen Anträge zu Einführungen und "
+    "Ausmusterungen aufgeführt, die das {schuljahr} oder spätere Schuljahre betreffen, sowie "
+    "Ausmusterungen nach dem vorigen Schuljahr. Angegeben sind jeweils Jahrgang, Art und "
+    "Schuljahr des Antrags und die Entscheidung, je nach Auswahl außerdem das Datum der "
+    "Entscheidung, die bearbeitende Person und die Begründung."
+)
+RUECKLAGEN_HINWEIS = (
+    "Die Spalte Rücklagen gibt die Anzahl der Exemplare an, die die Fachschaft {fach} von der "
+    "jeweiligen Buchreihe nach deren Ausmusterung behalten möchte, anstatt sie auszusondern. "
+    "Hierbei handelt es sich um Wünsche, die unter Umständen nur teilweise oder gar nicht "
+    "erfüllt werden können."
+)
+RUECKLAGEN_HINWEIS_PRUEFEN = (
+    " Ist keine Anzahl eingetragen, ist keine Rücklage vermerkt. Wünsche können Sie "
+    "handschriftlich eintragen."
+)
+
+
+def _pruefauftrag(subject: str, schoolyear_name: str, books_text: str) -> list[str]:
+    """Die Absätze des Prüfauftrags (Vorgabe vom 2026-11-23). Der letzte steht
+    dem Bestätigungsblock am Ende der Liste gegenüber: Genehmigung oder Antrag
+    auf Änderungen."""
+    return [
+        f"Bitte prüfen Sie als Fachkonferenzleitung {subject} im Namen der Fachschaft "
+        f"{subject} die folgende Bücherliste {subject}, das heißt {books_text}, für das "
+        f"{schoolyear_name}.",
+        "Bitte korrigieren Sie handschriftlich, falls ISBN falsch sind, falsche Klassenstufen "
+        "zugeordnet sind, neue Bücher angeschafft oder alte ausgemustert werden sollen. Am Ende "
+        "genehmigen Sie die Bücherliste in der vorliegenden Form, oder Sie beantragen die "
+        "eingetragenen Änderungen.",
+        f"Die Genehmigung am Ende bezieht sich ausschließlich auf das {schoolyear_name}. "
+        "Vorhaben, die erst in späteren Schuljahren wirksam werden sollen (z. B. die Einführung "
+        "eines Buches in einem kommenden Schuljahr), sind dabei nicht zu berücksichtigen. Bitte "
+        "notieren Sie solche Vorhaben dennoch so früh wie möglich, damit sie rechtzeitig geplant "
+        "werden können.",
+        "Da ein Buch durch seine ISBN eindeutig beschrieben wird, kann der Titel vom "
+        "Originaltitel des Buches abweichen und gegebenenfalls auch im nachhinein noch einmal "
+        "verändert werden, um z. B. Bücher für verschiedene Leistungsniveaus leichter "
+        "auseinanderhalten zu können. Änderungsvorschläge für Buchtitel können Sie "
+        "handschriftlich notieren. Beachten Sie bitte, dass diese gegebenenfalls nicht oder auch "
+        "nur abgeändert übernommen werden. Die Leihgebühr dient nur der Information. Sie ergibt "
+        "sich aus dem Neupreis des Buches und der Anzahl der Jahrgänge, für die es vorgesehen "
+        "ist.",
+    ]
+
+
+def _hat_jahreszahlen(zeilen: list[dict]) -> bool:
+    """Steht in der Spalte „Jahrgang“ ein Zusatz oder ein Stil (Antragsinformationen)?"""
+    return any(
+        "(" in zeile["klasse"] or zeile.get("stil")
+        or any(stil for _, stil in zeile.get("klasse_teile", ()))
+        for zeile in zeilen
+    )
+
+
+def _hinweise(subject: str, schoolyear_name: str, tables: dict[str, list[dict]], *,
+              ruecklagen: bool, pruefen: bool) -> list[str]:
+    """Die Erklärungen vor den Tabellen, je nachdem, was im PDF vorkommt:
+    Jahreszahlen, Anmerkungen zu Anträgen, Rücklagen (Vorgabe vom 2026-11-23)."""
+    zeilen = [*tables["leih"], *tables["kauf"]]
+    hinweise: list[str] = []
+    if _hat_jahreszahlen(zeilen):
+        hinweise.append(JAHRESZAHLEN_HINWEIS)
+    if any(zeile.get("anmerkungen") for zeile in (*zeilen, *tables.get("ausgemustert", ()))):
+        hinweise.append(ANMERKUNGEN_HINWEIS.format(schuljahr=escape(schoolyear_name)))
+    if ruecklagen:
+        text = RUECKLAGEN_HINWEIS.format(fach=escape(subject))
+        hinweise.append(text + (RUECKLAGEN_HINWEIS_PRUEFEN if pruefen else ""))
+    return hinweise
 
 
 def _sternchen(
@@ -814,7 +907,7 @@ def _zelle(zeile: dict, spalte: Spalte) -> Any:
     Ein Klartext-Wert, der nur wegen des Stils zum Paragraph wird, bekommt
     geschützte Leerzeichen: gemessen wurde er einzeilig, so bleibt er es.
     """
-    text = zeile[spalte.key]
+    text = zeile.get(spalte.key, "")
     zeilenstil = zeile.get("stil") or ""
     teile = zeile.get("klasse_teile") if spalte.key == "klasse" else None
     if not zeilenstil and not teile:
@@ -862,7 +955,7 @@ def render_table(
     # mit mindestens MIN_GAP Luft pro Lücke in CONTENT_WIDTH.
     effective_width = CONTENT_WIDTH - MIN_GAP * n_gaps
 
-    werte = [[r[sp.key] for r in rows] for sp in spalten]
+    werte = [[r.get(sp.key, "") for r in rows] for sp in spalten]
 
     # 1) Jede Spalte zuerst mit ihrem kurzen Kopf ("Jg.", "Leihgeb.",
     #    "Rückl."); die einzeiligen sind so breit wie Kopf oder breitester Wert
@@ -1202,12 +1295,12 @@ class SubjectHeading(Flowable):
 class ConfirmationBlock(Flowable):
     """Einleitungssatz + zwei Ankreuzfelder + Unterschrift-Zeile am Fach-Listenende.
 
-    Einleitungssatz: "Hiermit bestätige ich im Namen der Fachschaft <Fach>,
-    dass ...". Oberes Kreuz: die Liste ist NICHT korrekt und soll um die
-    handschriftlich eingetragenen Änderungen ergänzt werden. Unteres Kreuz:
-    die Bücher sind richtig. Fließt normal im Textfluss mit — bei kurzen
-    Listen landet der Block dadurch am Ende der Tabellen, bei sehr langen
-    ggf. auf einer eigenen Folgeseite.
+    Einleitungssatz: "Hiermit erkläre ich im Namen der Fachschaft <Fach> zu der
+    ... Bücherliste, dass diese ..." (Vorgabe vom 2026-11-23). Oberes Kreuz:
+    in der vorliegenden Form genehmigt. Unteres Kreuz: nicht genehmigt, die
+    handschriftlichen Änderungen sind beantragt. Fließt normal im Textfluss
+    mit — bei kurzen Listen landet der Block dadurch am Ende der Tabellen, bei
+    sehr langen ggf. auf einer eigenen Folgeseite.
     """
 
     # Abstände zwischen einleitendem Satz, den beiden Ankreuzzeilen und dem
@@ -1236,23 +1329,26 @@ class ConfirmationBlock(Flowable):
         else:
             location = "auf den vorliegenden Seiten"
         if book_count == 1:
-            # Einzelnes Buch: Singular ("das ... Buch", "seine", "dessen")
-            # statt Plural ("die ... Bücher", "ihre", "deren"). Die
+            # Einzelnes Buch: Singular ("zu dem ... Buch", "seine", "dessen")
+            # statt Plural ("zu den ... Büchern", "ihre", "deren"). Die
             # Klassenstufe(n) richten sich dabei nach den tatsächlich diesem
             # einen Buch zugeordneten Klassenstufen, nicht nach der Bücherzahl.
-            klassenstufe_word = "Klassenstufe" if grade_count == 1 else "Klassenstufen"
+            if grade_count == 1:
+                klassenstufe_word, zugeordnet = "Klassenstufe", "zugeordneter"
+            else:
+                klassenstufe_word, zugeordnet = "Klassenstufen", "zugeordneten"
             intro_text = (
-                f"Hiermit bestätige ich im Namen der Fachschaft {subject}, dass die {location} "
-                f"aufgeführte <b>Bücherliste {subject}</b>, das heißt das durch seine "
-                f"<b>ISBN</b> beschriebene Buch und dessen zugeordnete <b>{klassenstufe_word}</b>, "
-                f"für das <b>{schoolyear_name}</b> ..."
+                f"Hiermit erkläre ich im Namen der Fachschaft {subject} zu der {location} "
+                f"aufgeführten <b>Bücherliste {subject}</b>, das heißt zu dem durch seine "
+                f"<b>ISBN</b> beschriebenen Buch und dessen {zugeordnet} <b>{klassenstufe_word}</b>, "
+                f"für das <b>{schoolyear_name}</b>, dass diese ..."
             )
         else:
             intro_text = (
-                f"Hiermit bestätige ich im Namen der Fachschaft {subject}, dass die {location} "
-                f"aufgeführte <b>Bücherliste {subject}</b>, das heißt die durch ihre <b>ISBN</b> "
-                f"beschriebenen Bücher und deren zugeordnete <b>Klassenstufen</b>, für das "
-                f"<b>{schoolyear_name}</b> ..."
+                f"Hiermit erkläre ich im Namen der Fachschaft {subject} zu der {location} "
+                f"aufgeführten <b>Bücherliste {subject}</b>, das heißt zu den durch ihre <b>ISBN</b> "
+                f"beschriebenen Büchern und deren zugeordneten <b>Klassenstufen</b>, für das "
+                f"<b>{schoolyear_name}</b>, dass diese ..."
             )
         self._intro_par = Paragraph(intro_text, CONFIRM_STYLE)
         _, self._intro_h = self._intro_par.wrap(self.width, 0xFFFFFF)
@@ -1260,15 +1356,16 @@ class ConfirmationBlock(Flowable):
         text_width = self.width - CHECKBOX_SIZE - 6
         self._checkbox_pars = [
             Paragraph(
-                "... <b>nicht korrekt</b> ist und um die <b>handschriftlichen Anmerkungen</b> "
-                "(Durchstreichungen, Eintragungen neuer Bücher, Klassen, ...) "
-                "verändert werden muss.",
+                "... in der vorliegenden Form <b>genehmigt</b> wird. Die Bücherliste kann damit "
+                "<b>an</b> die <b>Schüler übermittelt</b> werden; eine <b>nachträgliche "
+                "Änderung</b> kann unter Umständen <b>nicht</b> mehr <b>gestattet</b> werden.",
                 CONFIRM_STYLE,
             ),
             Paragraph(
-                "... <b>korrekt</b> ist, <b>an</b> die <b>Schüler übermittelt</b> werden kann und eine "
-                "<b>nachträgliche Änderung</b> unter Umständen <b>nicht</b> mehr <b>gestattet</b> werden "
-                "kann.",
+                "... <b>nicht</b> in der vorliegenden Form genehmigt wird und um die "
+                "<b>handschriftlichen Anmerkungen</b> (Durchstreichungen, Eintragungen neuer "
+                "Bücher, Klassen, ...) verändert werden soll. Diese Änderungen werden hiermit "
+                "<b>beantragt</b>.",
                 CONFIRM_STYLE,
             ),
         ]
@@ -1484,24 +1581,14 @@ def subject_story(
     story: list = []
     if duplex:
         story.append(_RecordPage(start_page_holder))
-    story += [
-        SubjectHeading(
-            schoolyear_name, subject, confirm_value=confirm_value,
-            return_by=return_by if confirmation else None,
-            return_to=return_to if confirmation else None,
-        ),
-        Paragraph(art.einleitung.format(name=subject), INTRO_STYLE),
-    ]
+    story.append(SubjectHeading(
+        schoolyear_name, subject, confirm_value=confirm_value,
+        return_by=return_by if confirmation else None,
+        return_to=return_to if confirmation else None,
+    ))
     erklaerungen: dict[str, list[tuple[str, str]]] = {"leih": [], "kauf": []}
     if art.sternchen:
         tables, erklaerungen = _sternchen(subject, tables)
-        if any(erklaerungen.values()):
-            # Der Hinweis nur, wenn es Sternchen gibt; als zweiter Absatz mit
-            # einer halben Leerzeile Abstand.
-            story[-1:] = [
-                Paragraph(art.einleitung.format(name=subject), INTRO_ABSATZ_STYLE),
-                Paragraph(STERNCHEN_HINWEIS, INTRO_STYLE),
-            ]
     book_count = len(tables["leih"]) + len(tables["kauf"])
     # Bei genau einem Buch entscheidet die Anzahl seiner Klassenstufen
     # (Spalte "klasse", z.B. "5" oder "5, 6") über Singular/Plural.
@@ -1510,48 +1597,49 @@ def subject_story(
         only_row = (tables["leih"] or tables["kauf"])[0]
         # Mit Antragsinformationen stehen auch Kommas im Zusatz („von … bis …“).
         grade_count = only_row.get("jahrgang_anzahl") or only_row["klasse"].count(",") + 1
+
+    # Rücklagen: die Spalte steht mit Prüfauftrag immer (in den leihbaren und den
+    # ausgemusterten Buchreihen, in denen eine Rücklage möglich ist), sonst nur
+    # in einer Tabelle, in der mindestens eine Buchreihe eine hat.
+    def leih_spalten(zeilen: list[dict]) -> tuple[Spalte, ...]:
+        if (zeilen and art.planung and confirmation) or any(z.get("ruecklage") for z in zeilen):
+            return (*art.spalten, RUECKLAGEN)
+        return art.spalten
+
+    mit_ruecklagen = any(
+        RUECKLAGEN in leih_spalten(tables.get(name, [])) for name in ("leih", "ausgemustert"))
+
+    # Die Texte vor den Tabellen. Mit Prüfauftrag setzt der Blocksatz der
+    # Bestätigung den Ton, sonst der Einleitungsstil; nach dem letzten Absatz
+    # steht der volle Abstand zur Tabelle, dazwischen eine halbe Leerzeile.
+    schuljahr = escape(schoolyear_name)
     if confirmation:
-        # Bestätigungs-Lauf: statt des Einleitungssatzes ein Prüfauftrag an die
-        # Fachkonferenzleitung, dessen letzter Absatz auf die beiden
-        # Ankreuzfelder im ConfirmationBlock abgestimmt ist. Singular/Plural
-        # wie im ConfirmationBlock.
+        # Singular/Plural wie im ConfirmationBlock.
         if book_count == 1:
             klassenstufe_word = "Klassenstufe" if grade_count == 1 else "Klassenstufen"
             books_text = f"das durch seine ISBN beschriebene Buch und dessen zugeordnete {klassenstufe_word}"
         else:
             books_text = "die durch ihre ISBN beschriebenen Bücher und deren zugeordnete Klassenstufen"
-        story[-1:] = [
-            Paragraph(
-                f"Bitte prüfen Sie als Fachkonferenzleitung {subject} im Namen der "
-                f"Fachschaft {subject} die folgende Bücherliste {subject}, das heißt "
-                f"{books_text}, für das {schoolyear_name}.",
-                INTRO_PART_STYLE,
-            ),
-            Paragraph(
-                "Da ein Buch durch seine ISBN eindeutig beschrieben wird, kann der Titel vom "
-                "Originaltitel des Buches abweichen und gegebenenfalls auch im nachhinein noch einmal "
-                "verändert werden, um z. B. Bücher für verschiedene Leistungsniveaus leichter "
-                "auseinanderhalten zu können. Die Leihgebühr dient nur der Information. Sie ergibt "
-                "sich aus dem Neupreis des Buches und der Anzahl der Jahrgänge, für die es "
-                "vorgesehen ist.",
-                INTRO_PART_STYLE,
-            ),
-            Paragraph(
-                "Bitte korrigieren Sie, falls ISBN falsch sind, falsche Klassenstufen zugeordnet "
-                "sind, neue Bücher angeschafft oder alte ausgemustert werden sollen, dies "
-                "handschriftlich und bestätigen Sie am Ende die Gültigkeit dieser Änderungen, oder "
-                "notieren Sie, falls gewünscht, handschriftlich Änderungsvorschläge für Buchtitel "
-                "und bestätigen Sie am Ende die Gültigkeit der Bücherliste. Beachten Sie bitte, dass "
-                "Änderungsvorschläge für Buchtitel gegebenenfalls nicht oder auch nur abgeändert "
-                "übernommen werden.",
-                INTRO_CONFIRM_STYLE,
-            ),
-        ]
-
-    def leih_spalten(zeilen: list[dict]) -> tuple[Spalte, ...]:
-        if any(zeile.get("ruecklage") for zeile in zeilen):
-            return (*art.spalten, RUECKLAGEN)
-        return art.spalten
+        absaetze = _pruefauftrag(escape(subject), schuljahr, books_text)
+        teil_stil, letzter_stil = INTRO_PART_STYLE, INTRO_CONFIRM_STYLE
+    else:
+        einleitung = art.einleitung.format(name=subject, schuljahr=schoolyear_name)
+        if art.planung:
+            if not _hat_jahreszahlen([*tables["leih"], *tables["kauf"]]):
+                einleitung += f" {STAND_SATZ}"
+            einleitung += f" {ZWEITE_TABELLE_SATZ}"
+        absaetze = [einleitung]
+        if any(erklaerungen.values()):
+            # Der Hinweis nur, wenn es Sternchen gibt; als zweiter Absatz.
+            absaetze.append(STERNCHEN_HINWEIS)
+        teil_stil, letzter_stil = INTRO_ABSATZ_STYLE, INTRO_STYLE
+    if art.planung:
+        if tables.get("ausgemustert"):
+            absaetze[0] += f" {DRITTE_TABELLE_SATZ}"
+        absaetze += _hinweise(subject, schoolyear_name, tables, ruecklagen=mit_ruecklagen,
+                              pruefen=confirmation)
+    story += [Paragraph(text, teil_stil) for text in absaetze[:-1]]
+    story.append(Paragraph(absaetze[-1], letzter_stil))
 
     # "Buchreihen" statt "Bücher" in den Überschriften (Vorgabe vom 2026-11-10).
     story.append(Paragraph("Leihbare Buchreihen", SECTION_STYLE))

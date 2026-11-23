@@ -12,7 +12,7 @@ import pytest
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
-from app.planungsdruck import NBSP, Antragsdetails, fach_tabellen
+from app.planungsdruck import KEINE_DETAILS, NBSP, Antragsdetails, fach_tabellen
 from buecherlisten.core.daten import Buecherdaten
 from buecherlisten.core.erzeugen import Zuordnungen, erzeuge_buecherlisten_pdfs
 from buecherlisten.core.layout import (
@@ -308,7 +308,8 @@ def test_ausgemustert_im_pdf_mit_spalten_der_leihbaren():
     assert "Ganz weg" in unten and "Läuft" not in unten
     # Leihgebühr und Rücklagen - die Rücklagen-Spalte nur in dieser Tabelle.
     assert "4,00 €\n4\n" in unten
-    oben = text.split("Selbst anzuschaffende")[0]
+    # Der Hinweis vor den Tabellen nennt die Spalte; ihre Kopfzeile steht nur unten.
+    oben = text.split("Selbst anzuschaffende")[0].rsplit("Leihbare Buchreihen", 1)[1]
     assert "Rückl" not in oben
 
 
@@ -551,3 +552,87 @@ def _pdf_text_mit(planung: Buchplanung, details: Antragsdetails) -> str:
                                         zuordnungen=Zuordnungen(fkl={}, kollegium={},
                                                                 aufgabenfeld={}))
     return "".join(seite.extract_text() for seite in PdfReader(io.BytesIO(pdf.inhalt)).pages)
+
+
+# ── Texte vor den Tabellen und Prüfauftrag (Vorgabe vom 2026-11-23) ──────────
+
+def _text(planung: Buchplanung, *, antraege: bool, pruefen: bool = False,
+          details: Antragsdetails = KEINE_DETAILS) -> str:
+    """Der Text der Chemie-PDF in einer Zeile (pypdf bricht Zeilen anders um)."""
+    from pypdf import PdfReader
+
+    daten = Buecherdaten(SJ, "Schuljahr 26/27",
+                         fach_tabellen(planung, antraege=antraege, details=details))
+    (pdf,) = erzeuge_buecherlisten_pdfs(
+        daten, faecher=["Chemie"], antraege=antraege, bestaetigung=pruefen,
+        zuordnungen=Zuordnungen(fkl={}, kollegium={}, aufgabenfeld={}))
+    return " ".join(
+        "".join(seite.extract_text() for seite in PdfReader(io.BytesIO(pdf.inhalt)).pages).split())
+
+
+def test_ohne_pruefen_nennt_die_einleitung_stand_und_tabellen(planung):
+    text = _text(planung, antraege=False)
+    assert ("Folgende Buchreihen sind für das Fach Chemie im Schuljahr 26/27 vorgesehen. "
+            "Aufgeführt ist der genehmigte Stand für dieses Schuljahr. Buchreihen, die selbst "
+            "anzuschaffen sind, werden gesondert in der zweiten Tabelle ausgewiesen. "
+            "Leihbare Buchreihen, die nach dem vorigen Schuljahr ausgemustert wurden, "
+            "werden gesondert in der dritten Tabelle ausgewiesen.") in text
+    assert "Bitte prüfen" not in text and "Hiermit" not in text
+    assert "Jahreszahlen" not in text and "Anmerkungen" not in text
+
+
+def test_mit_antragsinformationen_erklaert_ein_absatz_die_jahreszahlen(planung):
+    text = _text(planung, antraege=True)
+    assert "Die Jahreszahlen in Klammern hinter einem Jahrgang" in text
+    assert "durchgestrichene Anträge wurden abgelehnt" in text
+    assert "Aufgeführt ist der genehmigte Stand" not in text
+    assert "Anmerkungen" not in text
+
+
+def test_antragsdetails_haben_einen_eigenen_absatz(anmerkungs_planung):
+    text = _text(anmerkungs_planung, antraege=True, details=ALLE_DETAILS)
+    assert "Unter einer Buchreihe sind die bereits entschiedenen Anträge" in text
+    assert text.index("Unter einer Buchreihe") < text.rindex("Leihbare Buchreihen")
+    ohne = _text(anmerkungs_planung, antraege=True)
+    assert "Unter einer Buchreihe" not in ohne
+
+
+def test_ruecklagenhinweis_nur_mit_spalte_und_als_wunsch(planung):
+    assert "Die Spalte Rücklagen" not in _text(planung, antraege=False)
+    mit = Buchplanung(schuljahr=planung.schuljahr, buecher=planung.buecher,
+                      planung=planung.planung,
+                      ruecklagen=(Ruecklage(isbn=A, fach="Chemie", anzahl=3),))
+    text = _text(mit, antraege=False)
+    assert ("Die Spalte Rücklagen gibt die Anzahl der Exemplare an, die die Fachschaft Chemie "
+            "von der jeweiligen Buchreihe nach deren Ausmusterung behalten möchte") in text
+    assert "Wünsche, die unter Umständen nur teilweise oder gar nicht erfüllt werden können" in text
+    assert "handschriftlich eintragen" not in text
+    # Die Erklärung steht vor den Tabellen.
+    assert text.index("Die Spalte Rücklagen") < text.rindex("Leihbare Buchreihen")
+
+
+def test_pruefen_hat_den_pruefauftrag_und_immer_die_ruecklagenspalte(planung):
+    text = _text(planung, antraege=False, pruefen=True)
+    assert "Bitte prüfen Sie als Fachkonferenzleitung Chemie im Namen der Fachschaft Chemie" in text
+    assert "Folgende Buchreihen" not in text
+    # Spätere Vorhaben: nicht Teil der Genehmigung, aber früh zu notieren.
+    assert "bezieht sich ausschließlich auf das Schuljahr 26/27" in text
+    assert "so früh wie möglich" in text
+    # Keine Rücklage eingetragen und trotzdem Spalte und Erklärung.
+    assert "Die Spalte Rücklagen" in text and "Wünsche können Sie handschriftlich eintragen" in text
+    assert text.index("Wünsche können Sie") < text.rindex("Leihbare Buchreihen")
+    leih = text.rsplit("Leihbare Buchreihen", 1)[1].split("Selbst anzuschaffende Buchreihen")[0]
+    assert "Rückl" in leih
+    # Beim Kaufbuch gibt es keine Rücklage.
+    kauf = text.split("Selbst anzuschaffende Buchreihen")[1].split("Leihbare nach vorigem")[0]
+    assert "Rückl" not in kauf
+
+
+def test_pruefen_endet_mit_genehmigung_oder_antrag_auf_aenderungen(planung):
+    text = _text(planung, antraege=False, pruefen=True)
+    ende = text[text.index("Hiermit erkläre ich"):]
+    assert "zu den durch ihre ISBN beschriebenen Büchern und deren zugeordneten Klassenstufen" in ende
+    assert "für das Schuljahr 26/27, dass diese ..." in ende
+    assert "in der vorliegenden Form genehmigt wird" in ende
+    assert "Diese Änderungen werden hiermit beantragt" in ende
+    assert "Unterschrift Fachkonferenzleitung Chemie" in ende
