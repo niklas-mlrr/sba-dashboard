@@ -204,13 +204,12 @@ body {
 .kopfaktionen { float: right; display: flex; gap: .6rem; margin-top: -5px; }
 /* Mit etwas in der Mitte (``kopfmitte``, base.html), wie die Kopfzeile einer
    Bücherliste bei IServ: Titel (Name, dahinter der Stand) links, Knöpfe rechts
-   auf Höhe des Namens, die Legende in der Mitte - mit gleichem Abstand zu
-   beiden. Sie steht mittig in der ganzen Höhe der Kopfzeile, beginnt aber nie
-   über dem Titel.
+   an derselben Stelle wie bei IServ (pull-right, 5 px über der Überschrift),
+   die Legende in der Mitte - mit gleichem Abstand zu beiden.
    Wird es eng, gibt zuerst der Titel nach (der Stand bricht unter den Namen,
    der selbst nie umbricht), erst danach die Legende (ihre Gruppen brechen
-   um): der flex-shrink des Titels ist viel größer als der der Legende. Die Knöpfe haben
-   feste Größe und bleiben stehen. */
+   um): der flex-shrink des Titels ist viel größer als der der Legende. Die
+   Knöpfe haben feste Größe und bleiben stehen. */
 .kopf.mit-mitte {
   --zeile: calc(28px * 1.1);   /* eine Zeile der Überschrift */
   /* „« Zurück“ darunter: eine Zeile und, wie bei IServ, der Abstand unter der
@@ -228,23 +227,31 @@ body {
    bricht der Stand um, wandert der Name eine halbe Zeile nach oben, der Stand
    steht darunter. „« Zurück“ wandert mit und bleibt unter dem Stand. */
 .kopf.mit-mitte > .kopftitel { transform: translateY(calc(-50% + (var(--zeile) + var(--zurueck)) / 2)); }
-.kopf.mit-mitte > .kopfmitte { flex: 0 1 auto; order: 2; align-self: center; margin: 0 auto; }
+/* Die Legende steht mit ihrer Mitte auf der Mittelachse der Überschriftenzeile
+   (Name, Stand, Knöpfe), nicht in der Mitte des ganzen Kopfes. Höher als 20 px
+   über die Überschrift ragt sie nicht (die ganz umgebrochene Legende wäre sonst
+   in der Reiterleiste); dafür zählt sie mit 20 px weniger Höhe zum Kopf. */
+.kopf.mit-mitte > .kopfmitte {
+  flex: 0 1 auto;
+  order: 2;
+  align-self: flex-start;
+  margin: 0 auto -20px;
+  transform: translateY(max(calc(-50% + var(--zeile) / 2), -20px));
+}
 .kopf.mit-mitte > .kopfmitte.farblegende { flex-wrap: wrap; }
 .kopf.mit-mitte > .kopfaktionen {
   float: none;
   flex: none;
   order: 3;
   align-self: flex-start;
-  align-items: center;
-  height: var(--zeile);
-  margin: 0 0 0 2rem;
+  margin: -5px 0 0 2rem;   /* wie bei IServ: 5 px über der Oberkante der Überschrift */
 }
 /* Zu schmal selbst für die umgebrochene Legende: die Mitte in eine eigene
    Zeile unter Titel und Knöpfe. */
 @media (max-width: 1100px) {
   .kopf.mit-mitte { flex-wrap: wrap; }
   .kopf.mit-mitte > .kopftitel { flex: 1 1 0; min-width: min-content; }
-  .kopf.mit-mitte > .kopfmitte { flex: 1 1 100%; order: 4; margin: .6rem 0 0; align-self: flex-start; }
+  .kopf.mit-mitte > .kopfmitte { flex: 1 1 100%; order: 4; margin: .6rem 0 0; transform: none; }
 }
 /* Die Farblegende der Fach-Ansicht: je Gruppe eine Spalte, die Muster mit
    denselben Klassen wie die Tabelle. */
