@@ -2,6 +2,8 @@
 {% import "_buchplanung.html" as bp with context %}
 {% block titel %}Änderungen — Schulbuchausleihe{% endblock %}
 {% block seitenklasse %}seite-voll{% endblock %}
+{# Kopf wie bei IServ (app.css, .listenkopf): Knöpfe oben bündig rechts, Strich darunter. #}
+{% block kopfklasse %} listenkopf{% endblock %}
 {% block ueberschrift %}Änderungen<small>&nbsp;–&nbsp;</small><small class="label-text">{{ schuljahr }}</small>{% endblock %}
 {#
   Die Änderungsliste: jede Einführung ab diesem Schuljahr und jede
