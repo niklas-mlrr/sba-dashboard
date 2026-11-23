@@ -212,7 +212,7 @@ body {
   column-gap: 2rem;
 }
 .kopf.mit-mitte > * { grid-column: 1 / -1; }
-.kopf.mit-mitte > h1 { grid-column: 1; grid-row: 1; margin: 0; }
+.kopf.mit-mitte > h1 { grid-column: 1; grid-row: 1; margin-top: 0; }
 .kopf.mit-mitte > .kopfmitte { grid-column: 2; grid-row: 1; justify-self: center; }
 .kopf.mit-mitte > .kopfaktionen { grid-column: 3; grid-row: 1; float: none; margin-top: 0; }
 /* Der Stand der Liste (Label hinter dem Namen) steht mit Legende unter der
