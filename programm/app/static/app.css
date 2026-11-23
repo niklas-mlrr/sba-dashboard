@@ -213,7 +213,9 @@ body {
    feste Größe und bleiben stehen. */
 .kopf.mit-mitte {
   --zeile: calc(28px * 1.1);   /* eine Zeile der Überschrift */
-  --zurueck: 20px;             /* „« Zurück“ darunter */
+  /* „« Zurück“ darunter: eine Zeile und, wie bei IServ, der Abstand unter der
+     Überschrift (.67em von 28px) dazwischen. */
+  --zurueck: calc(20px + 28px * .67);
   display: flex;
   align-items: flex-start;
 }
@@ -221,7 +223,7 @@ body {
 .kopf.mit-mitte > .kopftitel { flex: 0 1000000 auto; order: 1; margin-right: 2rem; }
 .kopf.mit-mitte .kopfname { white-space: nowrap; }
 .kopf.mit-mitte .kopftitel h1 { margin: 0; }
-.kopf.mit-mitte .zurueck { line-height: var(--zurueck); }
+.kopf.mit-mitte .zurueck { margin-top: calc(28px * .67); line-height: 20px; }
 /* Die Mitte von Name und Stand bleibt, wo die Mitte des Namens allein stünde:
    bricht der Stand um, wandert der Name eine halbe Zeile nach oben, der Stand
    steht darunter. „« Zurück“ wandert mit und bleibt unter dem Stand. */
