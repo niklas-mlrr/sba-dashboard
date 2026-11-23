@@ -202,19 +202,25 @@ body {
 }
 /* Der Abruf-Knopf steht rechts in der Überschriftenzeile (pull-right). */
 .kopfaktionen { float: right; display: flex; gap: .6rem; margin-top: -5px; }
+/* Fach-Ansicht: Knöpfe, Überschrift, „« Zurück“ und Strich genau wie die
+   Detailseite einer Bücherliste bei IServ (partials/schoolyear/booklists/
+   booklist_detail.html mit Bootstrap 3.3.7 + normalize.css, 2026-11-23 in
+   Chromium nachgemessen): Knöpfe als ul.list-inline.pull-right - Oberkante
+   bündig mit der Überschrift, 10 px Abstand (li je 5 px Polster), rechts 5 px
+   eingerückt; „« Zurück“ als <p> mit 10 px darunter, dann 9 px bis zum Strich. */
+.kopf.fach-kopf .kopfaktionen { gap: 10px; margin-top: 0; margin-right: 5px; }
+.kopf.fach-kopf .zurueck { margin-bottom: 10px; line-height: 20px; }
 /* Mit etwas in der Mitte (``kopfmitte``, base.html), wie die Kopfzeile einer
    Bücherliste bei IServ: Titel (Name, dahinter der Stand) links, Knöpfe rechts
-   an derselben Stelle wie bei IServ (pull-right, 5 px über der Überschrift),
-   die Legende in der Mitte - mit gleichem Abstand zu beiden.
+   an derselben Stelle wie bei IServ (.fach-kopf oben), die Legende in der
+   Mitte - mit gleichem Abstand zu beiden.
    Wird es eng, gibt zuerst der Titel nach (der Stand bricht unter den Namen,
    der selbst nie umbricht), erst danach die Legende (ihre Gruppen brechen
    um): der flex-shrink des Titels ist viel größer als der der Legende. Die
-   Knöpfe haben feste Größe und bleiben stehen. */
+   Knöpfe haben feste Größe und bleiben stehen. Der Name bleibt dabei oben
+   stehen wie bei IServ; Stand und „« Zurück“ rücken nach unten. */
 .kopf.mit-mitte {
   --zeile: calc(28px * 1.1);   /* eine Zeile der Überschrift */
-  /* „« Zurück“ darunter: eine Zeile und, wie bei IServ, der Abstand unter der
-     Überschrift (.67em von 28px) dazwischen. */
-  --zurueck: calc(20px + 28px * .67);
   display: flex;
   align-items: flex-start;
 }
@@ -222,11 +228,8 @@ body {
 .kopf.mit-mitte > .kopftitel { flex: 0 1000000 auto; order: 1; margin-right: 2rem; }
 .kopf.mit-mitte .kopfname { white-space: nowrap; }
 .kopf.mit-mitte .kopftitel h1 { margin: 0; }
+/* Wie bei IServ der Abstand unter der Überschrift (.67em von 28px). */
 .kopf.mit-mitte .zurueck { margin-top: calc(28px * .67); line-height: 20px; }
-/* Die Mitte von Name und Stand bleibt, wo die Mitte des Namens allein stünde:
-   bricht der Stand um, wandert der Name eine halbe Zeile nach oben, der Stand
-   steht darunter. „« Zurück“ wandert mit und bleibt unter dem Stand. */
-.kopf.mit-mitte > .kopftitel { transform: translateY(calc(-50% + (var(--zeile) + var(--zurueck)) / 2)); }
 /* Die Legende steht mit ihrer Mitte auf der Mittelachse der Überschriftenzeile
    (Name, Stand, Knöpfe), nicht in der Mitte des ganzen Kopfes. Höher als 20 px
    über die Überschrift ragt sie nicht (die ganz umgebrochene Legende wäre sonst
@@ -244,7 +247,7 @@ body {
   flex: none;
   order: 3;
   align-self: flex-start;
-  margin: -5px 0 0 2rem;   /* wie bei IServ: 5 px über der Oberkante der Überschrift */
+  margin: 0 5px 0 2rem;   /* wie bei IServ: bündig oben, rechts 5 px eingerückt */
 }
 /* Zu schmal selbst für die umgebrochene Legende: die Mitte in eine eigene
    Zeile unter Titel und Knöpfe. */

@@ -35,7 +35,8 @@
   stehen bewusst nicht darin.
 #}
 {% set mit_legende = ansicht == "fach" and not liste and gruppe and planung.mtime is not none %}
-{% block kopfklasse %}{% if mit_legende %} mit-mitte{% endif %}{% endblock %}
+{# Knöpfe, Überschrift, „« Zurück“ und Strich der Fach-Ansicht wie bei IServ (app.css, .fach-kopf). #}
+{% block kopfklasse %}{% if ansicht == "fach" %} fach-kopf{% endif %}{% if mit_legende %} mit-mitte{% endif %}{% endblock %}
 {% block kopfmitte %}{% if mit_legende %}
 <div class="kopfmitte farblegende" role="note" aria-label="Legende der Farben">
   <div class="farblegende-gruppe farblegende-jahrgang">

@@ -704,7 +704,7 @@ def test_fachseite_hat_oben_die_farblegende(seiten: TestClient, abgeglichen: dic
     """Zwischen Überschrift und Knöpfen, in der Reihenfolge Schrift,
     Hinterlegung, Markierung - mit den Klassen der Tabelle."""
     text = seiten.get("/buecherliste/fach/Deutsch").text
-    kopf = text[text.index('<header class="kopf mit-mitte">'):text.index("</header>")]
+    kopf = text[text.index('<header class="kopf fach-kopf mit-mitte">'):text.index("</header>")]
     legende = kopf[kopf.index('class="kopfmitte farblegende"'):]
     assert kopf.index('class="kopfaktionen"') < kopf.index("farblegende") < kopf.index("<h1>")
     gruppen = [legende.index(k) for k in ("Jahrgang", "Buchreihe</div>", "IServ-Vergleich")]
