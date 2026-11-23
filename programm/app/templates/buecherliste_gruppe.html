@@ -30,19 +30,20 @@
   Knöpfen: Jahrgang (Schrift der Planung), Buchreihe (Hinterlegung der ganzen
   Zeile, der Text steht im Kästchen) und IServ-Vergleich (Markierung). Die
   Muster tragen dieselben Klassen wie die Tabelle, sehen also immer so aus wie
-  dort. Nur mit Datei: ohne sie färbt nichts. Strich vorn und Antragskästen
+  dort. Nur mit Datei: ohne sie färbt nichts. Vor den Jahrgangsmustern steht der
+  Strich vorn bündig am linken Rand (Farbe wie die Schrift); Antragskästen
   stehen bewusst nicht darin.
 #}
 {% set mit_legende = ansicht == "fach" and not liste and gruppe and planung.mtime is not none %}
 {% block kopfklasse %}{% if mit_legende %} mit-mitte{% endif %}{% endblock %}
 {% block kopfmitte %}{% if mit_legende %}
 <div class="kopfmitte farblegende" role="note" aria-label="Legende der Farben">
-  <div class="farblegende-gruppe">
+  <div class="farblegende-gruppe farblegende-jahrgang">
     <div class="farblegende-kopf">Jahrgang</div>
-    <div><span class="muster"><span class="schrift-einfuehrung">7</span></span> Einführung</div>
+    <div><span class="muster strich-einfuehrung"><span class="schrift-einfuehrung">7</span></span> Einführung</div>
     {#- Eine Zeile für beide Rot: erst normal, dann durchgestrichen (nach Vorjahr). -#}
-    <div><span class="muster"><span class="schrift-ausmusterung">7</span> <span class="schrift-ausmusterung durch">7</span></span> Ausmusterung (nach Vorjahr)</div>
-    <div><span class="muster"><span class="schrift-grau">7</span></span> Einführung abgelehnt</div>
+    <div><span class="muster strich-ausmusterung"><span class="schrift-ausmusterung">7</span> <span class="schrift-ausmusterung durch">7</span></span> Ausmusterung (nach Vorjahr)</div>
+    <div><span class="muster strich-grau"><span class="schrift-grau">7</span></span> Einführung abgelehnt</div>
   </div>
   <div class="farblegende-gruppe">
     <div class="farblegende-kopf">Buchreihe</div>

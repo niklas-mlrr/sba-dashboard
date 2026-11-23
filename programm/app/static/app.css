@@ -241,6 +241,12 @@ body {
 /* IServ: die Jahrgangszahlen bündig unter dem markierten Text darüber, und
    hinter jedem Muster derselbe Abstand - auch hinter den zwei roten. */
 .farblegende-iserv .muster { min-width: 0; text-align: left; margin-right: .6rem; }
+/* Jahrgang: der Strich vorn (wie tr.strich in der Tabelle) steht bündig am
+   linken Rand der Gruppe, die Zahl folgt dahinter. */
+.farblegende-jahrgang .muster { text-align: left; padding-left: 6px; border-left: 4px solid var(--strich-farbe); }
+.farblegende-jahrgang .strich-einfuehrung { --strich-farbe: var(--einfuehrung-strich); }
+.farblegende-jahrgang .strich-ausmusterung { --strich-farbe: var(--ausmusterung-strich); }
+.farblegende-jahrgang .strich-grau { --strich-farbe: var(--grau-strich); }
 .farblegende .markierung { padding: 0 5px; line-height: 1.35; }
 /* Buchreihe: der Text steht im Kästchen, alle Kästchen gleich breit. */
 .farblegende .flaeche {
